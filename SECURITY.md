@@ -73,6 +73,45 @@ When we receive a security bug report, we will:
 4. **Domain Separation**: Use `PAYKIT_SUBSCRIPTION_V2` domain constant
 5. **Deterministic Serialization**: Use `postcard` for canonical serialization
 
+## Component-Specific Security Considerations
+
+### paykit-lib
+- **Transport Security**: All network operations should use TLS/HTTPS
+- **Key Validation**: Always validate public keys before use
+- **Path Traversal**: Ensure payment method IDs don't allow path traversal attacks
+
+### paykit-interactive
+- **Noise Protocol**: Use Noise_IK handshake pattern correctly
+- **Key Rotation**: Rotate keys periodically to prevent long-term compromise
+- **Session Management**: Properly manage Noise channel sessions
+- **Replay Protection**: Verify message nonces and timestamps
+
+### paykit-subscriptions
+- **Nonce Management**: Never reuse nonces - use cryptographically secure random generation
+- **NonceStore Cleanup**: Call `cleanup_expired()` periodically to prevent memory growth
+- **Spending Limits**: File locks may not work on network filesystems (NFS, SMB) - use local storage
+- **Signature Verification**: Always verify Ed25519 signatures before processing
+- **Timestamp Validation**: Check signature timestamps are within acceptable range
+
+### paykit-demo-core
+- **Key Storage**: ⚠️ Demo code stores keys in plaintext JSON files - NOT for production
+- **Secure Storage**: Production implementations should use OS keychain, HSMs, or secure enclaves
+- **Error Handling**: Don't leak sensitive information in error messages
+
+### paykit-demo-cli
+- **File Permissions**: Ensure identity files have restrictive permissions (600)
+- **Key Storage**: ⚠️ Keys stored in `~/.paykit/` as plaintext - demo only
+- **Input Validation**: Validate all user inputs before processing
+
+### paykit-demo-web
+- **localStorage Security**: ⚠️ Data stored in browser localStorage is NOT encrypted
+- **XSS Protection**: Sanitize all user inputs to prevent XSS attacks
+- **CSP Headers**: Use Content Security Policy headers
+- **WASM Security**: WebAssembly code is sandboxed but still requires careful validation
+- **Key Storage**: ⚠️ Private keys in localStorage are accessible to any JavaScript on the page
+- **HTTPS Required**: Always serve over HTTPS in production
+- **No Encryption at Rest**: Demo code doesn't encrypt data at rest - NOT for production
+
 ## Known Security Considerations
 
 ### 1. NonceStore Memory Growth
@@ -92,9 +131,31 @@ Spending limits use file-level locks which may not work correctly on network fil
 
 Interactive payments use the Noise_IK handshake pattern. Ensure proper key rotation and session management to prevent long-term key compromise.
 
+### 4. Demo Application Limitations
+
+**All demo applications (CLI and Web) are for development and testing only:**
+
+- Private keys stored in plaintext
+- No encryption at rest
+- No OS-level secure storage
+- Simplified error handling
+- No rate limiting
+- No DDoS protection
+
+**For production use**, implement:
+- Secure key storage (HSMs, secure enclaves, OS keychain)
+- Encryption at rest
+- Proper authentication and authorization
+- Rate limiting and DDoS protection
+- Comprehensive audit logging
+- Input validation and sanitization
+
 ## Security Audit History
 
+Historical audit reports are archived in [docs/archive/audit-reports/](docs/archive/audit-reports/):
+
 - **2025-11**: Internal audit completed. Grade: A (Strong)
+- See [PAYKIT_SECURITY_AUDIT_REPORT.md](docs/archive/audit-reports/PAYKIT_SECURITY_AUDIT_REPORT.md) for details
 - **Next audit**: Scheduled for 2026-Q1
 
 ## Security Updates

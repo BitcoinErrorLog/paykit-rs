@@ -4,10 +4,13 @@ Complete guide for deploying Paykit demo applications.
 
 ## Overview
 
-Paykit provides three demo applications:
+Paykit provides demo applications:
 1. **CLI Demo** - Command-line interface (local use)
 2. **Web Demo** - Browser-based WASM application (static hosting)
 3. **Desktop App** - macOS native application (future/planned)
+
+For detailed component-specific deployment instructions, see:
+- **[paykit-demo-web/DEPLOYMENT.md](paykit-demo-web/DEPLOYMENT.md)** - Comprehensive web demo deployment guide
 
 ## CLI Demo Deployment
 

@@ -15,8 +15,10 @@ Paykit enables payment method discovery and interactive payment flows using:
 paykit-rs-master/
 ├── paykit-lib/              # Core library (public directory, transport traits)
 ├── paykit-interactive/      # Interactive payment protocol (Noise + receipts)
+├── paykit-subscriptions/    # Subscription management and auto-pay
 ├── paykit-demo-core/        # Shared demo application logic
-└── paykit-demo-cli/         # Command-line demo application
+├── paykit-demo-cli/         # Command-line demo application
+└── paykit-demo-web/         # WebAssembly browser demo application
 ```
 
 ## Quick Start
@@ -40,6 +42,19 @@ cargo build --release
 ```
 
 See the [CLI README](paykit-demo-cli/README.md) for complete documentation.
+
+### Try the Web Demo
+
+Run the WebAssembly demo in your browser:
+
+```bash
+cd paykit-demo-web
+wasm-pack build --target web --out-dir www/pkg
+cd www
+python3 -m http.server 8080
+```
+
+Then open `http://localhost:8080` in your browser. See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
 
 ## Components
 
@@ -104,6 +119,29 @@ Shared business logic for demo applications:
 - File-based storage
 - Contact management
 
+### paykit-subscriptions
+
+Subscription management and automated payments:
+- Subscription agreements with cryptographic signatures
+- Payment requests with expiration and metadata
+- Auto-pay rules with spending limits
+- Thread-safe nonce tracking and spending limit enforcement
+- Safe arithmetic with overflow protection
+
+**Key APIs**:
+```rust
+use paykit_subscriptions::{Subscription, SubscriptionTerms, PaymentFrequency, AutoPayRule};
+
+// Create subscription
+let terms = SubscriptionTerms::new(amount, currency, PaymentFrequency::Monthly { day_of_month: 1 });
+let subscription = Subscription::new(provider_pk, subscriber_pk, terms);
+
+// Configure auto-pay
+let rule = AutoPayRule::new(subscription_id, peer_pk, max_amount, period_seconds);
+```
+
+See the [Subscriptions README](paykit-subscriptions/README.md) for complete documentation.
+
 ### paykit-demo-cli
 
 Full-featured command-line demonstration:
@@ -113,6 +151,21 @@ Full-featured command-line demonstration:
 - Contact management
 - Payment simulation
 - Receipt viewing
+- Subscription management
+- Auto-pay configuration
+
+### paykit-demo-web
+
+WebAssembly browser application:
+- Full Paykit functionality in the browser
+- Identity management with localStorage persistence
+- Contact management and directory discovery
+- Payment method configuration
+- Subscription and auto-pay management
+- Receipt tracking
+- Interactive dashboard
+
+See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
 
 ## Installation
 
@@ -140,9 +193,17 @@ cargo build
 cd paykit-interactive
 cargo build
 
+# Subscriptions
+cd paykit-subscriptions
+cargo build
+
 # CLI demo
 cd paykit-demo-cli
 cargo build --release
+
+# Web demo (WASM)
+cd paykit-demo-web
+wasm-pack build --target web --out-dir www/pkg
 ```
 
 ## Usage Examples
@@ -193,24 +254,24 @@ See [CLI README](paykit-demo-cli/README.md) for complete examples.
 
 ### ✅ Completed
 
-**Phase 0: Protocol Testing**
-- Integration tests for Noise protocol handshakes
-- Pubky SDK compliance tests
-- Fixed pubky-noise compilation issues
+**Core Components**
+- `paykit-lib`: Core library with transport traits and public directory operations
+- `paykit-interactive`: Interactive payment protocol with Noise encryption and receipts
+- `paykit-subscriptions`: Subscription management, payment requests, and auto-pay automation
+- `paykit-demo-core`: Shared business logic for demo applications
 
-**Phase 1: Core Library (`paykit-demo-core`)**
-- Identity management with Ed25519/X25519
-- Directory operations wrapper
-- Payment flow coordination
-- File-based storage
-- Data models
+**Demo Applications**
+- `paykit-demo-cli`: Full-featured command-line demo with all Paykit features
+- `paykit-demo-web`: Complete WebAssembly browser demo with interactive UI
 
-**Phase 2: CLI Demo (`paykit-demo-cli`)**
-- Complete command structure
-- All core commands implemented
-- Rich terminal UI with colors and QR codes
+**Features**
+- Identity management (Ed25519/X25519 keypairs)
+- Payment method discovery and publishing
 - Contact management
-- Comprehensive documentation
+- Subscription agreements and payment requests
+- Auto-pay rules with spending limits
+- Receipt exchange and tracking
+- Noise protocol encryption for private channels
 
 ### 🚧 In Progress
 
@@ -220,12 +281,9 @@ See [CLI README](paykit-demo-cli/README.md) for complete examples.
 
 ### 📋 Planned
 
-- Web WASM demo (browser-based showcase)
 - Desktop Electron app (end-user application)
 - Multi-signature support
 - Hardware wallet integration
-
-See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for detailed progress tracking.
 
 ## Architecture
 
@@ -274,10 +332,21 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 
 ## Documentation
 
-- [CLI User Guide](paykit-demo-cli/README.md)
-- [Implementation Status](IMPLEMENTATION_STATUS.md)
-- [Paykit Roadmap](PAYKIT_ROADMAP.md)
-- [Noise Integration Review](../NOISE_INTEGRATION_REVIEW.md)
+### Component Documentation
+- [paykit-lib](paykit-lib/README.md) - Core library API reference
+- [paykit-interactive](paykit-interactive/README.md) - Interactive payment protocol
+- [paykit-subscriptions](paykit-subscriptions/README.md) - Subscription management
+- [paykit-demo-core](paykit-demo-core/BUILD.md) - Shared demo logic
+- [paykit-demo-cli](paykit-demo-cli/README.md) - CLI demo user guide
+- [paykit-demo-web](paykit-demo-web/README.md) - Web demo user guide
+
+### Project Documentation
+- [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and component relationships
+- [Paykit Roadmap](PAYKIT_ROADMAP.md) - Development roadmap and integration plan
+- [Security Guide](SECURITY.md) - Security considerations and best practices
+- [Deployment Guide](DEPLOYMENT.md) - Deployment instructions
+- [Build Instructions](BUILD.md) - Build and development setup
+- [Documentation Index](docs/README.md) - Complete documentation index
 
 ## Security Considerations
 

@@ -23,6 +23,20 @@ Paykit follows [Semantic Versioning](https://semver.org/):
 - **MINOR**: New functionality, backwards compatible
 - **PATCH**: Backwards compatible bug fixes
 
+### Component Versioning Strategy
+
+All components in the workspace should generally use the same version number for consistency:
+- `paykit-lib`
+- `paykit-interactive`
+- `paykit-subscriptions`
+- `paykit-demo-core`
+- `paykit-demo-cli`
+- `paykit-demo-web`
+
+When a component has breaking changes, consider:
+- Bumping all components to maintain consistency
+- Or documenting version compatibility matrix if components must diverge
+
 ## Release Process
 
 ### 1. Update Version Numbers

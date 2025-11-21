@@ -512,12 +512,23 @@ jobs:
 
 ---
 
+## Component-Specific Build Instructions
+
+Each component has detailed build documentation:
+
+- **[paykit-lib/BUILD.md](paykit-lib/BUILD.md)** - Core library build instructions
+- **[paykit-interactive/BUILD.md](paykit-interactive/BUILD.md)** - Interactive protocol build (if exists)
+- **[paykit-subscriptions/BUILD.md](paykit-subscriptions/BUILD.md)** - Subscriptions crate build
+- **[paykit-demo-core/BUILD.md](paykit-demo-core/BUILD.md)** - Shared demo logic build
+- **[paykit-demo-cli/BUILD.md](paykit-demo-cli/BUILD.md)** - CLI demo build instructions
+- **[paykit-demo-web/BUILD_INSTRUCTIONS.md](paykit-demo-web/BUILD_INSTRUCTIONS.md)** - Web demo WASM build instructions
+
 ## Next Steps
 
 After building successfully:
 
-1. **Read project-specific BUILD.md files** in each crate directory
-2. **Try the demos**: Start with `paykit-demo-cli`
+1. **Read component-specific BUILD.md files** listed above
+2. **Try the demos**: Start with `paykit-demo-cli` or `paykit-demo-web`
 3. **Read the code**: Check out `paykit-lib/src/lib.rs`
 4. **Run tests**: `cargo test --workspace --lib`
 5. **Explore examples**: Check `paykit-interactive/examples/`
@@ -529,15 +540,20 @@ After building successfully:
 ### Documentation
 
 - Workspace README: [README.md](./README.md)
-- Project READMEs: Each crate has its own README
-- Security docs: [SECURITY_FIXES_STATUS.md](./SECURITY_FIXES_STATUS.md)
-- Completion report: [DEMO_APP_FIX_COMPLETION.md](./DEMO_APP_FIX_COMPLETION.md)
+- Component READMEs:
+  - [paykit-lib/README.md](paykit-lib/README.md)
+  - [paykit-interactive/README.md](paykit-interactive/README.md)
+  - [paykit-subscriptions/README.md](paykit-subscriptions/README.md)
+  - [paykit-demo-cli/README.md](paykit-demo-cli/README.md)
+  - [paykit-demo-web/README.md](paykit-demo-web/README.md)
+- Security docs: [SECURITY.md](./SECURITY.md)
+- Deployment: [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ### Common Issues
 
-1. **Homebrew Rust**: Must use Rustup, see [paykit-demo-web/QUICK_FIX_HOMEBREW_RUST.md](./paykit-demo-web/QUICK_FIX_HOMEBREW_RUST.md)
-2. **WASM build fails**: Need WASM target, see [paykit-demo-web/START_HERE.md](./paykit-demo-web/START_HERE.md)
-3. **OpenSSL errors**: Install libssl-dev, see Troubleshooting section above
+1. **Homebrew Rust**: Must use Rustup (not Homebrew's Rust). See Prerequisites section above.
+2. **WASM build fails**: Need WASM target installed: `rustup target add wasm32-unknown-unknown`. See [paykit-demo-web/BUILD_INSTRUCTIONS.md](paykit-demo-web/BUILD_INSTRUCTIONS.md)
+3. **OpenSSL errors**: Install libssl-dev (Linux) or ensure OpenSSL is available (macOS). See Troubleshooting section above.
 
 ---
 

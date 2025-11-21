@@ -640,6 +640,175 @@ Storage for payment requests.
 
 ---
 
+## Auto-Pay Management
+
+### `WasmAutoPayRule`
+
+Auto-pay configuration rule for subscriptions.
+
+#### Constructor
+
+```javascript
+const rule = new WasmAutoPayRule(
+    subscription_id,      // Subscription ID this rule applies to
+    peer_pubkey,         // Peer's public key
+    max_amount,          // Maximum amount per payment (number)
+    period_seconds,      // Period in seconds (number)
+    require_confirmation // Whether manual confirmation is required (boolean)
+);
+```
+
+#### Methods
+
+**`subscription_id()` → `string`**
+
+**`peer_pubkey()` → `string`**
+
+**`max_amount()` → `number`**
+
+**`period_seconds()` → `number`**
+
+**`enabled()` → `boolean`**
+
+**`require_confirmation()` → `boolean`**
+
+**`enable()` → `void`**
+
+**`disable()` → `void`**
+
+**`set_require_confirmation(required: boolean)` → `void`**
+
+**`to_json()` → `string`**
+
+**`from_json(json: string)` → `WasmAutoPayRule`**
+
+### `WasmAutoPayRuleStorage`
+
+Storage for auto-pay rules in browser localStorage.
+
+#### Constructor
+
+```javascript
+const storage = new WasmAutoPayRuleStorage();
+```
+
+#### Methods
+
+**`save_autopay_rule(rule: WasmAutoPayRule)` → `Promise<void>`**
+
+Save an auto-pay rule to localStorage.
+
+**`get_autopay_rule(subscription_id: string)` → `Promise<Option<WasmAutoPayRule>>`**
+
+Get an auto-pay rule by subscription ID.
+
+**`list_autopay_rules()` → `Promise<Array<object>>`**
+
+List all auto-pay rules. Returns array of objects with properties:
+- `id`: Rule ID
+- `subscription_id`: Subscription ID
+- `peer_pubkey`: Peer's public key
+- `max_amount`: Maximum amount (number)
+- `period_seconds`: Period in seconds (number)
+- `enabled`: Whether rule is enabled (boolean)
+- `require_confirmation`: Whether confirmation is required (boolean)
+
+**`delete_autopay_rule(subscription_id: string)` → `Promise<void>`**
+
+Delete an auto-pay rule.
+
+**`clear_all()` → `Promise<void>`**
+
+Clear all auto-pay rules.
+
+---
+
+## Spending Limits (Allowances)
+
+### `WasmPeerSpendingLimit`
+
+Spending limit configuration for a peer.
+
+#### Constructor
+
+```javascript
+const limit = new WasmPeerSpendingLimit(
+    peer_pubkey,    // Peer's public key
+    total_limit,    // Total spending limit (number)
+    period_seconds  // Period in seconds (number)
+);
+```
+
+#### Methods
+
+**`peer_pubkey()` → `string`**
+
+**`total_limit()` → `number`**
+
+**`current_spent()` → `number`**
+
+**`remaining_limit()` → `number`**
+
+**`period_seconds()` → `number`**
+
+**`period_start()` → `number`** - Unix timestamp when period started
+
+**`can_spend(amount: number)` → `boolean`**
+
+Check if a payment amount is within the remaining limit.
+
+**`record_payment(amount: number)` → `Promise<void>`**
+
+Record a payment against the limit. Automatically resets period if expired.
+
+**`reset()` → `void`**
+
+Reset the spending counter and start a new period.
+
+**`to_json()` → `string`**
+
+**`from_json(json: string)` → `WasmPeerSpendingLimit`**
+
+### `WasmPeerSpendingLimitStorage`
+
+Storage for peer spending limits in browser localStorage.
+
+#### Constructor
+
+```javascript
+const storage = new WasmPeerSpendingLimitStorage();
+```
+
+#### Methods
+
+**`save_peer_limit(limit: WasmPeerSpendingLimit)` → `Promise<void>`**
+
+Save a peer spending limit to localStorage.
+
+**`get_peer_limit(peer_pubkey: string)` → `Promise<Option<WasmPeerSpendingLimit>>`**
+
+Get a peer spending limit. Automatically resets period if expired.
+
+**`list_peer_limits()` → `Promise<Array<object>>`**
+
+List all peer spending limits. Returns array of objects with properties:
+- `peer_pubkey`: Peer's public key
+- `total_limit`: Total limit (number)
+- `current_spent`: Current spent amount (number)
+- `remaining_limit`: Remaining limit (number)
+- `period_seconds`: Period in seconds (number)
+- `period_start`: Period start timestamp (number)
+
+**`delete_peer_limit(peer_pubkey: string)` → `Promise<void>`**
+
+Delete a peer spending limit.
+
+**`clear_all()` → `Promise<void>`**
+
+Clear all peer spending limits.
+
+---
+
 ## Payment Operations
 
 ### `WasmPaymentCoordinator`

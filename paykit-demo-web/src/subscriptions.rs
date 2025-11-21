@@ -809,10 +809,12 @@ fn parse_frequency_wasm(freq: &str) -> Result<PaymentFrequency, JsValue> {
 #[derive(Clone)]
 pub struct WasmAutoPayRule {
     id: String,
+    subscription_id: String,
     peer_pubkey: String,
     max_amount: i64,
     period_seconds: u64,
     enabled: bool,
+    require_confirmation: bool,
 }
 
 #[wasm_bindgen]
@@ -820,10 +822,15 @@ impl WasmAutoPayRule {
     /// Create a new auto-pay rule
     #[wasm_bindgen(constructor)]
     pub fn new(
+        subscription_id: &str,
         peer_pubkey: &str,
         max_amount: i64,
         period_seconds: u64,
+        require_confirmation: bool,
     ) -> Result<WasmAutoPayRule, JsValue> {
+        if subscription_id.is_empty() {
+            return Err(JsValue::from_str("Subscription ID cannot be empty"));
+        }
         if max_amount <= 0 {
             return Err(JsValue::from_str("Max amount must be positive"));
         }
@@ -833,10 +840,12 @@ impl WasmAutoPayRule {
 
         Ok(WasmAutoPayRule {
             id: format!("autopay_{}", uuid::Uuid::new_v4()),
+            subscription_id: subscription_id.to_string(),
             peer_pubkey: peer_pubkey.to_string(),
             max_amount,
             period_seconds,
             enabled: true,
+            require_confirmation,
         })
     }
 
@@ -844,6 +853,12 @@ impl WasmAutoPayRule {
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
         self.id.clone()
+    }
+
+    /// Get the subscription ID
+    #[wasm_bindgen(getter)]
+    pub fn subscription_id(&self) -> String {
+        self.subscription_id.clone()
     }
 
     /// Get the peer public key
@@ -878,6 +893,86 @@ impl WasmAutoPayRule {
     /// Disable the rule
     pub fn disable(&mut self) {
         self.enabled = false;
+    }
+
+    /// Check if manual confirmation is required
+    #[wasm_bindgen(getter)]
+    pub fn require_confirmation(&self) -> bool {
+        self.require_confirmation
+    }
+
+    /// Set whether manual confirmation is required
+    pub fn set_require_confirmation(&mut self, required: bool) {
+        self.require_confirmation = required;
+    }
+
+    /// Convert to JSON for storage
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"id".into(), &self.id.clone().into())?;
+        js_sys::Reflect::set(&obj, &"subscription_id".into(), &self.subscription_id.clone().into())?;
+        js_sys::Reflect::set(&obj, &"peer_pubkey".into(), &self.peer_pubkey.clone().into())?;
+        js_sys::Reflect::set(&obj, &"max_amount".into(), &self.max_amount.into())?;
+        js_sys::Reflect::set(&obj, &"period_seconds".into(), &self.period_seconds.into())?;
+        js_sys::Reflect::set(&obj, &"enabled".into(), &self.enabled.into())?;
+        js_sys::Reflect::set(&obj, &"require_confirmation".into(), &self.require_confirmation.into())?;
+        js_sys::JSON::stringify(&obj.into())
+            .map_err(|_| JsValue::from_str("Failed to serialize"))?
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("Failed to convert to string"))
+    }
+
+    /// Create from JSON
+    pub fn from_json(json: &str) -> Result<WasmAutoPayRule, JsValue> {
+        let obj = js_sys::JSON::parse(json)
+            .map_err(|_| JsValue::from_str("Invalid JSON"))?;
+
+        let id = js_sys::Reflect::get(&obj, &"id".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .ok_or_else(|| JsValue::from_str("Missing id"))?;
+
+        let subscription_id = js_sys::Reflect::get(&obj, &"subscription_id".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .ok_or_else(|| JsValue::from_str("Missing subscription_id"))?;
+
+        let peer_pubkey = js_sys::Reflect::get(&obj, &"peer_pubkey".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .ok_or_else(|| JsValue::from_str("Missing peer_pubkey"))?;
+
+        let max_amount = js_sys::Reflect::get(&obj, &"max_amount".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as i64)
+            .ok_or_else(|| JsValue::from_str("Missing or invalid max_amount"))?;
+
+        let period_seconds = js_sys::Reflect::get(&obj, &"period_seconds".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as u64)
+            .ok_or_else(|| JsValue::from_str("Missing or invalid period_seconds"))?;
+
+        let enabled = js_sys::Reflect::get(&obj, &"enabled".into())
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        let require_confirmation = js_sys::Reflect::get(&obj, &"require_confirmation".into())
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        Ok(WasmAutoPayRule {
+            id,
+            subscription_id,
+            peer_pubkey,
+            max_amount,
+            period_seconds,
+            enabled,
+            require_confirmation,
+        })
     }
 }
 
@@ -953,6 +1048,12 @@ impl WasmPeerSpendingLimit {
         self.period_seconds
     }
 
+    /// Get the period start timestamp
+    #[wasm_bindgen(getter)]
+    pub fn period_start(&self) -> i64 {
+        self.period_start
+    }
+
     /// Check if a payment amount is allowed
     pub fn can_spend(&self, amount: i64) -> bool {
         // Check if period has expired and should reset
@@ -1007,6 +1108,397 @@ impl WasmPeerSpendingLimit {
         self.period_start = now;
         self.current_spent = 0;
     }
+
+    /// Convert to JSON for storage
+    pub fn to_json(&self) -> Result<String, JsValue> {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"peer_pubkey".into(), &self.peer_pubkey.clone().into())?;
+        js_sys::Reflect::set(&obj, &"total_limit".into(), &self.total_limit.into())?;
+        js_sys::Reflect::set(&obj, &"current_spent".into(), &self.current_spent.into())?;
+        js_sys::Reflect::set(&obj, &"period_seconds".into(), &self.period_seconds.into())?;
+        js_sys::Reflect::set(&obj, &"period_start".into(), &self.period_start.into())?;
+        js_sys::JSON::stringify(&obj.into())
+            .map_err(|_| JsValue::from_str("Failed to serialize"))?
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("Failed to convert to string"))
+    }
+
+    /// Create from JSON
+    pub fn from_json(json: &str) -> Result<WasmPeerSpendingLimit, JsValue> {
+        let obj = js_sys::JSON::parse(json)
+            .map_err(|_| JsValue::from_str("Invalid JSON"))?;
+
+        let peer_pubkey = js_sys::Reflect::get(&obj, &"peer_pubkey".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .ok_or_else(|| JsValue::from_str("Missing peer_pubkey"))?;
+
+        let total_limit = js_sys::Reflect::get(&obj, &"total_limit".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as i64)
+            .ok_or_else(|| JsValue::from_str("Missing or invalid total_limit"))?;
+
+        let current_spent = js_sys::Reflect::get(&obj, &"current_spent".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as i64)
+            .unwrap_or(0);
+
+        let period_seconds = js_sys::Reflect::get(&obj, &"period_seconds".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as u64)
+            .ok_or_else(|| JsValue::from_str("Missing or invalid period_seconds"))?;
+
+        let period_start = js_sys::Reflect::get(&obj, &"period_start".into())
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as i64)
+            .unwrap_or_else(|| {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64
+            });
+
+        Ok(WasmPeerSpendingLimit {
+            peer_pubkey,
+            total_limit,
+            current_spent,
+            period_seconds,
+            period_start,
+        })
+    }
+}
+
+/// Storage for auto-pay rules in browser localStorage
+#[wasm_bindgen]
+pub struct WasmAutoPayRuleStorage {
+    storage_key: String,
+}
+
+#[wasm_bindgen]
+impl WasmAutoPayRuleStorage {
+    /// Create new storage manager
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmAutoPayRuleStorage {
+        WasmAutoPayRuleStorage {
+            storage_key: "paykit_autopay".to_string(),
+        }
+    }
+
+    /// Save an auto-pay rule
+    pub async fn save_autopay_rule(&self, rule: &WasmAutoPayRule) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:rule:{}", self.storage_key, rule.subscription_id());
+        let json = rule.to_json()?;
+
+        storage
+            .set_item(&key, &json)
+            .map_err(|e| JsValue::from_str(&format!("Failed to save: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Get an auto-pay rule by subscription ID
+    pub async fn get_autopay_rule(
+        &self,
+        subscription_id: &str,
+    ) -> Result<Option<WasmAutoPayRule>, JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:rule:{}", self.storage_key, subscription_id);
+
+        match storage.get_item(&key) {
+            Ok(Some(json)) => {
+                let rule = WasmAutoPayRule::from_json(&json)?;
+                Ok(Some(rule))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(JsValue::from_str(&format!("Failed to get: {:?}", e))),
+        }
+    }
+
+    /// List all auto-pay rules
+    pub async fn list_autopay_rules(&self) -> Result<Vec<JsValue>, JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let mut rules = Vec::new();
+        let prefix = format!("{}:rule:", self.storage_key);
+        let length = storage
+            .length()
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        for i in 0..length {
+            if let Ok(Some(key)) = storage.key(i) {
+                if key.starts_with(&prefix) {
+                    if let Ok(Some(json)) = storage.get_item(&key) {
+                        if let Ok(rule) = WasmAutoPayRule::from_json(&json) {
+                            let js_obj = js_sys::Object::new();
+                            js_sys::Reflect::set(&js_obj, &"id".into(), &rule.id().into())?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"subscription_id".into(),
+                                &rule.subscription_id().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"peer_pubkey".into(),
+                                &rule.peer_pubkey().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"max_amount".into(),
+                                &rule.max_amount().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"period_seconds".into(),
+                                &rule.period_seconds().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"enabled".into(),
+                                &rule.enabled().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"require_confirmation".into(),
+                                &rule.require_confirmation().into(),
+                            )?;
+
+                            rules.push(js_obj.into());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(rules)
+    }
+
+    /// Delete an auto-pay rule
+    pub async fn delete_autopay_rule(&self, subscription_id: &str) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:rule:{}", self.storage_key, subscription_id);
+        storage
+            .remove_item(&key)
+            .map_err(|e| JsValue::from_str(&format!("Failed to delete: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Clear all auto-pay rules
+    pub async fn clear_all(&self) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let prefix = format!("{}:rule:", self.storage_key);
+        let length = storage
+            .length()
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        let mut keys_to_remove = Vec::new();
+        for i in 0..length {
+            if let Ok(Some(key)) = storage.key(i) {
+                if key.starts_with(&prefix) {
+                    keys_to_remove.push(key);
+                }
+            }
+        }
+
+        for key in keys_to_remove {
+            storage
+                .remove_item(&key)
+                .map_err(|e| JsValue::from_str(&format!("Failed to clear: {:?}", e)))?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Storage for peer spending limits in browser localStorage
+#[wasm_bindgen]
+pub struct WasmPeerSpendingLimitStorage {
+    storage_key: String,
+}
+
+#[wasm_bindgen]
+impl WasmPeerSpendingLimitStorage {
+    /// Create new storage manager
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> WasmPeerSpendingLimitStorage {
+        WasmPeerSpendingLimitStorage {
+            storage_key: "paykit_limits".to_string(),
+        }
+    }
+
+    /// Save a peer spending limit
+    pub async fn save_peer_limit(&self, limit: &WasmPeerSpendingLimit) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:peer:{}", self.storage_key, limit.peer_pubkey());
+        let json = limit.to_json()?;
+
+        storage
+            .set_item(&key, &json)
+            .map_err(|e| JsValue::from_str(&format!("Failed to save: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Get a peer spending limit by peer pubkey
+    pub async fn get_peer_limit(
+        &self,
+        peer_pubkey: &str,
+    ) -> Result<Option<WasmPeerSpendingLimit>, JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:peer:{}", self.storage_key, peer_pubkey);
+
+        match storage.get_item(&key) {
+            Ok(Some(json)) => {
+                let mut limit = WasmPeerSpendingLimit::from_json(&json)?;
+                // Check if period needs reset
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+
+                if now - limit.period_start > limit.period_seconds() as i64 {
+                    limit.reset();
+                    // Save the reset limit
+                    self.save_peer_limit(&limit).await?;
+                }
+                Ok(Some(limit))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(JsValue::from_str(&format!("Failed to get: {:?}", e))),
+        }
+    }
+
+    /// List all peer spending limits
+    pub async fn list_peer_limits(&self) -> Result<Vec<JsValue>, JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let mut limits = Vec::new();
+        let prefix = format!("{}:peer:", self.storage_key);
+        let length = storage
+            .length()
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        for i in 0..length {
+            if let Ok(Some(key)) = storage.key(i) {
+                if key.starts_with(&prefix) {
+                    if let Ok(Some(json)) = storage.get_item(&key) {
+                        if let Ok(mut limit) = WasmPeerSpendingLimit::from_json(&json) {
+                            // Check if period needs reset
+                            use std::time::{SystemTime, UNIX_EPOCH};
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs() as i64;
+
+                            if now - limit.period_start > limit.period_seconds() as i64 {
+                                limit.reset();
+                                // Save the reset limit
+                                self.save_peer_limit(&limit).await?;
+                            }
+
+                            let js_obj = js_sys::Object::new();
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"peer_pubkey".into(),
+                                &limit.peer_pubkey().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"total_limit".into(),
+                                &limit.total_limit().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"current_spent".into(),
+                                &limit.current_spent().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"remaining_limit".into(),
+                                &limit.remaining_limit().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"period_seconds".into(),
+                                &limit.period_seconds().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"period_start".into(),
+                                &limit.period_start().into(),
+                            )?;
+
+                            limits.push(js_obj.into());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(limits)
+    }
+
+    /// Delete a peer spending limit
+    pub async fn delete_peer_limit(&self, peer_pubkey: &str) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let key = format!("{}:peer:{}", self.storage_key, peer_pubkey);
+        storage
+            .remove_item(&key)
+            .map_err(|e| JsValue::from_str(&format!("Failed to delete: {:?}", e)))?;
+
+        Ok(())
+    }
+
+    /// Clear all peer spending limits
+    pub async fn clear_all(&self) -> Result<(), JsValue> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage()?.ok_or("No localStorage")?;
+
+        let prefix = format!("{}:peer:", self.storage_key);
+        let length = storage
+            .length()
+            .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
+
+        let mut keys_to_remove = Vec::new();
+        for i in 0..length {
+            if let Ok(Some(key)) = storage.key(i) {
+                if key.starts_with(&prefix) {
+                    keys_to_remove.push(key);
+                }
+            }
+        }
+
+        for key in keys_to_remove {
+            storage
+                .remove_item(&key)
+                .map_err(|e| JsValue::from_str(&format!("Failed to clear: {:?}", e)))?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1018,10 +1510,12 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_auto_pay_rule_creation() {
-        let rule = WasmAutoPayRule::new("test_peer", 1000, 3600).unwrap();
+        let rule = WasmAutoPayRule::new("sub_123", "test_peer", 1000, 3600, false).unwrap();
         assert_eq!(rule.max_amount(), 1000);
         assert_eq!(rule.period_seconds(), 3600);
         assert!(rule.enabled());
+        assert_eq!(rule.subscription_id(), "sub_123");
+        assert!(!rule.require_confirmation());
     }
 
     #[wasm_bindgen_test]

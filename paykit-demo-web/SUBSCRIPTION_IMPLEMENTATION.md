@@ -181,11 +181,103 @@ await subscriptionStorage.delete_signed_subscription(subscription_id);
 - Clipboard API for "Copy ID" feature (fallback available)
 - localStorage API for persistence
 
+## Auto-Pay Management
+
+### Features Implemented
+
+- **Enable Auto-Pay**: Configure automatic payments for subscriptions
+- **Manual Confirmation**: Option to require manual approval before each payment
+- **Max Amount Limits**: Set maximum payment amount per subscription
+- **Rule Management**: Enable/disable and delete auto-pay rules
+- **Visual Status**: Clear indicators for enabled/disabled and confirmation requirements
+
+### API Usage
+
+#### Enabling Auto-Pay
+
+```javascript
+const rule = new WasmAutoPayRule(
+    subscription_id,      // Subscription ID
+    peer_pubkey,         // Provider's public key
+    max_amount,          // Max amount per payment (number)
+    period_seconds,      // Period in seconds (e.g., 30 * 24 * 60 * 60 for monthly)
+    require_confirmation // true to require manual confirmation
+);
+
+await autopayRuleStorage.save_autopay_rule(rule);
+```
+
+#### Listing Auto-Pay Rules
+
+```javascript
+const rules = await autopayRuleStorage.list_autopay_rules();
+// Returns array with: id, subscription_id, peer_pubkey, max_amount, 
+// period_seconds, enabled, require_confirmation
+```
+
+#### Disabling Auto-Pay
+
+```javascript
+const rule = await autopayRuleStorage.get_autopay_rule(subscription_id);
+if (rule) {
+    rule.disable();
+    await autopayRuleStorage.save_autopay_rule(rule);
+}
+```
+
+## Spending Limits (Allowances)
+
+### Features Implemented
+
+- **Per-Peer Limits**: Set spending limits for individual peers
+- **Period-Based**: Daily, weekly, or monthly limits
+- **Automatic Reset**: Limits automatically reset at period boundaries
+- **Spending Tracking**: Track current spending against limits
+- **Visual Progress**: Progress bars showing spending vs. limit
+- **Period Status**: Display days until period reset
+
+### API Usage
+
+#### Setting a Spending Limit
+
+```javascript
+const limit = new WasmPeerSpendingLimit(
+    peer_pubkey,    // Peer's public key
+    total_limit,    // Total limit in sats (number)
+    period_seconds  // Period: 86400 (daily), 604800 (weekly), 2592000 (monthly)
+);
+
+await peerLimitStorage.save_peer_limit(limit);
+```
+
+#### Checking Spending
+
+```javascript
+const limit = await peerLimitStorage.get_peer_limit(peer_pubkey);
+if (limit) {
+    console.log(`Spent: ${limit.current_spent()}/${limit.total_limit()}`);
+    console.log(`Remaining: ${limit.remaining_limit()}`);
+    
+    if (limit.can_spend(amount)) {
+        limit.record_payment(amount);
+        await peerLimitStorage.save_peer_limit(limit);
+    }
+}
+```
+
+#### Listing All Limits
+
+```javascript
+const limits = await peerLimitStorage.list_peer_limits();
+// Returns array with: peer_pubkey, total_limit, current_spent,
+// remaining_limit, period_seconds, period_start
+```
+
 ## Next Steps / Future Enhancements
 - [ ] Implement subscription signing workflow
 - [ ] Add subscription agreement negotiation via Noise Protocol
-- [ ] Implement auto-pay rule creation per subscription
-- [ ] Add spending limit tracking
+- [x] Implement auto-pay rule creation per subscription
+- [x] Add spending limit tracking
 - [ ] Display next payment date calculation
 - [ ] Add subscription search/filter functionality
 - [ ] Export/import subscriptions as JSON
@@ -194,9 +286,10 @@ await subscriptionStorage.delete_signed_subscription(subscription_id);
 - [ ] Add notifications for upcoming payments
 
 ## Files Modified
-1. `www/index.html` - Added subscription UI elements
-2. `www/app.js` - Added subscription management functions
-3. `www/styles.css` - Added subscription styling
+1. `www/index.html` - Added subscription, auto-pay, and spending limits UI elements
+2. `www/app.js` - Added subscription, auto-pay, and spending limits management functions
+3. `www/styles.css` - Added subscription, auto-pay rule, and spending limit styling
+4. `src/subscriptions.rs` - Added WasmAutoPayRule, WasmAutoPayRuleStorage, WasmPeerSpendingLimit, WasmPeerSpendingLimitStorage
 
 ## UI Overview
 

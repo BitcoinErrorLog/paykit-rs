@@ -38,7 +38,7 @@ A feature-complete CLI application showcasing all Paykit capabilities: public di
 
 ## 🚀 Quick Start
 
-###Installation
+### Installation
 
 ```bash
 cd paykit-demo-cli
@@ -99,7 +99,19 @@ paykit-demo receipts
 
 ### Subscriptions
 
-See [SUBSCRIPTION_GUIDE.md](./SUBSCRIPTION_GUIDE.md) for complete subscription documentation.
+| Command | Description | Example |
+|---------|-------------|---------|
+| `subscriptions request` | Send payment request | `paykit-demo subscriptions request --recipient pubky://... --amount 1000 --currency SAT` |
+| `subscriptions list` | List payment requests | `paykit-demo subscriptions list` |
+| `subscriptions list-agreements` | List subscriptions | `paykit-demo subscriptions list-agreements` |
+| `subscriptions respond` | Respond to request | `paykit-demo subscriptions respond --request-id <id> --action accept` |
+| `subscriptions propose` | Propose subscription | `paykit-demo subscriptions propose --recipient pubky://... --amount 1000 --frequency monthly:1` |
+| `subscriptions accept` | Accept subscription | `paykit-demo subscriptions accept --subscription-id <id>` |
+| `subscriptions enable-auto-pay` | Enable auto-pay | `paykit-demo subscriptions enable-auto-pay --subscription-id <id> --max-amount 5000` |
+| `subscriptions set-limit` | Set spending limits | `paykit-demo subscriptions set-limit --peer pubky://... --limit 10000 --period monthly` |
+| `subscriptions show-limits` | Show spending limits | `paykit-demo subscriptions show-limits` |
+
+For detailed subscription workflows, see [QUICKSTART.md](./QUICKSTART.md#4-subscriptions).
 
 ## 🔧 Configuration
 
@@ -172,10 +184,11 @@ cargo test --test pay_integration     # Payment tests
 
 ## 📖 Documentation
 
-- **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute getting started guide
+- **[QUICKSTART.md](./QUICKSTART.md)** - 5-minute getting started guide with examples
 - **[TESTING.md](./TESTING.md)** - Comprehensive testing guide
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design and flows
+- **[BUILD.md](./BUILD.md)** - Build instructions and development setup
 - **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues and fixes
+- **[demos/README.md](./demos/README.md)** - Demo scripts and workflows
 
 ## 🔒 Security Considerations
 

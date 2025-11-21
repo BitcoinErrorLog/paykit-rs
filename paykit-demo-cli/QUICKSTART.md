@@ -1,4 +1,8 @@
-# Paykit-Demo-CLI Quick Start Guide
+# Paykit Demo CLI - Quick Start Guide
+
+> **5-minute guide to get started with Paykit Demo CLI**
+
+This guide provides step-by-step instructions for common workflows. For complete documentation, see [README.md](./README.md).
 
 ## Installation
 
@@ -51,7 +55,7 @@ The binary will be at `target/release/paykit-demo`
 #### Send a Payment Request
 
 ```bash
-./paykit-demo subscriptions send-request \
+./paykit-demo subscriptions request \
   --recipient pubky://[recipient-key] \
   --amount 1000 \
   --currency SAT \
@@ -100,18 +104,24 @@ The binary will be at `target/release/paykit-demo`
 #### Enable Auto-Pay
 
 ```bash
-./paykit-demo subscriptions enable-autopay \
-  --peer pubky://[peer-key] \
+./paykit-demo subscriptions enable-auto-pay \
+  --subscription-id [subscription-id] \
   --max-amount 5000
 ```
 
 #### Set Spending Limits
 
 ```bash
-./paykit-demo subscriptions set-peer-limit \
+./paykit-demo subscriptions set-limit \
   --peer pubky://[peer-key] \
-  --daily-limit 10000 \
-  --monthly-limit 100000
+  --limit 10000 \
+  --period monthly
+```
+
+#### Show Spending Limits
+
+```bash
+./paykit-demo subscriptions show-limits
 ```
 
 ## Testing
@@ -177,7 +187,7 @@ BOB_KEY=$(./paykit-demo whoami --format pubkey)
 ./paykit-demo discover "pubky://$BOB_KEY"
 
 # Alice sends a payment request to Bob
-./paykit-demo subscriptions send-request \
+./paykit-demo subscriptions request \
   --recipient "pubky://$BOB_KEY" \
   --amount 1000 \
   --currency SAT \
@@ -203,30 +213,42 @@ BOB_KEY=$(./paykit-demo whoami --format pubkey)
 ./paykit-demo subscriptions list
 ./paykit-demo subscriptions accept --subscription-id [...]
 
-# Alice enables auto-pay for Bob
-./paykit-demo subscriptions enable-autopay \
-  --peer "pubky://$BOB_KEY" \
+# Alice enables auto-pay for Bob's subscription
+./paykit-demo subscriptions enable-auto-pay \
+  --subscription-id [subscription-id] \
   --max-amount 15000
 
 # Alice sets spending limits
-./paykit-demo subscriptions set-peer-limit \
+./paykit-demo subscriptions set-limit \
   --peer "pubky://$BOB_KEY" \
-  --daily-limit 20000 \
-  --monthly-limit 200000
+  --limit 20000 \
+  --period monthly
 ```
 
 ## Storage
 
 All data is stored in:
-- **macOS/Linux**: `~/.local/share/paykit-demo/`
+- **macOS**: `~/Library/Application Support/paykit-demo/`
+- **Linux**: `~/.local/share/paykit-demo/`
 - **Windows**: `%APPDATA%\paykit-demo\`
+- **Custom**: Set `PAYKIT_DEMO_DIR` environment variable
 
-### Files
-- `identities/` - Your keypairs and profiles
-- `data/requests/` - Payment requests
-- `data/subscriptions/` - Subscription agreements
-- `data/autopay/` - Auto-pay rules and limits
-- `data/contacts/` - Contact list
+### Storage Structure
+
+```
+paykit-demo/
+├── identities/           # Ed25519 keypairs (JSON)
+│   ├── alice.json
+│   └── bob.json
+├── data/
+│   ├── data.json        # Contacts and receipts
+│   └── subscriptions/   # Subscription data
+│       ├── requests/     # Payment requests
+│       ├── subscriptions/ # Subscription agreements
+│       ├── autopay_rules/ # Auto-pay rules
+│       └── peer_limits/  # Spending limits
+└── .current_identity    # Active identity marker
+```
 
 ## Configuration
 
@@ -244,7 +266,7 @@ The CLI needs a Pubky homeserver for directory operations. You can:
 ### Custom Data Directory
 
 ```bash
-export PAYKIT_DATA_DIR=/path/to/data
+export PAYKIT_DEMO_DIR=/path/to/data
 ./paykit-demo setup --name Alice
 ```
 
@@ -309,7 +331,9 @@ For detailed command help:
 
 ## Support
 
-- **Issues**: Check `AUDIT_COMPLETION_REPORT.md` for known issues
-- **Tests**: See `FINAL_SUMMARY.md` for test coverage
+- **Documentation**: See [README.md](./README.md) for complete command reference
+- **Testing**: See [TESTING.md](./TESTING.md) for testing guide
+- **Troubleshooting**: See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common issues
 - **Architecture**: See `paykit-demo-core/` for implementation details
+
 

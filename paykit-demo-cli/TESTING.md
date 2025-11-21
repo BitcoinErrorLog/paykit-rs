@@ -130,7 +130,7 @@ paykit-demo subscriptions propose \
 
 # Enable auto-pay
 paykit-demo subscriptions enable-auto-pay \
-  --subscription <id> \
+  --subscription-id <id> \
   --max-amount 1000
 ```
 

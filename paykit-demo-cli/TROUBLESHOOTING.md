@@ -392,9 +392,10 @@ Include:
 
 ### Check Documentation
 
-- [README.md](./README.md) - General overview
-- [TESTING.md](./TESTING.md) - Testing guide  
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - System design
+- [README.md](./README.md) - General overview and command reference
+- [QUICKSTART.md](./QUICKSTART.md) - Getting started guide
+- [TESTING.md](./TESTING.md) - Testing guide
+- [BUILD.md](./BUILD.md) - Build instructions
 
 ### Still Stuck?
 

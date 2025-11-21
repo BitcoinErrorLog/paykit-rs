@@ -278,6 +278,15 @@ MIT
 - [Pubky Project](https://pubky.org) - Decentralized identity system
 - [Noise Protocol](http://www.noiseprotocol.org/) - Encryption framework
 
+## Related Components
+
+This CLI demo application uses and integrates with:
+
+- **[paykit-lib](../paykit-lib/README.md)** - Core library for directory operations and transport traits
+- **[paykit-interactive](../paykit-interactive/README.md)** - Interactive payment protocol with Noise encryption
+- **[paykit-subscriptions](../paykit-subscriptions/README.md)** - Subscription management, payment requests, and auto-pay
+- **[paykit-demo-core](../paykit-demo-core/README.md)** - Shared business logic for demo applications
+
 ## ⭐ Key Differentiators
 
 ### vs. Traditional Payment CLIs

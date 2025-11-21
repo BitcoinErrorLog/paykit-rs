@@ -1,0 +1,526 @@
+//! Integration tests for real Noise protocol handshakes and encrypted channels
+//!
+//! These tests verify that pubky-noise integration works correctly with actual
+//! TCP connections and Noise_IK handshakes (not mocks).
+
+use paykit_interactive::{
+    transport::PubkyNoiseChannel, PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage,
+    PaykitReceipt, PaykitStorage, ReceiptGenerator,
+};
+use paykit_lib::MethodId;
+use pubky_noise::{NoiseClient, NoiseServer, RingKeyProvider};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::time::timeout;
+
+// Use mock implementations for storage and receipt generation
+#[path = "mock_implementations.rs"]
+mod mock_implementations;
+use mock_implementations::{MockReceiptGenerator, MockStorage};
+
+/// Dummy ring key provider for testing
+struct DummyRing;
+impl RingKeyProvider for DummyRing {
+    fn derive_device_x25519(
+        &self,
+        _kid: &str,
+        device_id: &[u8],
+        epoch: u32,
+    ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
+        // Generate a deterministic key from device_id and epoch for testing
+        let mut seed = [0u8; 32];
+        let data = format!("{:?}:{}", device_id, epoch);
+        let bytes = data.as_bytes();
+        let len = bytes.len().min(32);
+        seed[..len].copy_from_slice(&bytes[..len]);
+        Ok(seed)
+    }
+
+    fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
+        // Return a dummy public key for testing
+        Ok([1u8; 32])
+    }
+
+    fn sign_ed25519(
+        &self,
+        _kid: &str,
+        _msg: &[u8],
+    ) -> std::result::Result<[u8; 64], pubky_noise::NoiseError> {
+        // Return a dummy signature for testing
+        Ok([2u8; 64])
+    }
+}
+
+/// Helper to generate test keys
+fn generate_test_keys() -> ([u8; 32], [u8; 32]) {
+    use rand::RngCore;
+    let mut rng = rand::thread_rng();
+    let mut seed = [0u8; 32];
+    rng.fill_bytes(&mut seed);
+
+    // Derive X25519 key from seed using the same method as pubky-noise
+    let device_id = b"test_device_id_12345";
+    let x_sk = pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, 0);
+    let x_pk = pubky_noise::kdf::x25519_pk_from_sk(&x_sk);
+
+    (x_sk, x_pk)
+}
+
+/// Helper to create test public keys
+fn create_test_pubkey(_name: &str) -> pubky::PublicKey {
+    // Generate a valid keypair and use its public key
+    let keypair = pubky::Keypair::random();
+    keypair.public_key()
+}
+
+#[tokio::test]
+async fn test_noise_client_server_handshake() {
+    // Test 1: Real Noise_IK handshake over TCP
+
+    // Setup server
+    let (_server_sk, server_pk) = generate_test_keys();
+    let ring = Arc::new(DummyRing);
+    let server = NoiseServer::<DummyRing, ()>::new_direct(
+        "server_kid",
+        b"server_device_id",
+        ring,
+        0, // current_epoch
+    );
+
+    // Start TCP server
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind");
+    let server_addr = listener.local_addr().expect("Failed to get address");
+
+    // Spawn server task
+    let server_handle = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.expect("Failed to accept");
+
+        // Read handshake message
+        let mut len_bytes = [0u8; 4];
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .expect("Failed to read length");
+        let len = u32::from_be_bytes(len_bytes) as usize;
+
+        let mut handshake_msg = vec![0u8; len];
+        stream
+            .read_exact(&mut handshake_msg)
+            .await
+            .expect("Failed to read handshake");
+
+        // Process handshake - Step 2: Server processes client's message and sends response
+        let (mut hs_state, _identity) = server
+            .build_responder_read_ik(&handshake_msg)
+            .expect("Handshake failed");
+
+        // Generate response message
+        let mut response_msg = vec![0u8; 128];
+        let n = hs_state
+            .write_message(&[], &mut response_msg)
+            .expect("Write failed");
+        response_msg.truncate(n);
+
+        // Send handshake response
+        let len = (response_msg.len() as u32).to_be_bytes();
+        stream.write_all(&len).await.expect("Write failed");
+        stream.write_all(&response_msg).await.expect("Write failed");
+
+        // Step 3: Complete handshake to get transport mode
+        let mut link = pubky_noise::datalink_adapter::server_complete_ik(hs_state)
+            .expect("Failed to complete handshake");
+
+        // Send encrypted test message
+        let test_msg = b"Hello from server!";
+        let ciphertext = link.encrypt(test_msg).expect("Encryption failed");
+        let len = (ciphertext.len() as u32).to_be_bytes();
+        stream.write_all(&len).await.expect("Write failed");
+        stream.write_all(&ciphertext).await.expect("Write failed");
+
+        // Read encrypted response
+        let mut len_bytes = [0u8; 4];
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .expect("Failed to read length");
+        let len = u32::from_be_bytes(len_bytes) as usize;
+
+        let mut ciphertext = vec![0u8; len];
+        stream
+            .read_exact(&mut ciphertext)
+            .await
+            .expect("Failed to read ciphertext");
+
+        let plaintext = link.decrypt(&ciphertext).expect("Decryption failed");
+        assert_eq!(&plaintext, b"Hello from client!");
+    });
+
+    // Give server time to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Setup client
+    let (_client_sk, _client_pk) = generate_test_keys();
+    let client_ring = Arc::new(DummyRing);
+    let client =
+        NoiseClient::<DummyRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
+
+    // Connect and perform handshake
+    let mut stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Failed to connect");
+
+    // Step 1: Client starts handshake
+    let (hs_state, _epoch, handshake_msg) =
+        pubky_noise::datalink_adapter::client_start_ik_direct(&client, &server_pk, 0, None)
+            .expect("Handshake build failed");
+
+    // Send handshake
+    let len = (handshake_msg.len() as u32).to_be_bytes();
+    stream.write_all(&len).await.expect("Write failed");
+    stream
+        .write_all(&handshake_msg)
+        .await
+        .expect("Write failed");
+
+    // Step 2: Read server's response
+    let mut len_bytes = [0u8; 4];
+    stream
+        .read_exact(&mut len_bytes)
+        .await
+        .expect("Failed to read response length");
+    let len = u32::from_be_bytes(len_bytes) as usize;
+
+    let mut response_msg = vec![0u8; len];
+    stream
+        .read_exact(&mut response_msg)
+        .await
+        .expect("Failed to read response");
+
+    // Step 3: Complete handshake to get transport mode
+    let mut link = pubky_noise::datalink_adapter::client_complete_ik(hs_state, &response_msg)
+        .expect("Failed to complete handshake");
+
+    // Read encrypted message from server
+    let mut len_bytes = [0u8; 4];
+    stream
+        .read_exact(&mut len_bytes)
+        .await
+        .expect("Failed to read length");
+    let len = u32::from_be_bytes(len_bytes) as usize;
+
+    let mut ciphertext = vec![0u8; len];
+    stream
+        .read_exact(&mut ciphertext)
+        .await
+        .expect("Failed to read ciphertext");
+
+    let plaintext = link.decrypt(&ciphertext).expect("Decryption failed");
+    assert_eq!(&plaintext, b"Hello from server!");
+
+    // Send encrypted response
+    let test_msg = b"Hello from client!";
+    let ciphertext = link.encrypt(test_msg).expect("Encryption failed");
+    let len = (ciphertext.len() as u32).to_be_bytes();
+    stream.write_all(&len).await.expect("Write failed");
+    stream.write_all(&ciphertext).await.expect("Write failed");
+
+    // Wait for server to finish
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .expect("Server timeout")
+        .expect("Server panicked");
+
+    println!("✅ Real Noise_IK handshake test passed");
+}
+
+#[tokio::test]
+async fn test_pubky_noise_channel_real() {
+    // Test 2: PubkyNoiseChannel with real transport
+
+    // Setup server
+    let (_server_sk, server_pk) = generate_test_keys();
+    let server_ring2 = Arc::new(DummyRing);
+    let server = NoiseServer::<DummyRing, ()>::new_direct(
+        "server_kid2",
+        b"server_device_id",
+        server_ring2,
+        0,
+    );
+
+    // Start TCP server
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind");
+    let server_addr = listener.local_addr().expect("Failed to get address");
+
+    // Spawn server task
+    let server_handle = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("Failed to accept");
+
+        // Read handshake message
+        let mut len_bytes = [0u8; 4];
+        let (mut reader, mut writer) = tokio::io::split(stream);
+        reader
+            .read_exact(&mut len_bytes)
+            .await
+            .expect("Failed to read length");
+        let len = u32::from_be_bytes(len_bytes) as usize;
+
+        let mut handshake_msg = vec![0u8; len];
+        reader
+            .read_exact(&mut handshake_msg)
+            .await
+            .expect("Failed to read handshake");
+
+        // Process handshake - Step 2: Server processes client's message and sends response
+        let (mut hs_state, _identity) = server
+            .build_responder_read_ik(&handshake_msg)
+            .expect("Handshake failed");
+
+        // Generate response message
+        let mut response_msg = vec![0u8; 128];
+        let n = hs_state
+            .write_message(&[], &mut response_msg)
+            .expect("Write failed");
+        response_msg.truncate(n);
+
+        // Send handshake response
+        writer
+            .write_all(&(response_msg.len() as u32).to_be_bytes())
+            .await
+            .expect("Write failed");
+        writer.write_all(&response_msg).await.expect("Write failed");
+
+        // Step 3: Complete handshake to get transport mode
+        let link = pubky_noise::datalink_adapter::server_complete_ik(hs_state)
+            .expect("Failed to complete handshake");
+
+        // Reunite stream and create channel
+        let stream = reader.unsplit(writer);
+        let mut channel = PubkyNoiseChannel::new(stream, link);
+
+        // Receive PaykitNoiseMessage
+        let msg = channel.recv().await.expect("Failed to receive message");
+        match msg {
+            PaykitNoiseMessage::OfferPrivateEndpoint {
+                method_id,
+                endpoint,
+            } => {
+                assert_eq!(method_id.0, "lightning");
+                assert_eq!(endpoint, "lnbc10000n1...");
+            }
+            _ => panic!("Unexpected message type"),
+        }
+
+        // Send response
+        channel
+            .send(PaykitNoiseMessage::Ack)
+            .await
+            .expect("Failed to send response");
+    });
+
+    // Give server time to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Setup client
+    let (_client_sk, _client_pk) = generate_test_keys();
+    let client_ring = Arc::new(DummyRing);
+    let client =
+        NoiseClient::<DummyRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
+
+    // Connect using PubkyNoiseChannel::connect()
+    let stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Failed to connect");
+
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
+        .await
+        .expect("Failed to connect channel");
+
+    // Send PaykitNoiseMessage
+    channel
+        .send(PaykitNoiseMessage::OfferPrivateEndpoint {
+            method_id: MethodId("lightning".to_string()),
+            endpoint: "lnbc10000n1...".to_string(),
+        })
+        .await
+        .expect("Failed to send message");
+
+    // Receive response
+    let msg = channel.recv().await.expect("Failed to receive response");
+    assert!(matches!(msg, PaykitNoiseMessage::Ack));
+
+    // Wait for server to finish
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .expect("Server timeout")
+        .expect("Server panicked");
+
+    println!("✅ PubkyNoiseChannel real transport test passed");
+}
+
+#[tokio::test]
+async fn test_complete_payment_flow_encrypted() {
+    // Test 3: Complete payment flow over real Noise
+
+    // Setup server (payee)
+    let (_server_sk, server_pk) = generate_test_keys();
+    let server_ring = Arc::new(DummyRing);
+    let server = Arc::new(NoiseServer::<DummyRing, ()>::new_direct(
+        "payee_kid",
+        b"payee_device",
+        server_ring,
+        0,
+    ));
+
+    // Setup payee manager
+    let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage.clone(),
+        payee_generator,
+    ));
+
+    // Create test public keys
+    let payer_pk = create_test_pubkey("payer");
+    let payee_pk = create_test_pubkey("payee");
+
+    // Start TCP server
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("Failed to bind");
+    let server_addr = listener.local_addr().expect("Failed to get address");
+
+    // Spawn server (payee) task
+    let server_handle = {
+        let server = server.clone();
+        let payee_manager = payee_manager.clone();
+        let payer_pk = payer_pk.clone();
+        let payee_pk = payee_pk.clone();
+
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("Failed to accept");
+
+            // Read handshake message
+            let mut len_bytes = [0u8; 4];
+            let (mut reader, mut writer) = tokio::io::split(stream);
+            reader
+                .read_exact(&mut len_bytes)
+                .await
+                .expect("Failed to read length");
+            let len = u32::from_be_bytes(len_bytes) as usize;
+
+            let mut handshake_msg = vec![0u8; len];
+            reader
+                .read_exact(&mut handshake_msg)
+                .await
+                .expect("Failed to read handshake");
+
+            // Process handshake - Step 2: Server processes client's message and sends response
+            let (mut hs_state, _identity) = server
+                .build_responder_read_ik(&handshake_msg)
+                .expect("Handshake failed");
+
+            // Generate response message
+            let mut response_msg = vec![0u8; 128];
+            let n = hs_state
+                .write_message(&[], &mut response_msg)
+                .expect("Write failed");
+            response_msg.truncate(n);
+
+            // Send handshake response
+            writer
+                .write_all(&(response_msg.len() as u32).to_be_bytes())
+                .await
+                .expect("Write failed");
+            writer.write_all(&response_msg).await.expect("Write failed");
+
+            // Step 3: Complete handshake to get transport mode
+            let link = pubky_noise::datalink_adapter::server_complete_ik(hs_state)
+                .expect("Failed to complete handshake");
+
+            // Create channel
+            let stream = reader.unsplit(writer);
+            let mut channel = PubkyNoiseChannel::new(stream, link);
+
+            // Handle payment request
+            let msg = channel.recv().await.expect("Failed to receive");
+            let response = payee_manager
+                .handle_message(msg, &payer_pk, &payee_pk)
+                .await
+                .expect("Failed to handle message");
+
+            if let Some(response_msg) = response {
+                channel
+                    .send(response_msg)
+                    .await
+                    .expect("Failed to send response");
+            }
+        })
+    };
+
+    // Give server time to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Setup client (payer)
+    let (_client_sk, _client_pk) = generate_test_keys();
+    let client_ring3 = Arc::new(DummyRing);
+    let client =
+        NoiseClient::<DummyRing, ()>::new_direct("payer_kid", b"payer_device", client_ring3);
+
+    let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_manager = PaykitInteractiveManager::new(payer_storage.clone(), payer_generator);
+
+    // Connect using real Noise channel
+    let stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Failed to connect");
+
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
+        .await
+        .expect("Failed to connect channel");
+
+    // Create provisional receipt
+    let provisional_receipt = PaykitReceipt::new(
+        format!(
+            "receipt_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        ),
+        payer_pk.clone(),
+        payee_pk.clone(),
+        MethodId("lightning".to_string()),
+        Some("1000".to_string()),
+        Some("SAT".to_string()),
+        serde_json::json!({"order_id": "TEST-001"}),
+    );
+
+    // Initiate payment over encrypted channel
+    let final_receipt = payer_manager
+        .initiate_payment(&mut channel, provisional_receipt)
+        .await
+        .expect("Payment initiation failed");
+
+    // Verify receipt was completed
+    assert_eq!(final_receipt.payer, payer_pk);
+    assert_eq!(final_receipt.payee, payee_pk);
+    assert_eq!(final_receipt.method_id.0, "lightning");
+    assert!(final_receipt.metadata.get("invoice").is_some());
+
+    // Wait for server to finish
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .expect("Server timeout")
+        .expect("Server panicked");
+
+    println!("✅ Complete payment flow over real Noise test passed");
+}

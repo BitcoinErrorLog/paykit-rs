@@ -1,21 +1,7 @@
 //! Paykit library.
 //!
-//! `paykit-lib` is a stateless Rust SDK that focuses on the transport layer of the
-//! Paykit protocol. It defines ergonomic helper types plus a pair of tiny traits that
-//! callers implement (or wrap) to perform reads and writes against the routing network.
-//! The crate includes first-party adapters for the Pubky SDK behind the default
-//! `pubky` feature while remaining open for custom transports or mocks.
-//!
-//! ## Design goals
-//! - Provide high-level helpers such as [`get_payment_list`] and [`set_payment_endpoint`]
-//!   that work with any type implementing [`UnauthenticatedTransportRead`] or
-//!   [`AuthenticatedTransport`].
-//! - Keep storage/session management outside of the crate so integrators can inject their
-//!   own security model, capability scoping, caching, or telemetry.
-//! - Export the standard Pubky path prefixes (see [`transport::pubky`]) to keep file layout
-//!   consistent across bindings.
-//!
-//! For an architectural overview and example workflows, see `paykit-lib/README.md`.
+//! This crate intentionally stays stateless and delegates authenticated access
+//! to callers through trait-based dependency injection.
 
 use std::{collections::HashMap, fmt};
 
@@ -23,30 +9,10 @@ use std::{collections::HashMap, fmt};
 pub use pubky::PublicKey;
 
 #[cfg(not(feature = "pubky"))]
-/// Public key placeholder used when the `pubky` feature is disabled.
-///
-/// Applications providing their own transport layer should define a richer type
-/// and convert into this wrapper where necessary.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PublicKey(pub String);
 
-#[cfg(not(feature = "pubky"))]
-impl fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-#[cfg(not(feature = "pubky"))]
-impl std::str::FromStr for PublicKey {
-    type Err = std::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(PublicKey(s.to_string()))
-    }
-}
-
-mod transport;
+pub mod transport;
 
 pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
 
@@ -85,14 +51,14 @@ impl std::error::Error for PaykitError {}
 /// Identifier for a payment method specification.
 ///
 /// Typically based filename component stored under `/pub/paykit.app/v0/…`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct MethodId(pub String);
 
 /// Serialized payload served by a payment endpoint (UTF-8 text such as JSON, lnurl, etc.).
 ///
 /// If you need to transmit binary payloads, encode them (e.g., base64) before wrapping
 /// in `EndpointData`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EndpointData(pub String);
 
 /// Collection of supported payment entries keyed by method identifiers.
@@ -100,6 +66,16 @@ pub struct EndpointData(pub String);
 pub struct SupportedPayments {
     /// Map of `MethodId` to endpoint data.
     pub entries: HashMap<MethodId, EndpointData>,
+}
+
+impl SupportedPayments {
+    /// Convert to a list of (method_id, endpoint) tuples for FFI.
+    pub fn to_list(&self) -> Vec<(String, String)> {
+        self.entries
+            .iter()
+            .map(|(k, v)| (k.0.clone(), v.0.clone()))
+            .collect()
+    }
 }
 
 /// Stores or updates a payment endpoint via the injected authenticated client.
@@ -115,6 +91,7 @@ pub struct SupportedPayments {
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(client, data), fields(method = %method.0, data_len = data.0.len())))]
 pub async fn set_payment_endpoint<S>(client: &S, method: MethodId, data: EndpointData) -> Result<()>
 where
     S: AuthenticatedTransport,
@@ -126,6 +103,7 @@ where
 }
 
 /// Removes a payment endpoint via the injected authenticated client.
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(client), fields(method = %method.0)))]
 pub async fn remove_payment_endpoint<S>(client: &S, method: MethodId) -> Result<()>
 where
     S: AuthenticatedTransport,
@@ -159,6 +137,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(reader)))]
 pub async fn get_payment_list<R>(reader: &R, payee: &PublicKey) -> Result<SupportedPayments>
 where
     R: UnauthenticatedTransportRead,
@@ -189,6 +168,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(reader), fields(method = %method.0)))]
 pub async fn get_payment_endpoint<R>(
     reader: &R,
     payee: &PublicKey,
@@ -221,6 +201,7 @@ where
 /// # Ok(())
 /// # }
 /// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(reader)))]
 pub async fn get_known_contacts<R>(reader: &R, key: &PublicKey) -> Result<Vec<PublicKey>>
 where
     R: UnauthenticatedTransportRead,

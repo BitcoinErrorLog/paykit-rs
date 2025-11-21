@@ -1,5 +1,3 @@
-//! Authenticated Pubky adapter that satisfies [`crate::AuthenticatedTransport`].
-
 use async_trait::async_trait;
 use pubky::PubkySession;
 
@@ -31,8 +29,10 @@ impl From<PubkySession> for PubkyAuthenticatedTransport {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl AuthenticatedTransport for PubkyAuthenticatedTransport {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self, data), fields(method = %method.0, data_len = data.0.len())))]
     async fn upsert_payment_endpoint(&self, method: &MethodId, data: &EndpointData) -> Result<()> {
         let path = format!("{PAYKIT_PATH_PREFIX}{}", method.0);
         self.session
@@ -43,6 +43,7 @@ impl AuthenticatedTransport for PubkyAuthenticatedTransport {
         Ok(())
     }
 
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(method = %method.0)))]
     async fn remove_payment_endpoint(&self, method: &MethodId) -> Result<()> {
         let path = format!("{PAYKIT_PATH_PREFIX}{}", method.0);
         self.session

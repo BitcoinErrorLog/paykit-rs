@@ -1,5 +1,3 @@
-//! Unauthenticated Pubky adapter that exposes reads over [`crate::UnauthenticatedTransportRead`].
-
 use std::collections::HashMap;
 
 use async_trait::async_trait;
@@ -73,8 +71,10 @@ impl PubkyUnauthenticatedTransport {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     async fn fetch_supported_payments(&self, payee: &PublicKey) -> Result<SupportedPayments> {
         let addr = format!("pubky{payee}{PAYKIT_PATH_PREFIX}");
         let entries = self.list_entries(addr, "list supported payments").await?;
@@ -107,6 +107,7 @@ impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
         Ok(SupportedPayments { entries: map })
     }
 
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(method = %method.0)))]
     async fn fetch_payment_endpoint(
         &self,
         payee: &PublicKey,
@@ -119,6 +120,7 @@ impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
         }
     }
 
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     async fn fetch_known_contacts(&self, owner: &PublicKey) -> Result<Vec<PublicKey>> {
         let addr = format!("pubky{owner}{PUBKY_FOLLOWS_PATH}");
         let entries = self.list_entries(addr, "list known contacts").await?;
@@ -138,15 +140,57 @@ impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
                 match pk_str.parse::<PublicKey>() {
                     Ok(pk) => contacts.push(pk),
                     Err(err) => {
-                        return Err(PaykitError::Transport(format!(
-                            "invalid contact entry '{pk_str}': {err}"
-                        )))
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("invalid contact entry '{pk_str}': {err}");
+                        #[cfg(not(feature = "tracing"))]
+                        eprintln!("invalid contact entry '{pk_str}': {err}");
+                        continue;
                     }
                 }
             }
         }
 
         Ok(contacts)
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
+    async fn list_directory(&self, owner: &PublicKey, path: &str) -> Result<Vec<String>> {
+        let addr = format!("pubky{owner}{path}");
+        let entries = self.list_entries(addr, "list directory").await?;
+
+        let mut names = Vec::new();
+        for resource in entries {
+            let name = resource
+                .path
+                .as_str()
+                .rsplit('/')
+                .next()
+                .filter(|segment| !segment.is_empty());
+            if let Some(name) = name {
+                names.push(name.to_string());
+            }
+        }
+
+        Ok(names)
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
+    async fn fetch_file(&self, owner: &PublicKey, path: &str) -> Result<Option<Vec<u8>>> {
+        let addr = format!("pubky{owner}{path}");
+        match self.inner.get(&addr).await {
+            Ok(resp) => {
+                let bytes = resp
+                    .bytes()
+                    .await
+                    .map_err(|err| PaykitError::Transport(format!("fetch file: {err}")))?;
+                if bytes.is_empty() {
+                    return Ok(None);
+                }
+                Ok(Some(bytes.to_vec()))
+            }
+            Err(err) if is_not_found(&err) => Ok(None),
+            Err(err) => Err(PaykitError::Transport(format!("fetch file: {err}"))),
+        }
     }
 }
 

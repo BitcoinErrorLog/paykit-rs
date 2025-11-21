@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 25fc3e5abae6c89048ebef06f47b0322cdd850857897951cee1be7f0d420dbb2 # shrinks to subscription = Subscription { subscription_id: "aaaaaaaa-0000", subscriber: PublicKey(tdukzsh4qmprjo133igpkroqeras4if8byd46ngnrew9nc3ouwno), provider: PublicKey(tdukzsh4qmprjo133igpkroqeras4if8byd46ngnrew9nc3ouwno), terms: SubscriptionTerms { amount: Amount { value: 1000 }, currency: "SAT", frequency: Monthly { day_of_month: 1 }, method: MethodId("lightning"), max_amount_per_period: None, description: "Test subscription" }, metadata: Object {}, created_at: 1700000000, starts_at: 1700000000, ends_at: Some(1800000000) }

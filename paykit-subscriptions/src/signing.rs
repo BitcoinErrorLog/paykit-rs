@@ -1,0 +1,412 @@
+//! # Cryptographic Signature System
+//!
+//! ## Security Model
+//!
+//! This module provides Ed25519 digital signatures over subscription data following
+//! [RFC 8032](https://tools.ietf.org/html/rfc8032) - Edwards-Curve Digital Signature Algorithm (EdDSA).
+//!
+//! It MUST provide:
+//! - Deterministic hashing (canonical serialization via postcard)
+//! - Replay protection (nonce + timestamp + expiration)
+//! - Domain separation (unique context per signature type)
+//!
+//! ## Cryptographic Standards
+//!
+//! - **Signature Algorithm**: Ed25519 ([RFC 8032](https://tools.ietf.org/html/rfc8032))
+//! - **Hash Function**: SHA-256 ([FIPS 180-4](https://csrc.nist.gov/publications/detail/fips/180/4/final))
+//! - **Serialization**: Postcard (deterministic binary format)
+//! - **Domain Separation**: PAYKIT_SUBSCRIPTION_V2 constant
+//!
+//! ## Breaking Changes from v0.1
+//! - Uses postcard instead of JSON for deterministic serialization
+//! - Signature now includes nonce, timestamp, and expiration
+//! - X25519 signing removed (Ed25519 only)
+//! - Domain separation added
+
+use crate::{Result, Subscription, SubscriptionError};
+use ed25519_dalek::{Signature as DalekSig, Signer, SigningKey, Verifier, VerifyingKey};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+/// Domain separation constant for subscription signatures
+const SUBSCRIPTION_DOMAIN: &[u8] = b"PAYKIT_SUBSCRIPTION_V2";
+
+/// Signature with replay protection
+///
+/// # Security
+///
+/// - Includes nonce for uniqueness (must never be reused)
+/// - Includes timestamp and expiration for temporal validity
+/// - Verification checks expiration before cryptographic validation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Signature {
+    #[serde(with = "serde_bytes")]
+    pub signature: Vec<u8>, // Changed to Vec for serde compatibility
+    pub public_key: [u8; 32],
+    pub nonce: [u8; 32], // Unique per signature - prevents replay
+    pub timestamp: i64,  // When signed
+    pub expires_at: i64, // Expiration time
+}
+
+impl Signature {
+    /// Create a new Ed25519 signature
+    pub fn new_ed25519(
+        signature: [u8; 64],
+        public_key: [u8; 32],
+        nonce: [u8; 32],
+        timestamp: i64,
+        expires_at: i64,
+    ) -> Self {
+        Self {
+            signature: signature.to_vec(),
+            public_key,
+            nonce,
+            timestamp,
+            expires_at,
+        }
+    }
+
+    /// Get signature as fixed-size array
+    pub fn signature_bytes(&self) -> Option<[u8; 64]> {
+        if self.signature.len() == 64 {
+            let mut arr = [0u8; 64];
+            arr.copy_from_slice(&self.signature);
+            Some(arr)
+        } else {
+            None
+        }
+    }
+}
+
+/// Data structure for signing (includes replay protection)
+#[derive(Serialize)]
+struct SignaturePayload<'a> {
+    domain: &'static [u8],
+    subscription: &'a Subscription,
+    nonce: &'a [u8; 32],
+    timestamp: i64,
+    expires_at: i64,
+}
+
+/// Hash subscription data for signing (DETERMINISTIC)
+///
+/// # Security
+///
+/// This function MUST produce identical output for identical input.
+/// Uses postcard with deterministic serialization (pubky-sdk standard).
+///
+/// # Arguments
+///
+/// * `subscription` - The subscription to hash
+/// * `nonce` - Unique 32-byte nonce
+/// * `timestamp` - When the signature was created
+/// * `expires_at` - When the signature expires
+///
+/// # Panics
+///
+/// Never panics - all errors returned as Result.
+fn hash_subscription_canonical(
+    subscription: &Subscription,
+    nonce: &[u8; 32],
+    timestamp: i64,
+    expires_at: i64,
+) -> Result<[u8; 32]> {
+    let payload = SignaturePayload {
+        domain: SUBSCRIPTION_DOMAIN,
+        subscription,
+        nonce,
+        timestamp,
+        expires_at,
+    };
+
+    // postcard is deterministic (fixed-size fields, defined order)
+    let canonical_bytes = postcard::to_allocvec(&payload)
+        .map_err(|e| SubscriptionError::Serialization(format!("Serialization error: {}", e)))?;
+
+    let hash = Sha256::digest(&canonical_bytes);
+    let mut result = [0u8; 32];
+    result.copy_from_slice(&hash);
+    Ok(result)
+}
+
+/// Sign subscription with Ed25519 keypair
+///
+/// # Security
+///
+/// - Uses deterministic canonical serialization (postcard)
+/// - Includes nonce for replay protection (MUST be unique)
+/// - Includes timestamp and expiration
+/// - Domain-separated (PAYKIT_SUBSCRIPTION_V2)
+///
+/// # Arguments
+///
+/// * `subscription` - The subscription to sign
+/// * `keypair` - Ed25519 signing keypair
+/// * `nonce` - Unique 32-byte nonce (MUST be random, NEVER reused)
+/// * `lifetime_seconds` - How long signature is valid
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use rand::RngCore;
+/// # use paykit_subscriptions::signing::sign_subscription_ed25519;
+/// # let subscription = todo!();
+/// # let keypair = todo!();
+/// let mut nonce = [0u8; 32];
+/// rand::thread_rng().fill_bytes(&mut nonce);
+/// let signature = sign_subscription_ed25519(
+///     &subscription,
+///     &keypair,
+///     &nonce,
+///     3600  // Valid for 1 hour
+/// )?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+pub fn sign_subscription_ed25519(
+    subscription: &Subscription,
+    keypair: &pubky::Keypair,
+    nonce: &[u8; 32],
+    lifetime_seconds: i64,
+) -> Result<Signature> {
+    // Get current time
+    let timestamp = chrono::Utc::now().timestamp();
+    let expires_at = timestamp + lifetime_seconds;
+
+    // Compute canonical hash
+    let message = hash_subscription_canonical(subscription, nonce, timestamp, expires_at)?;
+
+    // Sign with Ed25519
+    let secret_bytes = keypair.secret_key();
+    let signing_key = SigningKey::from_bytes(&secret_bytes);
+    let signature_bytes = signing_key.sign(&message);
+
+    Ok(Signature::new_ed25519(
+        signature_bytes.to_bytes(),
+        keypair.public_key().to_bytes(),
+        *nonce,
+        timestamp,
+        expires_at,
+    ))
+}
+
+/// Verify Ed25519 signature
+///
+/// # Security
+///
+/// - Checks expiration FIRST (fail fast)
+/// - Checks signature validity
+/// - Uses constant-time comparison where applicable
+/// - Caller MUST track nonces to prevent replay attacks
+///
+/// # Returns
+///
+/// `Ok(true)` if signature is valid and not expired  
+/// `Ok(false)` if signature is invalid or expired  
+/// `Err(_)` if data is malformed
+///
+/// # Nonce Tracking
+///
+/// WARNING: Caller MUST maintain a nonce database and reject
+/// any signature with a previously-seen nonce to prevent replay attacks.
+pub fn verify_signature_ed25519(
+    subscription: &Subscription,
+    signature: &Signature,
+) -> Result<bool> {
+    // Check expiration FIRST (fail fast)
+    let now = chrono::Utc::now().timestamp();
+    if now > signature.expires_at {
+        return Ok(false);
+    }
+
+    // Reconstruct canonical hash
+    let message = hash_subscription_canonical(
+        subscription,
+        &signature.nonce,
+        signature.timestamp,
+        signature.expires_at,
+    )?;
+
+    // Parse and verify public key
+    let verifying_key = VerifyingKey::from_bytes(&signature.public_key)
+        .map_err(|e| SubscriptionError::Crypto(format!("Invalid public key: {}", e)))?;
+
+    // Parse signature - need fixed size array
+    let sig_bytes = signature
+        .signature_bytes()
+        .ok_or_else(|| SubscriptionError::Crypto("Invalid signature length".to_string()))?;
+    let sig = DalekSig::from_bytes(&sig_bytes);
+
+    // Verify (ed25519-dalek uses constant-time internally)
+    Ok(verifying_key.verify(&message, &sig).is_ok())
+}
+
+/// Generic signing function (Ed25519 only in v0.2)
+///
+/// # Security
+///
+/// X25519 signing has been removed in v0.2 for security reasons.
+/// Use Ed25519 keys for all signatures.
+pub fn sign_subscription(
+    subscription: &Subscription,
+    keypair: &pubky::Keypair,
+    nonce: &[u8; 32],
+    lifetime_seconds: i64,
+) -> Result<Signature> {
+    sign_subscription_ed25519(subscription, keypair, nonce, lifetime_seconds)
+}
+
+/// Generic verification function (Ed25519 only in v0.2)
+pub fn verify_signature(subscription: &Subscription, signature: &Signature) -> Result<bool> {
+    verify_signature_ed25519(subscription, signature)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use paykit_lib::{MethodId, PublicKey};
+    use rand::RngCore;
+    use std::str::FromStr;
+
+    fn create_test_subscription() -> Subscription {
+        let keypair1 = pkarr::Keypair::random();
+        let keypair2 = pkarr::Keypair::random();
+
+        Subscription {
+            subscription_id: "sub_test_123".to_string(),
+            subscriber: PublicKey::from_str(&keypair1.public_key().to_z32()).unwrap(),
+            provider: PublicKey::from_str(&keypair2.public_key().to_z32()).unwrap(),
+            terms: crate::subscription::SubscriptionTerms {
+                amount: crate::Amount::from_sats(1000),
+                currency: "SAT".to_string(),
+                frequency: crate::subscription::PaymentFrequency::Monthly { day_of_month: 1 },
+                method: MethodId("lightning".to_string()),
+                max_amount_per_period: Some(crate::Amount::from_sats(5000)),
+                description: "Test subscription".to_string(),
+            },
+            metadata: serde_json::json!({}),
+            created_at: chrono::Utc::now().timestamp(),
+            starts_at: chrono::Utc::now().timestamp(),
+            ends_at: None,
+        }
+    }
+
+    #[test]
+    fn test_sign_and_verify_ed25519() {
+        let subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+
+        // Sign
+        let signature = sign_subscription_ed25519(&subscription, &keypair, &nonce, 3600).unwrap();
+
+        // Verify structure
+        assert_eq!(signature.signature.len(), 64);
+        assert_eq!(signature.public_key.len(), 32);
+        assert_eq!(signature.nonce, nonce);
+        assert!(signature.expires_at > signature.timestamp);
+
+        // Verify signature
+        let valid = verify_signature_ed25519(&subscription, &signature).unwrap();
+        assert!(valid, "Signature should be valid");
+    }
+
+    #[test]
+    fn test_signature_hash_is_deterministic() {
+        let sub1 = create_test_subscription();
+        let sub2 = sub1.clone();
+        let nonce = [42u8; 32];
+        let timestamp = 1000i64;
+        let expires_at = 2000i64;
+
+        let hash1 = hash_subscription_canonical(&sub1, &nonce, timestamp, expires_at).unwrap();
+        let hash2 = hash_subscription_canonical(&sub2, &nonce, timestamp, expires_at).unwrap();
+
+        assert_eq!(hash1, hash2, "Hash must be deterministic");
+    }
+
+    #[test]
+    fn test_expired_signature_rejected() {
+        let subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+
+        // Create signature that expires in 1 second
+        let signature = sign_subscription_ed25519(&subscription, &keypair, &nonce, 1).unwrap();
+
+        // Wait for expiration
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        // Should be rejected
+        let valid = verify_signature_ed25519(&subscription, &signature).unwrap();
+        assert!(!valid, "Expired signature should be rejected");
+    }
+
+    #[test]
+    fn test_invalid_signature_fails() {
+        let subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+
+        let mut signature =
+            sign_subscription_ed25519(&subscription, &keypair, &nonce, 3600).unwrap();
+
+        // Corrupt the signature
+        signature.signature[0] ^= 1;
+
+        let valid = verify_signature_ed25519(&subscription, &signature).unwrap();
+        assert!(!valid, "Corrupted signature should be invalid");
+    }
+
+    #[test]
+    fn test_modified_subscription_fails_verification() {
+        let mut subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+
+        let signature = sign_subscription_ed25519(&subscription, &keypair, &nonce, 3600).unwrap();
+
+        // Modify subscription
+        subscription.terms.amount = crate::Amount::from_sats(999999);
+
+        let valid = verify_signature_ed25519(&subscription, &signature).unwrap();
+        assert!(
+            !valid,
+            "Signature should not be valid for modified subscription"
+        );
+    }
+
+    #[test]
+    fn test_generic_sign_and_verify() {
+        let subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+        let mut nonce = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce);
+
+        let signature = sign_subscription(&subscription, &keypair, &nonce, 3600).unwrap();
+        let valid = verify_signature(&subscription, &signature).unwrap();
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_different_nonces_produce_different_signatures() {
+        let subscription = create_test_subscription();
+        let keypair = pkarr::Keypair::random();
+
+        let mut nonce1 = [0u8; 32];
+        let mut nonce2 = [1u8; 32];
+        rand::thread_rng().fill_bytes(&mut nonce1);
+        rand::thread_rng().fill_bytes(&mut nonce2);
+
+        let sig1 = sign_subscription_ed25519(&subscription, &keypair, &nonce1, 3600).unwrap();
+        let sig2 = sign_subscription_ed25519(&subscription, &keypair, &nonce2, 3600).unwrap();
+
+        assert_ne!(
+            sig1.signature, sig2.signature,
+            "Different nonces should produce different signatures"
+        );
+    }
+}

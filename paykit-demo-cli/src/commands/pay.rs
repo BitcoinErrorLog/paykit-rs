@@ -1,0 +1,300 @@
+//! Pay command - initiate payment
+
+use anyhow::{Context, Result};
+use paykit_demo_core::{DemoStorage, NoiseClientHelper, Receipt};
+use paykit_interactive::{PaykitNoiseChannel, PaykitNoiseMessage};
+use paykit_lib::{MethodId, PubkyUnauthenticatedTransport, UnauthenticatedTransportRead};
+use pubky::Pubky;
+use std::path::Path;
+
+use crate::ui;
+
+#[tracing::instrument(skip(storage_dir))]
+pub async fn run(
+    storage_dir: &Path,
+    recipient: &str,
+    amount: Option<String>,
+    currency: Option<String>,
+    method: &str,
+    verbose: bool,
+) -> Result<()> {
+    run_with_sdk(
+        storage_dir,
+        recipient,
+        amount,
+        currency,
+        method,
+        verbose,
+        None,
+    )
+    .await
+}
+
+/// Internal version that accepts an optional SDK (for testing)
+pub async fn run_with_sdk(
+    storage_dir: &Path,
+    recipient: &str,
+    amount: Option<String>,
+    currency: Option<String>,
+    method: &str,
+    verbose: bool,
+    sdk: Option<&Pubky>,
+) -> Result<()> {
+    ui::header("Initiate Payment");
+
+    tracing::debug!("Loading current identity");
+    // Load current identity
+    let identity = super::load_current_identity(storage_dir)?;
+
+    if verbose {
+        ui::info(&format!("Payer: {}", identity.pubky_uri()));
+        tracing::info!("Payer: {}", identity.pubky_uri());
+    }
+
+    // Resolve recipient (could be contact name or URI)
+    let payee_uri = resolve_recipient(storage_dir, recipient)?;
+    let payee_pubkey: pubky::PublicKey = extract_pubkey_from_uri(&payee_uri)?;
+
+    ui::info(&format!("Recipient: {}", payee_uri));
+    ui::info(&format!("Method: {}", method));
+
+    if let Some(amt) = &amount {
+        if let Some(curr) = &currency {
+            ui::info(&format!("Amount: {} {}", amt, curr));
+        } else {
+            ui::info(&format!("Amount: {}", amt));
+        }
+    }
+
+    ui::separator();
+    ui::info("Discovering recipient's payment endpoints...");
+
+    // Create or use provided SDK
+    let default_sdk;
+    let sdk_ref = if let Some(s) = sdk {
+        s
+    } else {
+        default_sdk = Pubky::new().context("Failed to create Pubky SDK")?;
+        &default_sdk
+    };
+
+    // Query recipient's published methods
+    let unauth_transport = PubkyUnauthenticatedTransport::new(sdk_ref.public_storage());
+    let methods = unauth_transport
+        .fetch_supported_payments(&payee_pubkey)
+        .await
+        .context("Failed to query recipient's payment methods")?;
+
+    if methods.entries.is_empty() {
+        ui::error("Recipient has not published any payment methods");
+        ui::info("They need to run 'paykit-demo publish' first");
+        return Ok(());
+    }
+
+    let method_id = MethodId(method.to_string());
+    let endpoint_data = methods
+        .entries
+        .get(&method_id)
+        .ok_or_else(|| anyhow::anyhow!("Recipient does not support '{}' method", method))?;
+
+    ui::success(&format!("Found {} endpoint: {}", method, endpoint_data.0));
+
+    // Check if this is a Noise endpoint that we can connect to
+    let endpoint_str = &endpoint_data.0;
+    if endpoint_str.starts_with("noise://") {
+        // This is an interactive endpoint - connect via Noise
+        ui::separator();
+        ui::info("Connecting to recipient via Noise protocol...");
+
+        // Parse Noise endpoint: noise://host:port@static_pubkey
+        let (host, static_pk) = parse_noise_endpoint(endpoint_str)?;
+
+        tracing::debug!("Connecting to {} with static key", host);
+
+        // Connect to recipient
+        let mut channel = NoiseClientHelper::connect_to_recipient(&identity, &host, &static_pk)
+            .await
+            .context("Failed to establish Noise connection")?;
+
+        ui::success("Noise connection established");
+
+        // Create and send payment request
+        ui::info("Sending payment request...");
+
+        let provisional_receipt = paykit_interactive::PaykitReceipt::new(
+            format!("receipt-{}", uuid::Uuid::new_v4()),
+            identity.public_key(),
+            payee_pubkey,
+            method_id.clone(),
+            amount.clone(),
+            currency.clone(),
+            serde_json::json!({}),
+        );
+
+        let request = PaykitNoiseMessage::RequestReceipt {
+            provisional_receipt,
+        };
+
+        channel
+            .send(request)
+            .await
+            .context("Failed to send payment request")?;
+
+        ui::success("Payment request sent");
+
+        // Wait for confirmation
+        ui::info("Waiting for recipient confirmation...");
+
+        let response = channel.recv().await.context("Failed to receive response")?;
+
+        match response {
+            PaykitNoiseMessage::ConfirmReceipt { receipt } => {
+                ui::success("Payment confirmed!");
+                ui::separator();
+                ui::info("Receipt Details:");
+                ui::info(&format!("  ID: {}", receipt.receipt_id));
+                ui::info(&format!("  Payer: {}", receipt.payer));
+                ui::info(&format!("  Payee: {}", receipt.payee));
+                ui::info(&format!("  Method: {}", receipt.method_id.0));
+                if let Some(amt) = &receipt.amount {
+                    if let Some(curr) = &receipt.currency {
+                        ui::info(&format!("  Amount: {} {}", amt, curr));
+                    }
+                }
+
+                // Save receipt to storage
+                let storage = DemoStorage::new(storage_dir.join("data"));
+
+                // Convert PaykitReceipt to storage Receipt
+                let storage_receipt = Receipt::new(
+                    receipt.receipt_id.clone(),
+                    receipt.payer.clone(),
+                    receipt.payee.clone(),
+                    receipt.method_id.0.clone(),
+                );
+
+                storage
+                    .save_receipt(storage_receipt)
+                    .context("Failed to save receipt")?;
+
+                ui::success("Receipt saved");
+            }
+            _ => {
+                ui::error("Unexpected response from recipient");
+                return Ok(());
+            }
+        }
+
+        ui::separator();
+        ui::success("Payment completed successfully");
+    } else {
+        // Not a Noise endpoint - show what was discovered
+        ui::separator();
+        ui::info("Payment endpoint discovered (non-interactive):");
+        ui::info(&format!("  Endpoint: {}", endpoint_data.0));
+        ui::info("");
+        ui::info("This appears to be a static payment endpoint.");
+        ui::info("For interactive payments, the recipient should:");
+        ui::info("  1. Run: paykit-demo receive --port <PORT>");
+        ui::info("  2. Publish with the Noise endpoint format:");
+        ui::info("     paykit-demo publish --endpoint 'noise://host:port@pubkey'");
+    }
+
+    Ok(())
+}
+
+fn resolve_recipient(storage_dir: &Path, recipient: &str) -> Result<String> {
+    // If it looks like a URI, return as-is
+    if recipient.starts_with("pubky://") || recipient.len() > 40 {
+        return Ok(recipient.to_string());
+    }
+
+    // Otherwise, try to look up as contact name
+    let storage = DemoStorage::new(storage_dir.join("data"));
+    let contacts = storage.list_contacts()?;
+
+    for contact in contacts {
+        if contact.name == recipient {
+            return Ok(contact.pubky_uri());
+        }
+    }
+
+    // If not found, assume it's a public key
+    Ok(format!("pubky://{}", recipient))
+}
+
+/// Extract the public key from a pubky:// URI
+pub fn extract_pubkey_from_uri(uri: &str) -> Result<pubky::PublicKey> {
+    let pk_str = uri.strip_prefix("pubky://").unwrap_or(uri);
+
+    pk_str
+        .parse::<pubky::PublicKey>()
+        .with_context(|| format!("Invalid public key in URI: {}", uri))
+}
+
+/// Parse a Noise endpoint string: noise://host:port@static_pubkey
+pub fn parse_noise_endpoint(endpoint: &str) -> Result<(String, [u8; 32])> {
+    let without_prefix = endpoint
+        .strip_prefix("noise://")
+        .ok_or_else(|| anyhow::anyhow!("Endpoint must start with 'noise://'"))?;
+
+    if let Some((host, pk_hex)) = without_prefix.split_once('@') {
+        // Decode the public key from hex
+        let pk_bytes =
+            hex::decode(pk_hex).with_context(|| format!("Invalid hex public key: {}", pk_hex))?;
+
+        if pk_bytes.len() != 32 {
+            anyhow::bail!("Public key must be 32 bytes, got {}", pk_bytes.len());
+        }
+
+        let mut pk_array = [0u8; 32];
+        pk_array.copy_from_slice(&pk_bytes);
+
+        Ok((host.to_string(), pk_array))
+    } else {
+        anyhow::bail!("Invalid Noise endpoint format. Expected: noise://host:port@pubkey_hex")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_pubkey_from_uri() {
+        let uri = "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+        let result = extract_pubkey_from_uri(uri);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_extract_pubkey_without_prefix() {
+        let uri = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+        let result = extract_pubkey_from_uri(uri);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_noise_endpoint() {
+        let endpoint = "noise://127.0.0.1:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let result = parse_noise_endpoint(endpoint);
+        assert!(result.is_ok());
+        let (host, pk) = result.unwrap();
+        assert_eq!(host, "127.0.0.1:9735");
+        assert_eq!(pk.len(), 32);
+    }
+
+    #[test]
+    fn test_parse_noise_endpoint_invalid_format() {
+        let endpoint = "noise://127.0.0.1:9735"; // Missing @ and pubkey
+        let result = parse_noise_endpoint(endpoint);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_noise_endpoint_invalid_hex() {
+        let endpoint = "noise://127.0.0.1:9735@xyz";
+        let result = parse_noise_endpoint(endpoint);
+        assert!(result.is_err());
+    }
+}

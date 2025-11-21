@@ -57,9 +57,12 @@ A fully functional WebAssembly application demonstrating all Paykit capabilities
 ### 💸 Interactive Payments
 - **Real WebSocket-based Noise Protocol** encryption
 - End-to-end encrypted payment coordination
+- Automatic endpoint discovery via directory
 - Receipt exchange and persistence
 - Support for both public and private endpoints
 - Real-time payment status updates
+- Full error handling and user feedback
+- See [PAYMENTS.md](./PAYMENTS.md) for complete guide
 
 ### 📋 Subscription Management
 - **Phase 2**: Payment requests and subscription agreements
@@ -69,10 +72,18 @@ A fully functional WebAssembly application demonstrating all Paykit capabilities
 - Browser-based storage
 
 ### 🔄 Auto-Pay Features
-- Configurable spending limits per peer
-- Time-based periods (daily, weekly, monthly, custom)
-- Automatic payment execution
-- Spending tracking and limits
+- Enable auto-pay for subscriptions with configurable rules
+- Set maximum payment amounts per subscription
+- Require manual confirmation before each payment (optional)
+- Enable/disable auto-pay rules dynamically
+- View and manage all auto-pay configurations
+
+### 💰 Spending Limits (Allowances)
+- Set spending limits per peer (daily, weekly, monthly)
+- Track current spending against limits
+- Visual progress indicators
+- Automatic period reset
+- Prevent exceeding configured limits
 
 ## 📚 Documentation
 
@@ -96,6 +107,10 @@ A fully functional WebAssembly application demonstrating all Paykit capabilities
 - **[START_HERE.md](./START_HERE.md)** - Quick setup guide
 - **[BUILD_INSTRUCTIONS.md](./BUILD_INSTRUCTIONS.md)** - Detailed build guide
 - **[TESTING.md](./TESTING.md)** - How to run tests
+
+### Project History
+
+- **[CHANGELOG.md](./CHANGELOG.md)** - Complete implementation history and version changes
 
 ## 🚀 Quick Start
 
@@ -509,7 +524,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 - Rate limiting and DoS protection
 - Security audit required
 
-See [SECURITY.md](./SECURITY.md) for security documentation.
+For production security considerations, see the [Security Considerations](#-security-considerations) section above.
 
 ## 🔧 Troubleshooting
 
@@ -544,7 +559,7 @@ cargo install wasm-pack
 - Verify server URL and port
 - Check CORS configuration
 
-See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for complete guide.
+See the [Troubleshooting](#-troubleshooting) section above for common issues.
 
 ## 📝 Development
 
@@ -606,29 +621,7 @@ This project is part of the Paykit ecosystem. See main repository for license in
 - ✅ Auto-pay automation
 - ✅ WebSocket Noise transport
 - ✅ Receipt exchange
-- ✅ Comprehensive testing
-- ✅ Complete documentation
-
-**Limitations:**
-- Demo security model (not for real funds)
-- Browser localStorage limits (~5-10MB)
-- Mock publishing (methods not actually published to homeserver)
-- Requires WebSocket relay server for receiving payments
-
-## 📊 Status
-
-**Production-Ready for Demonstration:**
-- ✅ Dashboard and overview
-- ✅ Identity management
-- ✅ Contact management
-- ✅ Payment method configuration
-- ✅ Receipt management and filtering
-- ✅ Directory queries
-- ✅ Subscription management
-- ✅ Auto-pay automation
-- ✅ WebSocket Noise transport
-- ✅ Receipt exchange
-- ✅ Comprehensive testing (~87 tests)
+- ✅ Comprehensive testing (~103 tests)
 - ✅ Complete documentation
 
 **Limitations:**

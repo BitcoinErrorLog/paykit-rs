@@ -15,6 +15,10 @@ import init, {
     WasmReceiptStorage,
     WasmPaymentCoordinator,
     WasmDashboard,
+    WasmAutoPayRule,
+    WasmAutoPayRuleStorage,
+    WasmPeerSpendingLimit,
+    WasmPeerSpendingLimitStorage,
     format_timestamp,
     is_valid_pubkey,
     version
@@ -30,6 +34,8 @@ let paymentMethodStorage;
 let receiptStorage;
 let paymentCoordinator;
 let dashboard;
+let autopayRuleStorage;
+let peerLimitStorage;
 
 
 // Initialize the WASM module
@@ -37,6 +43,14 @@ async function initializeApp() {
     try {
         await init();
         console.log('Paykit WASM initialized');
+        
+        // Verify required classes are available
+        if (typeof WasmAutoPayRuleStorage === 'undefined') {
+            console.error('WasmAutoPayRuleStorage is not available');
+        }
+        if (typeof WasmPeerSpendingLimitStorage === 'undefined') {
+            console.error('WasmPeerSpendingLimitStorage is not available');
+        }
         
         // Initialize storage
         storage = new BrowserStorage();
@@ -48,6 +62,23 @@ async function initializeApp() {
         paymentCoordinator = new WasmPaymentCoordinator();
         dashboard = new WasmDashboard();
         
+        // Initialize auto-pay and spending limits storage
+        try {
+            if (typeof WasmAutoPayRuleStorage !== 'undefined') {
+                autopayRuleStorage = new WasmAutoPayRuleStorage();
+            } else {
+                console.warn('WasmAutoPayRuleStorage not available - auto-pay features disabled');
+            }
+            if (typeof WasmPeerSpendingLimitStorage !== 'undefined') {
+                peerLimitStorage = new WasmPeerSpendingLimitStorage();
+            } else {
+                console.warn('WasmPeerSpendingLimitStorage not available - spending limits disabled');
+            }
+        } catch (err) {
+            console.error('Failed to initialize auto-pay/limit storage:', err);
+            // Continue anyway - these features will show errors if used
+        }
+        
         // Load current identity if it exists
         await loadCurrentIdentity();
         
@@ -56,6 +87,15 @@ async function initializeApp() {
         updateIdentityList();
         await updateRequestsList();
         await updateSubscriptionsList();
+        
+        // Update auto-pay and limits (may fail if storage not initialized)
+        try {
+            await updateAutoPayRulesList();
+            await updatePeerLimitsList();
+        } catch (err) {
+            console.warn('Failed to update auto-pay/limits lists:', err);
+        }
+        
         await updateContactsList();
         await updatePaymentMethodsList();
         await updateReceiptsList();
@@ -66,7 +106,11 @@ async function initializeApp() {
         
         showNotification('Paykit initialized successfully', 'success');
     } catch (error) {
+        console.error('Initialization error:', error);
         handleError(error, 'Initialization');
+        // Show error in UI
+        const errorMsg = error.message || String(error);
+        showNotification('Initialization failed: ' + errorMsg, 'error');
     }
 }
 
@@ -798,24 +842,37 @@ function validatePaymentForm() {
 
 // UI Management
 function switchTab(tabName) {
-    // Update tab buttons with ARIA attributes
-    document.querySelectorAll('.tab').forEach(btn => {
-        const isActive = btn.dataset.tab === tabName;
-        btn.classList.toggle('active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-    
-    // Update tab content with ARIA attributes
-    document.querySelectorAll('.tab-content').forEach(content => {
-        const isActive = content.id === `${tabName}-tab`;
-        content.classList.toggle('active', isActive);
-        content.hidden = !isActive;
-    });
-    
-    // Focus management for accessibility
-    const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
-    if (activeTab) {
-        activeTab.focus();
+    try {
+        console.log('Switching to tab:', tabName);
+        
+        // Update tab buttons with ARIA attributes
+        document.querySelectorAll('.tab').forEach(btn => {
+            const isActive = btn.dataset.tab === tabName;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        
+        // Update tab content with ARIA attributes
+        document.querySelectorAll('.tab-content').forEach(content => {
+            const isActive = content.id === `${tabName}-tab`;
+            if (isActive) {
+                content.classList.add('active');
+                content.hidden = false;
+            } else {
+                content.classList.remove('active');
+                content.hidden = true;
+            }
+        });
+        
+        // Focus management for accessibility
+        const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+        if (activeTab) {
+            activeTab.focus();
+        }
+        
+        console.log('Tab switched successfully');
+    } catch (error) {
+        console.error('Error switching tab:', error);
     }
 }
 
@@ -1167,6 +1224,9 @@ async function updateSubscriptionsList() {
             </div>
         `;
         }).join('');
+        
+        // Update auto-pay subscription selector
+        await updateAutopaySubscriptionSelector();
     } catch (error) {
         console.error('Failed to load subscriptions:', error);
         listEl.innerHTML = '<p class="error-state">Failed to load subscriptions</p>';
@@ -1265,6 +1325,414 @@ function copySubscriptionId(subscriptionId) {
 // Make subscription functions global for HTML onclick handlers
 window.deleteSubscription = deleteSubscription;
 window.copySubscriptionId = copySubscriptionId;
+
+// ============================================================
+// Auto-Pay Management
+// ============================================================
+
+async function enableAutoPay(subscriptionId, maxAmount, requireConfirmation) {
+    try {
+        if (!subscriptionId || !maxAmount) {
+            showNotification('Subscription ID and max amount are required', 'error');
+            return;
+        }
+
+        if (!autopayRuleStorage) {
+            showNotification('Auto-pay storage not initialized', 'error');
+            return;
+        }
+
+        // Try to get signed subscription first, then unsigned
+        let sub = null;
+        let peerPubkey = null;
+        
+        const signedSub = await subscriptionStorage.get_signed_subscription(subscriptionId);
+        if (signedSub) {
+            sub = signedSub.subscription();
+            peerPubkey = sub.provider();
+        } else {
+            // Try unsigned subscription
+            const unsignedSub = await subscriptionStorage.get_subscription(subscriptionId);
+            if (unsignedSub) {
+                peerPubkey = unsignedSub.provider();
+            }
+        }
+        
+        if (!peerPubkey) {
+            showNotification('Subscription not found. Please create a subscription first.', 'error');
+            return;
+        }
+        
+        // Convert period to seconds (default monthly = 30 days)
+        const periodSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
+
+        const rule = new WasmAutoPayRule(
+            subscriptionId,
+            peerPubkey,
+            parseInt(maxAmount),
+            periodSeconds,
+            requireConfirmation || false
+        );
+
+        await autopayRuleStorage.save_autopay_rule(rule);
+        showNotification('Auto-pay enabled', 'success');
+        await updateAutoPayRulesList();
+    } catch (error) {
+        console.error('Failed to enable auto-pay:', error);
+        showNotification('Failed to enable auto-pay: ' + (error.message || String(error)), 'error');
+    }
+}
+
+async function disableAutoPay(subscriptionId) {
+    try {
+        const rule = await autopayRuleStorage.get_autopay_rule(subscriptionId);
+        if (rule) {
+            rule.disable();
+            await autopayRuleStorage.save_autopay_rule(rule);
+            showNotification('Auto-pay disabled', 'success');
+            await updateAutoPayRulesList();
+        } else {
+            showNotification('Auto-pay rule not found', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to disable auto-pay:', error);
+        showNotification('Failed to disable auto-pay: ' + error.message, 'error');
+    }
+}
+
+async function getAutoPayStatus(subscriptionId) {
+    try {
+        const rule = await autopayRuleStorage.get_autopay_rule(subscriptionId);
+        return rule;
+    } catch (error) {
+        console.error('Failed to get auto-pay status:', error);
+        return null;
+    }
+}
+
+async function listAutoPayRules() {
+    try {
+        if (!autopayRuleStorage) {
+            console.warn('Auto-pay storage not initialized');
+            return [];
+        }
+        return await autopayRuleStorage.list_autopay_rules();
+    } catch (error) {
+        console.error('Failed to list auto-pay rules:', error);
+        return [];
+    }
+}
+
+async function updateAutoPayRulesList() {
+    const listEl = document.getElementById('autopay-rules-list');
+    if (!listEl) {
+        console.log('autopay-rules-list element not found');
+        return;
+    }
+    
+    try {
+        const rules = await listAutoPayRules();
+
+        if (rules.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No auto-pay rules configured</p>';
+            return;
+        }
+
+        listEl.innerHTML = rules.map(rule => {
+            const enabled = rule.enabled ? 'Enabled' : 'Disabled';
+            const enabledClass = rule.enabled ? 'active' : 'inactive';
+            const confirmRequired = rule.require_confirmation ? 'Yes' : 'No';
+            const confirmClass = rule.require_confirmation ? 'warning' : 'success';
+            const maxAmount = Number(rule.max_amount);
+            const subscriptionId = String(rule.subscription_id);
+            const peerPubkey = String(rule.peer_pubkey);
+            
+            return `
+                <div class="autopay-rule-item ${enabledClass}">
+                    <div class="rule-header">
+                        <div class="rule-id">Subscription: ${subscriptionId.substring(0, 12)}...</div>
+                        <div class="rule-status ${enabledClass}">${enabled}</div>
+                    </div>
+                    <div class="rule-details">
+                        <div class="rule-detail">
+                            <span class="label">Peer:</span>
+                            <span class="value">${peerPubkey.substring(0, 20)}...</span>
+                        </div>
+                        <div class="rule-detail">
+                            <span class="label">Max Amount:</span>
+                            <span class="value">${maxAmount} sats</span>
+                        </div>
+                        <div class="rule-detail">
+                            <span class="label">Confirmation Required:</span>
+                            <span class="value ${confirmClass}">${confirmRequired}</span>
+                        </div>
+                    </div>
+                    <div class="rule-actions">
+                        <button class="btn btn-small" onclick="toggleAutoPay('${subscriptionId}')">
+                            ${rule.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="deleteAutoPayRule('${subscriptionId}')">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to update auto-pay rules list:', error);
+    }
+}
+
+async function toggleAutoPay(subscriptionId) {
+    try {
+        const rule = await autopayRuleStorage.get_autopay_rule(subscriptionId);
+        if (rule) {
+            if (rule.enabled()) {
+                await disableAutoPay(subscriptionId);
+            } else {
+                rule.enable();
+                await autopayRuleStorage.save_autopay_rule(rule);
+                showNotification('Auto-pay enabled', 'success');
+                await updateAutoPayRulesList();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to toggle auto-pay:', error);
+        showNotification('Failed to toggle auto-pay: ' + error.message, 'error');
+    }
+}
+
+async function deleteAutoPayRule(subscriptionId) {
+    if (!confirm('Delete this auto-pay rule?')) return;
+    
+    try {
+        await autopayRuleStorage.delete_autopay_rule(subscriptionId);
+        showNotification('Auto-pay rule deleted', 'success');
+        await updateAutoPayRulesList();
+    } catch (error) {
+        console.error('Failed to delete auto-pay rule:', error);
+        showNotification('Failed to delete auto-pay rule: ' + error.message, 'error');
+    }
+}
+
+// ============================================================
+// Spending Limits Management
+// ============================================================
+
+function periodToSeconds(period) {
+    switch (period) {
+        case 'daily':
+            return 24 * 60 * 60;
+        case 'weekly':
+            return 7 * 24 * 60 * 60;
+        case 'monthly':
+            return 30 * 24 * 60 * 60;
+        default:
+            return 30 * 24 * 60 * 60; // Default to monthly
+    }
+}
+
+async function setPeerLimit(peerPubkey, limit, period) {
+    try {
+        if (!peerPubkey || !limit || !period) {
+            showNotification('Peer pubkey, limit, and period are required', 'error');
+            return;
+        }
+
+        if (!peerLimitStorage) {
+            showNotification('Peer limit storage not initialized', 'error');
+            return;
+        }
+
+        // Validate pubkey
+        const cleanPubkey = peerPubkey.replace('pubky://', '');
+        if (!is_valid_pubkey(cleanPubkey)) {
+            showNotification('Invalid peer pubkey', 'error');
+            return;
+        }
+
+        const periodSeconds = periodToSeconds(period);
+        const limitAmount = parseInt(limit);
+
+        if (limitAmount <= 0) {
+            showNotification('Limit must be positive', 'error');
+            return;
+        }
+
+        const spendingLimit = new WasmPeerSpendingLimit(
+            cleanPubkey,
+            limitAmount,
+            periodSeconds
+        );
+
+        await peerLimitStorage.save_peer_limit(spendingLimit);
+        showNotification('Spending limit set', 'success');
+        await updatePeerLimitsList();
+    } catch (error) {
+        console.error('Failed to set peer limit:', error);
+        showNotification('Failed to set peer limit: ' + (error.message || String(error)), 'error');
+    }
+}
+
+async function getPeerLimit(peerPubkey) {
+    try {
+        const cleanPubkey = peerPubkey.replace('pubky://', '');
+        return await peerLimitStorage.get_peer_limit(cleanPubkey);
+    } catch (error) {
+        console.error('Failed to get peer limit:', error);
+        return null;
+    }
+}
+
+async function listPeerLimits() {
+    try {
+        if (!peerLimitStorage) {
+            console.warn('Peer limit storage not initialized');
+            return [];
+        }
+        return await peerLimitStorage.list_peer_limits();
+    } catch (error) {
+        console.error('Failed to list peer limits:', error);
+        return [];
+    }
+}
+
+async function updatePeerLimitsList() {
+    const listEl = document.getElementById('peer-limits-list');
+    if (!listEl) {
+        console.log('peer-limits-list element not found');
+        return;
+    }
+    
+    try {
+        const limits = await listPeerLimits();
+
+        if (limits.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No spending limits configured</p>';
+            return;
+        }
+
+        listEl.innerHTML = limits.map(limit => {
+            const currentSpent = Number(limit.current_spent);
+            const totalLimit = Number(limit.total_limit);
+            const periodSeconds = Number(limit.period_seconds);
+            const periodStart = Number(limit.period_start);
+            const peerPubkey = String(limit.peer_pubkey);
+            
+            const percentage = (currentSpent / totalLimit) * 100;
+            const periodName = periodSeconds === 24 * 60 * 60 ? 'Daily' :
+                              periodSeconds === 7 * 24 * 60 * 60 ? 'Weekly' :
+                              periodSeconds === 30 * 24 * 60 * 60 ? 'Monthly' : 'Custom';
+            
+            // Calculate days until reset
+            const now = Math.floor(Date.now() / 1000);
+            const elapsed = now - periodStart;
+            const remaining = Math.max(0, periodSeconds - elapsed);
+            const daysRemaining = Math.floor(remaining / (24 * 60 * 60));
+            
+            // Escape single quotes for onclick attributes
+            const escapedPubkey = peerPubkey.replace(/'/g, "\\'");
+            
+            return `
+                <div class="spending-limit-item">
+                    <div class="limit-header">
+                        <div class="limit-peer">${peerPubkey.substring(0, 20)}...</div>
+                        <div class="limit-period">${periodName}</div>
+                    </div>
+                    <div class="limit-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${Math.min(percentage, 100)}%"></div>
+                        </div>
+                        <div class="limit-amounts">
+                            <span>${currentSpent} / ${totalLimit} sats</span>
+                            <span class="remaining">${Number(limit.remaining_limit)} remaining</span>
+                        </div>
+                    </div>
+                    <div class="limit-details">
+                        <div class="limit-detail">
+                            <span class="label">Resets in:</span>
+                            <span class="value">${daysRemaining} days</span>
+                        </div>
+                    </div>
+                    <div class="limit-actions">
+                        <button class="btn btn-small" onclick="resetPeerLimit('${escapedPubkey}')">
+                            Reset
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="deletePeerLimit('${escapedPubkey}')">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to update peer limits list:', error);
+    }
+}
+
+async function resetPeerLimit(peerPubkey) {
+    try {
+        const limit = await peerLimitStorage.get_peer_limit(peerPubkey.replace('pubky://', ''));
+        if (limit) {
+            limit.reset();
+            await peerLimitStorage.save_peer_limit(limit);
+            showNotification('Spending limit reset', 'success');
+            await updatePeerLimitsList();
+        } else {
+            showNotification('Spending limit not found', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to reset peer limit:', error);
+        showNotification('Failed to reset peer limit: ' + error.message, 'error');
+    }
+}
+
+async function deletePeerLimit(peerPubkey) {
+    if (!confirm('Delete this spending limit?')) return;
+    
+    try {
+        await peerLimitStorage.delete_peer_limit(peerPubkey.replace('pubky://', ''));
+        showNotification('Spending limit deleted', 'success');
+        await updatePeerLimitsList();
+    } catch (error) {
+        console.error('Failed to delete peer limit:', error);
+        showNotification('Failed to delete peer limit: ' + error.message, 'error');
+    }
+}
+
+// Update subscription selector for auto-pay
+async function updateAutopaySubscriptionSelector() {
+    const select = document.getElementById('autopay-subscription-select');
+    if (!select) return;
+    
+    try {
+        const subscriptions = await subscriptionStorage.list_active_subscriptions();
+        const currentValue = select.value;
+        
+        // Clear existing options except the first one
+        select.innerHTML = '<option value="">Select a subscription...</option>';
+        
+        subscriptions.forEach(sub => {
+            const option = document.createElement('option');
+            option.value = sub.subscription_id;
+            option.textContent = `${sub.subscription_id.substring(0, 12)}... - ${sub.amount} ${sub.currency} (${sub.frequency})`;
+            select.appendChild(option);
+        });
+        
+        // Restore selection if it still exists
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    } catch (error) {
+        console.error('Failed to update subscription selector:', error);
+    }
+}
+
+// Make functions global for HTML onclick handlers
+window.toggleAutoPay = toggleAutoPay;
+window.deleteAutoPayRule = deleteAutoPayRule;
+window.resetPeerLimit = resetPeerLimit;
+window.deletePeerLimit = deletePeerLimit;
 
 // ============================================================
 // Contact Management
@@ -2084,9 +2552,19 @@ async function updateRecentActivity() {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded - Setting up event listeners');
+    
     // Tab navigation with keyboard support
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.addEventListener('click', () => {
+    const tabs = document.querySelectorAll('.tab');
+    console.log(`Found ${tabs.length} tabs`);
+    tabs.forEach(btn => {
+        if (!btn.dataset.tab) {
+            console.warn('Tab button missing data-tab attribute:', btn);
+            return;
+        }
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('Tab clicked:', btn.dataset.tab);
             switchTab(btn.dataset.tab);
         });
         
@@ -2191,6 +2669,66 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Auto-pay actions
+    const enableAutopayBtn = document.getElementById('enable-autopay-btn');
+    if (enableAutopayBtn) {
+        enableAutopayBtn.addEventListener('click', async () => {
+            const subscriptionId = document.getElementById('autopay-subscription-select')?.value;
+            const maxAmount = document.getElementById('autopay-max-amount-input')?.value;
+            const requireConfirmation = document.getElementById('autopay-require-confirmation')?.checked || false;
+            
+            if (!subscriptionId || !maxAmount) {
+                showNotification('Subscription and max amount are required', 'error');
+                return;
+            }
+            
+            await enableAutoPay(subscriptionId, maxAmount, requireConfirmation);
+            
+            // Clear form
+            const select = document.getElementById('autopay-subscription-select');
+            const amountInput = document.getElementById('autopay-max-amount-input');
+            const confirmCheckbox = document.getElementById('autopay-require-confirmation');
+            if (select) select.value = '';
+            if (amountInput) amountInput.value = '';
+            if (confirmCheckbox) confirmCheckbox.checked = false;
+        });
+    }
+    
+    const refreshAutopayBtn = document.getElementById('refresh-autopay-btn');
+    if (refreshAutopayBtn) {
+        refreshAutopayBtn.addEventListener('click', updateAutoPayRulesList);
+    }
+    
+    // Spending limits actions
+    const setLimitBtn = document.getElementById('set-limit-btn');
+    if (setLimitBtn) {
+        setLimitBtn.addEventListener('click', async () => {
+            const peerPubkey = document.getElementById('limit-peer-input')?.value.trim();
+            const limit = document.getElementById('limit-amount-input')?.value;
+            const period = document.getElementById('limit-period-select')?.value;
+            
+            if (!peerPubkey || !limit) {
+                showNotification('Peer pubkey and limit are required', 'error');
+                return;
+            }
+            
+            await setPeerLimit(peerPubkey, limit, period);
+            
+            // Clear form
+            const peerInput = document.getElementById('limit-peer-input');
+            const limitInput = document.getElementById('limit-amount-input');
+            const periodSelect = document.getElementById('limit-period-select');
+            if (peerInput) peerInput.value = '';
+            if (limitInput) limitInput.value = '';
+            if (periodSelect) periodSelect.value = 'monthly';
+        });
+    }
+    
+    const refreshLimitsBtn = document.getElementById('refresh-limits-btn');
+    if (refreshLimitsBtn) {
+        refreshLimitsBtn.addEventListener('click', updatePeerLimitsList);
+    }
+    
     // Payment actions
     document.getElementById('initiate-payment-btn').addEventListener('click', initiatePayment);
     
@@ -2216,7 +2754,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial validation
     validatePaymentForm();
     
-    // Initialize app
-    initializeApp();
+    // Initialize app (don't block on errors)
+    initializeApp().catch(err => {
+        console.error('Failed to initialize app:', err);
+        showNotification('App initialization had errors - some features may not work', 'error');
+    });
+    
+    // Ensure tab navigation works even if initialization fails
+    console.log('Event listeners attached, tab navigation should work');
 });
 

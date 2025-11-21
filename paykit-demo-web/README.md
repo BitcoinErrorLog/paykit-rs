@@ -72,10 +72,18 @@ A fully functional WebAssembly application demonstrating all Paykit capabilities
 - Browser-based storage
 
 ### 🔄 Auto-Pay Features
-- Configurable spending limits per peer
-- Time-based periods (daily, weekly, monthly, custom)
-- Automatic payment execution
-- Spending tracking and limits
+- Enable auto-pay for subscriptions with configurable rules
+- Set maximum payment amounts per subscription
+- Require manual confirmation before each payment (optional)
+- Enable/disable auto-pay rules dynamically
+- View and manage all auto-pay configurations
+
+### 💰 Spending Limits (Allowances)
+- Set spending limits per peer (daily, weekly, monthly)
+- Track current spending against limits
+- Visual progress indicators
+- Automatic period reset
+- Prevent exceeding configured limits
 
 ## 📚 Documentation
 
@@ -592,6 +600,14 @@ See the main [Paykit repository](https://github.com/paykit/paykit-rs) for contri
 ## 📄 License
 
 This project is part of the Paykit ecosystem. See main repository for license information.
+
+## Related Components
+
+This web demo application uses and integrates with:
+
+- **[paykit-lib](../paykit-lib/README.md)** - Core library for directory operations and transport traits
+- **[paykit-subscriptions](../paykit-subscriptions/README.md)** - Subscription management, payment requests, and auto-pay automation
+- **[paykit-demo-core](../paykit-demo-core/README.md)** - Shared business logic for demo applications
 
 ## 🔗 Links
 

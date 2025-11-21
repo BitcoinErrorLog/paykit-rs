@@ -224,32 +224,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     wasm.__externref_drop_slice(ptr, len);
     return result;
 }
-/**
- * Initialize the WASM module
- *
- * This should be called once when the module is loaded.
- * It sets up panic hooks for better error messages in the browser console.
- */
-export function init() {
-    wasm.init();
-}
-
-/**
- * Get the version of the Paykit WASM module
- * @returns {string}
- */
-export function version() {
-    let deferred1_0;
-    let deferred1_1;
-    try {
-        const ret = wasm.version();
-        deferred1_0 = ret[0];
-        deferred1_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-    }
-}
 
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_externrefs.get(idx);
@@ -291,12 +265,85 @@ export function format_timestamp(timestamp) {
     }
 }
 
-function wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b(arg0, arg1, arg2);
+/**
+ * Parse a Noise endpoint string and return WebSocket URL and server key
+ *
+ * Format: noise://host:port@pubkey_hex
+ * Returns JSON: { ws_url: string, server_key_hex: string, host: string, port: number }
+ * @param {string} endpoint
+ * @returns {any}
+ */
+export function parse_noise_endpoint_wasm(endpoint) {
+    const ptr0 = passStringToWasm0(endpoint, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.parse_noise_endpoint_wasm(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Extract public key from pubky:// URI or raw public key
+ *
+ * Returns public key string
+ * @param {string} uri
+ * @returns {string}
+ */
+export function extract_pubkey_from_uri_wasm(uri) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(uri, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.extract_pubkey_from_uri_wasm(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Initialize the WASM module
+ *
+ * This should be called once when the module is loaded.
+ * It sets up panic hooks for better error messages in the browser console.
+ */
+export function init() {
+    wasm.init();
+}
+
+/**
+ * Get the version of the Paykit WASM module
+ * @returns {string}
+ */
+export function version() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.version();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
 }
 
 function wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859(arg0, arg1, arg2) {
     wasm.wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859(arg0, arg1, arg2);
+}
+
+function wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b(arg0, arg1, arg2);
 }
 
 function wasm_bindgen__convert__closures_____invoke__hec0e381372c60b88(arg0, arg1) {
@@ -663,6 +710,14 @@ const WasmAutoPayRuleFinalization = (typeof FinalizationRegistry === 'undefined'
  */
 export class WasmAutoPayRule {
 
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmAutoPayRule.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmAutoPayRuleFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -707,6 +762,37 @@ export class WasmAutoPayRule {
         return BigInt.asUintN(64, ret);
     }
     /**
+     * Get the subscription ID
+     * @returns {string}
+     */
+    get subscription_id() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmautopayrule_subscription_id(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Check if manual confirmation is required
+     * @returns {boolean}
+     */
+    get require_confirmation() {
+        const ret = wasm.wasmautopayrule_require_confirmation(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Set whether manual confirmation is required
+     * @param {boolean} required
+     */
+    set_require_confirmation(required) {
+        wasm.wasmautopayrule_set_require_confirmation(this.__wbg_ptr, required);
+    }
+    /**
      * Get the rule ID
      * @returns {string}
      */
@@ -724,14 +810,18 @@ export class WasmAutoPayRule {
     }
     /**
      * Create a new auto-pay rule
+     * @param {string} subscription_id
      * @param {string} peer_pubkey
      * @param {bigint} max_amount
      * @param {bigint} period_seconds
+     * @param {boolean} require_confirmation
      */
-    constructor(peer_pubkey, max_amount, period_seconds) {
-        const ptr0 = passStringToWasm0(peer_pubkey, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    constructor(subscription_id, peer_pubkey, max_amount, period_seconds, require_confirmation) {
+        const ptr0 = passStringToWasm0(subscription_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmautopayrule_new(ptr0, len0, max_amount, period_seconds);
+        const ptr1 = passStringToWasm0(peer_pubkey, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmautopayrule_new(ptr0, len0, ptr1, len1, max_amount, period_seconds, require_confirmation);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -759,8 +849,123 @@ export class WasmAutoPayRule {
         const ret = wasm.wasmautopayrule_enabled(this.__wbg_ptr);
         return ret !== 0;
     }
+    /**
+     * Convert to JSON for storage
+     * @returns {string}
+     */
+    to_json() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmautopayrule_to_json(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Create from JSON
+     * @param {string} json
+     * @returns {WasmAutoPayRule}
+     */
+    static from_json(json) {
+        const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmautopayrule_from_json(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmAutoPayRule.__wrap(ret[0]);
+    }
 }
 if (Symbol.dispose) WasmAutoPayRule.prototype[Symbol.dispose] = WasmAutoPayRule.prototype.free;
+
+const WasmAutoPayRuleStorageFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmautopayrulestorage_free(ptr >>> 0, 1));
+/**
+ * Storage for auto-pay rules in browser localStorage
+ */
+export class WasmAutoPayRuleStorage {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmAutoPayRuleStorageFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmautopayrulestorage_free(ptr, 0);
+    }
+    /**
+     * Get an auto-pay rule by subscription ID
+     * @param {string} subscription_id
+     * @returns {Promise<WasmAutoPayRule | undefined>}
+     */
+    get_autopay_rule(subscription_id) {
+        const ptr0 = passStringToWasm0(subscription_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmautopayrulestorage_get_autopay_rule(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * Save an auto-pay rule
+     * @param {WasmAutoPayRule} rule
+     * @returns {Promise<void>}
+     */
+    save_autopay_rule(rule) {
+        _assertClass(rule, WasmAutoPayRule);
+        const ret = wasm.wasmautopayrulestorage_save_autopay_rule(this.__wbg_ptr, rule.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * List all auto-pay rules
+     * @returns {Promise<any[]>}
+     */
+    list_autopay_rules() {
+        const ret = wasm.wasmautopayrulestorage_list_autopay_rules(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Delete an auto-pay rule
+     * @param {string} subscription_id
+     * @returns {Promise<void>}
+     */
+    delete_autopay_rule(subscription_id) {
+        const ptr0 = passStringToWasm0(subscription_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmautopayrulestorage_delete_autopay_rule(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * Create new storage manager
+     */
+    constructor() {
+        const ret = wasm.wasmautopayrulestorage_new();
+        this.__wbg_ptr = ret >>> 0;
+        WasmAutoPayRuleStorageFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Clear all auto-pay rules
+     * @returns {Promise<void>}
+     */
+    clear_all() {
+        const ret = wasm.wasmautopayrulestorage_clear_all(this.__wbg_ptr);
+        return ret;
+    }
+}
+if (Symbol.dispose) WasmAutoPayRuleStorage.prototype[Symbol.dispose] = WasmAutoPayRuleStorage.prototype.free;
 
 const WasmContactFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -2331,6 +2536,14 @@ const WasmPeerSpendingLimitFinalization = (typeof FinalizationRegistry === 'unde
  */
 export class WasmPeerSpendingLimit {
 
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(WasmPeerSpendingLimit.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmPeerSpendingLimitFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -2364,6 +2577,14 @@ export class WasmPeerSpendingLimit {
      */
     get total_limit() {
         const ret = wasm.wasmautopayrule_max_amount(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Get the period start timestamp
+     * @returns {bigint}
+     */
+    get period_start() {
+        const ret = wasm.wasmpeerspendinglimit_period_start(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -2424,6 +2645,28 @@ export class WasmPeerSpendingLimit {
         wasm.wasmpeerspendinglimit_reset(this.__wbg_ptr);
     }
     /**
+     * Convert to JSON for storage
+     * @returns {string}
+     */
+    to_json() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmpeerspendinglimit_to_json(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Check if a payment amount is allowed
      * @param {bigint} amount
      * @returns {boolean}
@@ -2432,8 +2675,101 @@ export class WasmPeerSpendingLimit {
         const ret = wasm.wasmpeerspendinglimit_can_spend(this.__wbg_ptr, amount);
         return ret !== 0;
     }
+    /**
+     * Create from JSON
+     * @param {string} json
+     * @returns {WasmPeerSpendingLimit}
+     */
+    static from_json(json) {
+        const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmpeerspendinglimit_from_json(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmPeerSpendingLimit.__wrap(ret[0]);
+    }
 }
 if (Symbol.dispose) WasmPeerSpendingLimit.prototype[Symbol.dispose] = WasmPeerSpendingLimit.prototype.free;
+
+const WasmPeerSpendingLimitStorageFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmpeerspendinglimitstorage_free(ptr >>> 0, 1));
+/**
+ * Storage for peer spending limits in browser localStorage
+ */
+export class WasmPeerSpendingLimitStorage {
+
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmPeerSpendingLimitStorageFinalization.unregister(this);
+        return ptr;
+    }
+
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmpeerspendinglimitstorage_free(ptr, 0);
+    }
+    /**
+     * Get a peer spending limit by peer pubkey
+     * @param {string} peer_pubkey
+     * @returns {Promise<WasmPeerSpendingLimit | undefined>}
+     */
+    get_peer_limit(peer_pubkey) {
+        const ptr0 = passStringToWasm0(peer_pubkey, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmpeerspendinglimitstorage_get_peer_limit(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * Save a peer spending limit
+     * @param {WasmPeerSpendingLimit} limit
+     * @returns {Promise<void>}
+     */
+    save_peer_limit(limit) {
+        _assertClass(limit, WasmPeerSpendingLimit);
+        const ret = wasm.wasmpeerspendinglimitstorage_save_peer_limit(this.__wbg_ptr, limit.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * List all peer spending limits
+     * @returns {Promise<any[]>}
+     */
+    list_peer_limits() {
+        const ret = wasm.wasmpeerspendinglimitstorage_list_peer_limits(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Delete a peer spending limit
+     * @param {string} peer_pubkey
+     * @returns {Promise<void>}
+     */
+    delete_peer_limit(peer_pubkey) {
+        const ptr0 = passStringToWasm0(peer_pubkey, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmpeerspendinglimitstorage_delete_peer_limit(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+    /**
+     * Create new storage manager
+     */
+    constructor() {
+        const ret = wasm.wasmpeerspendinglimitstorage_new();
+        this.__wbg_ptr = ret >>> 0;
+        WasmPeerSpendingLimitStorageFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Clear all peer spending limits
+     * @returns {Promise<void>}
+     */
+    clear_all() {
+        const ret = wasm.wasmpeerspendinglimitstorage_clear_all(this.__wbg_ptr);
+        return ret;
+    }
+}
+if (Symbol.dispose) WasmPeerSpendingLimitStorage.prototype[Symbol.dispose] = WasmPeerSpendingLimitStorage.prototype.free;
 
 const WasmReceiptStorageFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -3404,6 +3740,10 @@ function __wbg_get_imports() {
         const ret = arg0.ok;
         return ret;
     };
+    imports.wbg.__wbg_parse_2a704d6b78abb2b8 = function() { return handleError(function (arg0, arg1) {
+        const ret = JSON.parse(getStringFromWasm0(arg0, arg1));
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_process_dc0fbacc7c1c06f7 = function(arg0) {
         const ret = arg0.process;
         return ret;
@@ -3488,6 +3828,10 @@ function __wbg_get_imports() {
         const ret = arg0.status;
         return ret;
     };
+    imports.wbg.__wbg_stringify_b5fb28f6465d9c3e = function() { return handleError(function (arg0) {
+        const ret = JSON.stringify(arg0);
+        return ret;
+    }, arguments) };
     imports.wbg.__wbg_subarray_480600f3d6a9f26c = function(arg0, arg1, arg2) {
         const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
         return ret;
@@ -3504,6 +3848,10 @@ function __wbg_get_imports() {
         const ret = arg0.versions;
         return ret;
     };
+    imports.wbg.__wbg_wasmautopayrule_new = function(arg0) {
+        const ret = WasmAutoPayRule.__wrap(arg0);
+        return ret;
+    };
     imports.wbg.__wbg_wasmcontact_new = function(arg0) {
         const ret = WasmContact.__wrap(arg0);
         return ret;
@@ -3514,6 +3862,10 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbg_wasmpaymentrequest_new = function(arg0) {
         const ret = WasmPaymentRequest.__wrap(arg0);
+        return ret;
+    };
+    imports.wbg.__wbg_wasmpeerspendinglimit_new = function(arg0) {
+        const ret = WasmPeerSpendingLimit.__wrap(arg0);
         return ret;
     };
     imports.wbg.__wbg_wasmsignedsubscription_new = function(arg0) {
@@ -3529,19 +3881,24 @@ function __wbg_get_imports() {
         const ret = getStringFromWasm0(arg0, arg1);
         return ret;
     };
-    imports.wbg.__wbindgen_cast_42ef79217ed4073d = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 388, function: Function { arguments: [Externref], shim_idx: 389, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__he7277012e90784de, wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859);
-        return ret;
-    };
-    imports.wbg.__wbindgen_cast_51f483ae288a2366 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 143, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 144, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    imports.wbg.__wbindgen_cast_3e6d7a467edf4f66 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 166, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 167, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
         const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h0ea10b8e17c2589a, wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b);
         return ret;
     };
-    imports.wbg.__wbindgen_cast_88e7dd862db8caef = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 385, function: Function { arguments: [], shim_idx: 386, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    imports.wbg.__wbindgen_cast_4625c577ab2ec9ee = function(arg0) {
+        // Cast intrinsic for `U64 -> Externref`.
+        const ret = BigInt.asUintN(64, arg0);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_752ed32918f8e5cb = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 424, function: Function { arguments: [], shim_idx: 425, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
         const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__he9ff11ce1c64d320, wasm_bindgen__convert__closures_____invoke__hec0e381372c60b88);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_98c349af0503c7f4 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 166, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 167, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h0ea10b8e17c2589a, wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b);
         return ret;
     };
     imports.wbg.__wbindgen_cast_9ae0607507abb057 = function(arg0) {
@@ -3559,11 +3916,6 @@ function __wbg_get_imports() {
         const ret = arg0;
         return ret;
     };
-    imports.wbg.__wbindgen_cast_da4eb1fec54a7d80 = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 143, function: Function { arguments: [NamedExternref("ErrorEvent")], shim_idx: 144, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h0ea10b8e17c2589a, wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b);
-        return ret;
-    };
     imports.wbg.__wbindgen_cast_e481686c74984159 = function(arg0, arg1) {
         var v0 = getArrayJsValueFromWasm0(arg0, arg1).slice();
         wasm.__wbindgen_free(arg0, arg1 * 4, 4);
@@ -3571,8 +3923,13 @@ function __wbg_get_imports() {
         const ret = v0;
         return ret;
     };
-    imports.wbg.__wbindgen_cast_fc618bba980404ae = function(arg0, arg1) {
-        // Cast intrinsic for `Closure(Closure { dtor_idx: 143, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 144, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    imports.wbg.__wbindgen_cast_e77cc7d1fa54f319 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 427, function: Function { arguments: [Externref], shim_idx: 428, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+        const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__he7277012e90784de, wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859);
+        return ret;
+    };
+    imports.wbg.__wbindgen_cast_fb0c6bde9bba27e4 = function(arg0, arg1) {
+        // Cast intrinsic for `Closure(Closure { dtor_idx: 166, function: Function { arguments: [NamedExternref("ErrorEvent")], shim_idx: 167, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
         const ret = makeMutClosure(arg0, arg1, wasm.wasm_bindgen__closure__destroy__h0ea10b8e17c2589a, wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b);
         return ret;
     };

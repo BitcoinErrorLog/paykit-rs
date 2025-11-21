@@ -1,5 +1,23 @@
 /* tslint:disable */
 /* eslint-disable */
+export function is_valid_pubkey(pubkey: string): boolean;
+/**
+ * Utility functions for subscriptions
+ */
+export function format_timestamp(timestamp: bigint): string;
+/**
+ * Parse a Noise endpoint string and return WebSocket URL and server key
+ *
+ * Format: noise://host:port@pubkey_hex
+ * Returns JSON: { ws_url: string, server_key_hex: string, host: string, port: number }
+ */
+export function parse_noise_endpoint_wasm(endpoint: string): any;
+/**
+ * Extract public key from pubky:// URI or raw public key
+ *
+ * Returns public key string
+ */
+export function extract_pubkey_from_uri_wasm(uri: string): string;
 /**
  * Initialize the WASM module
  *
@@ -11,11 +29,6 @@ export function init(): void;
  * Get the version of the Paykit WASM module
  */
 export function version(): string;
-export function is_valid_pubkey(pubkey: string): boolean;
-/**
- * Utility functions for subscriptions
- */
-export function format_timestamp(timestamp: bigint): string;
 /**
  * Storage manager for browser localStorage
  */
@@ -126,9 +139,13 @@ export class WasmAutoPayRule {
   free(): void;
   [Symbol.dispose](): void;
   /**
+   * Set whether manual confirmation is required
+   */
+  set_require_confirmation(required: boolean): void;
+  /**
    * Create a new auto-pay rule
    */
-  constructor(peer_pubkey: string, max_amount: bigint, period_seconds: bigint);
+  constructor(subscription_id: string, peer_pubkey: string, max_amount: bigint, period_seconds: bigint, require_confirmation: boolean);
   /**
    * Enable the rule
    */
@@ -137,6 +154,14 @@ export class WasmAutoPayRule {
    * Disable the rule
    */
   disable(): void;
+  /**
+   * Convert to JSON for storage
+   */
+  to_json(): string;
+  /**
+   * Create from JSON
+   */
+  static from_json(json: string): WasmAutoPayRule;
   /**
    * Get the maximum amount
    */
@@ -150,6 +175,14 @@ export class WasmAutoPayRule {
    */
   readonly period_seconds: bigint;
   /**
+   * Get the subscription ID
+   */
+  readonly subscription_id: string;
+  /**
+   * Check if manual confirmation is required
+   */
+  readonly require_confirmation: boolean;
+  /**
    * Get the rule ID
    */
   readonly id: string;
@@ -157,6 +190,37 @@ export class WasmAutoPayRule {
    * Check if the rule is enabled
    */
   readonly enabled: boolean;
+}
+/**
+ * Storage for auto-pay rules in browser localStorage
+ */
+export class WasmAutoPayRuleStorage {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Get an auto-pay rule by subscription ID
+   */
+  get_autopay_rule(subscription_id: string): Promise<WasmAutoPayRule | undefined>;
+  /**
+   * Save an auto-pay rule
+   */
+  save_autopay_rule(rule: WasmAutoPayRule): Promise<void>;
+  /**
+   * List all auto-pay rules
+   */
+  list_autopay_rules(): Promise<any[]>;
+  /**
+   * Delete an auto-pay rule
+   */
+  delete_autopay_rule(subscription_id: string): Promise<void>;
+  /**
+   * Create new storage manager
+   */
+  constructor();
+  /**
+   * Clear all auto-pay rules
+   */
+  clear_all(): Promise<void>;
 }
 /**
  * A contact in the address book
@@ -1021,9 +1085,17 @@ export class WasmPeerSpendingLimit {
    */
   reset(): void;
   /**
+   * Convert to JSON for storage
+   */
+  to_json(): string;
+  /**
    * Check if a payment amount is allowed
    */
   can_spend(amount: bigint): boolean;
+  /**
+   * Create from JSON
+   */
+  static from_json(json: string): WasmPeerSpendingLimit;
   /**
    * Get the peer public key
    */
@@ -1032,6 +1104,10 @@ export class WasmPeerSpendingLimit {
    * Get the total limit
    */
   readonly total_limit: bigint;
+  /**
+   * Get the period start timestamp
+   */
+  readonly period_start: bigint;
   /**
    * Get the current spent amount
    */
@@ -1044,6 +1120,37 @@ export class WasmPeerSpendingLimit {
    * Get the remaining limit
    */
   readonly remaining_limit: bigint;
+}
+/**
+ * Storage for peer spending limits in browser localStorage
+ */
+export class WasmPeerSpendingLimitStorage {
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Get a peer spending limit by peer pubkey
+   */
+  get_peer_limit(peer_pubkey: string): Promise<WasmPeerSpendingLimit | undefined>;
+  /**
+   * Save a peer spending limit
+   */
+  save_peer_limit(limit: WasmPeerSpendingLimit): Promise<void>;
+  /**
+   * List all peer spending limits
+   */
+  list_peer_limits(): Promise<any[]>;
+  /**
+   * Delete a peer spending limit
+   */
+  delete_peer_limit(peer_pubkey: string): Promise<void>;
+  /**
+   * Create new storage manager
+   */
+  constructor();
+  /**
+   * Clear all peer spending limits
+   */
+  clear_all(): Promise<void>;
 }
 /**
  * Receipt storage in browser localStorage
@@ -1339,21 +1446,11 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly __wbg_identity_free: (a: number, b: number) => void;
-  readonly identity_ed25519PublicKeyHex: (a: number) => [number, number];
-  readonly identity_ed25519SecretKeyHex: (a: number) => [number, number];
-  readonly identity_fromJSON: (a: number, b: number) => [number, number, number];
-  readonly identity_new: () => [number, number, number];
-  readonly identity_nickname: (a: number) => [number, number];
-  readonly identity_pubkyUri: (a: number) => [number, number];
-  readonly identity_publicKey: (a: number) => [number, number];
-  readonly identity_toJSON: (a: number) => [number, number, number, number];
-  readonly identity_withNickname: (a: number, b: number) => [number, number, number];
-  readonly version: () => [number, number];
-  readonly init: () => void;
   readonly __wbg_wasmautopayrule_free: (a: number, b: number) => void;
+  readonly __wbg_wasmautopayrulestorage_free: (a: number, b: number) => void;
   readonly __wbg_wasmpaymentrequest_free: (a: number, b: number) => void;
   readonly __wbg_wasmpeerspendinglimit_free: (a: number, b: number) => void;
+  readonly __wbg_wasmpeerspendinglimitstorage_free: (a: number, b: number) => void;
   readonly __wbg_wasmrequeststorage_free: (a: number, b: number) => void;
   readonly __wbg_wasmsignedsubscription_free: (a: number, b: number) => void;
   readonly __wbg_wasmsubscription_free: (a: number, b: number) => void;
@@ -1363,11 +1460,22 @@ export interface InitOutput {
   readonly wasmautopayrule_disable: (a: number) => void;
   readonly wasmautopayrule_enable: (a: number) => void;
   readonly wasmautopayrule_enabled: (a: number) => number;
+  readonly wasmautopayrule_from_json: (a: number, b: number) => [number, number, number];
   readonly wasmautopayrule_id: (a: number) => [number, number];
   readonly wasmautopayrule_max_amount: (a: number) => bigint;
-  readonly wasmautopayrule_new: (a: number, b: number, c: bigint, d: bigint) => [number, number, number];
+  readonly wasmautopayrule_new: (a: number, b: number, c: number, d: number, e: bigint, f: bigint, g: number) => [number, number, number];
   readonly wasmautopayrule_peer_pubkey: (a: number) => [number, number];
   readonly wasmautopayrule_period_seconds: (a: number) => bigint;
+  readonly wasmautopayrule_require_confirmation: (a: number) => number;
+  readonly wasmautopayrule_set_require_confirmation: (a: number, b: number) => void;
+  readonly wasmautopayrule_subscription_id: (a: number) => [number, number];
+  readonly wasmautopayrule_to_json: (a: number) => [number, number, number, number];
+  readonly wasmautopayrulestorage_clear_all: (a: number) => any;
+  readonly wasmautopayrulestorage_delete_autopay_rule: (a: number, b: number, c: number) => any;
+  readonly wasmautopayrulestorage_get_autopay_rule: (a: number, b: number, c: number) => any;
+  readonly wasmautopayrulestorage_list_autopay_rules: (a: number) => any;
+  readonly wasmautopayrulestorage_new: () => number;
+  readonly wasmautopayrulestorage_save_autopay_rule: (a: number, b: number) => any;
   readonly wasmpaymentrequest_amount: (a: number) => [number, number];
   readonly wasmpaymentrequest_created_at: (a: number) => bigint;
   readonly wasmpaymentrequest_currency: (a: number) => [number, number];
@@ -1383,12 +1491,21 @@ export interface InitOutput {
   readonly wasmpaymentrequest_with_description: (a: number, b: number, c: number) => number;
   readonly wasmpaymentrequest_with_expiration: (a: number, b: bigint) => number;
   readonly wasmpeerspendinglimit_can_spend: (a: number, b: bigint) => number;
+  readonly wasmpeerspendinglimit_from_json: (a: number, b: number) => [number, number, number];
   readonly wasmpeerspendinglimit_new: (a: number, b: number, c: bigint, d: bigint) => [number, number, number];
   readonly wasmpeerspendinglimit_peer_pubkey: (a: number) => [number, number];
   readonly wasmpeerspendinglimit_period_seconds: (a: number) => bigint;
+  readonly wasmpeerspendinglimit_period_start: (a: number) => bigint;
   readonly wasmpeerspendinglimit_record_payment: (a: number, b: bigint) => [number, number];
   readonly wasmpeerspendinglimit_remaining_limit: (a: number) => bigint;
   readonly wasmpeerspendinglimit_reset: (a: number) => void;
+  readonly wasmpeerspendinglimit_to_json: (a: number) => [number, number, number, number];
+  readonly wasmpeerspendinglimitstorage_clear_all: (a: number) => any;
+  readonly wasmpeerspendinglimitstorage_delete_peer_limit: (a: number, b: number, c: number) => any;
+  readonly wasmpeerspendinglimitstorage_get_peer_limit: (a: number, b: number, c: number) => any;
+  readonly wasmpeerspendinglimitstorage_list_peer_limits: (a: number) => any;
+  readonly wasmpeerspendinglimitstorage_new: () => number;
+  readonly wasmpeerspendinglimitstorage_save_peer_limit: (a: number, b: number) => any;
   readonly wasmrequeststorage_clear_all: (a: number) => any;
   readonly wasmrequeststorage_delete_request: (a: number, b: number, c: number) => any;
   readonly wasmrequeststorage_get_request: (a: number, b: number, c: number) => any;
@@ -1427,6 +1544,13 @@ export interface InitOutput {
   readonly wasmpeerspendinglimit_total_limit: (a: number) => bigint;
   readonly __wbg_wasmcontact_free: (a: number, b: number) => void;
   readonly __wbg_wasmcontactstorage_free: (a: number, b: number) => void;
+  readonly __wbg_wasmpaymentclient_free: (a: number, b: number) => void;
+  readonly __wbg_wasmpaymentcoordinator_free: (a: number, b: number) => void;
+  readonly __wbg_wasmpaymentreceiver_free: (a: number, b: number) => void;
+  readonly __wbg_wasmpaymentserver_free: (a: number, b: number) => void;
+  readonly __wbg_wasmreceiptstorage_free: (a: number, b: number) => void;
+  readonly extract_pubkey_from_uri_wasm: (a: number, b: number) => [number, number, number, number];
+  readonly parse_noise_endpoint_wasm: (a: number, b: number) => [number, number, number];
   readonly wasmcontact_added_at: (a: number) => bigint;
   readonly wasmcontact_from_json: (a: number, b: number) => [number, number, number];
   readonly wasmcontact_name: (a: number) => [number, number];
@@ -1444,6 +1568,27 @@ export interface InitOutput {
   readonly wasmcontactstorage_save_contact: (a: number, b: number) => any;
   readonly wasmcontactstorage_search_contacts: (a: number, b: number, c: number) => any;
   readonly wasmcontactstorage_update_payment_history: (a: number, b: number, c: number, d: number, e: number) => any;
+  readonly wasmpaymentclient_pay: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => any;
+  readonly wasmpaymentcoordinator_get_receipts: (a: number) => any;
+  readonly wasmpaymentcoordinator_initiate_payment: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => any;
+  readonly wasmpaymentcoordinator_new: () => number;
+  readonly wasmpaymentreceiver_accept_payment: (a: number, b: number, c: number) => any;
+  readonly wasmpaymentreceiver_get_receipts: (a: number) => any;
+  readonly wasmpaymentserver_listen: (a: number, b: number) => any;
+  readonly wasmreceiptstorage_clear_all: (a: number) => any;
+  readonly wasmreceiptstorage_delete_receipt: (a: number, b: number, c: number) => any;
+  readonly wasmreceiptstorage_export_as_json: (a: number) => any;
+  readonly wasmreceiptstorage_filter_by_contact: (a: number, b: number, c: number, d: number, e: number) => any;
+  readonly wasmreceiptstorage_filter_by_direction: (a: number, b: number, c: number, d: number, e: number) => any;
+  readonly wasmreceiptstorage_filter_by_method: (a: number, b: number, c: number) => any;
+  readonly wasmreceiptstorage_get_receipt: (a: number, b: number, c: number) => any;
+  readonly wasmreceiptstorage_get_statistics: (a: number, b: number, c: number) => any;
+  readonly wasmreceiptstorage_list_receipts: (a: number) => any;
+  readonly wasmreceiptstorage_save_receipt: (a: number, b: number, c: number, d: number, e: number) => any;
+  readonly wasmpaymentreceiver_new: () => number;
+  readonly wasmreceiptstorage_new: () => number;
+  readonly wasmpaymentclient_new: () => number;
+  readonly wasmpaymentserver_new: () => number;
   readonly __wbg_browserstorage_free: (a: number, b: number) => void;
   readonly browserstorage_clearAll: (a: number) => [number, number];
   readonly browserstorage_deleteIdentity: (a: number, b: number, c: number) => [number, number];
@@ -1453,6 +1598,24 @@ export interface InitOutput {
   readonly browserstorage_saveIdentity: (a: number, b: number, c: number, d: number) => [number, number];
   readonly browserstorage_setCurrentIdentity: (a: number, b: number, c: number) => [number, number];
   readonly browserstorage_new: () => number;
+  readonly __wbg_identity_free: (a: number, b: number) => void;
+  readonly identity_ed25519PublicKeyHex: (a: number) => [number, number];
+  readonly identity_ed25519SecretKeyHex: (a: number) => [number, number];
+  readonly identity_fromJSON: (a: number, b: number) => [number, number, number];
+  readonly identity_new: () => [number, number, number];
+  readonly identity_nickname: (a: number) => [number, number];
+  readonly identity_pubkyUri: (a: number) => [number, number];
+  readonly identity_publicKey: (a: number) => [number, number];
+  readonly identity_toJSON: (a: number) => [number, number, number, number];
+  readonly identity_withNickname: (a: number, b: number) => [number, number, number];
+  readonly version: () => [number, number];
+  readonly init: () => void;
+  readonly __wbg_wasmdashboard_free: (a: number, b: number) => void;
+  readonly wasmdashboard_get_overview_stats: (a: number, b: number, c: number) => any;
+  readonly wasmdashboard_get_recent_activity: (a: number, b: number, c: number, d: number) => any;
+  readonly wasmdashboard_get_setup_checklist: (a: number) => any;
+  readonly wasmdashboard_is_setup_complete: (a: number) => any;
+  readonly wasmdashboard_new: () => number;
   readonly __wbg_wasmpaymentmethodconfig_free: (a: number, b: number) => void;
   readonly __wbg_wasmpaymentmethodstorage_free: (a: number, b: number) => void;
   readonly wasmpaymentmethodconfig_endpoint: (a: number) => [number, number];
@@ -1472,46 +1635,14 @@ export interface InitOutput {
   readonly wasmpaymentmethodstorage_save_method: (a: number, b: number) => any;
   readonly wasmpaymentmethodstorage_set_preferred: (a: number, b: number, c: number, d: number) => any;
   readonly wasmpaymentmethodstorage_update_priority: (a: number, b: number, c: number, d: number) => any;
-  readonly __wbg_wasmpaymentcoordinator_free: (a: number, b: number) => void;
-  readonly wasmpaymentcoordinator_get_receipts: (a: number) => any;
-  readonly wasmpaymentcoordinator_initiate_payment: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => any;
-  readonly wasmpaymentcoordinator_new: () => number;
-  readonly wasmpaymentreceiver_accept_payment: (a: number, b: number, c: number) => any;
-  readonly wasmpaymentreceiver_get_receipts: (a: number) => any;
-  readonly wasmreceiptstorage_clear_all: (a: number) => any;
-  readonly wasmreceiptstorage_delete_receipt: (a: number, b: number, c: number) => any;
-  readonly wasmreceiptstorage_export_as_json: (a: number) => any;
-  readonly wasmreceiptstorage_filter_by_contact: (a: number, b: number, c: number, d: number, e: number) => any;
-  readonly wasmreceiptstorage_filter_by_direction: (a: number, b: number, c: number, d: number, e: number) => any;
-  readonly wasmreceiptstorage_filter_by_method: (a: number, b: number, c: number) => any;
-  readonly wasmreceiptstorage_get_receipt: (a: number, b: number, c: number) => any;
-  readonly wasmreceiptstorage_get_statistics: (a: number, b: number, c: number) => any;
-  readonly wasmreceiptstorage_list_receipts: (a: number) => any;
-  readonly wasmreceiptstorage_save_receipt: (a: number, b: number, c: number, d: number, e: number) => any;
-  readonly wasmpaymentreceiver_new: () => number;
-  readonly wasmreceiptstorage_new: () => number;
-  readonly __wbg_wasmpaymentreceiver_free: (a: number, b: number) => void;
-  readonly __wbg_wasmreceiptstorage_free: (a: number, b: number) => void;
   readonly __wbg_directoryclient_free: (a: number, b: number) => void;
-  readonly __wbg_wasmdashboard_free: (a: number, b: number) => void;
   readonly directoryclient_new: (a: number, b: number) => number;
   readonly directoryclient_publishMethods: (a: number, b: any) => any;
   readonly directoryclient_queryMethods: (a: number, b: number, c: number) => any;
-  readonly wasmdashboard_get_overview_stats: (a: number, b: number, c: number) => any;
-  readonly wasmdashboard_get_recent_activity: (a: number, b: number, c: number, d: number) => any;
-  readonly wasmdashboard_get_setup_checklist: (a: number) => any;
-  readonly wasmdashboard_is_setup_complete: (a: number) => any;
-  readonly wasmdashboard_new: () => number;
-  readonly __wbg_wasmpaymentclient_free: (a: number, b: number) => void;
-  readonly __wbg_wasmpaymentserver_free: (a: number, b: number) => void;
-  readonly wasmpaymentclient_pay: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => any;
-  readonly wasmpaymentserver_listen: (a: number, b: number) => any;
-  readonly wasmpaymentclient_new: () => number;
-  readonly wasmpaymentserver_new: () => number;
-  readonly wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b: (a: number, b: number, c: any) => void;
-  readonly wasm_bindgen__closure__destroy__h0ea10b8e17c2589a: (a: number, b: number) => void;
   readonly wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859: (a: number, b: number, c: any) => void;
   readonly wasm_bindgen__closure__destroy__he7277012e90784de: (a: number, b: number) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b: (a: number, b: number, c: any) => void;
+  readonly wasm_bindgen__closure__destroy__h0ea10b8e17c2589a: (a: number, b: number) => void;
   readonly wasm_bindgen__convert__closures_____invoke__hec0e381372c60b88: (a: number, b: number) => void;
   readonly wasm_bindgen__closure__destroy__he9ff11ce1c64d320: (a: number, b: number) => void;
   readonly wasm_bindgen__convert__closures_____invoke__h8a0305fb7488cc73: (a: number, b: number, c: any, d: any) => void;

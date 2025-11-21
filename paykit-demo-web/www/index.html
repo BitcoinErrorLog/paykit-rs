@@ -561,6 +561,66 @@
             </div>
 
             <div class="card">
+                <h3>Auto-Pay Configuration</h3>
+                <p>Enable automatic payments for your subscriptions</p>
+                
+                <div class="form-group">
+                    <label for="autopay-subscription-select">Subscription</label>
+                    <select id="autopay-subscription-select">
+                        <option value="">Select a subscription...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="autopay-max-amount-input">Max Amount per Payment (sats)</label>
+                    <input type="number" id="autopay-max-amount-input" placeholder="10000">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autopay-require-confirmation">
+                        Require manual confirmation before each payment
+                    </label>
+                </div>
+                <div class="form-group">
+                    <button id="enable-autopay-btn" class="btn btn-primary">Enable Auto-Pay</button>
+                    <button id="refresh-autopay-btn" class="btn btn-secondary">Refresh List</button>
+                </div>
+                
+                <div id="autopay-rules-list" class="autopay-rules-list">
+                    <p class="empty-state">No auto-pay rules configured</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Spending Limits (Allowances)</h3>
+                <p>Set spending limits per peer to control auto-payments</p>
+                
+                <div class="form-group">
+                    <label for="limit-peer-input">Peer Public Key</label>
+                    <input type="text" id="limit-peer-input" placeholder="Enter peer's public key or select contact">
+                </div>
+                <div class="form-group">
+                    <label for="limit-amount-input">Limit Amount (sats)</label>
+                    <input type="number" id="limit-amount-input" placeholder="100000">
+                </div>
+                <div class="form-group">
+                    <label for="limit-period-select">Period</label>
+                    <select id="limit-period-select">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly" selected>Monthly</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button id="set-limit-btn" class="btn btn-primary">Set Limit</button>
+                    <button id="refresh-limits-btn" class="btn btn-secondary">Refresh List</button>
+                </div>
+                
+                <div id="peer-limits-list" class="peer-limits-list">
+                    <p class="empty-state">No spending limits configured</p>
+                </div>
+            </div>
+
+            <div class="card">
                 <h3>About Subscriptions</h3>
                 <p><strong>Subscriptions</strong> allow you to:</p>
                 <ul>
@@ -568,6 +628,20 @@
                     <li>Set payment frequency (daily, weekly, monthly, yearly, custom)</li>
                     <li>Define subscription terms and amounts</li>
                     <li>Manage active subscriptions with start/end dates</li>
+                </ul>
+                <p><strong>Auto-Pay</strong> enables automatic payment processing:</p>
+                <ul>
+                    <li>Configure per-subscription auto-pay rules</li>
+                    <li>Set maximum payment amounts</li>
+                    <li>Require manual confirmation for each payment (optional)</li>
+                    <li>Enable or disable auto-pay at any time</li>
+                </ul>
+                <p><strong>Spending Limits</strong> control total spending per peer:</p>
+                <ul>
+                    <li>Set daily, weekly, or monthly spending limits</li>
+                    <li>Track current spending against limits</li>
+                    <li>Automatic period reset</li>
+                    <li>Prevent exceeding limits</li>
                 </ul>
                 <p class="note">💡 All data is stored in your browser's localStorage</p>
             </div>

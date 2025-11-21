@@ -180,6 +180,16 @@ cargo test --test concurrency_tests
 4. **Signature Verification**: Always verify signatures before processing
 5. **Replay Protection**: Maintain nonce database to detect replays
 
+## Related Components
+
+This crate integrates with other Paykit components:
+
+- **[paykit-lib](../paykit-lib/README.md)** - Core payment directory operations (may be used for directory features)
+- **[paykit-interactive](../paykit-interactive/README.md)** - Real-time payment execution over encrypted channels
+- **[paykit-demo-core](../paykit-demo-core/)** - Shared demo logic that uses subscriptions
+- **[paykit-demo-cli](../paykit-demo-cli/README.md)** - CLI demo with subscription management features
+- **[paykit-demo-web](../paykit-demo-web/README.md)** - Web demo with subscription and auto-pay features
+
 ## Dependencies
 
 - `paykit-lib`: Core payment directory operations
@@ -189,13 +199,19 @@ cargo test --test concurrency_tests
 - `rust_decimal`: Safe decimal arithmetic
 - `fs2`: File-level locking (native only)
 
+## Documentation
+
+- [Build Instructions](BUILD.md)
+- [Repository Root README](../README.md)
+- [Security Guide](../SECURITY.md)
+
 ## License
 
 See root [LICENSE](../LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please see the repository root for guidelines.
 
 ## Security
 

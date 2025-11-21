@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paykit Demo - Browser Demo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <header role="banner">
+        <div class="container">
+            <h1>🔐 Paykit Demo</h1>
+            <p class="subtitle">Decentralized Payment Discovery & Coordination</p>
+        </div>
+    </header>
+
+    <main class="container" id="main-content">
+        <!-- Tab Navigation -->
+        <nav class="tabs" role="tablist" aria-label="Main navigation">
+            <button class="tab active" data-tab="dashboard" role="tab" aria-selected="true" aria-controls="dashboard-tab" id="tab-dashboard">Dashboard</button>
+            <button class="tab" data-tab="identity" role="tab" aria-selected="false" aria-controls="identity-tab" id="tab-identity">Identity</button>
+            <button class="tab" data-tab="contacts" role="tab" aria-selected="false" aria-controls="contacts-tab" id="tab-contacts">Contacts</button>
+            <button class="tab" data-tab="directory" role="tab" aria-selected="false" aria-controls="directory-tab" id="tab-directory">Directory</button>
+            <button class="tab" data-tab="payments" role="tab" aria-selected="false" aria-controls="payments-tab" id="tab-payments">Payments</button>
+            <button class="tab" data-tab="receipts" role="tab" aria-selected="false" aria-controls="receipts-tab" id="tab-receipts">Receipts</button>
+            <button class="tab" data-tab="requests" role="tab" aria-selected="false" aria-controls="requests-tab" id="tab-requests">Requests</button>
+            <button class="tab" data-tab="subscriptions" role="tab" aria-selected="false" aria-controls="subscriptions-tab" id="tab-subscriptions">Subscriptions</button>
+            <button class="tab" data-tab="about" role="tab" aria-selected="false" aria-controls="about-tab" id="tab-about">About</button>
+        </nav>
+
+        <!-- Dashboard Tab -->
+        <section id="dashboard-tab" class="tab-content active" role="tabpanel" aria-labelledby="tab-dashboard">
+            <h2>Dashboard</h2>
+            <p>Welcome to Paykit - Your decentralized payment hub</p>
+
+            <div class="card">
+                <h3>Overview</h3>
+                <div class="dashboard-stats">
+                    <div class="dashboard-stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="dash-contacts">0</div>
+                            <div class="stat-label">Contacts</div>
+                        </div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="stat-icon">💳</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="dash-methods">0</div>
+                            <div class="stat-label">Payment Methods</div>
+                        </div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="stat-icon">🧾</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="dash-receipts">0</div>
+                            <div class="stat-label">Receipts</div>
+                        </div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="stat-icon">🔄</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="dash-subscriptions">0</div>
+                            <div class="stat-label">Subscriptions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="card dashboard-setup">
+                    <h3>Setup Progress</h3>
+                    <div class="setup-checklist">
+                        <div class="setup-item" id="setup-identity">
+                            <span class="setup-icon">⏳</span>
+                            <span class="setup-text">Create or load identity</span>
+                        </div>
+                        <div class="setup-item" id="setup-contacts">
+                            <span class="setup-icon">⏳</span>
+                            <span class="setup-text">Add contacts</span>
+                        </div>
+                        <div class="setup-item" id="setup-methods">
+                            <span class="setup-icon">⏳</span>
+                            <span class="setup-text">Configure payment methods</span>
+                        </div>
+                        <div class="setup-item" id="setup-preferred">
+                            <span class="setup-icon">⏳</span>
+                            <span class="setup-text">Set preferred method</span>
+                        </div>
+                    </div>
+                    <div class="setup-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="setup-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <p class="progress-text" id="setup-progress-text">0% Complete</p>
+                    </div>
+                </div>
+
+                <div class="card dashboard-actions">
+                    <h3>Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button class="action-btn" onclick="switchTab('identity')">
+                            <span class="action-icon">🔐</span>
+                            <span class="action-text">Manage Identity</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('contacts')">
+                            <span class="action-icon">👥</span>
+                            <span class="action-text">View Contacts</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('payments')">
+                            <span class="action-icon">💳</span>
+                            <span class="action-text">Payment Methods</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('receipts')">
+                            <span class="action-icon">🧾</span>
+                            <span class="action-text">View Receipts</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('directory')">
+                            <span class="action-icon">📡</span>
+                            <span class="action-text">Discover Methods</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('subscriptions')">
+                            <span class="action-icon">🔄</span>
+                            <span class="action-text">Subscriptions</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Recent Activity</h3>
+                <div id="dashboard-activity" class="dashboard-activity">
+                    <p class="empty-state">No recent activity. Complete a payment to see activity here.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Getting Started</h3>
+                <div class="getting-started">
+                    <div class="gs-step">
+                        <div class="gs-number">1</div>
+                        <div class="gs-content">
+                            <h4>Create Your Identity</h4>
+                            <p>Generate a new Pubky identity or import an existing one. This is your digital identity for Paykit.</p>
+                            <button class="btn btn-secondary" onclick="switchTab('identity')">Go to Identity →</button>
+                        </div>
+                    </div>
+                    <div class="gs-step">
+                        <div class="gs-number">2</div>
+                        <div class="gs-content">
+                            <h4>Add Contacts</h4>
+                            <p>Build your address book with contacts you want to send payments to or receive from.</p>
+                            <button class="btn btn-secondary" onclick="switchTab('contacts')">Manage Contacts →</button>
+                        </div>
+                    </div>
+                    <div class="gs-step">
+                        <div class="gs-number">3</div>
+                        <div class="gs-content">
+                            <h4>Configure Payment Methods</h4>
+                            <p>Set up your Lightning, Bitcoin Onchain, or custom payment methods.</p>
+                            <button class="btn btn-secondary" onclick="switchTab('payments')">Configure Methods →</button>
+                        </div>
+                    </div>
+                    <div class="gs-step">
+                        <div class="gs-number">4</div>
+                        <div class="gs-content">
+                            <h4>Start Transacting</h4>
+                            <p>Discover payment methods, create payment requests, or set up subscriptions.</p>
+                            <button class="btn btn-secondary" onclick="switchTab('directory')">Discover Methods →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Identity Tab -->
+        <section id="identity-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-identity" hidden>
+            <h2>Identity Management</h2>
+            <p>Create and manage your Pubky identity</p>
+
+            <div class="card">
+                <h3>Current Identity</h3>
+                <div id="current-identity" class="identity-display">
+                    <p class="empty-state">No identity selected. Create or load one below.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Actions</h3>
+                <div class="form-group">
+                    <label for="nickname-input">Nickname (optional)</label>
+                    <input type="text" id="nickname-input" placeholder="e.g., alice">
+                </div>
+                <button id="generate-btn" class="btn btn-primary">Generate New Identity</button>
+                <button id="export-btn" class="btn btn-secondary" disabled>Export Identity</button>
+            </div>
+
+            <div class="card">
+                <h3>Saved Identities</h3>
+                <div id="identity-list" class="identity-list">
+                    <p class="empty-state">No saved identities</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Import Identity</h3>
+                <textarea id="import-textarea" rows="4" placeholder="Paste exported identity JSON here"></textarea>
+                <button id="import-btn" class="btn btn-secondary">Import</button>
+            </div>
+        </section>
+
+        <!-- Contacts Tab -->
+        <section id="contacts-tab" class="tab-content">
+            <h2>Contact Management</h2>
+            <p>Manage your Pubky contacts and payment history</p>
+
+            <div class="card">
+                <h3>Add Contact</h3>
+                <div class="form-group">
+                    <label for="contact-name-input">Name</label>
+                    <input type="text" id="contact-name-input" placeholder="e.g., Alice Smith">
+                </div>
+                <div class="form-group">
+                    <label for="contact-pubkey-input">Pubky URI or Public Key</label>
+                    <input type="text" id="contact-pubkey-input" placeholder="pubky://... or public key">
+                </div>
+                <div class="form-group">
+                    <label for="contact-notes-input">Notes (optional)</label>
+                    <textarea id="contact-notes-input" rows="3" placeholder="Add notes about this contact..."></textarea>
+                </div>
+                <button id="add-contact-btn" class="btn btn-primary">Add Contact</button>
+            </div>
+
+            <div class="card">
+                <h3>My Contacts</h3>
+                <div class="form-group">
+                    <input type="text" id="contact-search-input" class="contact-search" placeholder="🔍 Search contacts...">
+                </div>
+                <div class="form-group">
+                    <button id="refresh-contacts-btn" class="btn btn-secondary">Refresh List</button>
+                    <button id="import-follows-btn" class="btn btn-secondary">Import from Follows</button>
+                </div>
+                <div id="contacts-list" class="contacts-list">
+                    <p class="empty-state">No contacts yet. Add one above or import from follows.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Details Modal -->
+        <div id="contact-modal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close" id="close-contact-modal">&times;</span>
+                <h2>Contact Details</h2>
+                <div id="contact-modal-content">
+                    <!-- Content will be filled by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Directory Tab -->
+        <section id="directory-tab" class="tab-content">
+            <h2>Payment Method Directory</h2>
+            <p>Discover payment methods from Pubky URIs</p>
+
+            <div class="card">
+                <h3>Query Directory</h3>
+                <div class="form-group">
+                    <label for="pubky-uri-input">Pubky URI or Public Key</label>
+                    <input type="text" id="pubky-uri-input" placeholder="pubky://...">
+                </div>
+                <div class="form-group">
+                    <label for="homeserver-input">Homeserver URL</label>
+                    <input type="text" id="homeserver-input" value="https://demo.httprelay.io">
+                </div>
+                <button id="query-btn" class="btn btn-primary">Query Methods</button>
+            </div>
+
+            <div class="card">
+                <h3>Results</h3>
+                <div id="query-results" class="results">
+                    <p class="empty-state">No results yet. Query a Pubky URI above.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Example URIs to Try</h3>
+                <ul class="example-list">
+                    <li>
+                        <code>pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo</code>
+                        <button class="btn-sm" onclick="tryExample('pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo')">Try</button>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Payments Tab -->
+        <section id="payments-tab" class="tab-content">
+            <h2>Payments</h2>
+            <p>Configure payment methods and initiate payments</p>
+
+            <div class="card">
+                <h3>My Payment Methods</h3>
+                <p class="note">⚠️ <strong>Demo Limitation:</strong> Methods are saved locally but NOT published to homeserver</p>
+                <div class="form-group">
+                    <button id="refresh-methods-btn" class="btn btn-secondary">Refresh List</button>
+                    <button id="mock-publish-btn" class="btn btn-secondary" style="background: var(--warning)">Mock Publish</button>
+                </div>
+                <div id="methods-list" class="methods-list">
+                    <p class="empty-state">No payment methods configured. Add one below.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Add Payment Method</h3>
+                <div class="form-group">
+                    <label for="method-id-input">Method Type</label>
+                    <select id="method-id-input">
+                        <option value="">Select method type...</option>
+                        <option value="lightning">Lightning</option>
+                        <option value="onchain">Bitcoin Onchain</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="form-group" id="custom-method-id-group" style="display: none;">
+                    <label for="custom-method-id-input">Custom Method ID</label>
+                    <input type="text" id="custom-method-id-input" placeholder="e.g., liquid, ecash">
+                </div>
+                <div class="form-group">
+                    <label for="method-endpoint-input">Payment Endpoint</label>
+                    <input type="text" id="method-endpoint-input" placeholder="e.g., LNURL, Bitcoin address, etc.">
+                    <small class="form-help">Lightning: LNURL or Lightning Address | Onchain: Bitcoin Address</small>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="method-public-checkbox" checked>
+                        <span>Public (visible in directory)</span>
+                    </label>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="method-preferred-checkbox">
+                        <span>Preferred method</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="method-priority-input">Priority (1 = highest)</label>
+                    <input type="number" id="method-priority-input" value="1" min="1" max="100">
+                </div>
+                <button id="add-method-btn" class="btn btn-primary">Add Payment Method</button>
+            </div>
+
+            <div class="card">
+                <h3>Payment Simulation</h3>
+                <p>Simulate a payment flow</p>
+
+                <div class="form-group">
+                    <label for="recipient-input">Recipient Pubky URI</label>
+                    <input type="text" id="recipient-input" placeholder="pubky://...">
+                </div>
+                <div class="form-group">
+                    <label for="amount-input">Amount</label>
+                    <input type="number" id="amount-input" placeholder="1000">
+                </div>
+                <div class="form-group">
+                    <label for="currency-input">Currency</label>
+                    <input type="text" id="currency-input" value="SAT">
+                </div>
+                <div class="form-group">
+                    <label for="method-select">Payment Method</label>
+                    <select id="method-select">
+                        <option value="lightning">Lightning</option>
+                        <option value="onchain">Bitcoin Onchain</option>
+                    </select>
+                </div>
+                <button id="initiate-payment-btn" class="btn btn-primary" disabled>Initiate Payment</button>
+                <p class="note">💡 Payments use real Noise protocol encryption. Recipient must have a WebSocket server running with a published noise:// endpoint.</p>
+            </div>
+
+            <div class="card">
+                <h3>Payment Status</h3>
+                <div id="payment-status" class="status-display">
+                    <p class="empty-state">No active payment</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Receipts Tab -->
+        <section id="receipts-tab" class="tab-content">
+            <h2>Payment Receipts</h2>
+            <p>View and manage your payment transaction history</p>
+
+            <div class="card">
+                <h3>Receipt Statistics</h3>
+                <div id="receipt-stats" class="receipt-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-receipts">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="sent-receipts">0</div>
+                        <div class="stat-label">Sent</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="received-receipts">0</div>
+                        <div class="stat-label">Received</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Filter Receipts</h3>
+                <div class="filter-controls">
+                    <div class="form-group">
+                        <label for="filter-direction">Direction</label>
+                        <select id="filter-direction">
+                            <option value="all">All</option>
+                            <option value="sent">Sent</option>
+                            <option value="received">Received</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter-method">Method</label>
+                        <select id="filter-method">
+                            <option value="all">All Methods</option>
+                            <option value="lightning">Lightning</option>
+                            <option value="onchain">Bitcoin Onchain</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="filter-contact">Contact</label>
+                        <select id="filter-contact">
+                            <option value="all">All Contacts</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button id="apply-filters-btn" class="btn btn-primary">Apply Filters</button>
+                        <button id="reset-filters-btn" class="btn btn-secondary">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Receipts</h3>
+                <div class="form-group">
+                    <button id="refresh-receipts-btn" class="btn btn-secondary">Refresh List</button>
+                    <button id="export-receipts-btn" class="btn btn-secondary">Export JSON</button>
+                    <button id="clear-receipts-btn" class="btn btn-secondary" style="background: var(--error)">Clear All</button>
+                </div>
+                <div id="receipts-list" class="receipts-list">
+                    <p class="empty-state">No receipts yet. Complete a payment to see receipts here.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Payment Requests Tab -->
+        <section id="requests-tab" class="tab-content">
+            <h2>Payment Requests</h2>
+            <p>Create and manage one-time payment requests</p>
+
+            <div class="card">
+                <h3>Create Payment Request</h3>
+                <div class="form-group">
+                    <label for="request-recipient-input">Recipient Public Key</label>
+                    <input type="text" id="request-recipient-input" placeholder="Enter recipient's public key">
+                </div>
+                <div class="form-group">
+                    <label for="request-amount-input">Amount</label>
+                    <input type="number" id="request-amount-input" placeholder="1000">
+                </div>
+                <div class="form-group">
+                    <label for="request-currency-input">Currency</label>
+                    <input type="text" id="request-currency-input" value="SAT" placeholder="SAT">
+                </div>
+                <div class="form-group">
+                    <label for="request-description-input">Description (optional)</label>
+                    <input type="text" id="request-description-input" placeholder="e.g., Coffee payment">
+                </div>
+                <div class="form-group">
+                    <label for="request-expires-input">Expires in (hours)</label>
+                    <input type="number" id="request-expires-input" value="24" placeholder="24">
+                </div>
+                <button id="create-request-btn" class="btn btn-primary">Create Payment Request</button>
+            </div>
+
+            <div class="card">
+                <h3>My Payment Requests</h3>
+                <div class="form-group">
+                    <button id="refresh-requests-btn" class="btn btn-secondary">Refresh List</button>
+                    <button id="clear-requests-btn" class="btn btn-secondary" style="background: var(--error)">Clear All</button>
+                </div>
+                <div id="requests-list" class="requests-list">
+                    <p class="empty-state">No payment requests yet. Create one above.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>About Payment Requests</h3>
+                <p><strong>Payment Requests</strong> allow you to:</p>
+                <ul>
+                    <li>Send one-time payment requests to any Pubky user</li>
+                    <li>Set amount, currency, and expiration</li>
+                    <li>Store requests locally in browser</li>
+                    <li>Track request status and history</li>
+                </ul>
+                <p class="note">💡 Requests are stored in your browser's localStorage</p>
+            </div>
+        </section>
+
+        <!-- Subscriptions Tab -->
+        <section id="subscriptions-tab" class="tab-content">
+            <h2>Subscriptions</h2>
+            <p>Create and manage recurring payment subscriptions</p>
+
+            <div class="card">
+                <h3>Create Subscription</h3>
+                <div class="form-group">
+                    <label for="sub-provider-input">Provider Public Key</label>
+                    <input type="text" id="sub-provider-input" placeholder="Enter provider's public key">
+                </div>
+                <div class="form-group">
+                    <label for="sub-amount-input">Amount (per payment)</label>
+                    <input type="number" id="sub-amount-input" placeholder="10000">
+                </div>
+                <div class="form-group">
+                    <label for="sub-currency-input">Currency</label>
+                    <input type="text" id="sub-currency-input" value="SAT" placeholder="SAT">
+                </div>
+                <div class="form-group">
+                    <label for="sub-frequency-select">Payment Frequency</label>
+                    <select id="sub-frequency-select">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly:1">Monthly (1st of month)</option>
+                        <option value="monthly:15">Monthly (15th of month)</option>
+                        <option value="yearly:1:1">Yearly (Jan 1st)</option>
+                        <option value="custom">Custom (seconds)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="custom-frequency-group" style="display: none;">
+                    <label for="sub-custom-interval">Custom Interval (seconds)</label>
+                    <input type="number" id="sub-custom-interval" placeholder="86400">
+                </div>
+                <div class="form-group">
+                    <label for="sub-description-input">Description</label>
+                    <input type="text" id="sub-description-input" placeholder="e.g., Netflix subscription">
+                </div>
+                <button id="create-subscription-btn" class="btn btn-primary">Create Subscription</button>
+            </div>
+
+            <div class="card">
+                <h3>My Subscriptions</h3>
+                <div class="form-group">
+                    <button id="refresh-subscriptions-btn" class="btn btn-secondary">Refresh List</button>
+                    <button id="clear-subscriptions-btn" class="btn btn-secondary" style="background: var(--error)">Clear All</button>
+                </div>
+                <div id="subscriptions-list" class="requests-list">
+                    <p class="empty-state">No subscriptions yet. Create one above.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>About Subscriptions</h3>
+                <p><strong>Subscriptions</strong> allow you to:</p>
+                <ul>
+                    <li>Create recurring payment agreements</li>
+                    <li>Set payment frequency (daily, weekly, monthly, yearly, custom)</li>
+                    <li>Define subscription terms and amounts</li>
+                    <li>Manage active subscriptions with start/end dates</li>
+                </ul>
+                <p class="note">💡 All data is stored in your browser's localStorage</p>
+            </div>
+        </section>
+
+
+        <!-- About Tab -->
+        <section id="about-tab" class="tab-content">
+            <h2>About Paykit</h2>
+            
+            <div class="card">
+                <h3>What is Paykit?</h3>
+                <p>Paykit is a flexible payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).</p>
+            </div>
+
+            <div class="card">
+                <h3>Features</h3>
+                <ul>
+                    <li><strong>Public Directory:</strong> Discover payment methods via Pubky homeservers</li>
+                    <li><strong>Private Channels:</strong> Negotiate payments over encrypted Noise Protocol channels</li>
+                    <li><strong>Receipt Exchange:</strong> Cryptographic proof of payment coordination</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Architecture</h3>
+                <pre>User A → Pubky Homeserver ← User B
+   ↓
+Discover Payment Methods
+   ↓
+Noise Channel Negotiation
+   ↓
+Payment Execution (off-protocol)
+   ↓
+Receipt Exchange</pre>
+            </div>
+
+            <div class="card">
+                <h3>Resources</h3>
+                <ul>
+                    <li><a href="https://github.com/paykit/paykit-rs" target="_blank">GitHub Repository</a></li>
+                    <li><a href="https://pubky.org" target="_blank">Pubky Protocol</a></li>
+                    <li><a href="../paykit-demo-cli/README.md" target="_blank">CLI Demo</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>WASM Module Info</h3>
+                <p>Module Version: <span id="wasm-version">Loading...</span></p>
+                <p>Build Target: web</p>
+                <p>Rust Edition: 2021</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Paykit Demo - Built with Rust + WebAssembly | <a href="https://github.com/paykit/paykit-rs" target="_blank">Source Code</a></p>
+        </div>
+    </footer>
+
+    <div id="notification" class="notification"></div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
+

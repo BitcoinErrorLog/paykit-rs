@@ -1,0 +1,31 @@
+{
+  "buildCommand": "cargo install wasm-pack && wasm-pack build --target web --release --out-dir www/pkg",
+  "outputDirectory": "www",
+  "framework": null,
+  "devCommand": "python3 -m http.server 8080 -d www",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/pkg/(.*).wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ]
+    }
+  ]
+}
+

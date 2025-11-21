@@ -1,0 +1,16 @@
+{
+  "name": "paykit-demo-web",
+  "type": "module",
+  "description": "WebAssembly demo for Paykit",
+  "version": "0.1.0",
+  "files": [
+    "paykit_demo_web_bg.wasm",
+    "paykit_demo_web.js",
+    "paykit_demo_web.d.ts"
+  ],
+  "main": "paykit_demo_web.js",
+  "types": "paykit_demo_web.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

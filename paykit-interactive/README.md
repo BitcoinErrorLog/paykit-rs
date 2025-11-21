@@ -85,14 +85,23 @@ Payer                           Payee
   | (both save receipt)          |
 ```
 
+## Related Components
+
+This crate extends the functionality of other Paykit components:
+
+- **[paykit-lib](../paykit-lib/README.md)** - Uses transport traits from the core library for directory operations
+- **[paykit-subscriptions](../paykit-subscriptions/README.md)** - May be used together for subscription-based payments
+- **[paykit-demo-core](../paykit-demo-core/)** - Shared demo logic that may use interactive features
+- **[paykit-demo-cli](../paykit-demo-cli/README.md)** - CLI demo that demonstrates interactive payment flows
+
 ## Integration Plan
 
-This crate is part of the **Paykit Roadmap** (Phase 2 & 3). It is designed to be integrated into Bitkit (via `bitkit-core`) and other Pubky apps to enable:
+This crate is part of the **Paykit Roadmap** (Phase 2 & 3 - ✅ Complete). It is designed to be integrated into Bitkit (via `bitkit-core`) and other Pubky apps to enable:
 - Private payment negotiation.
 - Interactive checkout flows.
 - Standardized transaction history.
 
-See `../PAYKIT_ROADMAP.md` for the full integration plan.
+See [PAYKIT_ROADMAP.md](../PAYKIT_ROADMAP.md) for the full integration plan.
 
 ## Testing
 
@@ -105,4 +114,10 @@ cargo test --all-features
 
 - `timeout` (default): Enables 30-second timeout for receipt negotiations using `tokio::time`
 - Disable for environments without tokio runtime
+
+## Documentation
+
+- [Build Instructions](BUILD.md) (if exists)
+- [Repository Root README](../README.md)
+- [Paykit Roadmap](../PAYKIT_ROADMAP.md)
 

@@ -2,13 +2,16 @@
 //!
 //! Provides helpers to run a Noise server that accepts payment requests.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use paykit_interactive::transport::PubkyNoiseChannel;
 use pubky_noise::{datalink_adapter, DummyRing, NoiseServer};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::Identity;
+
+/// Maximum handshake message size (Noise handshakes are typically <512 bytes)
+const MAX_HANDSHAKE_SIZE: usize = 4096;
 
 /// Helper for creating and running Noise servers for payment reception
 pub struct NoiseServerHelper;
@@ -37,12 +40,13 @@ impl NoiseServerHelper {
         device_id: &[u8],
         epoch: u32,
     ) -> Arc<NoiseServer<DummyRing, ()>> {
-        // Derive X25519 key for Noise from Ed25519 identity
-        let x25519_key = identity.derive_x25519_key(device_id, epoch);
+        // Use Ed25519 secret key as the seed for DummyRing
+        // DummyRing will derive X25519 keys from this seed using HKDF
+        let seed = identity.keypair.secret_key();
 
         // Create a ring key provider
         let ring = Arc::new(DummyRing::new(
-            x25519_key,
+            seed,
             identity.public_key().to_string(),
         ));
 
@@ -125,34 +129,62 @@ impl NoiseServerHelper {
     /// Accept a single Noise connection and perform handshake
     ///
     /// This is used internally by `run_server` but can also be used standalone.
+    /// Uses length-prefixed messages to match `PubkyNoiseChannel::connect`.
     pub async fn accept_connection(
         server: Arc<NoiseServer<DummyRing, ()>>,
         mut stream: TcpStream,
     ) -> Result<PubkyNoiseChannel<TcpStream>> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        // Read the client's handshake initiation (step 1)
-        let mut first_msg = vec![0u8; 256];
-        let n = stream
-            .read(&mut first_msg)
+        // Read length-prefixed handshake initiation (step 1)
+        let mut len_bytes = [0u8; 4];
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .context("Failed to read handshake length")?;
+        let msg_len = u32::from_be_bytes(len_bytes) as usize;
+
+        // Validate message length to prevent DoS via memory exhaustion
+        if msg_len > MAX_HANDSHAKE_SIZE {
+            return Err(anyhow!(
+                "Handshake message too large: {} bytes (max {})",
+                msg_len,
+                MAX_HANDSHAKE_SIZE
+            ));
+        }
+
+        let mut first_msg = vec![0u8; msg_len];
+        stream
+            .read_exact(&mut first_msg)
             .await
             .context("Failed to read handshake initiation")?;
-        first_msg.truncate(n);
 
-        // Process handshake (step 2 - server accepts)
-        #[allow(deprecated)]
-        let (hs, _payload, response) = datalink_adapter::server_accept_ik(&server, &first_msg)
-            .context("Failed to accept handshake")?;
+        // Process handshake (step 2 - server reads and creates response)
+        let (mut hs_state, _identity) = server
+            .build_responder_read_ik(&first_msg)
+            .context("Failed to process handshake")?;
 
-        // Send response to client
+        // Generate response message
+        let mut response_msg = vec![0u8; 128];
+        let n = hs_state
+            .write_message(&[], &mut response_msg)
+            .context("Failed to generate handshake response")?;
+        response_msg.truncate(n);
+
+        // Send length-prefixed response to client
+        let len = (response_msg.len() as u32).to_be_bytes();
         stream
-            .write_all(&response)
+            .write_all(&len)
+            .await
+            .context("Failed to send response length")?;
+        stream
+            .write_all(&response_msg)
             .await
             .context("Failed to send handshake response")?;
 
         // Complete handshake to get transport link (step 3)
         let link =
-            datalink_adapter::server_complete_ik(hs).context("Failed to complete handshake")?;
+            datalink_adapter::server_complete_ik(hs_state).context("Failed to complete handshake")?;
 
         // Create channel
         Ok(PubkyNoiseChannel::new(stream, link))
@@ -161,9 +193,13 @@ impl NoiseServerHelper {
     /// Get the static public key for this server
     ///
     /// This is the key that clients need to connect to this server.
+    /// Uses the same key derivation as `create_server` to ensure consistency.
     pub fn get_static_public_key(identity: &Identity, device_id: &[u8], epoch: u32) -> [u8; 32] {
-        let x25519_key = identity.derive_x25519_key(device_id, epoch);
-        pubky_noise::kdf::x25519_pk_from_sk(&x25519_key)
+        // Use Ed25519 secret key as seed, same as create_server
+        let seed = identity.keypair.secret_key();
+        // Derive X25519 secret key using HKDF (same as DummyRing does internally)
+        let x25519_sk = pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, epoch);
+        pubky_noise::kdf::x25519_pk_from_sk(&x25519_sk)
     }
 }
 

@@ -1,10 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
-export function is_valid_pubkey(pubkey: string): boolean;
 /**
  * Utility functions for subscriptions
  */
 export function format_timestamp(timestamp: bigint): string;
+export function is_valid_pubkey(pubkey: string): boolean;
 /**
  * Parse a Noise endpoint string and return WebSocket URL and server key
  *
@@ -19,16 +19,16 @@ export function parse_noise_endpoint_wasm(endpoint: string): any;
  */
 export function extract_pubkey_from_uri_wasm(uri: string): string;
 /**
+ * Get the version of the Paykit WASM module
+ */
+export function version(): string;
+/**
  * Initialize the WASM module
  *
  * This should be called once when the module is loaded.
  * It sets up panic hooks for better error messages in the browser console.
  */
 export function init(): void;
-/**
- * Get the version of the Paykit WASM module
- */
-export function version(): string;
 /**
  * Storage manager for browser localStorage
  */
@@ -1639,12 +1639,12 @@ export interface InitOutput {
   readonly directoryclient_new: (a: number, b: number) => number;
   readonly directoryclient_publishMethods: (a: number, b: any) => any;
   readonly directoryclient_queryMethods: (a: number, b: number, c: number) => any;
-  readonly wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859: (a: number, b: number, c: any) => void;
-  readonly wasm_bindgen__closure__destroy__he7277012e90784de: (a: number, b: number) => void;
-  readonly wasm_bindgen__convert__closures_____invoke__h7460171fa07d4e7b: (a: number, b: number, c: any) => void;
-  readonly wasm_bindgen__closure__destroy__h0ea10b8e17c2589a: (a: number, b: number) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h1d87f793a0e21f8d: (a: number, b: number, c: any) => void;
+  readonly wasm_bindgen__closure__destroy__hac396c4cc880457f: (a: number, b: number) => void;
   readonly wasm_bindgen__convert__closures_____invoke__hec0e381372c60b88: (a: number, b: number) => void;
   readonly wasm_bindgen__closure__destroy__he9ff11ce1c64d320: (a: number, b: number) => void;
+  readonly wasm_bindgen__convert__closures_____invoke__h75da7eae032c0859: (a: number, b: number, c: any) => void;
+  readonly wasm_bindgen__closure__destroy__he7277012e90784de: (a: number, b: number) => void;
   readonly wasm_bindgen__convert__closures_____invoke__h8a0305fb7488cc73: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

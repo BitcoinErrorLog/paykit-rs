@@ -32,14 +32,14 @@ impl NoiseClientHelper {
     /// # }
     /// ```
     pub fn create_client(identity: &Identity, device_id: &[u8]) -> Arc<NoiseClient<DummyRing, ()>> {
-        // Derive X25519 key for Noise from Ed25519 identity
-        // Using epoch 0 for simplicity in this demo
-        let x25519_key = identity.derive_x25519_key(device_id, 0);
+        // Use Ed25519 secret key as the seed for DummyRing
+        // DummyRing will derive X25519 keys from this seed using HKDF
+        let seed = identity.keypair.secret_key();
 
         // Create a ring key provider
         // Note: In production, you'd want a more secure key management system
         let ring = Arc::new(DummyRing::new(
-            x25519_key,
+            seed,
             identity.public_key().to_string(),
         ));
 

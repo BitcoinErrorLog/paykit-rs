@@ -3,6 +3,12 @@ use async_trait::async_trait;
 use pubky_noise::{NoiseClient, NoiseLink, RingKeyProvider};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+/// Maximum handshake message size (Noise handshakes are typically <512 bytes)
+const MAX_HANDSHAKE_SIZE: usize = 4096;
+
+/// Maximum encrypted message size (16MB should be more than enough for payment messages)
+const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
+
 /// A concrete implementation of `PaykitNoiseChannel` using `pubky-noise`.
 ///
 /// It wraps an underlying byte stream (`T`) and handles the Noise protocol encryption/decryption.
@@ -49,18 +55,38 @@ where
         )
         .map_err(|e| InteractiveError::Transport(format!("Handshake build failed: {}", e)))?;
 
-        // 2. Send the handshake initiation message
+        // 2. Send length-prefixed handshake initiation message
+        let len = (first_msg.len() as u32).to_be_bytes();
+        stream
+            .write_all(&len)
+            .await
+            .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake length: {}", e)))?;
         stream
             .write_all(&first_msg)
             .await
             .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake: {}", e)))?;
 
-        // 3. Read server's response message
-        let mut response = vec![0u8; 128];
-        let n = stream.read(&mut response).await.map_err(|e| {
-            InteractiveError::Transport(format!("Failed to read handshake response: {}", e))
-        })?;
-        response.truncate(n);
+        // 3. Read length-prefixed server response
+        let mut len_bytes = [0u8; 4];
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .map_err(|e| InteractiveError::Transport(format!("Failed to read response length: {}", e)))?;
+        let response_len = u32::from_be_bytes(len_bytes) as usize;
+
+        // Validate response length to prevent DoS via memory exhaustion
+        if response_len > MAX_HANDSHAKE_SIZE {
+            return Err(InteractiveError::Transport(format!(
+                "Handshake response too large: {} bytes (max {})",
+                response_len, MAX_HANDSHAKE_SIZE
+            )));
+        }
+
+        let mut response = vec![0u8; response_len];
+        stream
+            .read_exact(&mut response)
+            .await
+            .map_err(|e| InteractiveError::Transport(format!("Failed to read handshake response: {}", e)))?;
 
         // 4. Complete the handshake
         let link =
@@ -111,6 +137,14 @@ where
             .await
             .map_err(|e| InteractiveError::Transport(format!("Read failed: {}", e)))?;
         let len = u32::from_be_bytes(len_bytes) as usize;
+
+        // Validate message length to prevent DoS via memory exhaustion
+        if len > MAX_MESSAGE_SIZE {
+            return Err(InteractiveError::Transport(format!(
+                "Message too large: {} bytes (max {})",
+                len, MAX_MESSAGE_SIZE
+            )));
+        }
 
         // 2. Read ciphertext
         let mut ciphertext = vec![0u8; len];

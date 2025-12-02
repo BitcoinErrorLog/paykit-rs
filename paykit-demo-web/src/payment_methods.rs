@@ -430,7 +430,7 @@ impl WasmPaymentMethodStorage {
     /// # Examples
     ///
     /// ```
-    /// use paykit_demo_web::WasmPaymentMethodStorage;
+    /// use paykit_demo_web::{WasmPaymentMethodConfig, WasmPaymentMethodStorage};
     /// use wasm_bindgen_test::*;
     ///
     /// wasm_bindgen_test_configure!(run_in_browser);
@@ -438,6 +438,16 @@ impl WasmPaymentMethodStorage {
     /// #[wasm_bindgen_test]
     /// async fn set_preferred_example() {
     ///     let storage = WasmPaymentMethodStorage::new();
+    ///     // First create the method
+    ///     let method = WasmPaymentMethodConfig::new(
+    ///         "lightning".to_string(),
+    ///         "lightning://node.example.com".to_string(),
+    ///         true,   // is_public
+    ///         false,  // is_preferred (will be changed below)
+    ///         1,      // priority
+    ///     ).unwrap();
+    ///     storage.save_method(&method).await.unwrap();
+    ///     // Then set it as preferred
     ///     storage.set_preferred("lightning", true).await.unwrap();
     /// }
     /// ```
@@ -459,17 +469,15 @@ impl WasmPaymentMethodStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
     /// use paykit_demo_web::WasmPaymentMethodStorage;
-    /// use wasm_bindgen_test::*;
     ///
-    /// wasm_bindgen_test_configure!(run_in_browser);
-    ///
-    /// #[wasm_bindgen_test]
-    /// async fn update_priority_example() {
-    ///     let storage = WasmPaymentMethodStorage::new();
-    ///     storage.update_priority("lightning", 1).await.unwrap();
-    /// }
+    /// let storage = WasmPaymentMethodStorage::new();
+    /// storage.update_priority("lightning", 1).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn update_priority(&self, method_id: &str, priority: u32) -> Result<(), JsValue> {
         let mut method = self

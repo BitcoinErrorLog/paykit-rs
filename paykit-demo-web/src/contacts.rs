@@ -48,6 +48,7 @@
 //! }
 //! ```
 
+use crate::utils::current_timestamp_secs;
 use paykit_lib::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -61,10 +62,11 @@ use wasm_bindgen::prelude::*;
 /// # Examples
 ///
 /// ```
-/// use paykit_demo_web::WasmContact;
+/// use paykit_demo_web::{Identity, WasmContact};
 ///
+/// let identity = Identity::new().unwrap();
 /// let contact = WasmContact::new(
-///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo".to_string(),
+///     identity.public_key(),
 ///     "Bob's Coffee Shop".to_string()
 /// ).unwrap();
 /// ```
@@ -99,10 +101,11 @@ impl WasmContact {
     /// # Examples
     ///
     /// ```
-    /// use paykit_demo_web::WasmContact;
+    /// use paykit_demo_web::{Identity, WasmContact};
     ///
+    /// let identity = Identity::new().unwrap();
     /// let contact = WasmContact::new(
-    ///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo".to_string(),
+    ///     identity.public_key(),
     ///     "Alice".to_string()
     /// ).unwrap();
     /// ```
@@ -112,11 +115,7 @@ impl WasmContact {
         PublicKey::from_str(&public_key)
             .map_err(|e| JsValue::from_str(&format!("Invalid public key: {}", e)))?;
 
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now = current_timestamp_secs();
 
         Ok(WasmContact {
             inner: Contact {
@@ -134,10 +133,11 @@ impl WasmContact {
     /// # Examples
     ///
     /// ```
-    /// use paykit_demo_web::WasmContact;
+    /// use paykit_demo_web::{Identity, WasmContact};
     ///
+    /// let identity = Identity::new().unwrap();
     /// let contact = WasmContact::new(
-    ///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo".to_string(),
+    ///     identity.public_key(),
     ///     "Alice".to_string()
     /// ).unwrap().with_notes("Met at Bitcoin conference".to_string());
     /// ```
@@ -185,14 +185,15 @@ impl WasmContact {
     /// # Examples
     ///
     /// ```
-    /// use paykit_demo_web::WasmContact;
+    /// use paykit_demo_web::{Identity, WasmContact};
     ///
+    /// let identity = Identity::new().unwrap();
     /// let contact = WasmContact::new(
-    ///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo".to_string(),
+    ///     identity.public_key(),
     ///     "Alice".to_string()
     /// ).unwrap();
     ///
-    /// assert_eq!(contact.pubky_uri(), "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
+    /// assert!(contact.pubky_uri().starts_with("pubky://"));
     /// ```
     pub fn pubky_uri(&self) -> String {
         format!("pubky://{}", self.inner.public_key)
@@ -484,7 +485,7 @@ impl WasmContactStorage {
     /// # Examples
     ///
     /// ```
-    /// use paykit_demo_web::WasmContactStorage;
+    /// use paykit_demo_web::{Identity, WasmContact, WasmContactStorage};
     /// use wasm_bindgen_test::*;
     ///
     /// wasm_bindgen_test_configure!(run_in_browser);
@@ -492,8 +493,13 @@ impl WasmContactStorage {
     /// #[wasm_bindgen_test]
     /// async fn update_history_example() {
     ///     let storage = WasmContactStorage::new();
-    ///     let pubkey = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
-    ///     storage.update_payment_history(pubkey, "receipt_123").await.unwrap();
+    ///     let identity = Identity::new().unwrap();
+    ///     let pubkey = identity.public_key();
+    ///     // First create the contact
+    ///     let contact = WasmContact::new(pubkey.clone(), "Test Contact".to_string()).unwrap();
+    ///     storage.save_contact(&contact).await.unwrap();
+    ///     // Then update payment history
+    ///     storage.update_payment_history(&pubkey, "receipt_123").await.unwrap();
     /// }
     /// ```
     pub async fn update_payment_history(
@@ -520,16 +526,21 @@ impl WasmContactStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Identity;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    const TEST_PUBKEY: &str = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+    /// Generate a valid test public key using Identity
+    fn generate_test_pubkey() -> String {
+        Identity::new().unwrap().public_key()
+    }
 
     #[wasm_bindgen_test]
     fn test_contact_creation() {
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
-        assert_eq!(contact.public_key(), TEST_PUBKEY);
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
+        assert_eq!(contact.public_key(), pubkey);
         assert_eq!(contact.name(), "Alice");
         assert_eq!(contact.notes(), None);
         assert!(contact.added_at() > 0);
@@ -537,7 +548,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_contact_with_notes() {
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Bob".to_string())
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey, "Bob".to_string())
             .unwrap()
             .with_notes("Test notes".to_string());
         assert_eq!(contact.notes(), Some("Test notes".to_string()));
@@ -545,13 +557,15 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_pubky_uri() {
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
-        assert_eq!(contact.pubky_uri(), format!("pubky://{}", TEST_PUBKEY));
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
+        assert_eq!(contact.pubky_uri(), format!("pubky://{}", pubkey));
     }
 
     #[wasm_bindgen_test]
     fn test_contact_json_serialization() {
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string())
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey, "Alice".to_string())
             .unwrap()
             .with_notes("Test notes".to_string());
 
@@ -572,10 +586,11 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_save_and_retrieve_contact() {
         let storage = WasmContactStorage::new();
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
 
         storage.save_contact(&contact).await.unwrap();
-        let retrieved = storage.get_contact(TEST_PUBKEY).await.unwrap();
+        let retrieved = storage.get_contact(&pubkey).await.unwrap();
 
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
@@ -585,48 +600,67 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_list_contacts_sorted() {
         let storage = WasmContactStorage::new();
+        let pubkey1 = generate_test_pubkey();
+        let pubkey2 = generate_test_pubkey();
+        let pubkey3 = generate_test_pubkey();
 
         // Clean up first
-        let _ = storage.delete_contact("test_pubkey_1").await;
-        let _ = storage.delete_contact("test_pubkey_2").await;
-        let _ = storage.delete_contact("test_pubkey_3").await;
+        let _ = storage.delete_contact(&pubkey1).await;
+        let _ = storage.delete_contact(&pubkey2).await;
+        let _ = storage.delete_contact(&pubkey3).await;
 
-        // Create contacts (will fail with invalid keys, but that's okay for this test structure)
-        // In real test we'd use valid keys, but for sorting test we just need the storage layer
-        // Let's skip this test in actual implementation and test sorting in integration tests
+        // Create contacts with valid keys
+        let contact1 = WasmContact::new(pubkey1.clone(), "Alice".to_string()).unwrap();
+        let contact2 = WasmContact::new(pubkey2.clone(), "Bob".to_string()).unwrap();
+        let contact3 = WasmContact::new(pubkey3.clone(), "Charlie".to_string()).unwrap();
+
+        storage.save_contact(&contact1).await.unwrap();
+        storage.save_contact(&contact2).await.unwrap();
+        storage.save_contact(&contact3).await.unwrap();
+
+        let contacts = storage.list_contacts().await.unwrap();
+        assert!(contacts.len() >= 3);
+
+        // Clean up
+        let _ = storage.delete_contact(&pubkey1).await;
+        let _ = storage.delete_contact(&pubkey2).await;
+        let _ = storage.delete_contact(&pubkey3).await;
     }
 
     #[wasm_bindgen_test]
     async fn test_delete_contact() {
         let storage = WasmContactStorage::new();
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
 
         storage.save_contact(&contact).await.unwrap();
-        storage.delete_contact(TEST_PUBKEY).await.unwrap();
+        storage.delete_contact(&pubkey).await.unwrap();
 
-        let retrieved = storage.get_contact(TEST_PUBKEY).await.unwrap();
+        let retrieved = storage.get_contact(&pubkey).await.unwrap();
         assert!(retrieved.is_none());
     }
 
     #[wasm_bindgen_test]
     async fn test_duplicate_pubkey_overwrites() {
         let storage = WasmContactStorage::new();
+        let pubkey = generate_test_pubkey();
 
-        let contact1 = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
+        let contact1 = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
         storage.save_contact(&contact1).await.unwrap();
 
-        let contact2 = WasmContact::new(TEST_PUBKEY.to_string(), "Bob".to_string()).unwrap();
+        let contact2 = WasmContact::new(pubkey.clone(), "Bob".to_string()).unwrap();
         storage.save_contact(&contact2).await.unwrap();
 
-        let retrieved = storage.get_contact(TEST_PUBKEY).await.unwrap().unwrap();
+        let retrieved = storage.get_contact(&pubkey).await.unwrap().unwrap();
         assert_eq!(retrieved.name(), "Bob");
     }
 
     #[wasm_bindgen_test]
     async fn test_search_contacts_partial_match() {
         let storage = WasmContactStorage::new();
+        let pubkey = generate_test_pubkey();
 
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice Smith".to_string()).unwrap();
+        let contact = WasmContact::new(pubkey.clone(), "Alice Smith".to_string()).unwrap();
         storage.save_contact(&contact).await.unwrap();
 
         let results = storage.search_contacts("alice").await.unwrap();
@@ -637,21 +671,28 @@ mod tests {
 
         // Test that search doesn't error with non-matching query
         let _ = storage.search_contacts("bob").await.unwrap();
+
+        // Clean up
+        let _ = storage.delete_contact(&pubkey).await;
     }
 
     #[wasm_bindgen_test]
     async fn test_update_payment_history() {
         let storage = WasmContactStorage::new();
-        let contact = WasmContact::new(TEST_PUBKEY.to_string(), "Alice".to_string()).unwrap();
+        let pubkey = generate_test_pubkey();
+        let contact = WasmContact::new(pubkey.clone(), "Alice".to_string()).unwrap();
 
         storage.save_contact(&contact).await.unwrap();
         storage
-            .update_payment_history(TEST_PUBKEY, "receipt_123")
+            .update_payment_history(&pubkey, "receipt_123")
             .await
             .unwrap();
 
-        let retrieved = storage.get_contact(TEST_PUBKEY).await.unwrap().unwrap();
+        let retrieved = storage.get_contact(&pubkey).await.unwrap().unwrap();
         let history = retrieved.payment_history();
         assert_eq!(history.len(), 1);
+
+        // Clean up
+        let _ = storage.delete_contact(&pubkey).await;
     }
 }

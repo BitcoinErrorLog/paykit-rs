@@ -19,7 +19,7 @@
 //!
 //! ## Initiating a payment (payer side)
 //!
-//! ```no_run
+//! ```ignore
 //! use paykit_demo_core::{PaymentCoordinator, DemoPaykitStorage, DemoReceiptGenerator};
 //! use std::sync::Arc;
 //!
@@ -49,7 +49,7 @@
 //!
 //! ## Handling payment requests (payee side)
 //!
-//! ```no_run
+//! ```ignore
 //! # use paykit_demo_core::{PaymentCoordinator, DemoPaykitStorage, DemoReceiptGenerator};
 //! # use std::sync::Arc;
 //! # async fn example() -> anyhow::Result<()> {

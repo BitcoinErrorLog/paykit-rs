@@ -1,7 +1,10 @@
 //! Integration tests for directory operations
 
-use paykit_demo_core::{DirectoryClient, Identity, PaymentMethod, SessionManager};
-use paykit_lib::AuthenticatedTransport;
+use paykit_demo_core::{Identity, PaymentMethod, SessionManager};
+use paykit_lib::{
+    AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
+    PubkyUnauthenticatedTransport, UnauthenticatedTransportRead,
+};
 use pubky_testnet::EphemeralTestnet;
 
 #[tokio::test]
@@ -21,8 +24,9 @@ async fn test_publish_and_query_payment_methods() {
         .await
         .expect("Failed to create session");
 
-    // Create directory client
-    let client = DirectoryClient::new("https://demo.httprelay.io");
+    // Create transport using testnet SDK (not public network)
+    let auth_transport = PubkyAuthenticatedTransport::new(session.session().clone());
+    let read_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
     // Publish payment methods
     let methods = vec![
@@ -30,20 +34,25 @@ async fn test_publish_and_query_payment_methods() {
         PaymentMethod::new("onchain".to_string(), "bc1q...test".to_string(), true),
     ];
 
-    client
-        .publish_methods(session.session(), &methods)
-        .await
-        .expect("Failed to publish methods");
+    for method in &methods {
+        auth_transport
+            .upsert_payment_endpoint(
+                &MethodId(method.method_id.clone()),
+                &EndpointData(method.endpoint.clone()),
+            )
+            .await
+            .expect("Failed to publish method");
+    }
 
-    // Query the methods back
-    let queried = client
-        .query_methods(&identity.public_key())
+    // Query the methods back using testnet transport
+    let supported = read_transport
+        .fetch_supported_payments(&identity.public_key())
         .await
         .expect("Failed to query methods");
 
-    assert_eq!(queried.len(), 2);
-    assert!(queried.iter().any(|m| m.method_id == "lightning"));
-    assert!(queried.iter().any(|m| m.method_id == "onchain"));
+    assert_eq!(supported.entries.len(), 2);
+    assert!(supported.entries.contains_key(&MethodId("lightning".to_string())));
+    assert!(supported.entries.contains_key(&MethodId("onchain".to_string())));
 }
 
 #[tokio::test]
@@ -60,31 +69,30 @@ async fn test_delete_payment_method() {
         .await
         .expect("Failed to create session");
 
-    let client = DirectoryClient::new("https://demo.httprelay.io");
+    // Create transports using testnet SDK
+    let auth_transport = PubkyAuthenticatedTransport::new(session.session().clone());
+    let read_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
     // Publish a method
-    let methods = vec![PaymentMethod::new(
-        "lightning".to_string(),
-        "lnbc1...test".to_string(),
-        true,
-    )];
-
-    client
-        .publish_methods(session.session(), &methods)
+    auth_transport
+        .upsert_payment_endpoint(
+            &MethodId("lightning".to_string()),
+            &EndpointData("lnbc1...test".to_string()),
+        )
         .await
-        .expect("Failed to publish methods");
+        .expect("Failed to publish method");
 
     // Delete it
-    client
-        .delete_method(session.session(), "lightning")
+    auth_transport
+        .remove_payment_endpoint(&MethodId("lightning".to_string()))
         .await
         .expect("Failed to delete method");
 
     // Verify it's gone
-    let queried = client
-        .query_methods(&identity.public_key())
+    let supported = read_transport
+        .fetch_supported_payments(&identity.public_key())
         .await
         .expect("Failed to query methods");
 
-    assert_eq!(queried.len(), 0);
+    assert_eq!(supported.entries.len(), 0);
 }

@@ -102,9 +102,15 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// let sent = storage.filter_by_direction("sent", "8pin...").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn filter_by_direction(
         &self,
@@ -145,9 +151,15 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// let lightning_receipts = storage.filter_by_method("lightning").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn filter_by_method(&self, method: &str) -> Result<Vec<JsValue>, JsValue> {
         let all_receipts = self.list_receipts().await?;
@@ -180,9 +192,15 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// let alice_receipts = storage.filter_by_contact("8pin...", "my_pubkey").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn filter_by_contact(
         &self,
@@ -225,10 +243,16 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// let json = storage.export_as_json().await?;
     /// // Download or process json
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn export_as_json(&self) -> Result<String, JsValue> {
         let receipts = self.list_receipts().await?;
@@ -258,9 +282,15 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// let stats = storage.get_statistics("my_pubkey").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_statistics(&self, current_pubkey: &str) -> Result<JsValue, JsValue> {
         let all_receipts = self.list_receipts().await?;
@@ -297,9 +327,15 @@ impl WasmReceiptStorage {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
+    /// use paykit_demo_web::WasmReceiptStorage;
+    ///
     /// let storage = WasmReceiptStorage::new();
     /// storage.clear_all().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn clear_all(&self) -> Result<(), JsValue> {
         let window = web_sys::window().ok_or("No window")?;

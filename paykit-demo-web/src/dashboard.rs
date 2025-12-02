@@ -21,7 +21,7 @@ use crate::subscriptions::WasmSubscriptionAgreementStorage;
 /// use paykit_demo_web::WasmDashboard;
 ///
 /// let dashboard = WasmDashboard::new();
-/// let stats = dashboard.get_overview_stats("my_pubkey").await?;
+/// // In browser: let stats = dashboard.get_overview_stats("my_pubkey").await?;
 /// ```
 #[wasm_bindgen]
 pub struct WasmDashboard {
@@ -41,13 +41,6 @@ impl Default for WasmDashboard {
 impl WasmDashboard {
     /// Create a new dashboard aggregator
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use paykit_demo_web::WasmDashboard;
-    ///
-    /// let dashboard = WasmDashboard::new();
-    /// ```
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -76,11 +69,15 @@ impl WasmDashboard {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
     /// use paykit_demo_web::WasmDashboard;
     ///
     /// let dashboard = WasmDashboard::new();
     /// let stats = dashboard.get_overview_stats("my_pubkey").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_overview_stats(&self, current_pubkey: &str) -> Result<JsValue, JsValue> {
         // Get contact count
@@ -151,11 +148,15 @@ impl WasmDashboard {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
     /// use paykit_demo_web::WasmDashboard;
     ///
     /// let dashboard = WasmDashboard::new();
     /// let activity = dashboard.get_recent_activity("my_pubkey", 10).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_recent_activity(
         &self,
@@ -231,11 +232,15 @@ impl WasmDashboard {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
     /// use paykit_demo_web::WasmDashboard;
     ///
     /// let dashboard = WasmDashboard::new();
     /// let is_ready = dashboard.is_setup_complete().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn is_setup_complete(&self) -> Result<bool, JsValue> {
         let contacts = self.contact_storage.list_contacts().await?;
@@ -254,11 +259,15 @@ impl WasmDashboard {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use wasm_bindgen::JsValue;
+    /// # async fn example() -> Result<(), JsValue> {
     /// use paykit_demo_web::WasmDashboard;
     ///
     /// let dashboard = WasmDashboard::new();
     /// let checklist = dashboard.get_setup_checklist().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_setup_checklist(&self) -> Result<JsValue, JsValue> {
         let contacts = self.contact_storage.list_contacts().await?;

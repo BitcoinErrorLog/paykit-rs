@@ -1,4 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["paykit-lib", "paykit-interactive", "paykit-subscriptions", "paykit-demo-core", "paykit-demo-cli"]
-# paykit-demo-web excluded - WASM support is future work (see FINAL_SWEEP_REPORT.md)
+members = ["paykit-lib", "paykit-interactive", "paykit-subscriptions", "paykit-demo-core", "paykit-demo-cli", "paykit-demo-web"]

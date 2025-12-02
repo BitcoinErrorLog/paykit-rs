@@ -3,6 +3,7 @@
 use crate::types::{
     Amount, PaymentFrequency, PaymentRequest, SignedSubscription, Subscription, SubscriptionTerms,
 };
+use crate::utils::current_timestamp_secs;
 use paykit_lib::{MethodId, PublicKey};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
@@ -338,6 +339,11 @@ impl WasmSubscription {
             .parse()
             .map_err(|_| JsValue::from_str(&format!("Invalid amount: {}", amount)))?;
 
+        // Validate amount is positive
+        if amount_sats <= 0 {
+            return Err(JsValue::from_str("Amount must be positive"));
+        }
+
         let terms = SubscriptionTerms::new(
             Amount::from_sats(amount_sats),
             currency.to_string(),
@@ -662,20 +668,22 @@ impl WasmSubscriptionAgreementStorage {
         Ok(subscriptions)
     }
 
-    /// List all subscriptions (including inactive)
+    /// List all subscriptions (including inactive and unsigned)
     pub async fn list_all_subscriptions(&self) -> Result<Vec<JsValue>, JsValue> {
         let window = web_sys::window().ok_or("No window")?;
         let storage = window.local_storage()?.ok_or("No localStorage")?;
 
         let mut subscriptions = Vec::new();
-        let prefix = format!("{}:signed:", self.storage_key);
+        let signed_prefix = format!("{}:signed:", self.storage_key);
+        let sub_prefix = format!("{}:sub:", self.storage_key);
         let length = storage
             .length()
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         for i in 0..length {
             if let Ok(Some(key)) = storage.key(i) {
-                if key.starts_with(&prefix) {
+                if key.starts_with(&signed_prefix) {
+                    // Handle signed subscriptions
                     if let Ok(Some(json)) = storage.get_item(&key) {
                         if let Ok(signed) = serde_json::from_str::<SignedSubscription>(&json) {
                             let js_obj = js_sys::Object::new();
@@ -712,6 +720,50 @@ impl WasmSubscriptionAgreementStorage {
                                 &"is_expired".into(),
                                 &is_expired.into(),
                             )?;
+                            js_sys::Reflect::set(&js_obj, &"is_signed".into(), &true.into())?;
+
+                            subscriptions.push(js_obj.into());
+                        }
+                    }
+                } else if key.starts_with(&sub_prefix) {
+                    // Handle unsigned subscriptions
+                    if let Ok(Some(json)) = storage.get_item(&key) {
+                        if let Ok(sub) = serde_json::from_str::<Subscription>(&json) {
+                            let js_obj = js_sys::Object::new();
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"subscription_id".into(),
+                                &sub.subscription_id.as_str().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"subscriber".into(),
+                                &sub.subscriber.to_z32().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"provider".into(),
+                                &sub.provider.to_z32().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"amount".into(),
+                                &sub.terms.amount.to_string().into(),
+                            )?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"currency".into(),
+                                &sub.terms.currency.as_str().into(),
+                            )?;
+                            let is_active = sub.is_active();
+                            let is_expired = sub.is_expired();
+                            js_sys::Reflect::set(&js_obj, &"is_active".into(), &is_active.into())?;
+                            js_sys::Reflect::set(
+                                &js_obj,
+                                &"is_expired".into(),
+                                &is_expired.into(),
+                            )?;
+                            js_sys::Reflect::set(&js_obj, &"is_signed".into(), &false.into())?;
 
                             subscriptions.push(js_obj.into());
                         }
@@ -1003,11 +1055,7 @@ impl WasmPeerSpendingLimit {
             return Err(JsValue::from_str("Period must be non-zero"));
         }
 
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now = current_timestamp_secs();
 
         Ok(WasmPeerSpendingLimit {
             peer_pubkey: peer_pubkey.to_string(),
@@ -1057,11 +1105,7 @@ impl WasmPeerSpendingLimit {
     /// Check if a payment amount is allowed
     pub fn can_spend(&self, amount: i64) -> bool {
         // Check if period has expired and should reset
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now = current_timestamp_secs();
 
         if now - self.period_start > self.period_seconds as i64 {
             // Period expired, can spend up to limit
@@ -1079,11 +1123,7 @@ impl WasmPeerSpendingLimit {
         }
 
         // Check if period needs to be reset
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now = current_timestamp_secs();
 
         if now - self.period_start > self.period_seconds as i64 {
             // Reset for new period
@@ -1099,12 +1139,7 @@ impl WasmPeerSpendingLimit {
 
     /// Reset the spending counter
     pub fn reset(&mut self) {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
+        let now = current_timestamp_secs();
         self.period_start = now;
         self.current_spent = 0;
     }
@@ -1155,13 +1190,7 @@ impl WasmPeerSpendingLimit {
             .ok()
             .and_then(|v| v.as_f64())
             .map(|v| v as i64)
-            .unwrap_or_else(|| {
-                use std::time::{SystemTime, UNIX_EPOCH};
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs() as i64
-            });
+            .unwrap_or_else(current_timestamp_secs);
 
         Ok(WasmPeerSpendingLimit {
             peer_pubkey,
@@ -1370,11 +1399,7 @@ impl WasmPeerSpendingLimitStorage {
             Ok(Some(json)) => {
                 let mut limit = WasmPeerSpendingLimit::from_json(&json)?;
                 // Check if period needs reset
-                use std::time::{SystemTime, UNIX_EPOCH};
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs() as i64;
+                let now = current_timestamp_secs();
 
                 if now - limit.period_start > limit.period_seconds() as i64 {
                     limit.reset();
@@ -1405,11 +1430,7 @@ impl WasmPeerSpendingLimitStorage {
                     if let Ok(Some(json)) = storage.get_item(&key) {
                         if let Ok(mut limit) = WasmPeerSpendingLimit::from_json(&json) {
                             // Check if period needs reset
-                            use std::time::{SystemTime, UNIX_EPOCH};
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs() as i64;
+                            let now = current_timestamp_secs();
 
                             if now - limit.period_start > limit.period_seconds() as i64 {
                                 limit.reset();

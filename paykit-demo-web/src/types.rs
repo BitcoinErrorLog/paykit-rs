@@ -3,6 +3,7 @@
 //! These are simplified versions of types from paykit-lib, paykit-interactive,
 //! and paykit-subscriptions adapted for browser use without tokio dependencies.
 
+use crate::utils::current_timestamp_secs;
 use paykit_lib::{MethodId, PublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -55,12 +56,7 @@ impl PaymentRequest {
         currency: String,
         method: MethodId,
     ) -> Self {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
+        let now = current_timestamp_secs();
         let request_id = format!("req_{}", uuid::Uuid::new_v4());
 
         Self {
@@ -112,12 +108,7 @@ pub struct Subscription {
 
 impl Subscription {
     pub fn new(subscriber: PublicKey, provider: PublicKey, terms: SubscriptionTerms) -> Self {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
+        let now = current_timestamp_secs();
         let subscription_id = format!("sub_{}", uuid::Uuid::new_v4());
 
         Self {
@@ -132,22 +123,12 @@ impl Subscription {
     }
 
     pub fn is_active(&self) -> bool {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
+        let now = current_timestamp_secs();
         now >= self.starts_at && self.ends_at.is_none_or(|end| now < end)
     }
 
     pub fn is_expired(&self) -> bool {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
+        let now = current_timestamp_secs();
         self.ends_at.is_some_and(|end| now >= end)
     }
 
@@ -262,11 +243,7 @@ impl PaykitReceipt {
         currency: Option<String>,
         metadata: serde_json::Value,
     ) -> Self {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
+        let now = current_timestamp_secs();
 
         Self {
             receipt_id,

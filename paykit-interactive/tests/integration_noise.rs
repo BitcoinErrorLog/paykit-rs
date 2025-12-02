@@ -8,7 +8,8 @@ use paykit_interactive::{
     PaykitReceipt, PaykitStorage, ReceiptGenerator,
 };
 use paykit_lib::MethodId;
-use pubky_noise::{NoiseClient, NoiseServer, RingKeyProvider};
+use pubky_noise::{DummyRing, NoiseClient, NoiseServer};
+use pubky_noise::ring::RingKeyProvider;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -20,52 +21,16 @@ use tokio::time::timeout;
 mod mock_implementations;
 use mock_implementations::{MockReceiptGenerator, MockStorage};
 
-/// Dummy ring key provider for testing
-struct DummyRing;
-impl RingKeyProvider for DummyRing {
-    fn derive_device_x25519(
-        &self,
-        _kid: &str,
-        device_id: &[u8],
-        epoch: u32,
-    ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
-        // Generate a deterministic key from device_id and epoch for testing
-        let mut seed = [0u8; 32];
-        let data = format!("{:?}:{}", device_id, epoch);
-        let bytes = data.as_bytes();
-        let len = bytes.len().min(32);
-        seed[..len].copy_from_slice(&bytes[..len]);
-        Ok(seed)
-    }
+/// Shared seed for all test keys - ensures client and server derive compatible keys
+const TEST_SEED: [u8; 32] = [42u8; 32];
+const SERVER_DEVICE_ID: &[u8] = b"server_device";
+const CLIENT_DEVICE_ID: &[u8] = b"client_device";
 
-    fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
-        // Return a dummy public key for testing
-        Ok([1u8; 32])
-    }
-
-    fn sign_ed25519(
-        &self,
-        _kid: &str,
-        _msg: &[u8],
-    ) -> std::result::Result<[u8; 64], pubky_noise::NoiseError> {
-        // Return a dummy signature for testing
-        Ok([2u8; 64])
-    }
-}
-
-/// Helper to generate test keys
-fn generate_test_keys() -> ([u8; 32], [u8; 32]) {
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    let mut seed = [0u8; 32];
-    rng.fill_bytes(&mut seed);
-
-    // Derive X25519 key from seed using the same method as pubky-noise
-    let device_id = b"test_device_id_12345";
-    let x_sk = pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, 0);
-    let x_pk = pubky_noise::kdf::x25519_pk_from_sk(&x_sk);
-
-    (x_sk, x_pk)
+/// Helper to get the server's public key (derived from the shared seed)
+fn get_server_public_key() -> [u8; 32] {
+    let ring = DummyRing::new(TEST_SEED, "server_kid");
+    let x_sk = ring.derive_device_x25519("server_kid", SERVER_DEVICE_ID, 0).unwrap();
+    pubky_noise::kdf::x25519_pk_from_sk(&x_sk)
 }
 
 /// Helper to create test public keys
@@ -79,13 +44,13 @@ fn create_test_pubkey(_name: &str) -> pubky::PublicKey {
 async fn test_noise_client_server_handshake() {
     // Test 1: Real Noise_IK handshake over TCP
 
-    // Setup server
-    let (_server_sk, server_pk) = generate_test_keys();
-    let ring = Arc::new(DummyRing);
+    // Setup server with shared seed
+    let server_pk = get_server_public_key();
+    let server_ring = Arc::new(DummyRing::new(TEST_SEED, "server_kid"));
     let server = NoiseServer::<DummyRing, ()>::new_direct(
         "server_kid",
-        b"server_device_id",
-        ring,
+        SERVER_DEVICE_ID,
+        server_ring,
         0, // current_epoch
     );
 
@@ -162,11 +127,10 @@ async fn test_noise_client_server_handshake() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Setup client
-    let (_client_sk, _client_pk) = generate_test_keys();
-    let client_ring = Arc::new(DummyRing);
+    // Setup client with shared seed
+    let client_ring = Arc::new(DummyRing::new(TEST_SEED, "client_kid"));
     let client =
-        NoiseClient::<DummyRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
+        NoiseClient::<DummyRing, ()>::new_direct("client_kid", CLIENT_DEVICE_ID, client_ring);
 
     // Connect and perform handshake
     let mut stream = TcpStream::connect(server_addr)
@@ -241,13 +205,13 @@ async fn test_noise_client_server_handshake() {
 async fn test_pubky_noise_channel_real() {
     // Test 2: PubkyNoiseChannel with real transport
 
-    // Setup server
-    let (_server_sk, server_pk) = generate_test_keys();
-    let server_ring2 = Arc::new(DummyRing);
+    // Setup server with shared seed
+    let server_pk = get_server_public_key();
+    let server_ring = Arc::new(DummyRing::new(TEST_SEED, "server_kid"));
     let server = NoiseServer::<DummyRing, ()>::new_direct(
-        "server_kid2",
-        b"server_device_id",
-        server_ring2,
+        "server_kid",
+        SERVER_DEVICE_ID,
+        server_ring,
         0,
     );
 
@@ -326,11 +290,10 @@ async fn test_pubky_noise_channel_real() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Setup client
-    let (_client_sk, _client_pk) = generate_test_keys();
-    let client_ring = Arc::new(DummyRing);
+    // Setup client with shared seed
+    let client_ring = Arc::new(DummyRing::new(TEST_SEED, "client_kid"));
     let client =
-        NoiseClient::<DummyRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
+        NoiseClient::<DummyRing, ()>::new_direct("client_kid", CLIENT_DEVICE_ID, client_ring);
 
     // Connect using PubkyNoiseChannel::connect()
     let stream = TcpStream::connect(server_addr)
@@ -367,12 +330,12 @@ async fn test_pubky_noise_channel_real() {
 async fn test_complete_payment_flow_encrypted() {
     // Test 3: Complete payment flow over real Noise
 
-    // Setup server (payee)
-    let (_server_sk, server_pk) = generate_test_keys();
-    let server_ring = Arc::new(DummyRing);
+    // Setup server (payee) with shared seed
+    let server_pk = get_server_public_key();
+    let server_ring = Arc::new(DummyRing::new(TEST_SEED, "server_kid"));
     let server = Arc::new(NoiseServer::<DummyRing, ()>::new_direct(
-        "payee_kid",
-        b"payee_device",
+        "server_kid",
+        SERVER_DEVICE_ID,
         server_ring,
         0,
     ));
@@ -467,11 +430,10 @@ async fn test_complete_payment_flow_encrypted() {
     // Give server time to start
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // Setup client (payer)
-    let (_client_sk, _client_pk) = generate_test_keys();
-    let client_ring3 = Arc::new(DummyRing);
+    // Setup client (payer) with shared seed
+    let client_ring = Arc::new(DummyRing::new(TEST_SEED, "client_kid"));
     let client =
-        NoiseClient::<DummyRing, ()>::new_direct("payer_kid", b"payer_device", client_ring3);
+        NoiseClient::<DummyRing, ()>::new_direct("client_kid", CLIENT_DEVICE_ID, client_ring);
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
     let payer_generator =

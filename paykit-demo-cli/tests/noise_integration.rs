@@ -25,7 +25,7 @@ async fn test_noise_3step_handshake() {
 
     // Step 1: Client initiates
     let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 3, None).unwrap();
+        client_start_ik_direct(&client, &server_static_pk, 3).unwrap();
 
     // Step 2: Server responds
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
@@ -59,16 +59,16 @@ async fn test_noise_handshake_with_identity_payload() {
         .unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
-    // Client initiates with hint
+    // Client initiates
     let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 0, Some("payment-request")).unwrap();
+        client_start_ik_direct(&client, &server_static_pk, 0).unwrap();
 
     // Server receives and extracts identity
     let (s_hs, identity, response) = server_accept_ik(&server, &first_msg).unwrap();
 
     // Verify identity payload was received (check for non-zero Ed25519 key)
     assert_ne!(identity.ed25519_pub, [0u8; 32]);
-    assert_eq!(identity.server_hint, Some("payment-request".to_string()));
+    assert_eq!(identity.epoch, 0); // Verify epoch is transmitted
 
     // Complete handshake
     let _c_link = client_complete_ik(c_hs, &response).unwrap();
@@ -92,7 +92,7 @@ async fn test_noise_message_exchange() {
 
     // Perform handshake
     let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 1, None).unwrap();
+        client_start_ik_direct(&client, &server_static_pk, 1).unwrap();
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
     let mut c_link = client_complete_ik(c_hs, &response).unwrap();
     let mut s_link = server_complete_ik(s_hs).unwrap();

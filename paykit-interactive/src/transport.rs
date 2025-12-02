@@ -1,6 +1,6 @@
 use crate::{InteractiveError, PaykitNoiseChannel, PaykitNoiseMessage, Result};
 use async_trait::async_trait;
-use pubky_noise::{NoiseClient, NoiseLink, RingKeyProvider};
+use pubky_noise::{NoiseClient, NoiseSession, RingKeyProvider};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 /// Maximum handshake message size (Noise handshakes are typically <512 bytes)
@@ -14,16 +14,16 @@ const MAX_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
 /// It wraps an underlying byte stream (`T`) and handles the Noise protocol encryption/decryption.
 pub struct PubkyNoiseChannel<S> {
     stream: S,
-    link: NoiseLink,
+    session: NoiseSession,
 }
 
 impl<S> PubkyNoiseChannel<S>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send,
 {
-    /// Create a new channel from an established Noise Link and an underlying stream.
-    pub fn new(stream: S, link: NoiseLink) -> Self {
-        Self { stream, link }
+    /// Create a new channel from an established Noise session and an underlying stream.
+    pub fn new(stream: S, session: NoiseSession) -> Self {
+        Self { stream, session }
     }
 
     /// Perform a client-side handshake and return a new channel.
@@ -42,16 +42,14 @@ where
     /// This follows the standard Noise_IK pattern which requires completing
     /// the full handshake before entering transport mode.
     pub async fn connect<R: RingKeyProvider>(
-        client: &NoiseClient<R, ()>,
+        client: &NoiseClient<R>,
         mut stream: S,
         server_static_pub: &[u8; 32],
     ) -> Result<Self> {
         // 1. Build the IK handshake initiation message
-        let (hs, _epoch, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
+        let (hs, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
             client,
             server_static_pub,
-            0,
-            None,
         )
         .map_err(|e| InteractiveError::Transport(format!("Handshake build failed: {}", e)))?;
 
@@ -89,13 +87,13 @@ where
             .map_err(|e| InteractiveError::Transport(format!("Failed to read handshake response: {}", e)))?;
 
         // 4. Complete the handshake
-        let link =
+        let session =
             pubky_noise::datalink_adapter::client_complete_ik(hs, &response).map_err(|e| {
                 InteractiveError::Transport(format!("Failed to complete handshake: {}", e))
             })?;
 
         // 5. Channel is now ready for encrypted transport messages
-        Ok(Self { stream, link })
+        Ok(Self { stream, session })
     }
 }
 
@@ -111,7 +109,7 @@ where
 
         // 2. Encrypt
         let ciphertext = self
-            .link
+            .session
             .encrypt(&json_bytes)
             .map_err(|e| InteractiveError::Transport(format!("Encryption failed: {}", e)))?;
 
@@ -155,7 +153,7 @@ where
 
         // 3. Decrypt
         let plaintext = self
-            .link
+            .session
             .decrypt(&ciphertext)
             .map_err(|e| InteractiveError::Transport(format!("Decryption failed: {}", e)))?;
 

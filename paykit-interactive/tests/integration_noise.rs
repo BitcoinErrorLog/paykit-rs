@@ -139,7 +139,7 @@ async fn test_noise_client_server_handshake() {
 
     // Step 1: Client starts handshake
     let (hs_state, _epoch, handshake_msg) =
-        pubky_noise::datalink_adapter::client_start_ik_direct(&client, &server_pk, 0, None)
+        pubky_noise::datalink_adapter::client_start_ik_direct(&client, &server_pk, 0)
             .expect("Handshake build failed");
 
     // Send handshake

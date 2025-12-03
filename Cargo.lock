@@ -448,6 +448,12 @@ checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
 
 [[package]]
 name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
+name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -1862,7 +1868,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3314d5adb5d94bcdf56771f2e50dbbc80bb4bdf88967526706205ac9eff24eb"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "headers-core",
  "http",
@@ -2094,7 +2100,7 @@ version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52e9a2a24dc5c6821e71a7030e1e14b7b632acac55c40e9d2e082c621261bb56"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "futures-channel",
  "futures-core",
@@ -2685,7 +2691,7 @@ checksum = "42afda58fa2cf50914402d132cc1caacff116a85d10c72ab2082bb7c50021754"
 dependencies = [
  "anyhow",
  "backon",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "chrono",
  "futures",
@@ -2795,6 +2801,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -2803,6 +2810,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "curve25519-dalek",
  "ed25519-dalek",
  "hex",
  "paykit-interactive",
@@ -2813,12 +2821,15 @@ dependencies = [
  "pubky-noise",
  "pubky-testnet",
  "rand 0.8.5",
+ "rand_core 0.6.4",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-test",
  "uuid",
+ "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]
@@ -2861,6 +2872,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
@@ -3284,7 +3296,7 @@ version = "0.6.0-rc.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1db16263a3ebeb88de3bfa26c264ac947f943967bc08c8032fe0bdd6f7b6d5db"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "cookie",
  "flume",
  "futures-lite",
@@ -3336,7 +3348,7 @@ dependencies = [
  "axum-server",
  "axum-test",
  "base32",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "clap",
  "dav-server",
@@ -3378,8 +3390,9 @@ dependencies = [
 
 [[package]]
 name = "pubky-noise"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
+ "base64 0.21.7",
  "blake2",
  "cfg-if",
  "curve25519-dalek",
@@ -3387,6 +3400,7 @@ dependencies = [
  "hex",
  "hkdf",
  "pubky",
+ "rand 0.8.5",
  "secrecy",
  "serde",
  "serde_json",
@@ -3744,7 +3758,7 @@ version = "0.12.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d0946410b9f7b082a427e4ef5c8ff541a88b357bc6c637c40db3a68ac70a36f"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "cookie",
  "cookie_store",
@@ -4321,15 +4335,16 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "snow"
-version = "0.9.6"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "850948bee068e713b8ab860fe1adc4d109676ab4c3b621fd8147f06b261f2f85"
+checksum = "599b506ccc4aff8cf7844bc42cf783009a434c1e26c964432560fb6d6ad02d82"
 dependencies = [
  "aes-gcm",
  "blake2",
  "chacha20poly1305",
  "curve25519-dalek",
- "rand_core 0.6.4",
+ "getrandom 0.3.4",
+ "ring",
  "rustc_version",
  "sha2",
  "subtle",

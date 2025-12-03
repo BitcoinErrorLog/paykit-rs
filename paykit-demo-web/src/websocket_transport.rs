@@ -7,7 +7,7 @@
 use crate::types::PaykitNoiseMessage;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::Uint8Array;
-use pubky_noise::{NoiseClient, NoiseLink, RingKeyProvider};
+use pubky_noise::{NoiseClient, NoiseSession, RingKeyProvider};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -58,7 +58,7 @@ pub type Result<T> = std::result::Result<T, TransportError>;
 /// using the Noise_IK handshake pattern.
 pub struct WebSocketNoiseChannel {
     ws: WebSocket,
-    link: NoiseLink,
+    session: NoiseSession,
     rx: Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
     #[allow(dead_code)]
     tx: UnboundedSender<Vec<u8>>,
@@ -73,7 +73,7 @@ impl WebSocketNoiseChannel {
     /// 3. Channel is ready for encrypted transport
     pub async fn connect<R: RingKeyProvider>(
         ws_url: &str,
-        client: &NoiseClient<R, ()>,
+        client: &NoiseClient<R>,
         server_static_pub: &[u8; 32],
     ) -> Result<Self> {
         // 1. Create WebSocket connection
@@ -123,9 +123,9 @@ impl WebSocketNoiseChannel {
         Self::wait_for_open(&ws).await?;
 
         // 5. Perform Noise handshake
-        let link = Self::perform_client_handshake(&ws, &rx, client, server_static_pub).await?;
+        let session = Self::perform_client_handshake(&ws, &rx, client, server_static_pub).await?;
 
-        Ok(Self { ws, link, rx, tx })
+        Ok(Self { ws, session, rx, tx })
     }
 
     /// Wait for WebSocket to reach OPEN state
@@ -165,15 +165,13 @@ impl WebSocketNoiseChannel {
     async fn perform_client_handshake<R: RingKeyProvider>(
         ws: &WebSocket,
         rx: &Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
-        client: &NoiseClient<R, ()>,
+        client: &NoiseClient<R>,
         server_static_pub: &[u8; 32],
-    ) -> Result<NoiseLink> {
+    ) -> Result<NoiseSession> {
         // 1. Build the IK handshake initiation message
-        let (hs, _epoch, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
+        let (hs, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
             client,
             server_static_pub,
-            0,
-            None,
         )
         .map_err(|e| TransportError::HandshakeFailed(format!("Handshake build failed: {}", e)))?;
 
@@ -190,12 +188,12 @@ impl WebSocketNoiseChannel {
         })?;
 
         // 4. Complete the handshake
-        let link =
+        let session =
             pubky_noise::datalink_adapter::client_complete_ik(hs, &response).map_err(|e| {
                 TransportError::HandshakeFailed(format!("Failed to complete handshake: {}", e))
             })?;
 
-        Ok(link)
+        Ok(session)
     }
 
     /// Receive raw bytes from the message queue
@@ -218,7 +216,7 @@ impl WebSocketNoiseChannel {
 
         // 2. Encrypt
         let ciphertext = self
-            .link
+            .session
             .encrypt(&json_bytes)
             .map_err(|e| TransportError::EncryptionFailed(format!("Encryption failed: {}", e)))?;
 
@@ -269,7 +267,7 @@ impl WebSocketNoiseChannel {
 
         // 3. Decrypt
         let plaintext = self
-            .link
+            .session
             .decrypt(&ciphertext)
             .map_err(|e| TransportError::DecryptionFailed(format!("Decryption failed: {}", e)))?;
 

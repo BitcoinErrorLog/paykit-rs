@@ -14,18 +14,18 @@ async fn test_noise_3step_handshake() {
     let ring_client = Arc::new(DummyRing::new([1u8; 32], "client"));
     let ring_server = Arc::new(DummyRing::new([2u8; 32], "server"));
 
-    let client = NoiseClient::<_, ()>::new_direct("client", b"dev", ring_client.clone());
-    let server = NoiseServer::<_, ()>::new_direct("server", b"dev", ring_server.clone(), 3);
+    let client = NoiseClient::<_>::new_direct("client", b"dev", ring_client.clone());
+    let server = NoiseServer::<_>::new_direct("server", b"dev", ring_server.clone());
 
     // Get server static key
     let server_sk = ring_server
-        .derive_device_x25519("server", b"dev", 3)
+        .derive_device_x25519("server", b"dev")
         .unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
     // Step 1: Client initiates
-    let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 3, None).unwrap();
+    let (c_hs, first_msg) =
+        client_start_ik_direct(&client, &server_static_pk).unwrap();
 
     // Step 2: Server responds
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
@@ -50,25 +50,21 @@ async fn test_noise_handshake_with_identity_payload() {
     let ring_client = Arc::new(DummyRing::new([3u8; 32], "alice"));
     let ring_server = Arc::new(DummyRing::new([4u8; 32], "bob"));
 
-    let client = NoiseClient::<_, ()>::new_direct("alice", b"device1", ring_client.clone());
-    let server = NoiseServer::<_, ()>::new_direct("bob", b"device2", ring_server.clone(), 0);
+    let client = NoiseClient::<_>::new_direct("alice", b"device1", ring_client.clone());
+    let server = NoiseServer::<_>::new_direct("bob", b"device2", ring_server.clone());
 
     // Get server static key
     let server_sk = ring_server
-        .derive_device_x25519("bob", b"device2", 0)
+        .derive_device_x25519("bob", b"device2")
         .unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
-    // Client initiates with hint
-    let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 0, Some("payment-request")).unwrap();
+    // Client initiates
+    let (c_hs, first_msg) =
+        client_start_ik_direct(&client, &server_static_pk).unwrap();
 
-    // Server receives and extracts identity
-    let (s_hs, identity, response) = server_accept_ik(&server, &first_msg).unwrap();
-
-    // Verify identity payload was received (check for non-zero Ed25519 key)
-    assert_ne!(identity.ed25519_pub, [0u8; 32]);
-    assert_eq!(identity.server_hint, Some("payment-request".to_string()));
+    // Server receives and responds
+    let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
 
     // Complete handshake
     let _c_link = client_complete_ik(c_hs, &response).unwrap();
@@ -81,18 +77,18 @@ async fn test_noise_message_exchange() {
     let ring_client = Arc::new(DummyRing::new([5u8; 32], "payer"));
     let ring_server = Arc::new(DummyRing::new([6u8; 32], "payee"));
 
-    let client = NoiseClient::<_, ()>::new_direct("payer", b"wallet", ring_client.clone());
-    let server = NoiseServer::<_, ()>::new_direct("payee", b"receiver", ring_server.clone(), 1);
+    let client = NoiseClient::<_>::new_direct("payer", b"wallet", ring_client.clone());
+    let server = NoiseServer::<_>::new_direct("payee", b"receiver", ring_server.clone());
 
     // Get server static key
     let server_sk = ring_server
-        .derive_device_x25519("payee", b"receiver", 1)
+        .derive_device_x25519("payee", b"receiver")
         .unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
     // Perform handshake
-    let (c_hs, _epoch, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk, 1, None).unwrap();
+    let (c_hs, first_msg) =
+        client_start_ik_direct(&client, &server_static_pk).unwrap();
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
     let mut c_link = client_complete_ik(c_hs, &response).unwrap();
     let mut s_link = server_complete_ik(s_hs).unwrap();

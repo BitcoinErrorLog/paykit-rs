@@ -261,6 +261,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn endpoint_round_trip_and_update() {
         let setup = TestSetup::new().await;
 
@@ -306,6 +307,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn missing_endpoint_returns_none() {
         let setup = TestSetup::new().await;
         let method = MethodId("bolt11".into());
@@ -319,6 +321,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn list_reflects_additions_and_removals() {
         let setup = TestSetup::new().await;
 
@@ -375,6 +378,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn removing_missing_endpoint_is_error() {
         let setup = TestSetup::new().await;
         let method = MethodId("unused".into());
@@ -387,6 +391,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn lists_known_contacts() {
         let setup = TestSetup::new().await;
 

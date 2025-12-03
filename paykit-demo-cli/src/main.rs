@@ -80,6 +80,14 @@ enum Commands {
         /// Port to listen on
         #[arg(short, long, default_value = "8888")]
         port: u16,
+
+        /// Noise pattern to use: ik (default), ik-raw, n, nn
+        /// - ik: Mutual authentication with identity binding
+        /// - ik-raw: Cold key scenario, client identity via pkarr
+        /// - n: Anonymous client, authenticated server (donation box)
+        /// - nn: Fully anonymous (requires post-handshake attestation)
+        #[arg(long, default_value = "ik")]
+        pattern: String,
     },
 
     /// Initiate a payment (client mode)
@@ -98,6 +106,19 @@ enum Commands {
         /// Payment method (onchain, lightning)
         #[arg(short, long, default_value = "lightning")]
         method: String,
+
+        /// Noise pattern to use: ik (default), ik-raw, n, nn
+        /// - ik: Mutual authentication with identity binding
+        /// - ik-raw: Cold key scenario, identity via pkarr
+        /// - n: Anonymous client, authenticated server
+        /// - nn: Fully anonymous (requires post-handshake attestation)
+        #[arg(long, default_value = "ik")]
+        pattern: String,
+
+        /// Direct connection address (host:port@pubkey)
+        /// Use when not relying on Pubky discovery
+        #[arg(long)]
+        connect: Option<String>,
     },
 
     /// Show payment receipts
@@ -355,14 +376,16 @@ async fn main() -> Result<()> {
                 commands::contacts::show(&storage_dir, &name, cli.verbose).await?;
             }
         },
-        Commands::Receive { port } => {
-            commands::receive::run(&storage_dir, port, cli.verbose).await?;
+        Commands::Receive { port, pattern } => {
+            commands::receive::run(&storage_dir, port, &pattern, cli.verbose).await?;
         }
         Commands::Pay {
             recipient,
             amount,
             currency,
             method,
+            pattern,
+            connect,
         } => {
             commands::pay::run(
                 &storage_dir,
@@ -370,6 +393,8 @@ async fn main() -> Result<()> {
                 amount,
                 currency,
                 &method,
+                &pattern,
+                connect.as_deref(),
                 cli.verbose,
             )
             .await?;

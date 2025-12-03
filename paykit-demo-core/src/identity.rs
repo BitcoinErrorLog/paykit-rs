@@ -21,10 +21,9 @@
 //! - Use memory-safe zeroization for key material
 //!
 //! ## X25519 Key Derivation
-//! Uses `pubky_noise::kdf::derive_x25519_for_device_epoch` which implements:
+//! Uses `pubky_noise::kdf::derive_x25519_static` which implements:
 //! - HKDF-based derivation from Ed25519 seed
 //! - Device-specific binding (prevents key reuse across devices)
-//! - Epoch-based rotation (enables forward secrecy)
 //! - Deterministic output (same inputs → same key)
 
 use anyhow::{Context, Result};
@@ -109,26 +108,24 @@ impl Identity {
     ///
     /// # Arguments
     /// * `device_id` - Unique device identifier (binds key to specific device)
-    /// * `epoch` - Key rotation epoch (enables forward secrecy, use 0 for no rotation)
     ///
     /// # Security Properties
     /// - Deterministic: same inputs always produce same output
     /// - Device-bound: different devices produce different keys
-    /// - Epoch-based: increment epoch to rotate keys without changing identity
     /// - One-way: cannot recover Ed25519 key from X25519 key
     ///
     /// # Example
     /// ```
     /// # use paykit_demo_core::Identity;
     /// let identity = Identity::generate();
-    /// let x25519_key = identity.derive_x25519_key(b"device-001", 0);
+    /// let x25519_key = identity.derive_x25519_key(b"device-001");
     /// assert_eq!(x25519_key.len(), 32);
     /// ```
-    pub fn derive_x25519_key(&self, device_id: &[u8], epoch: u32) -> [u8; 32] {
+    pub fn derive_x25519_key(&self, device_id: &[u8]) -> [u8; 32] {
         let seed = self.keypair.secret_key();
         // Uses pubky_noise KDF which implements HKDF-based derivation
         // with proper domain separation and security properties
-        pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, epoch)
+        pubky_noise::kdf::derive_x25519_static(&seed, device_id)
     }
 }
 
@@ -273,14 +270,14 @@ mod tests {
     fn test_x25519_derivation() {
         let identity = Identity::generate();
         let device_id = b"test_device";
-        let key1 = identity.derive_x25519_key(device_id, 0);
-        let key2 = identity.derive_x25519_key(device_id, 0);
+        let key1 = identity.derive_x25519_key(device_id);
+        let key2 = identity.derive_x25519_key(device_id);
 
         // Same inputs should produce same output
         assert_eq!(key1, key2);
 
-        // Different epoch should produce different key
-        let key3 = identity.derive_x25519_key(device_id, 1);
+        // Different device should produce different key
+        let key3 = identity.derive_x25519_key(b"other_device");
         assert_ne!(key1, key3);
     }
 }

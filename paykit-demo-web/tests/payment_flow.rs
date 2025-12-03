@@ -140,14 +140,14 @@ fn test_multiple_payment_requests() {
 
 #[wasm_bindgen_test]
 fn test_payment_coordinator_creation() {
-    let coordinator = WasmPaymentCoordinator::new();
+    let _coordinator = WasmPaymentCoordinator::new();
     // Coordinator should be created successfully
     // We can't easily test the internal state, but creation should not panic
 }
 
 #[wasm_bindgen_test]
 fn test_receipt_storage_after_payment() {
-    let storage = WasmReceiptStorage::new();
+    let _storage = WasmReceiptStorage::new();
     // Storage should be created successfully
     // We can't easily test the internal state, but creation should not panic
 }

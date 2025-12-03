@@ -11,8 +11,9 @@ serde_json = "1.0"
 thiserror = "1.0"
 async-trait = "0.1"
 tokio = { version = "1.0", features = ["time"], optional = true }
+zeroize = "1.7"
 
-pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
+pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 
 [features]
 default = ["timeout"]

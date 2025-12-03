@@ -11,6 +11,7 @@ use pubky_testnet::EphemeralTestnet;
 use tempfile::TempDir;
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_complete_publish_discover_workflow() {
     // This test validates the full workflow:
     // 1. Receiver creates identity and publishes methods
@@ -93,6 +94,7 @@ async fn test_complete_publish_discover_workflow() {
 }
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_method_rotation_and_updates() {
     // Test that methods can be updated/rotated
     let testnet = EphemeralTestnet::start()
@@ -156,6 +158,7 @@ async fn test_method_rotation_and_updates() {
 }
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_multiple_users_publishing() {
     // Test that multiple users can publish independently
     let testnet = EphemeralTestnet::start()

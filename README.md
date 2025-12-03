@@ -348,6 +348,58 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 - [Build Instructions](BUILD.md) - Build and development setup
 - [Documentation Index](docs/README.md) - Complete documentation index
 
+## Noise Protocol & Cold Key Architecture
+
+Paykit uses [pubky-noise](../pubky-noise/) for encrypted communication channels. The library supports multiple Noise patterns for different security/usability tradeoffs:
+
+### Pattern Selection for Paykit/Bitkit
+
+| Pattern | Use Case | Ed25519 Required | Identity Binding |
+|---------|----------|------------------|------------------|
+| **IK** | Authenticated payments | Yes (at handshake) | Full identity proof |
+| **IK-raw** | Cold key scenarios | Via pkarr lookup | pkarr-based binding |
+| **N** | Anonymous payment requests | No | Recipient only |
+| **NN** | Ephemeral data exchange | No | None |
+
+### Cold Key Integration (Bitkit)
+
+For Bitkit integration where Ed25519 keys are kept relatively cold:
+
+1. **X25519 Key Publication**: Publish derived X25519 keys to pkarr
+2. **pkarr-Based Auth**: Use `IK-raw` pattern with pkarr lookup for identity verification
+3. **Hot Key Derivation**: Derive X25519 keys from Ed25519 for frequent operations
+
+```rust
+use pubky_noise::{NoiseSender, NoiseReceiver, kdf::derive_x25519_static};
+use zeroize::Zeroizing;
+
+// Derive X25519 key from seed (done once, key published to pkarr)
+let x25519_sk = derive_x25519_static(&seed, b"device-context");
+
+// Initiate connection with raw key (no Ed25519 signing required)
+let (mut state, msg) = NoiseSender::initiate_ik_raw(
+    &x25519_sk,
+    &recipient_x25519_pk,
+)?;
+
+// Identity verification happens via pkarr record lookup
+```
+
+See the [pubky-noise Cold Key Architecture](../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) documentation for details.
+
+### Pattern Negotiation Protocol
+
+For pattern-aware servers that accept multiple Noise patterns on a single port, clients send a pattern byte before the handshake:
+
+| Byte | Pattern | Description |
+|------|---------|-------------|
+| `0x00` | IK | Full Ed25519 authentication |
+| `0x01` | IK-raw | Cold key (pkarr verification) |
+| `0x02` | N | Anonymous client |
+| `0x03` | NN | Fully ephemeral |
+
+See [docs/NOISE_PATTERN_NEGOTIATION.md](docs/NOISE_PATTERN_NEGOTIATION.md) for the complete protocol specification.
+
 ## Security Considerations
 
 **For Production Use**:
@@ -397,7 +449,7 @@ MIT
 ## Related Projects
 
 - [Pubky](https://pubky.org) - Decentralized identity and data protocol
-- [Pubky Noise](../pubky-noise-main/) - Noise Protocol implementation
+- [Pubky Noise](../pubky-noise/) - Noise Protocol implementation
 - [Bitkit](https://bitkit.to) - Reference wallet implementation
 
 ## Contact

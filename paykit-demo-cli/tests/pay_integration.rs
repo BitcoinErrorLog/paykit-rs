@@ -3,11 +3,13 @@
 mod common;
 
 use paykit_demo_core::IdentityManager;
+#[allow(unused_imports)]
 use paykit_lib::{AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport};
 use pubky_testnet::EphemeralTestnet;
 use tempfile::TempDir;
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_pay_command_discovers_recipient_methods() {
     // Setup: Create testnet and identities
     let testnet = EphemeralTestnet::start()
@@ -55,7 +57,9 @@ async fn test_pay_command_discovers_recipient_methods() {
         Some("1000".to_string()),
         Some("SAT".to_string()),
         "lightning",
-        false,
+        "ik",          // pattern
+        None,          // connect
+        false,         // verbose
         Some(&sdk),
     )
     .await;
@@ -69,6 +73,7 @@ async fn test_pay_command_discovers_recipient_methods() {
 }
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_pay_command_fails_when_method_not_supported() {
     // Setup
     let testnet = EphemeralTestnet::start()
@@ -105,7 +110,9 @@ async fn test_pay_command_fails_when_method_not_supported() {
         Some("1000".to_string()),
         Some("SAT".to_string()),
         "onchain",
-        false,
+        "ik",          // pattern
+        None,          // connect
+        false,         // verbose
         Some(&sdk),
     )
     .await;
@@ -115,6 +122,7 @@ async fn test_pay_command_fails_when_method_not_supported() {
 }
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_pay_command_discovers_multiple_methods() {
     // Setup
     let testnet = EphemeralTestnet::start()
@@ -170,7 +178,9 @@ async fn test_pay_command_discovers_multiple_methods() {
         Some("5000".to_string()),
         Some("SAT".to_string()),
         "onchain",
-        true, // verbose
+        "ik",          // pattern
+        None,          // connect
+        true,          // verbose
         Some(&sdk),
     )
     .await;

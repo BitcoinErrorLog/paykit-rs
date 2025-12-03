@@ -101,6 +101,11 @@ pub mod transport;
 
 pub use manager::{PaykitInteractiveManager, ReceiptGenerator};
 pub use storage::PaykitStorage;
+pub use transport::PubkyNoiseChannel;
+
+// Re-export pubky-noise types for pattern selection
+pub use pubky_noise::NoisePattern;
+pub use zeroize::Zeroizing;
 
 /// Result type for interactive operations.
 pub type Result<T> = std::result::Result<T, InteractiveError>;

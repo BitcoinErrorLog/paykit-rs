@@ -61,7 +61,7 @@ uuid = { version = "1", features = ["v4", "js"] }
 # Crypto (WASM-compatible)
 getrandom = { version = "0.3", features = ["wasm_js"] }
 pkarr = "3"
-pubky-noise = { path = "../../pubky-noise-main" }
+pubky-noise = { path = "../../pubky-noise" }
 hex = "0.4"
 
 # For async trait support

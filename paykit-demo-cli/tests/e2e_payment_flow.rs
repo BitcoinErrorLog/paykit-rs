@@ -38,7 +38,7 @@ async fn test_noise_handshake_between_payer_and_receiver() {
     // Get receiver's static public key
     let device_id = format!("paykit-demo-{}", receiver.public_key());
     let receiver_static_pk =
-        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes(), 0);
+        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes());
 
     // Spawn server task
     let receiver_clone = receiver.clone();
@@ -46,7 +46,7 @@ async fn test_noise_handshake_between_payer_and_receiver() {
         // Accept one connection
         let (stream, _) = listener.accept().await.expect("Failed to accept");
 
-        let server = NoiseServerHelper::create_server(&receiver_clone, device_id.as_bytes(), 0);
+        let server = NoiseServerHelper::create_server(&receiver_clone, device_id.as_bytes());
         let mut channel = NoiseServerHelper::accept_connection(server, stream)
             .await
             .expect("Failed to complete handshake");
@@ -112,6 +112,7 @@ async fn test_noise_handshake_between_payer_and_receiver() {
 }
 
 #[tokio::test]
+#[ignore = "Requires external DHT - run manually with --ignored"]
 async fn test_full_payment_flow_with_published_methods() {
     // Setup: Create testnet and identities
     let testnet = EphemeralTestnet::start()
@@ -147,7 +148,7 @@ async fn test_full_payment_flow_with_published_methods() {
 
     let device_id = format!("paykit-demo-{}", receiver.public_key());
     let receiver_static_pk =
-        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes(), 0);
+        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes());
 
     // Publish lightning endpoint with Noise server info
     let endpoint_data = format!(
@@ -216,7 +217,7 @@ async fn test_multiple_concurrent_payment_requests() {
 
     let device_id = format!("paykit-demo-{}", receiver.public_key());
     let receiver_static_pk =
-        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes(), 0);
+        NoiseServerHelper::get_static_public_key(&receiver, device_id.as_bytes());
 
     // Spawn server to accept two connections
     let receiver_clone = receiver.clone();
@@ -227,7 +228,7 @@ async fn test_multiple_concurrent_payment_requests() {
             let (stream, _) = listener.accept().await.expect("Failed to accept");
 
             let server =
-                NoiseServerHelper::create_server(&receiver_clone, device_id_clone.as_bytes(), 0);
+                NoiseServerHelper::create_server(&receiver_clone, device_id_clone.as_bytes());
 
             let _receiver_clone2 = receiver_clone.clone();
             tokio::spawn(async move {

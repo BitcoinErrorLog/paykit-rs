@@ -5,6 +5,35 @@ All notable changes to the Paykit project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Cold Key Pattern Support** for hardware wallet / Bitkit integration
+  - New `NoiseRawClientHelper` with `connect_ik_raw`, `connect_anonymous`, `connect_ephemeral` methods
+  - New `NoiseServerHelper` pattern-aware accept methods: `accept_ik_raw`, `accept_n`, `accept_nn`
+  - New `AcceptedConnection` enum for pattern-specific connection handling
+  - New `NoisePattern` enum: `IK`, `IKRaw`, `N`, `NN`
+- **CLI Pattern Selection**
+  - `--pattern` flag for `receive` command (ik, ik-raw, n, nn)
+  - `--pattern` flag for `pay` command
+  - `--connect` flag for direct connections bypassing discovery
+- **Demo Scripts**
+  - `03-cold-key-payment.sh` - Demonstrates IK-raw pattern for cold key scenarios
+  - `04-anonymous-payment.sh` - Demonstrates N pattern for donation boxes
+- **Documentation**
+  - `docs/PATTERN_SELECTION.md` - Comprehensive pattern selection guide
+  - Updated `paykit-demo-cli/demos/README.md` with pattern reference
+- Cold key integration tests (`tests/cold_key_integration.rs`)
+
+### Changed
+- **BREAKING**: Upgraded to pubky-noise v0.8.0
+  - Removed `epoch` parameter from all Noise API calls
+  - Removed `()` phantom type parameter from `NoiseClient<R>` and `NoiseServer<R>`
+  - Updated `derive_x25519_for_device_epoch()` to `derive_x25519_static()`
+  - Updated return types: `client_start_ik_direct()` now returns 2-tuple `(hs, msg)`
+  - Updated return types: `server_accept_ik()` now returns 2-tuple `(hs, response)`
+- Fixed pubky-noise dependency paths (now points to `../../pubky-noise`)
+- Updated `.gitignore` to match pubky-noise patterns
+- Added `zeroize` dependency to `paykit-demo-core`
+
+### Documentation
 - Comprehensive documentation cleanup and consolidation
 - Component relationship documentation
 - Cross-component consistency improvements

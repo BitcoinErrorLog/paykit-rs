@@ -18,26 +18,27 @@ proptest! {
     /// Test that X25519 derivation is deterministic
     #[test]
     fn test_x25519_derivation_is_deterministic(
-        device_id in prop::collection::vec(any::<u8>(), 1..64),
-        epoch in 0u32..100u32
-    ) {
-        let identity = Identity::generate();
-
-        let key1 = identity.derive_x25519_key(&device_id, epoch);
-        let key2 = identity.derive_x25519_key(&device_id, epoch);
-
-        prop_assert_eq!(key1, key2);
-    }
-
-    /// Test that different epochs produce different keys
-    #[test]
-    fn test_different_epochs_produce_different_keys(
         device_id in prop::collection::vec(any::<u8>(), 1..64)
     ) {
         let identity = Identity::generate();
 
-        let key1 = identity.derive_x25519_key(&device_id, 0);
-        let key2 = identity.derive_x25519_key(&device_id, 1);
+        let key1 = identity.derive_x25519_key(&device_id);
+        let key2 = identity.derive_x25519_key(&device_id);
+
+        prop_assert_eq!(key1, key2);
+    }
+
+    /// Test that different devices produce different keys
+    #[test]
+    fn test_different_devices_produce_different_keys(
+        device_id1 in prop::collection::vec(any::<u8>(), 1..64),
+        device_id2 in prop::collection::vec(any::<u8>(), 1..64)
+    ) {
+        prop_assume!(device_id1 != device_id2);
+        let identity = Identity::generate();
+
+        let key1 = identity.derive_x25519_key(&device_id1);
+        let key2 = identity.derive_x25519_key(&device_id2);
 
         prop_assert_ne!(key1, key2);
     }
@@ -88,7 +89,7 @@ proptest! {
 #[test]
 fn test_x25519_key_length() {
     let identity = Identity::generate();
-    let key = identity.derive_x25519_key(b"device", 0);
+    let key = identity.derive_x25519_key(b"device");
     assert_eq!(key.len(), 32);
 }
 

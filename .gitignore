@@ -1,1 +1,18 @@
-/target
+# Rust build artifacts
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Generated files
+*.orig
+
+# Local config
+.env
+.env.local

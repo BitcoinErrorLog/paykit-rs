@@ -34,6 +34,53 @@ chmod +x demos/02-subscription.sh
 ./demos/02-subscription.sh
 ```
 
+### 03-cold-key-payment.sh
+Cold key payment flow using IK-raw pattern:
+- Ed25519 keys kept "cold" (offline)
+- X25519 keys for Noise connections
+- Identity binding via pkarr (external)
+- Demonstrates Bitkit-style architecture
+
+**Pattern**: IK-raw
+**Use Case**: Hardware wallets, cold storage scenarios
+
+```bash
+chmod +x demos/03-cold-key-payment.sh
+./demos/03-cold-key-payment.sh
+```
+
+### 04-anonymous-payment.sh
+Anonymous payment using N pattern:
+- Anonymous client (payer)
+- Authenticated server (receiver)
+- Privacy-preserving donations
+
+**Pattern**: N
+**Use Case**: Donation boxes, anonymous tips
+
+```bash
+chmod +x demos/04-anonymous-payment.sh
+./demos/04-anonymous-payment.sh
+```
+
+## Noise Pattern Reference
+
+| Pattern | Client | Server | Use Case |
+|---------|--------|--------|----------|
+| **IK** | Authenticated | Authenticated | Standard payments |
+| **IK-raw** | Via pkarr | Via pkarr | Cold key/hardware wallet |
+| **N** | Anonymous | Authenticated | Donations, tips |
+| **NN** | Anonymous | Anonymous | Post-handshake attestation |
+
+Use the `--pattern` flag to select a pattern:
+```bash
+# Receiver
+paykit-demo receive --port 9735 --pattern ik-raw
+
+# Payer  
+paykit-demo pay bob --connect 127.0.0.1:9735@<pubkey> --pattern ik-raw
+```
+
 ## Manual Demo Guide
 
 ### Complete Alice→Bob Payment (Interactive)

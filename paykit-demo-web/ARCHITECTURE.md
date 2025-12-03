@@ -507,7 +507,7 @@ js-sys = "0.3"            # JavaScript interop
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 paykit-lib = { path = "../paykit-lib" }
-pubky-noise = { path = "../../pubky-noise-main" }
+pubky-noise = { path = "../../pubky-noise" }
 ```
 
 ### JavaScript Dependencies

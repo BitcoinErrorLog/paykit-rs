@@ -79,6 +79,7 @@ mod tests {
     use pubky_testnet::EphemeralTestnet;
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn test_session_manager_creates_authenticated_transport() {
         // Start testnet
         let testnet = EphemeralTestnet::start()
@@ -101,6 +102,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn test_session_manager_from_keypair() {
         // Start testnet
         let testnet = EphemeralTestnet::start()
@@ -126,6 +128,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires network access to testnet/mainline"]
     async fn test_session_manager_can_publish() {
         // Integration test: create session and publish a method
         use paykit_lib::{AuthenticatedTransport, EndpointData, MethodId};

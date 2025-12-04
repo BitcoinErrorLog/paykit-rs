@@ -8,6 +8,7 @@
 //! - **IK-raw**: Cold key scenario, identity via pkarr lookup
 //! - **N**: Anonymous client, authenticated server
 //! - **NN**: Fully anonymous, post-handshake attestation required
+//! - **XX**: Trust-on-first-use, both parties exchange static keys during handshake
 
 use anyhow::{anyhow, Context, Result};
 use paykit_interactive::transport::PubkyNoiseChannel;
@@ -143,6 +144,9 @@ pub enum NoisePattern {
     /// NN pattern - both parties anonymous
     /// Use with post-handshake attestation
     NN,
+    /// XX pattern - trust-on-first-use
+    /// Both parties exchange static keys during 3-message handshake
+    XX,
 }
 
 impl std::fmt::Display for NoisePattern {
@@ -152,6 +156,7 @@ impl std::fmt::Display for NoisePattern {
             NoisePattern::IKRaw => write!(f, "IK-raw"),
             NoisePattern::N => write!(f, "N"),
             NoisePattern::NN => write!(f, "NN"),
+            NoisePattern::XX => write!(f, "XX"),
         }
     }
 }
@@ -164,6 +169,7 @@ impl NoisePattern {
             NoisePattern::IKRaw => 1,
             NoisePattern::N => 2,
             NoisePattern::NN => 3,
+            NoisePattern::XX => 4,
         }
     }
 }
@@ -177,6 +183,7 @@ impl TryFrom<u8> for NoisePattern {
             1 => Ok(NoisePattern::IKRaw),
             2 => Ok(NoisePattern::N),
             3 => Ok(NoisePattern::NN),
+            4 => Ok(NoisePattern::XX),
             other => Err(anyhow!("Unknown Noise pattern byte: {}", other)),
         }
     }
@@ -191,8 +198,9 @@ impl std::str::FromStr for NoisePattern {
             "ik-raw" | "ikraw" | "ik_raw" => Ok(NoisePattern::IKRaw),
             "n" => Ok(NoisePattern::N),
             "nn" => Ok(NoisePattern::NN),
+            "xx" => Ok(NoisePattern::XX),
             _ => Err(anyhow!(
-                "Unknown pattern: {}. Valid patterns: ik, ik-raw, n, nn",
+                "Unknown pattern: {}. Valid patterns: ik, ik-raw, n, nn, xx",
                 s
             )),
         }
@@ -574,6 +582,7 @@ mod tests {
         assert_eq!(format!("{}", NoisePattern::IKRaw), "IK-raw");
         assert_eq!(format!("{}", NoisePattern::N), "N");
         assert_eq!(format!("{}", NoisePattern::NN), "NN");
+        assert_eq!(format!("{}", NoisePattern::XX), "XX");
     }
 
     #[test]
@@ -590,6 +599,8 @@ mod tests {
         );
         assert_eq!("n".parse::<NoisePattern>().unwrap(), NoisePattern::N);
         assert_eq!("nn".parse::<NoisePattern>().unwrap(), NoisePattern::NN);
+        assert_eq!("xx".parse::<NoisePattern>().unwrap(), NoisePattern::XX);
+        assert_eq!("XX".parse::<NoisePattern>().unwrap(), NoisePattern::XX);
         assert!("invalid".parse::<NoisePattern>().is_err());
     }
 

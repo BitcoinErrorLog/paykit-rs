@@ -171,38 +171,41 @@ pub async fn run_with_sdk(
                 .await
                 .context("Failed to establish Noise connection (IK)")?
         }
-        NoisePattern::IKRaw | NoisePattern::N | NoisePattern::NN => match pattern {
-            NoisePattern::IKRaw => {
-                let device_context = format!("paykit-demo-{}", identity.public_key());
-                let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
-                    &identity.keypair.secret_key(),
-                    device_context.as_bytes(),
-                );
+        NoisePattern::IKRaw => {
+            let device_context = format!("paykit-demo-{}", identity.public_key());
+            let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
+                &identity.keypair.secret_key(),
+                device_context.as_bytes(),
+            );
 
-                NoiseRawClientHelper::connect_ik_raw_with_negotiation(&x25519_sk, &host, &static_pk)
+            NoiseRawClientHelper::connect_ik_raw_with_negotiation(&x25519_sk, &host, &static_pk)
+                .await
+                .context("Failed to establish Noise connection (IK-raw)")?
+        }
+        NoisePattern::N => {
+            ui::info("  (Anonymous mode - your identity is not revealed)");
+            NoiseRawClientHelper::connect_anonymous_with_negotiation(&host, &static_pk)
+                .await
+                .context("Failed to establish Noise connection (N)")?
+        }
+        NoisePattern::NN => {
+            ui::warning("  (Ephemeral mode - no authentication, verify manually!)");
+            let (channel, server_ephemeral) =
+                NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host)
                     .await
-                    .context("Failed to establish Noise connection (IK-raw)")?
-            }
-            NoisePattern::N => {
-                ui::info("  (Anonymous mode - your identity is not revealed)");
-                NoiseRawClientHelper::connect_anonymous_with_negotiation(&host, &static_pk)
-                    .await
-                    .context("Failed to establish Noise connection (N)")?
-            }
-            NoisePattern::NN => {
-                ui::warning("  (Ephemeral mode - no authentication, verify manually!)");
-                let (channel, server_ephemeral) =
-                    NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host)
-                        .await
-                        .context("Failed to establish Noise connection (NN)")?;
-                ui::info(&format!(
-                    "  Server ephemeral: {}",
-                    hex::encode(&server_ephemeral[..8])
-                ));
-                channel
-            }
-            NoisePattern::IK => unreachable!("handled above"),
-        },
+                    .context("Failed to establish Noise connection (NN)")?;
+            ui::info(&format!(
+                "  Server ephemeral: {}",
+                hex::encode(&server_ephemeral[..8])
+            ));
+            channel
+        }
+        NoisePattern::XX => {
+            ui::info("  (Trust-on-first-use - keys exchanged during handshake)");
+            // XX pattern requires client-side implementation
+            // For now, return an error as this needs more work on the client side
+            anyhow::bail!("XX pattern client-side not yet implemented in CLI demo");
+        }
     };
 
     ui::success("Noise connection established");

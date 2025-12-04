@@ -8,6 +8,7 @@
 //! - **IK-raw**: Cold key scenario, client identity via pkarr
 //! - **N**: Anonymous client, authenticated server (donation boxes)
 //! - **NN**: Fully anonymous, post-handshake attestation required
+//! - **XX**: Trust-on-first-use, 3-message handshake exchanging static keys
 
 use anyhow::{anyhow, Context, Result};
 use paykit_interactive::transport::PubkyNoiseChannel;
@@ -55,6 +56,13 @@ pub enum AcceptedConnection {
         /// Client's ephemeral public key (for post-handshake verification)
         client_ephemeral: [u8; 32],
     },
+    /// XX pattern: Trust-on-first-use (TOFU)
+    XX {
+        /// The encrypted channel
+        channel: PubkyNoiseChannel<TcpStream>,
+        /// Client's static X25519 public key (learned during handshake)
+        client_static_pk: [u8; 32],
+    },
 }
 
 impl AcceptedConnection {
@@ -65,6 +73,7 @@ impl AcceptedConnection {
             AcceptedConnection::IKRaw { channel, .. } => channel,
             AcceptedConnection::N { channel } => channel,
             AcceptedConnection::NN { channel, .. } => channel,
+            AcceptedConnection::XX { channel, .. } => channel,
         }
     }
 
@@ -75,6 +84,7 @@ impl AcceptedConnection {
             AcceptedConnection::IKRaw { channel, .. } => channel,
             AcceptedConnection::N { channel } => channel,
             AcceptedConnection::NN { channel, .. } => channel,
+            AcceptedConnection::XX { channel, .. } => channel,
         }
     }
 
@@ -85,6 +95,7 @@ impl AcceptedConnection {
             AcceptedConnection::IKRaw { channel, .. } => channel,
             AcceptedConnection::N { channel } => channel,
             AcceptedConnection::NN { channel, .. } => channel,
+            AcceptedConnection::XX { channel, .. } => channel,
         }
     }
 
@@ -93,11 +104,13 @@ impl AcceptedConnection {
         matches!(self, AcceptedConnection::IK { .. })
     }
 
-    /// Returns true if the client has a static key (IK or IK-raw).
+    /// Returns true if the client has a static key (IK, IK-raw, or XX).
     pub fn has_client_static(&self) -> bool {
         matches!(
             self,
-            AcceptedConnection::IK { .. } | AcceptedConnection::IKRaw { .. }
+            AcceptedConnection::IK { .. }
+                | AcceptedConnection::IKRaw { .. }
+                | AcceptedConnection::XX { .. }
         )
     }
 }
@@ -391,6 +404,58 @@ impl NoiseServerHelper {
         Ok((PubkyNoiseChannel::new(stream, session), client_ephemeral))
     }
 
+    /// Accept XX pattern connection (trust-on-first-use).
+    ///
+    /// Both parties exchange static keys during a 3-message handshake.
+    /// This is useful for TOFU scenarios where keys are cached after first contact.
+    ///
+    /// # Arguments
+    /// * `x25519_sk` - Server's X25519 secret key
+    /// * `stream` - The TCP connection to accept
+    ///
+    /// # Returns
+    /// A tuple of (channel, client_static_pk) - the client's static key learned during handshake
+    pub async fn accept_xx(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: TcpStream,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        use pubky_noise::NoiseReceiver;
+
+        // Read first message (client's ephemeral key)
+        let first_msg = Self::read_handshake_message(&mut stream).await?;
+
+        // Accept XX pattern - creates response with our ephemeral + static
+        let receiver = NoiseReceiver::new();
+        let (mut hs, response) = receiver
+            .respond_xx(x25519_sk, &first_msg)
+            .map_err(|e| anyhow!("XX handshake accept failed: {}", e))?;
+
+        // Send response (message 2)
+        Self::write_handshake_message(&mut stream, &response).await?;
+
+        // Read third message (client's static key + DH)
+        let third_msg = Self::read_handshake_message(&mut stream).await?;
+
+        // Process third message
+        let mut buf = vec![0u8; third_msg.len() + 256];
+        let _n = hs
+            .read_message(&third_msg, &mut buf)
+            .context("Failed to read XX third message")?;
+
+        // Extract client's static key
+        let client_static_pk: [u8; 32] = hs
+            .get_remote_static()
+            .ok_or_else(|| anyhow!("No client static key in XX pattern"))?
+            .try_into()
+            .map_err(|_| anyhow!("Invalid client static key length"))?;
+
+        // Complete handshake
+        let session = pubky_noise::NoiseSession::from_handshake(hs)
+            .map_err(|e| anyhow!("XX handshake completion failed: {}", e))?;
+
+        Ok((PubkyNoiseChannel::new(stream, session), client_static_pk))
+    }
+
     /// Accept a connection with pattern auto-detection.
     ///
     /// Detects the pattern based on message size and structure.
@@ -399,6 +464,7 @@ impl NoiseServerHelper {
     /// - IK/IK-raw: Larger messages with static key + payload
     /// - N: Smaller message, single round
     /// - NN: Medium message, ephemeral only
+    /// - XX: 3-message handshake with TOFU
     ///
     /// **Note**: This is heuristic-based. For production, consider using
     /// explicit pattern negotiation.
@@ -452,6 +518,13 @@ impl NoiseServerHelper {
                     client_ephemeral,
                 })
             }
+            NoisePattern::XX => {
+                let (channel, client_static_pk) = Self::accept_xx(x25519_sk, stream).await?;
+                Ok(AcceptedConnection::XX {
+                    channel,
+                    client_static_pk,
+                })
+            }
         }
     }
 
@@ -464,7 +537,7 @@ impl NoiseServerHelper {
     /// Client -> Server: [1-byte pattern] [4-byte length] [handshake message]
     /// ```
     ///
-    /// Pattern bytes: 0 = IK, 1 = IK-raw, 2 = N, 3 = NN
+    /// Pattern bytes: 0 = IK, 1 = IK-raw, 2 = N, 3 = NN, 4 = XX
     pub async fn run_pattern_server<F, Fut>(
         identity: &Identity,
         bind_addr: &str,
@@ -664,7 +737,11 @@ mod tests {
         // but we can verify the enum variants exist
         assert!(matches!(
             NoisePattern::IK,
-            NoisePattern::IK | NoisePattern::IKRaw | NoisePattern::N | NoisePattern::NN
+            NoisePattern::IK
+                | NoisePattern::IKRaw
+                | NoisePattern::N
+                | NoisePattern::NN
+                | NoisePattern::XX
         ));
 
         // Verify mock_identity is usable (prevents unused warning)

@@ -66,6 +66,10 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                 );
                 ui::warning("  WARNING: NN without attestation is vulnerable to MITM");
             }
+            NoisePattern::XX => {
+                ui::info("  Pattern XX: Trust-on-first-use, static keys exchanged during handshake");
+                ui::info("  Use for TOFU scenarios where keys are cached after first contact");
+            }
         }
     }
 
@@ -127,6 +131,11 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                                 client_ephemeral, ..
                             } => {
                                 format!("ephemeral ({})", hex::encode(&client_ephemeral[..8]))
+                            }
+                            AcceptedConnection::XX {
+                                client_static_pk, ..
+                            } => {
+                                format!("TOFU ({})", hex::encode(&client_static_pk[..8]))
                             }
                         };
 

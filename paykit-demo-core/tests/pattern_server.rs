@@ -78,7 +78,9 @@ async fn roundtrip(pattern: NoisePattern) -> Result<()> {
                     NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host).await?;
                 channel
             }
-            NoisePattern::IK => unreachable!("pattern-aware tests cover non-IK patterns"),
+            NoisePattern::IK | NoisePattern::XX => {
+                unreachable!("pattern-aware tests cover IK-raw, N, and NN only")
+            }
         };
 
         channel.send(PaykitNoiseMessage::Ack).await?;

@@ -360,6 +360,7 @@ Paykit uses [pubky-noise](../pubky-noise/) for encrypted communication channels.
 | **IK-raw** | Cold key scenarios | Via pkarr lookup | pkarr-based binding |
 | **N** | Anonymous payment requests | No | Recipient only |
 | **NN** | Ephemeral data exchange | No | None |
+| **XX** | Trust-on-first-use | No | TOFU (learned) |
 
 ### Cold Key Integration (Bitkit)
 
@@ -397,6 +398,7 @@ For pattern-aware servers that accept multiple Noise patterns on a single port, 
 | `0x01` | IK-raw | Cold key (pkarr verification) |
 | `0x02` | N | Anonymous client |
 | `0x03` | NN | Fully ephemeral |
+| `0x04` | XX | Trust-on-first-use |
 
 See [docs/NOISE_PATTERN_NEGOTIATION.md](docs/NOISE_PATTERN_NEGOTIATION.md) for the complete protocol specification.
 

@@ -14,9 +14,10 @@ When connecting to a pattern-aware server (e.g., `NoiseServerHelper::run_pattern
 | `0x01` | IK-raw | Via pkarr | X25519 static | Cold key scenarios |
 | `0x02` | N | Anonymous | X25519 static | Anonymous donations |
 | `0x03` | NN | Ephemeral | Ephemeral | Post-handshake attestation |
+| `0x04` | XX | TOFU (learned) | TOFU (learned) | Trust-on-first-use |
 
 > **Note:** The pattern-aware server (`NoiseServerHelper::run_pattern_server`) is
-> currently used for IK-raw, N, and NN. IK connections continue to use the
+> currently used for IK-raw, N, NN, and XX. IK connections continue to use the
 > legacy `run_server` helper and therefore do **not** send a pattern byte.
 
 ## Wire Format
@@ -100,9 +101,8 @@ let (channel, server_ephemeral) =
 ```rust
 use paykit_demo_core::{NoiseServerHelper, NoisePattern, AcceptedConnection};
 
-NoiseServerHelper::run_pattern_aware_server(
-    server,
-    &x25519_sk,
+NoiseServerHelper::run_pattern_server(
+    &identity,
     "0.0.0.0:9735",
     |connection| async {
         match connection {
@@ -118,6 +118,9 @@ NoiseServerHelper::run_pattern_aware_server(
             AcceptedConnection::NN { channel, client_ephemeral } => {
                 // Implement post-handshake attestation
             }
+            AcceptedConnection::XX { channel, client_static_pk } => {
+                // Trust-on-first-use: cache client_static_pk for future
+            }
         }
         Ok(())
     },
@@ -132,6 +135,7 @@ NoiseServerHelper::run_pattern_aware_server(
 - **IK-raw**: Suitable when Ed25519 keys are cold; requires pkarr verification
 - **N**: Client anonymity; verify server via pkarr
 - **NN**: No authentication; **MUST** implement post-handshake attestation
+- **XX**: Trust-on-first-use; cache static keys after first contact for future verification
 
 ### Post-Handshake Attestation (NN pattern)
 

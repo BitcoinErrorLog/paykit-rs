@@ -186,6 +186,7 @@ pub async fn run_with_sdk(
         }
         NoisePattern::N => {
             ui::info("  (Anonymous mode - your identity is not revealed)");
+            ui::warning("  NOTE: N pattern is ONE-WAY only. Server cannot send receipts back.");
             NoiseRawClientHelper::connect_anonymous_with_negotiation(&host, &static_pk)
                 .await
                 .context("Failed to establish Noise connection (N)")?
@@ -249,13 +250,43 @@ pub async fn run_with_sdk(
     };
 
     channel
-        .send(request)
+        .send(request.clone())
         .await
         .context("Failed to send payment request")?;
 
     ui::success("Payment request sent");
 
-    // Wait for confirmation
+    // N pattern is ONE-WAY: client can send, but server cannot respond
+    // Skip waiting for confirmation and save a local provisional receipt
+    if pattern == NoisePattern::N {
+        ui::separator();
+        ui::warning("N pattern is one-way - no confirmation from server possible");
+        ui::info("Payment request sent anonymously (fire-and-forget)");
+
+        // Save provisional receipt locally (unconfirmed)
+        if let PaykitNoiseMessage::RequestReceipt {
+            provisional_receipt,
+        } = request
+        {
+            let storage = DemoStorage::new(storage_dir.join("data"));
+            let storage_receipt = Receipt::new(
+                format!("{}-unconfirmed", provisional_receipt.receipt_id),
+                provisional_receipt.payer.clone(),
+                provisional_receipt.payee.clone(),
+                provisional_receipt.method_id.0.clone(),
+            );
+            storage
+                .save_receipt(storage_receipt)
+                .context("Failed to save provisional receipt")?;
+            ui::info("Provisional receipt saved (unconfirmed)");
+        }
+
+        ui::separator();
+        ui::success("Anonymous payment request completed");
+        return Ok(());
+    }
+
+    // Wait for confirmation (all patterns except N)
     ui::info("Waiting for recipient confirmation...");
 
     let response = channel.recv().await.context("Failed to receive response")?;

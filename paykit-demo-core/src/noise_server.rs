@@ -421,6 +421,14 @@ impl NoiseServerHelper {
         // Read length-prefixed first message
         let first_msg = Self::read_handshake_message(&mut stream).await?;
 
+        // Validate message length before slicing to prevent panic
+        if first_msg.len() < 32 {
+            return Err(anyhow!(
+                "NN handshake message too short: {} bytes (need at least 32)",
+                first_msg.len()
+            ));
+        }
+
         // Extract client's ephemeral key from first message (first 32 bytes of Noise e)
         let client_ephemeral: [u8; 32] = first_msg[..32]
             .try_into()
@@ -429,6 +437,15 @@ impl NoiseServerHelper {
         // Accept NN pattern
         let (hs, response) = datalink_adapter::accept_nn(&first_msg)
             .map_err(|e| anyhow!("Handshake accept failed: {}", e))?;
+
+        // Validate response length before slicing
+        if response.len() < 32 {
+            return Err(anyhow!(
+                "NN handshake response too short: {} bytes (need at least 32)",
+                response.len()
+            ));
+        }
+
         let server_ephemeral: [u8; 32] = response[..32]
             .try_into()
             .map_err(|_| anyhow!("Invalid response length"))?;
@@ -797,5 +814,47 @@ mod tests {
 
         // Verify mock_identity is usable (prevents unused warning)
         assert_eq!(mock_identity.ed25519_pub, [0u8; 32]);
+    }
+
+    /// Test that NN handshake rejects short messages gracefully (no panic).
+    ///
+    /// This tests the fix for a security vulnerability where malicious peers
+    /// could crash the server by sending handshake messages shorter than 32 bytes.
+    #[tokio::test]
+    async fn test_nn_rejects_short_handshake_message() {
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("addr");
+
+        // Server task: accept NN and expect graceful error
+        let server_task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            let result = NoiseServerHelper::accept_nn(stream).await;
+            // Should fail gracefully, not panic
+            assert!(result.is_err());
+            // Extract error message without requiring Debug on Ok type
+            let err = result.err().expect("expected error").to_string();
+            assert!(
+                err.contains("too short") || err.contains("Handshake"),
+                "Expected length error, got: {}",
+                err
+            );
+        });
+
+        // Client: send a maliciously short message (16 bytes instead of 32+)
+        let mut client = tokio::net::TcpStream::connect(addr)
+            .await
+            .expect("connect");
+
+        // Send length-prefixed short message (only 16 bytes)
+        let short_msg = [0u8; 16];
+        let len_bytes = (short_msg.len() as u32).to_be_bytes();
+        client.write_all(&len_bytes).await.expect("write len");
+        client.write_all(&short_msg).await.expect("write msg");
+
+        // Wait for server to process (should not panic)
+        server_task.await.expect("server should not panic");
     }
 }

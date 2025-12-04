@@ -37,6 +37,16 @@ This crate re-exports `NoisePattern` from `pubky-noise` for selecting the approp
 | **NN** | Ephemeral exchange | Post-handshake attestation required |
 | **XX** | Trust-on-first-use | Static keys learned during handshake |
 
+**Library Support:**
+
+| Method | Supported Patterns |
+|--------|-------------------|
+| `PubkyNoiseChannel::connect()` | IK only |
+| Direct `pubky-noise` usage | All patterns |
+
+> **Note**: The `PubkyNoiseChannel::connect()` method only supports IK pattern.
+> For IK-raw, N, NN, or XX patterns, use `pubky-noise` directly or the helpers in `paykit-demo-core`.
+
 ```rust
 use paykit_interactive::NoisePattern;
 

@@ -54,8 +54,53 @@ Protocol Layer:
 - Platform-agnostic storage traits for future WASM/localStorage support
 
 ### Noise Protocol
-- `NoiseClientHelper`: Client-side Noise protocol helper
-- `NoiseServerHelper`: Server-side Noise protocol helper
+- `NoiseClientHelper`: Client-side Noise protocol helper (IK pattern)
+- `NoiseServerHelper`: Server-side Noise protocol helper (multi-pattern)
+- `NoiseRawClientHelper`: Raw-key Noise helpers for cold key scenarios
+- `AcceptedConnection`: Enum representing pattern-specific connection info
+
+### pkarr Discovery
+- `pkarr_discovery`: Module for discovering/publishing X25519 keys via pkarr
+- Cold key support: Publish X25519 keys once, keep Ed25519 cold
+
+## Noise Pattern Support
+
+This crate supports multiple Noise patterns for different security/usability tradeoffs:
+
+| Pattern | Client Auth | Server Auth | Bidirectional | Use Case |
+|---------|-------------|-------------|---------------|----------|
+| **IK** | Ed25519 at handshake | X25519 static | ✅ Yes | Standard authenticated payments |
+| **IK-raw** | Via pkarr lookup | X25519 static | ✅ Yes | Cold key scenarios (Bitkit) |
+| **N** | Anonymous | X25519 static | ❌ **ONE-WAY** | Anonymous donations (fire-and-forget) |
+| **NN** | Post-handshake attestation | Post-handshake attestation | ✅ Yes | Ephemeral sessions |
+| **XX** | TOFU (learned) | TOFU (learned) | ✅ Yes | Trust-on-first-use |
+
+### IK-raw Trust Model
+
+IK-raw is designed for **cold key architectures** where Ed25519 keys are kept offline:
+
+1. **One-time setup**: Derive X25519 from Ed25519, publish to pkarr with Ed25519 signature
+2. **Runtime**: Use derived X25519 key for Noise handshakes (Ed25519 stays cold)
+3. **Verification**: Receiver looks up sender's pkarr record to verify X25519 key binding
+
+**Important**: Without pkarr verification, IK-raw connections are effectively anonymous. The receiver MUST verify the client's X25519 key against their pkarr record to establish identity.
+
+```rust
+use paykit_demo_core::pkarr_discovery;
+
+// Cold key setup (one-time, requires Ed25519)
+let (x25519_sk, x25519_pk) = pkarr_discovery::derive_noise_keypair(&ed25519_sk, "device-id");
+pkarr_discovery::publish_noise_key(&session, &ed25519_sk, &x25519_pk, "device-id").await?;
+
+// Runtime (Ed25519 stays cold)
+let channel = NoiseRawClientHelper::connect_ik_raw(&x25519_sk, host, &server_pk).await?;
+```
+
+### N Pattern Warning
+
+⚠️ **N pattern is ONE-WAY only.** The client can send encrypted messages to the server, but the server cannot send encrypted responses back. Use N only for fire-and-forget scenarios like anonymous donations.
+
+For bidirectional anonymous communication, use NN pattern with post-handshake attestation.
 
 ## Usage
 

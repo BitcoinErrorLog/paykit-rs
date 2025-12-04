@@ -174,11 +174,29 @@ See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
 - Rust 1.70+ (2021 edition)
 - Cargo
 
+### Repository Structure
+
+Paykit depends on `pubky-noise` for encrypted communication. For development, both repos must be cloned as siblings:
+
+```
+parent/
+├── paykit-rs/          # This repo
+│   ├── paykit-lib/
+│   ├── paykit-interactive/
+│   ├── paykit-demo-core/
+│   └── ...
+└── pubky-noise/        # Clone from: https://github.com/BitcoinErrorLog/pubky-noise
+    ├── src/
+    └── ...
+```
+
 ### Build All Components
 
 ```bash
-git clone <repo-url>
-cd paykit-rs-master
+# Clone both repos side by side
+git clone https://github.com/BitcoinErrorLog/pubky-noise
+git clone https://github.com/<org>/paykit-rs
+cd paykit-rs
 cargo build --release
 ```
 
@@ -364,6 +382,19 @@ Paykit uses [pubky-noise](../pubky-noise/) for encrypted communication channels.
 > ⚠️ **N Pattern Limitation**: The N pattern only supports client → server encryption.
 > Server cannot send encrypted responses. Use NN or IK-raw for bidirectional anonymous communication.
 
+### Pattern Support by Application Surface
+
+| Surface | IK | IK-raw | N | NN | XX | Notes |
+|---------|:--:|:------:|:-:|:--:|:--:|-------|
+| **paykit-demo-cli** | ✅ | ✅ | ✅¹ | ✅ | ✅ | Full pattern support via `--pattern` flag |
+| **paykit-demo-web** | ✅ | ❌ | ❌ | ❌ | ❌ | IK only (simplicity for web demo) |
+| **paykit-interactive** | ✅ | ❌ | ❌ | ❌ | ❌ | Library exposes IK; raw patterns use pubky-noise directly |
+| **paykit-demo-core** | ✅ | ✅ | ✅ | ✅ | ✅ | All helpers available |
+
+¹ N pattern is one-way (fire-and-forget). No receipt confirmation possible.
+
+**For Bitkit/Mobile Integration**: Use `paykit-demo-core::NoiseRawClientHelper` and `NoiseServerHelper` directly for IK-raw, N, NN, and XX patterns.
+
 ### Cold Key Integration (Bitkit)
 
 For Bitkit integration where Ed25519 keys are kept relatively cold:
@@ -371,6 +402,30 @@ For Bitkit integration where Ed25519 keys are kept relatively cold:
 1. **X25519 Key Publication**: Publish derived X25519 keys to pubky storage (one-time cold signing)
 2. **pkarr-Based Auth**: Use `IK-raw` pattern with pubky lookup for identity verification
 3. **Hot Key Derivation**: Derive X25519 keys from Ed25519 for frequent operations
+
+#### IK-raw Identity Verification (IMPORTANT)
+
+**Without pkarr verification, IK-raw connections are effectively anonymous.**
+
+The receiver MUST verify the client's X25519 key against their pkarr record to establish identity:
+
+```rust
+// Receiver-side verification in payment flow
+let client_x25519_from_handshake = connection.client_x25519_pk;
+let claimed_payer_pubkey = receipt.payer;
+
+// Look up payer's pkarr record
+let expected_x25519 = pkarr_discovery::discover_noise_key(
+    &storage, &claimed_payer_pubkey, "default"
+).await?;
+
+// Verify the key matches
+if expected_x25519 != client_x25519_from_handshake {
+    // REJECT or WARN: Client claiming false identity!
+}
+```
+
+The paykit-demo-cli receiver automatically performs this verification for IK-raw connections.
 
 #### Cold Key Setup (One-Time, Offline)
 
@@ -462,6 +517,43 @@ See [BUILD.md](BUILD.md) for detailed conventions and coding standards.
 ## License
 
 MIT
+
+## For Other Pubky App Developers
+
+`pubky-noise` is designed as a shared primitive for any Pubky app needing encrypted interactive channels. Paykit is the reference consumer.
+
+### Using pubky-noise in Your App
+
+**Option 1: Path dependency (development)**
+```toml
+# Cargo.toml - requires sibling clone
+[dependencies]
+pubky-noise = { path = "../pubky-noise" }
+```
+
+**Option 2: Git dependency (CI/testing)**
+```toml
+[dependencies]
+pubky-noise = { git = "https://github.com/BitcoinErrorLog/pubky-noise", branch = "main" }
+```
+
+**Option 3: crates.io (coming soon)**
+```toml
+[dependencies]
+pubky-noise = "0.8"  # When published
+```
+
+### Pattern Selection for Your Use Case
+
+| Your Need | Recommended Pattern | Why |
+|-----------|---------------------|-----|
+| Authenticated bidirectional | IK or IK-raw | Full mutual auth |
+| Cold keys / hardware wallet | IK-raw + pkarr | No Ed25519 at runtime |
+| Anonymous sender | N (if one-way OK) or NN | Client anonymity |
+| First contact / discovery | XX | TOFU, cache keys after |
+| Testing | NN | Simplest setup |
+
+See [pubky-noise README](../pubky-noise/README.md) and [Cold Key Architecture](../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) for complete documentation.
 
 ## Related Projects
 

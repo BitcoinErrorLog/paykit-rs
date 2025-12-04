@@ -411,6 +411,15 @@ impl NoiseRawClientHelper {
     ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
         let (hs, first_msg) =
             datalink_adapter::start_nn().map_err(|e| anyhow!("Handshake init failed: {}", e))?;
+
+        // Validate message length before slicing to prevent panic
+        if first_msg.len() < 32 {
+            return Err(anyhow!(
+                "NN handshake message too short: {} bytes (need at least 32)",
+                first_msg.len()
+            ));
+        }
+
         let client_ephemeral: [u8; 32] = first_msg[..32]
             .try_into()
             .map_err(|_| anyhow!("Invalid first message length"))?;
@@ -443,6 +452,14 @@ impl NoiseRawClientHelper {
             .read_exact(&mut response)
             .await
             .context("Failed to read response")?;
+
+        // Validate response length before slicing to prevent panic
+        if response.len() < 32 {
+            return Err(anyhow!(
+                "NN handshake response too short: {} bytes (need at least 32)",
+                response.len()
+            ));
+        }
 
         let server_ephemeral: [u8; 32] = response[..32]
             .try_into()

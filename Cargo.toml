@@ -1,3 +1,20 @@
 [workspace]
 resolver = "2"
 members = ["paykit-lib", "paykit-interactive", "paykit-subscriptions", "paykit-demo-core", "paykit-demo-cli", "paykit-demo-web"]
+
+# ==============================================================================
+# IMPORTANT: Repository Layout for Development
+# ==============================================================================
+# This workspace expects pubky-noise to be cloned as a sibling directory:
+#
+# parent/
+# ├── paykit-rs/        (this repo)
+# └── pubky-noise/      (https://github.com/BitcoinErrorLog/pubky-noise)
+#
+# For external consumers, pubky-noise will be published to crates.io.
+# Until then, clone both repos side by side.
+#
+# To use a git dependency instead of path (for CI or testing), uncomment:
+# [patch.crates-io]
+# pubky-noise = { git = "https://github.com/BitcoinErrorLog/pubky-noise", branch = "main" }
+# ==============================================================================

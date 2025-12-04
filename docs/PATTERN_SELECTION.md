@@ -6,15 +6,30 @@ This guide explains when to use each Noise pattern in Paykit for secure payment 
 > `pubky-noise` v0.8.0 and available via `paykit-demo-core`. The pkarr-based identity discovery
 > is implemented in `paykit_demo_core::pkarr_discovery`.
 
+## Noise Protocol Framework Reference
+
+All patterns implement the [Noise Protocol Framework](https://noiseprotocol.org/noise.html) with the cipher suite `Noise_*_25519_ChaChaPoly_SHA256`. Each pattern's token sequence follows the specification exactly.
+
 ## Pattern Overview
 
-| Pattern | Client Auth | Server Auth | Bidirectional | Use Case |
-|---------|-------------|-------------|---------------|----------|
-| **IK** | Ed25519 signed | Static key | ✅ Yes | Standard payments |
-| **IK-raw** | Via pkarr | Via pkarr | ✅ Yes | Cold key / hardware wallet |
-| **N** | Anonymous | Static key | ⚠️ **ONE-WAY** | Donations, anonymous tips |
-| **NN** | Anonymous | Anonymous | ✅ Yes | Post-handshake attestation |
-| **XX** | TOFU (learned) | TOFU (learned) | ✅ Yes | Trust-on-first-use |
+| Pattern | Noise Tokens | Client Auth | Server Auth | Bidirectional |
+|---------|--------------|-------------|-------------|---------------|
+| **IK** | `<- s / -> e, es, s, ss` | Ed25519 signed | Static key | ✅ Yes |
+| **IK-raw** | `<- s / -> e, es, s, ss` | Via pkarr | Via pkarr | ✅ Yes |
+| **N** | `<- s / -> e, es` | Anonymous | Static key | ⚠️ **ONE-WAY** |
+| **NN** | `-> e / <- e, ee` | Anonymous | Anonymous | ✅ Yes |
+| **XX** | `-> e / <- e, ee, s, es / -> s, se` | TOFU (learned) | TOFU (learned) | ✅ Yes |
+
+**Token Legend** (per [Noise spec §5](https://noiseprotocol.org/noise.html#handshake-patterns)):
+- `e` = ephemeral key
+- `s` = static key
+- `es` = DH(ephemeral, static)
+- `ee` = DH(ephemeral, ephemeral)
+- `ss` = DH(static, static)
+- `se` = DH(static, ephemeral)
+- `<-` = pre-message (known before handshake)
+- `->` = message from initiator
+- `<-` = message from responder
 
 > ⚠️ **N Pattern Critical Limitation**: The N pattern is **ONE-WAY** only. Clients can send
 > encrypted messages to the server, but the server **cannot** send encrypted responses back.
@@ -111,6 +126,33 @@ let (x25519_sk, x25519_pk) = setup_cold_key(&session, &ed25519_sk, "device").awa
 let server_pk = discover_noise_key(&storage, &peer_pubkey, "default").await?;
 ```
 
+**IMPORTANT: Receiver-Side Identity Verification**
+
+⚠️ **Without pkarr verification, IK-raw connections are effectively anonymous.**
+
+The receiver MUST verify the client's X25519 key against their pkarr record:
+
+```rust
+// In receiver payment handler for IK-raw connections:
+AcceptedConnection::IKRaw { channel, client_x25519_pk } => {
+    // Get claimed payer identity from payment request
+    let receipt = channel.recv().await?;
+    let claimed_payer = receipt.payer;
+    
+    // Look up payer's X25519 key from pkarr
+    let expected_x25519 = discover_noise_key(&storage, &claimed_payer, "default").await?;
+    
+    // CRITICAL: Verify the key matches what was used in handshake
+    if expected_x25519 != client_x25519_pk {
+        // Client is claiming a false identity!
+        // Option 1: Reject the payment
+        // Option 2: Proceed but mark as unverified
+    }
+}
+```
+
+The paykit-demo-cli receiver automatically performs this verification.
+
 See pubky-noise/docs/COLD_KEY_ARCHITECTURE.md for the complete architecture.
 
 ### N (Anonymous Client)
@@ -191,29 +233,79 @@ let attestation = channel.recv().await?;
 verify_attestation(&attestation, &expected_server_pk, &server_ephemeral, &client_ephemeral)?;
 ```
 
-**Attestation Protocol:**
+**Attestation Protocol (Required for NN):**
+
+The NN attestation binds an Ed25519 identity to the specific NN session. Without attestation,
+NN connections are MITM-vulnerable.
+
+**Message Format:**
+```
+message = SHA256(
+    "pubky-noise-nn-attestation-v1:" ||  // Domain separator
+    local_ephemeral_pk ||                 // Signer's ephemeral (32 bytes)
+    remote_ephemeral_pk                   // Peer's ephemeral (32 bytes)
+)
+signature = Ed25519_Sign(ed25519_sk, message)
+```
+
+**Protocol Flow:**
+1. NN handshake completes → both parties have ephemeral keys
+2. Server sends attestation first (proves server identity)
+3. Client verifies server attestation
+4. Client sends own attestation
+5. Server verifies client attestation
+6. **Now secure** - both parties authenticated
+
+**Implementation (using `paykit_demo_core::attestation`):**
+
 ```rust
-use paykit_demo_core::attestation::{sign_attestation, verify_attestation};
+use paykit_demo_core::{create_attestation, verify_attestation};
 
-// After NN handshake, both parties should exchange attestations:
+// After NN handshake completes:
+let (channel, server_ephemeral, client_ephemeral) = connect_ephemeral(host).await?;
 
-// Server signs attestation (binding Ed25519 identity to ephemeral key)
-let attestation = sign_attestation(&ed25519_sk, &client_ephemeral, &server_ephemeral);
+// === SERVER SIDE ===
+// Step 1: Server creates and sends attestation
+let server_attestation = create_attestation(
+    &ed25519_sk,           // Server's Ed25519 secret key
+    &server_ephemeral,     // Server's ephemeral (local)
+    &client_ephemeral,     // Client's ephemeral (remote)
+);
 channel.send(PaykitNoiseMessage::Attestation {
-    ed25519_pk: hex::encode(ed25519_pk),
-    signature: hex::encode(attestation),
+    ed25519_pk: hex::encode(server_ed25519_pk),
+    signature: hex::encode(server_attestation),
 }).await?;
 
-// Client verifies server attestation
+// === CLIENT SIDE ===
+// Step 2: Client receives and verifies server attestation
 if let PaykitNoiseMessage::Attestation { ed25519_pk, signature } = channel.recv().await? {
-    verify_attestation(
-        &hex::decode(ed25519_pk)?,
-        &hex::decode(signature)?,
-        &server_ephemeral,
-        &client_ephemeral,
-    )?;
+    let pk_bytes: [u8; 32] = hex::decode(&ed25519_pk)?.try_into()?;
+    let sig_bytes: [u8; 64] = hex::decode(&signature)?.try_into()?;
+    
+    // CRITICAL: Verify server's attestation
+    if !verify_attestation(&pk_bytes, &sig_bytes, &server_ephemeral, &client_ephemeral) {
+        return Err("Server attestation failed - possible MITM!");
+    }
+    
+    // Optional: Verify pk_bytes matches expected server identity
 }
+
+// Step 3: Client sends own attestation (same pattern)
+let client_attestation = create_attestation(
+    &client_ed25519_sk,
+    &client_ephemeral,     // Client's ephemeral (local)
+    &server_ephemeral,     // Server's ephemeral (remote)
+);
+channel.send(PaykitNoiseMessage::Attestation { ... }).await?;
 ```
+
+**Security Properties:**
+- Binds Ed25519 identity to specific ephemeral keys (replay protection)
+- Domain separator prevents cross-protocol attacks
+- SHA256 compression prevents length extension attacks
+- Both parties must attest for mutual authentication
+
+See [`paykit-demo-core/src/attestation.rs`](../paykit-demo-core/src/attestation.rs) for the reference implementation.
 
 ### XX (Trust-On-First-Use)
 

@@ -1,7 +1,7 @@
 # Production Readiness Implementation Summary
 
 **Date**: December 4, 2025  
-**Version**: Paykit v2.0.0 + pubky-noise v0.8.0  
+**Version**: Paykit v2.1.0 + pubky-noise v0.8.0  
 **Status**: ✅ PRODUCTION-READY
 
 ---
@@ -9,6 +9,60 @@
 ## Overview
 
 Successfully completed all production readiness improvements for the pubky-noise + paykit-rs integration, addressing critical security recommendations, completing missing tests, and organizing documentation for Bitkit deployment.
+
+## Latest Integration Cleanup (Session 2)
+
+### Security Fixes
+
+1. **NN Handshake Panic Fix** (Critical)
+   - Files: `paykit-demo-core/src/noise_server.rs`, `noise_client.rs`
+   - Added length validation before slicing ephemeral keys (32 bytes minimum)
+   - Malicious clients can no longer crash the server with short messages
+   - Unit test added: `test_nn_rejects_short_handshake_message()`
+
+2. **N Pattern One-Way Handling** (Critical)
+   - Files: `paykit-demo-cli/src/commands/pay.rs`, `receive.rs`
+   - N pattern is ONE-WAY (client → server only)
+   - Client now saves provisional receipt locally (fire-and-forget)
+   - Server receives request but does NOT attempt to send confirmation
+   - Clear UI warnings added for users
+
+3. **IK-raw pkarr Identity Verification** (High)
+   - File: `paykit-demo-cli/src/commands/receive.rs`
+   - Added `handle_ik_raw_with_pkarr_verification()` function
+   - Looks up claimed payer's X25519 key via pkarr
+   - Compares against handshake key; warns if mismatch
+   - Without verification, IK-raw is effectively anonymous
+
+### Documentation Improvements
+
+1. **Noise Protocol Spec References**
+   - `pubky-noise/README.md` - Added pattern token sequences
+   - `paykit-rs/docs/PATTERN_SELECTION.md` - Added Noise spec references
+   - Link to noiseprotocol.org for each pattern
+
+2. **NN Attestation Protocol Documentation**
+   - Complete message format: `SHA256(domain || local_eph || remote_eph)`
+   - Full protocol flow (server first, then client)
+   - Code examples for both parties
+   - Security properties documented
+
+3. **IK-raw Trust Model Documentation**
+   - `paykit-demo-core/README.md` - New section on cold key architecture
+   - `paykit-rs/README.md` - IK-raw verification section with code
+   - `paykit-rs/docs/PATTERN_SELECTION.md` - Receiver-side verification guide
+
+4. **Pattern Support Matrix**
+   - `paykit-rs/README.md` - Table showing which patterns each surface supports
+   - `paykit-demo-web/README.md` - IK-only note
+   - `paykit-interactive/README.md` - Library support clarification
+
+5. **Repository Structure Documentation**
+   - `paykit-rs/Cargo.toml` - Comments explaining sibling repo requirement
+   - `paykit-rs/README.md` - Clone instructions for both repos
+   - Future: git dependency for CI/testing, crates.io when published
+
+---
 
 ## Implemented Improvements
 
@@ -177,14 +231,16 @@ Successfully completed all production readiness improvements for the pubky-noise
 
 ## Files Changed in This Session
 
-### pubky-noise
+### Session 1: Initial Production Readiness
+
+#### pubky-noise
 1. `src/pkarr_helpers.rs` - Added timestamp support (7 functions, 6 tests)
 2. `src/ffi/pkarr.rs` - Added FFI wrappers for timestamp functions
 3. `src/sender.rs` - Added N pattern warning to docs
 4. `src/ffi/raw_manager.rs` - Fixed lifetime elision warning
-5. `README.md` - Updated pattern table with bidirectionality
+5. `README.md` - Updated pattern table with bidirectionality and Noise spec refs
 
-### paykit-rs
+#### paykit-rs
 1. `paykit-demo-core/src/pkarr_discovery.rs` - Added timestamp support
 2. `paykit-demo-core/tests/pkarr_integration.rs` - Implemented E2E tests
 3. `paykit-interactive/tests/integration_noise.rs` - Removed failing test code
@@ -199,7 +255,24 @@ Successfully completed all production readiness improvements for the pubky-noise
 12. `PAYKIT_ROADMAP.md` - Archived
 13. `paykit-demo-web/QUICK_FIX_HOMEBREW_RUST.md` - Archived
 
-**Total**: 13 files modified, 5 new files created, 3 files archived
+### Session 2: Integration Cleanup
+
+#### paykit-rs Security Fixes
+1. `paykit-demo-core/src/noise_server.rs` - NN handshake length validation + test
+2. `paykit-demo-core/src/noise_client.rs` - NN handshake length validation
+3. `paykit-demo-cli/src/commands/pay.rs` - N pattern one-way handling
+4. `paykit-demo-cli/src/commands/receive.rs` - N handler + IK-raw pkarr verification
+
+#### Documentation Updates
+5. `pubky-noise/README.md` - Noise spec references and pattern tokens
+6. `paykit-rs/README.md` - Pattern matrix, IK-raw verification, repo structure
+7. `paykit-rs/docs/PATTERN_SELECTION.md` - Noise spec refs, attestation protocol
+8. `paykit-demo-core/README.md` - Noise patterns and IK-raw trust model
+9. `paykit-demo-web/README.md` - IK-only note
+10. `paykit-interactive/README.md` - Pattern support clarification
+11. `paykit-rs/Cargo.toml` - Repository structure comments
+
+**Total Session 2**: 11 files modified, 0 new files, 0 archived
 
 ---
 

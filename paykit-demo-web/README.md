@@ -4,6 +4,10 @@
 
 A fully functional WebAssembly application demonstrating all Paykit capabilities in the browser: identity management, directory discovery, subscription management, auto-pay automation, and real-time encrypted payments via WebSocket-based Noise protocol.
 
+> **Pattern Support**: This web demo only supports the **IK Noise pattern** for simplicity.
+> For IK-raw, N, NN, or XX patterns (cold keys, anonymous, TOFU), use the [CLI demo](../paykit-demo-cli/README.md)
+> or integrate directly with [paykit-demo-core](../paykit-demo-core/README.md).
+
 <img width="1394" height="1130" alt="image" src="https://github.com/user-attachments/assets/bd3e66ab-ad55-4e05-9bf7-9f1e8ea27c70" />
 
 ## ✨ Features

@@ -2,6 +2,10 @@
 
 This guide explains when to use each Noise pattern in Paykit for secure payment communication.
 
+> **Implementation Status**: All patterns (IK, IK-raw, N, NN, XX) are fully implemented in
+> `pubky-noise` v0.8.0 and available via `paykit-demo-core`. The pkarr-based identity discovery
+> is implemented in `paykit_demo_core::pkarr_discovery`.
+
 ## Pattern Overview
 
 | Pattern | Client Auth | Server Auth | Use Case |
@@ -91,10 +95,18 @@ let channel = NoiseRawClientHelper::connect_ik_raw_with_negotiation(
 ).await?;
 ```
 
-**pkarr Integration:**
+**pkarr Integration (Now Implemented):**
+```rust
+use paykit_demo_core::pkarr_discovery::{discover_noise_key, publish_noise_key, setup_cold_key};
+
+// One-time cold key setup
+let (x25519_sk, x25519_pk) = setup_cold_key(&session, &ed25519_sk, "device").await?;
+
+// Runtime: discover peer's X25519 key from pubky storage
+let server_pk = discover_noise_key(&storage, &peer_pubkey, "default").await?;
 ```
-See pubky-noise/docs/COLD_KEY_ARCHITECTURE.md for the pkarr record format.
-```
+
+See pubky-noise/docs/COLD_KEY_ARCHITECTURE.md for the complete architecture.
 
 ### N (Anonymous Client)
 

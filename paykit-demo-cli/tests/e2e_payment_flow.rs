@@ -1,6 +1,21 @@
-//! End-to-end integration tests for pay + receive flow
+//! End-to-end integration tests for pay + receive flow.
 //!
 //! Tests the complete payment workflow: publish → discover → connect → pay → receive
+//!
+//! ## Test Categories
+//!
+//! - **Local tests** (run by default): Use direct TCP connections, no DHT required
+//! - **Testnet tests** (marked `#[ignore]`): Require `EphemeralTestnet`, run with `--ignored`
+//!
+//! ## Running Tests
+//!
+//! ```bash
+//! # Run local tests only (default)
+//! cargo test -p paykit-demo-cli --test e2e_payment_flow
+//!
+//! # Run all tests including testnet ones
+//! cargo test -p paykit-demo-cli --test e2e_payment_flow -- --ignored
+//! ```
 
 mod common;
 

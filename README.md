@@ -366,24 +366,37 @@ Paykit uses [pubky-noise](../pubky-noise/) for encrypted communication channels.
 
 For Bitkit integration where Ed25519 keys are kept relatively cold:
 
-1. **X25519 Key Publication**: Publish derived X25519 keys to pkarr
-2. **pkarr-Based Auth**: Use `IK-raw` pattern with pkarr lookup for identity verification
+1. **X25519 Key Publication**: Publish derived X25519 keys to pubky storage (one-time cold signing)
+2. **pkarr-Based Auth**: Use `IK-raw` pattern with pubky lookup for identity verification
 3. **Hot Key Derivation**: Derive X25519 keys from Ed25519 for frequent operations
 
+#### Cold Key Setup (One-Time, Offline)
+
 ```rust
-use pubky_noise::{NoiseSender, NoiseReceiver, kdf::derive_x25519_static};
-use zeroize::Zeroizing;
+use paykit_demo_core::pkarr_discovery::{setup_cold_key, prepare_cold_key_publication};
 
-// Derive X25519 key from seed (done once, key published to pkarr)
-let x25519_sk = derive_x25519_static(&seed, b"device-context");
+// Option 1: Full setup with pubky session
+let (x25519_sk, x25519_pk) = setup_cold_key(&session, &ed25519_sk, "device-id").await?;
+// Ed25519 key can now be stored cold
 
-// Initiate connection with raw key (no Ed25519 signing required)
-let (mut state, msg) = NoiseSender::initiate_ik_raw(
-    &x25519_sk,
-    &recipient_x25519_pk,
-)?;
+// Option 2: Offline preparation (publish later)
+let (x25519_sk, x25519_pk, txt_record) = prepare_cold_key_publication(&ed25519_sk, "device-id");
+// txt_record can be published via any method
+```
 
-// Identity verification happens via pkarr record lookup
+#### Runtime Payment (No Ed25519 Required)
+
+```rust
+use paykit_demo_core::{NoiseRawClientHelper, pkarr_discovery::discover_noise_key};
+
+// Discover recipient's X25519 key from pubky storage
+let recipient_pk = discover_noise_key(&storage, &recipient_pubkey, "default").await?;
+
+// Connect with IK-raw (no Ed25519 signing at runtime)
+let channel = NoiseRawClientHelper::connect_ik_raw(&x25519_sk, "host:port", &recipient_pk).await?;
+
+// Send payment via encrypted channel
+channel.send(PaykitNoiseMessage::RequestReceipt { ... }).await?;
 ```
 
 See the [pubky-noise Cold Key Architecture](../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) documentation for details.

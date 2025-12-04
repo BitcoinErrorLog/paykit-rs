@@ -2,6 +2,10 @@
 
 This guide covers integrating Paykit with pubky-noise v0.8.0 into Bitkit for production payments.
 
+> **Implementation Status**: The FFI layer is complete. `FfiRawNoiseManager` and all pkarr helper
+> functions (`ffiSignPkarrKeyBinding`, `ffiFormatX25519ForPkarr`, `ffiDeriveX25519Static`, etc.)
+> are available via UniFFI bindings for Swift (iOS) and Kotlin (Android).
+
 ## Overview
 
 Bitkit is a self-custodial Bitcoin and Lightning wallet that uses:
@@ -119,21 +123,34 @@ await SecureStorage.set('x25519_sk', x25519SecretKey);
 ### 3. Sign and Publish to pkarr
 
 ```typescript
-// Sign the X25519 key binding with Ed25519
-const signature = PubkyNoise.signPkarrKeyBinding(
+// Sign the X25519 key binding with Ed25519 (FFI function)
+const signature = PubkyNoise.ffiSignPkarrKeyBinding(
   ed25519Keypair.secretKey,
   x25519PublicKey,
   deviceId
 );
 
-// Format for pkarr
-const txtRecord = PubkyNoise.formatX25519ForPkarr(x25519PublicKey, signature);
+// Format for pkarr publication (FFI function)
+const txtRecord = PubkyNoise.ffiFormatX25519ForPkarr(x25519PublicKey, signature);
 
-// Publish to pkarr
-await pkarr.publish(`_noise.${deviceId}`, txtRecord);
+// Get the subdomain for the Noise key
+const subdomain = PubkyNoise.ffiPkarrNoiseSubdomain(deviceId);
+// Returns "_noise.{deviceId}"
+
+// Publish to pubky storage at /pub/noise.app/v0/{deviceId}
+await pubkySession.put(`/pub/noise.app/v0/${deviceId}`, txtRecord);
 
 // Ed25519 secret key can now be stored cold or derived on-demand from seed
 ```
+
+**Available FFI Functions for pkarr:**
+- `ffiSignPkarrKeyBinding(ed25519Sk, x25519Pk, deviceId)` → signature
+- `ffiFormatX25519ForPkarr(x25519Pk, signature?)` → TXT record string
+- `ffiParseX25519FromPkarr(txtRecord)` → x25519Pk
+- `ffiParseAndVerifyPkarrKey(txtRecord, ed25519Pk, deviceId)` → verified x25519Pk
+- `ffiVerifyPkarrKeyBinding(ed25519Pk, x25519Pk, signature, deviceId)` → boolean
+- `ffiPkarrNoiseSubdomain(deviceId)` → subdomain string
+- `ffiCreatePkarrBindingMessage(ed25519Pk, x25519Pk, deviceId)` → binding message
 
 ## Runtime Payment Flow
 

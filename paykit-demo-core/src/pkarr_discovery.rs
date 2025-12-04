@@ -1,14 +1,19 @@
 //! pkarr-based Noise key discovery for Paykit.
 //!
-//! This module provides async helpers for discovering Noise X25519 keys via pkarr
-//! and publishing your own keys for cold key scenarios.
+//! This module provides async helpers for discovering Noise X25519 keys via pubky
+//! storage and publishing your own keys for cold key scenarios.
 //!
 //! # Architecture
 //!
 //! In the Pubky ecosystem:
 //! 1. Identity is based on Ed25519 keys stored in pkarr
 //! 2. Noise sessions require X25519 keys
-//! 3. X25519 keys are derived from Ed25519 and published to pkarr with a binding signature
+//! 3. X25519 keys are derived from Ed25519 and published to pubky storage with a binding signature
+//!
+//! # Storage Path Convention
+//!
+//! Noise keys are stored at: `/pub/noise.app/v0/{device_id}`
+//! The content follows the pkarr TXT record format: `v=1;k={base64_x25519_pk};sig={base64_signature}`
 //!
 //! # Usage
 //!
@@ -16,14 +21,18 @@
 //! use paykit_demo_core::pkarr_discovery::{discover_noise_key, publish_noise_key};
 //!
 //! // Discover a peer's X25519 key before connecting
-//! let peer_x25519 = discover_noise_key(&sdk, &peer_pubky, "default").await?;
+//! let peer_x25519 = discover_noise_key(&storage, &peer_pubkey, "default").await?;
 //!
 //! // Publish your own X25519 key (one-time cold signing operation)
-//! publish_noise_key(&session, &ed25519_keypair, &x25519_pk, "default").await?;
+//! publish_noise_key(&session, &ed25519_sk, &x25519_pk, "default").await?;
 //! ```
 
 use crate::Result;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+
+/// Storage path prefix for Noise keys in pubky storage.
+/// Keys are stored at: `/pub/noise.app/v0/{device_id}`
+pub const NOISE_KEY_PATH_PREFIX: &str = "/pub/noise.app/v0/";
 
 /// Noise key discovery configuration.
 #[derive(Clone, Debug)]
@@ -43,100 +52,180 @@ impl Default for NoiseKeyConfig {
     }
 }
 
-/// Discover a peer's X25519 Noise key via pkarr lookup.
+/// Discover a peer's X25519 Noise key via pubky storage lookup.
 ///
 /// This is the primary method for cold key scenarios where:
-/// 1. The peer has published their X25519 key to pkarr
+/// 1. The peer has published their X25519 key to pubky storage
 /// 2. The key is bound to their Ed25519 identity with a signature
 ///
 /// # Arguments
-/// * `pubky_uri` - The peer's pubky URI (e.g., "pk:abc123...")
+/// * `storage` - The pubky PublicStorage client for reading
+/// * `peer_pubkey` - The peer's Ed25519 public key
 /// * `device_id` - Device identifier for multi-device lookup (e.g., "default", "mobile")
 ///
 /// # Returns
 /// The peer's 32-byte X25519 public key
 ///
-/// # Note
-/// This is a stub implementation. Full implementation requires pkarr SDK integration.
-#[allow(unused_variables)]
-pub async fn discover_noise_key(pubky_uri: &str, device_id: &str) -> Result<[u8; 32]> {
-    // TODO: Implement full pkarr lookup using pubky SDK
-    //
-    // The implementation should:
-    // 1. Parse the pubky URI to extract the Ed25519 public key
-    // 2. Construct the TXT record path: _noise.{device_id}.{pubky}
-    // 3. Query pkarr for the TXT record
-    // 4. Parse the record using pubky_noise::pkarr_helpers::parse_x25519_from_pkarr
-    // 5. Verify the binding signature if present
-    //
-    // Example (pseudocode):
-    // ```
-    // let ed25519_pk = parse_pubky_uri(pubky_uri)?;
-    // let subdomain = pubky_noise::pkarr_helpers::pkarr_noise_subdomain(device_id);
-    // let txt_record = pkarr_client.lookup_txt(&subdomain, &ed25519_pk).await?;
-    // let x25519_pk = pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(
-    //     &txt_record,
-    //     &ed25519_pk,
-    //     device_id,
-    // )?;
-    // Ok(x25519_pk)
-    // ```
+/// # Security
+/// This function verifies the Ed25519 signature binding the X25519 key to the identity.
+/// If verification fails, an error is returned.
+pub async fn discover_noise_key(
+    storage: &pubky::PublicStorage,
+    peer_pubkey: &pubky::PublicKey,
+    device_id: &str,
+) -> Result<[u8; 32]> {
+    // Construct the storage path
+    let path = format!("pubky://{}{}{}", peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id);
+    
+    // Fetch the noise key record
+    let response = storage
+        .get(&path)
+        .await
+        .with_context(|| format!("Failed to fetch noise key for {}", peer_pubkey))?;
+    
+    let txt_record = response
+        .text()
+        .await
+        .with_context(|| "Failed to read noise key response body")?;
+    
+    if txt_record.is_empty() {
+        return Err(anyhow!(
+            "No noise key published for {} device '{}'",
+            peer_pubkey,
+            device_id
+        ));
+    }
+    
+    // Parse and verify the key binding
+    let ed25519_pk_bytes = peer_pubkey.to_bytes();
+    let x25519_pk = pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(
+        &txt_record,
+        &ed25519_pk_bytes,
+        device_id,
+    )
+    .map_err(|e| anyhow!("Invalid noise key record: {}", e))?;
+    
+    Ok(x25519_pk)
+}
 
-    Err(anyhow!(
-        "pkarr discovery not yet implemented - requires pkarr SDK integration"
-    ))
+/// Discover a peer's X25519 key without signature verification.
+///
+/// Use this only when you have verified the peer's identity through another channel.
+/// For production use, prefer `discover_noise_key` which verifies signatures.
+pub async fn discover_noise_key_unverified(
+    storage: &pubky::PublicStorage,
+    peer_pubkey: &pubky::PublicKey,
+    device_id: &str,
+) -> Result<[u8; 32]> {
+    let path = format!("pubky://{}{}{}", peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id);
+    
+    let response = storage
+        .get(&path)
+        .await
+        .with_context(|| format!("Failed to fetch noise key for {}", peer_pubkey))?;
+    
+    let txt_record = response
+        .text()
+        .await
+        .with_context(|| "Failed to read noise key response body")?;
+    
+    if txt_record.is_empty() {
+        return Err(anyhow!(
+            "No noise key published for {} device '{}'",
+            peer_pubkey,
+            device_id
+        ));
+    }
+    
+    // Parse without verification
+    let x25519_pk = pubky_noise::pkarr_helpers::parse_x25519_from_pkarr(&txt_record)
+        .map_err(|e| anyhow!("Invalid noise key record format: {}", e))?;
+    
+    Ok(x25519_pk)
 }
 
 /// Discover a peer's X25519 key with full configuration.
-#[allow(unused_variables)]
 pub async fn discover_noise_key_with_config(
-    pubky_uri: &str,
+    storage: &pubky::PublicStorage,
+    peer_pubkey: &pubky::PublicKey,
     config: &NoiseKeyConfig,
 ) -> Result<[u8; 32]> {
-    discover_noise_key(pubky_uri, &config.device_id).await
+    if config.verify_binding {
+        discover_noise_key(storage, peer_pubkey, &config.device_id).await
+    } else {
+        discover_noise_key_unverified(storage, peer_pubkey, &config.device_id).await
+    }
 }
 
-/// Publish your X25519 Noise key to pkarr.
+/// Publish your X25519 Noise key to pubky storage.
 ///
 /// This should be called once during device setup (cold signing operation).
 /// The Ed25519 key signs the X25519 key binding, then can be stored cold.
 ///
 /// # Arguments
-/// * `ed25519_sk` - Your Ed25519 secret key (32 bytes)
+/// * `session` - Authenticated pubky session for writing
+/// * `ed25519_sk` - Your Ed25519 secret key (32 bytes) - used only for signing, then can be stored cold
 /// * `x25519_pk` - Your X25519 public key to publish (32 bytes)
 /// * `device_id` - Device identifier for multi-device scenarios
 ///
-/// # Note
-/// This is a stub implementation. Full implementation requires pkarr SDK integration.
-#[allow(unused_variables)]
+/// # Security
+/// After calling this function, the Ed25519 secret key can be stored cold.
+/// Only the derived X25519 key is needed for runtime Noise sessions.
 pub async fn publish_noise_key(
+    session: &pubky::PubkySession,
     ed25519_sk: &[u8; 32],
     x25519_pk: &[u8; 32],
     device_id: &str,
 ) -> Result<()> {
-    // TODO: Implement full pkarr publication using pubky SDK
-    //
-    // The implementation should:
-    // 1. Sign the X25519 key binding using pubky_noise::pkarr_helpers::sign_pkarr_key_binding
-    // 2. Format the TXT record using pubky_noise::pkarr_helpers::format_x25519_for_pkarr
-    // 3. Publish to pkarr at path: _noise.{device_id}
-    //
-    // Example (pseudocode):
-    // ```
-    // let signature = pubky_noise::pkarr_helpers::sign_pkarr_key_binding(
-    //     ed25519_sk,
-    //     x25519_pk,
-    //     device_id,
-    // );
-    // let txt_value = pubky_noise::pkarr_helpers::format_x25519_for_pkarr(x25519_pk, Some(&signature));
-    // let subdomain = pubky_noise::pkarr_helpers::pkarr_noise_subdomain(device_id);
-    // pkarr_client.publish_txt(&subdomain, &txt_value).await?;
-    // Ok(())
-    // ```
+    // Sign the key binding
+    let signature = pubky_noise::pkarr_helpers::sign_pkarr_key_binding(
+        ed25519_sk,
+        x25519_pk,
+        device_id,
+    );
+    
+    // Format the record
+    let txt_value = pubky_noise::pkarr_helpers::format_x25519_for_pkarr(
+        x25519_pk,
+        Some(&signature),
+    );
+    
+    // Construct the storage path
+    let path = format!("{}{}", NOISE_KEY_PATH_PREFIX, device_id);
+    
+    // Publish to pubky storage via session's storage API
+    session
+        .storage()
+        .put(path, txt_value)
+        .await
+        .with_context(|| "Failed to publish noise key")?;
+    
+    Ok(())
+}
 
-    Err(anyhow!(
-        "pkarr publication not yet implemented - requires pkarr SDK integration"
-    ))
+/// Complete cold key setup: derive X25519 key, sign binding, and publish.
+///
+/// This is a convenience function for the complete cold key setup flow.
+/// After calling this, the Ed25519 key can be stored cold.
+///
+/// # Arguments
+/// * `session` - Authenticated pubky session for writing
+/// * `ed25519_sk` - Your Ed25519 secret key (32 bytes)
+/// * `device_id` - Device identifier
+///
+/// # Returns
+/// Tuple of (X25519 secret key, X25519 public key) - keep the secret key secure!
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn setup_cold_key(
+    session: &pubky::PubkySession,
+    ed25519_sk: &[u8; 32],
+    device_id: &str,
+) -> Result<([u8; 32], [u8; 32])> {
+    let (x25519_sk, x25519_pk) = derive_noise_keypair(ed25519_sk, device_id);
+    
+    publish_noise_key(session, ed25519_sk, &x25519_pk, device_id).await?;
+    
+    Ok((x25519_sk, x25519_pk))
 }
 
 /// Generate X25519 keypair from Ed25519 secret key for cold key setup.
@@ -155,16 +244,15 @@ pub fn derive_noise_keypair(ed25519_sk: &[u8; 32], device_id: &str) -> ([u8; 32]
     let x25519_sk = pubky_noise::kdf::derive_x25519_static(ed25519_sk, device_id.as_bytes());
 
     // Compute public key using X25519 base point multiplication
-    // The X25519 function computes the public key by scalar multiplication with the base point
     let public = x25519_dalek::x25519(x25519_sk, x25519_dalek::X25519_BASEPOINT_BYTES);
 
     (x25519_sk, public)
 }
 
-/// Complete cold key setup: derive X25519 key and prepare for publication.
+/// Prepare cold key data for publication (offline operation).
 ///
-/// This is a convenience function for the complete cold key setup flow.
-/// Call this once with your Ed25519 key, then publish the result to pkarr.
+/// This creates the signed record without publishing. Use this when you need
+/// to prepare the data offline before publishing.
 ///
 /// # Arguments
 /// * `ed25519_sk` - Your Ed25519 secret key (32 bytes)
@@ -187,6 +275,11 @@ pub fn prepare_cold_key_publication(
         pubky_noise::pkarr_helpers::format_x25519_for_pkarr(&x25519_pk, Some(&signature));
 
     (x25519_sk, x25519_pk, txt_value)
+}
+
+/// Get the storage path for a noise key.
+pub fn noise_key_path(device_id: &str) -> String {
+    format!("{}{}", NOISE_KEY_PATH_PREFIX, device_id)
 }
 
 #[cfg(test)]
@@ -237,25 +330,16 @@ mod tests {
         assert_eq!(parsed, x25519_pk);
     }
 
-    #[tokio::test]
-    async fn test_discover_returns_not_implemented() {
-        let result = discover_noise_key("pk:abc123", "default").await;
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("not yet implemented"));
+    #[test]
+    fn test_noise_key_path() {
+        assert_eq!(noise_key_path("default"), "/pub/noise.app/v0/default");
+        assert_eq!(noise_key_path("mobile"), "/pub/noise.app/v0/mobile");
     }
 
-    #[tokio::test]
-    async fn test_publish_returns_not_implemented() {
-        let ed25519_sk = [1u8; 32];
-        let x25519_pk = [2u8; 32];
-        let result = publish_noise_key(&ed25519_sk, &x25519_pk, "default").await;
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("not yet implemented"));
+    #[test]
+    fn test_noise_key_config_default() {
+        let config = NoiseKeyConfig::default();
+        assert_eq!(config.device_id, "default");
+        assert!(config.verify_binding);
     }
 }

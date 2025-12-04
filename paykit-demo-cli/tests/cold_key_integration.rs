@@ -13,10 +13,22 @@ fn test_noise_pattern_parsing() {
     assert_eq!("IK".parse::<NoisePattern>().unwrap(), NoisePattern::IK);
 
     // IK-raw variants
-    assert_eq!("ik-raw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
-    assert_eq!("IK-raw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
-    assert_eq!("ikraw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
-    assert_eq!("ik_raw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
+    assert_eq!(
+        "ik-raw".parse::<NoisePattern>().unwrap(),
+        NoisePattern::IKRaw
+    );
+    assert_eq!(
+        "IK-raw".parse::<NoisePattern>().unwrap(),
+        NoisePattern::IKRaw
+    );
+    assert_eq!(
+        "ikraw".parse::<NoisePattern>().unwrap(),
+        NoisePattern::IKRaw
+    );
+    assert_eq!(
+        "ik_raw".parse::<NoisePattern>().unwrap(),
+        NoisePattern::IKRaw
+    );
 
     // N pattern
     assert_eq!("n".parse::<NoisePattern>().unwrap(), NoisePattern::N);
@@ -174,4 +186,3 @@ fn test_pattern_roundtrip() {
         assert_eq!(pattern, parsed);
     }
 }
-

@@ -11,14 +11,16 @@
 
 use anyhow::{anyhow, Context, Result};
 use paykit_interactive::transport::PubkyNoiseChannel;
-use pubky_noise::{datalink_adapter, identity_payload::IdentityPayload, kdf, DummyRing, NoiseServer};
+use pubky_noise::{
+    datalink_adapter, identity_payload::IdentityPayload, kdf, DummyRing, NoiseServer,
+};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use zeroize::Zeroizing;
 
-use crate::Identity;
 use crate::noise_client::NoisePattern;
+use crate::Identity;
 
 /// Maximum handshake message size (Noise handshakes are typically <512 bytes)
 const MAX_HANDSHAKE_SIZE: usize = 4096;
@@ -121,19 +123,13 @@ impl NoiseServerHelper {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_server(
-        identity: &Identity,
-        device_id: &[u8],
-    ) -> Arc<NoiseServer<DummyRing>> {
+    pub fn create_server(identity: &Identity, device_id: &[u8]) -> Arc<NoiseServer<DummyRing>> {
         // Use Ed25519 secret key as the seed for DummyRing
         // DummyRing will derive X25519 keys from this seed using HKDF
         let seed = identity.keypair.secret_key();
 
         // Create a ring key provider
-        let ring = Arc::new(DummyRing::new(
-            seed,
-            identity.public_key().to_string(),
-        ));
+        let ring = Arc::new(DummyRing::new(seed, identity.public_key().to_string()));
 
         // Create the Noise server
         Arc::new(NoiseServer::new_direct(
@@ -265,8 +261,8 @@ impl NoiseServerHelper {
             .context("Failed to send handshake response")?;
 
         // Complete handshake to get transport link (step 3)
-        let link =
-            datalink_adapter::server_complete_ik(hs_state).context("Failed to complete handshake")?;
+        let link = datalink_adapter::server_complete_ik(hs_state)
+            .context("Failed to complete handshake")?;
 
         // Create channel
         Ok(PubkyNoiseChannel::new(stream, link))
@@ -503,13 +499,10 @@ impl NoiseServerHelper {
                 .await
                 .context("Failed to read pattern byte")?;
 
-            let pattern = match pattern_byte[0] {
-                0 => NoisePattern::IK,
-                1 => NoisePattern::IKRaw,
-                2 => NoisePattern::N,
-                3 => NoisePattern::NN,
-                _ => {
-                    eprintln!("Unknown pattern byte: {}", pattern_byte[0]);
+            let pattern = match NoisePattern::try_from(pattern_byte[0]) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("Unknown pattern byte {}: {:#}", pattern_byte[0], e);
                     continue;
                 }
             };

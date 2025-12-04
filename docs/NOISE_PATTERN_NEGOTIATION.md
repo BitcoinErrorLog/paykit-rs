@@ -15,6 +15,10 @@ When connecting to a pattern-aware server (e.g., `NoiseServerHelper::run_pattern
 | `0x02` | N | Anonymous | X25519 static | Anonymous donations |
 | `0x03` | NN | Ephemeral | Ephemeral | Post-handshake attestation |
 
+> **Note:** The pattern-aware server (`NoiseServerHelper::run_pattern_server`) is
+> currently used for IK-raw, N, and NN. IK connections continue to use the
+> legacy `run_server` helper and therefore do **not** send a pattern byte.
+
 ## Wire Format
 
 ### Pattern-Aware Protocol
@@ -40,31 +44,30 @@ Legacy servers using `NoiseServerHelper::run_server` only accept IK pattern and 
 ### Using paykit-demo-core
 
 ```rust
-use paykit_demo_core::{NoiseClientHelper, NoiseRawClientHelper, NoisePattern};
-use tokio::io::AsyncWriteExt;
+use paykit_demo_core::{NoiseClientHelper, NoisePattern, NoiseRawClientHelper};
 
 async fn connect_with_pattern(
     host: &str,
     pattern: NoisePattern,
-    // ... other params
 ) -> Result<PubkyNoiseChannel<TcpStream>> {
-    let mut stream = TcpStream::connect(host).await?;
-    
-    // Send pattern byte for pattern-aware servers
-    let pattern_byte = match pattern {
-        NoisePattern::IK => 0u8,
-        NoisePattern::IKRaw => 1u8,
-        NoisePattern::N => 2u8,
-        NoisePattern::NN => 3u8,
-    };
-    stream.write_all(&[pattern_byte]).await?;
-    
-    // Proceed with pattern-specific handshake
     match pattern {
-        NoisePattern::IK => NoiseClientHelper::connect_to_recipient(&identity, host, &pk).await,
-        NoisePattern::IKRaw => NoiseRawClientHelper::connect_ik_raw(&x25519_sk, host, &pk).await,
-        NoisePattern::N => NoiseRawClientHelper::connect_anonymous(host, &pk).await,
-        NoisePattern::NN => NoiseRawClientHelper::connect_ephemeral(host).await,
+        NoisePattern::IK => {
+            // IK uses the legacy server (no pattern byte).
+            NoiseClientHelper::connect_to_recipient(&identity, host, &pk).await
+        }
+        NoisePattern::IKRaw => {
+            let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device");
+            NoiseRawClientHelper::connect_ik_raw_with_negotiation(&x25519_sk, host, &pk).await
+        }
+        NoisePattern::N => {
+            NoiseRawClientHelper::connect_anonymous_with_negotiation(host, &pk).await
+        }
+        NoisePattern::NN => {
+            let (channel, server_ephemeral) =
+                NoiseRawClientHelper::connect_ephemeral_with_negotiation(host).await?;
+            // Application-specific attestation logic goes here using server_ephemeral.
+            Ok(channel)
+        }
     }
 }
 ```
@@ -77,13 +80,17 @@ use tokio::net::TcpStream;
 
 // For cold key scenarios
 let x25519_sk = Zeroizing::new(derive_x25519_key(&seed, b"device"));
-let channel = PubkyNoiseChannel::connect_ik_raw(&x25519_sk, stream, &server_pk).await?;
+let stream = TcpStream::connect(host).await?;
+let channel = PubkyNoiseChannel::connect_ik_raw_with_negotiation(&x25519_sk, stream, &server_pk).await?;
 
 // For anonymous connections
-let channel = PubkyNoiseChannel::connect_anonymous(stream, &server_pk).await?;
+let stream = TcpStream::connect(host).await?;
+let channel = PubkyNoiseChannel::connect_anonymous_with_negotiation(stream, &server_pk).await?;
 
 // For ephemeral connections (returns server's ephemeral for attestation)
-let (channel, server_ephemeral) = PubkyNoiseChannel::connect_ephemeral(stream).await?;
+let stream = TcpStream::connect(host).await?;
+let (channel, server_ephemeral) =
+    PubkyNoiseChannel::connect_ephemeral_with_negotiation(stream).await?;
 ```
 
 ## Server Implementation

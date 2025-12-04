@@ -52,8 +52,12 @@ async fn test_publish_and_query_payment_methods() {
         .expect("Failed to query methods");
 
     assert_eq!(supported.entries.len(), 2);
-    assert!(supported.entries.contains_key(&MethodId("lightning".to_string())));
-    assert!(supported.entries.contains_key(&MethodId("onchain".to_string())));
+    assert!(supported
+        .entries
+        .contains_key(&MethodId("lightning".to_string())));
+    assert!(supported
+        .entries
+        .contains_key(&MethodId("onchain".to_string())));
 }
 
 #[tokio::test]

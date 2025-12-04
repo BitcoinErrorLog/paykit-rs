@@ -587,19 +587,21 @@ pub fn parse_noise_endpoint_wasm(endpoint: &str) -> Result<JsValue, JsValue> {
 
     // Validate server key is 64 hex characters (32 bytes)
     if server_key_hex.len() != 64 || !server_key_hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(JsValue::from_str("Server key must be 64 hex characters (32 bytes)"));
+        return Err(JsValue::from_str(
+            "Server key must be 64 hex characters (32 bytes)",
+        ));
     }
 
     // Parse host and port
-    let colon_index = host_port.rfind(':').ok_or_else(|| {
-        JsValue::from_str("Invalid host:port format")
-    })?;
+    let colon_index = host_port
+        .rfind(':')
+        .ok_or_else(|| JsValue::from_str("Invalid host:port format"))?;
 
     let host = host_port[..colon_index].to_string();
     let port_str = &host_port[colon_index + 1..];
-    let port: u16 = port_str.parse().map_err(|_| {
-        JsValue::from_str("Invalid port number")
-    })?;
+    let port: u16 = port_str
+        .parse()
+        .map_err(|_| JsValue::from_str("Invalid port number"))?;
 
     if port == 0 {
         return Err(JsValue::from_str("Port must be between 1 and 65535"));
@@ -607,11 +609,12 @@ pub fn parse_noise_endpoint_wasm(endpoint: &str) -> Result<JsValue, JsValue> {
 
     // Convert to WebSocket URL
     // Use wss:// for non-localhost, ws:// for localhost
-    let protocol = if host == "localhost" 
-        || host == "127.0.0.1" 
+    let protocol = if host == "localhost"
+        || host == "127.0.0.1"
         || host.starts_with("192.168.")
         || host.starts_with("10.")
-        || host.starts_with("172.") {
+        || host.starts_with("172.")
+    {
         "ws"
     } else {
         "wss"
@@ -626,9 +629,9 @@ pub fn parse_noise_endpoint_wasm(endpoint: &str) -> Result<JsValue, JsValue> {
         "port": port
     });
 
-    Ok(JsValue::from_str(&serde_json::to_string(&result).map_err(|e| {
-        JsValue::from_str(&format!("Serialization error: {}", e))
-    })?))
+    Ok(JsValue::from_str(&serde_json::to_string(&result).map_err(
+        |e| JsValue::from_str(&format!("Serialization error: {}", e)),
+    )?))
 }
 
 /// Extract public key from pubky:// URI or raw public key
@@ -670,13 +673,16 @@ mod tests {
         let endpoint = "noise://127.0.0.1:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let result = parse_noise_endpoint_wasm(endpoint);
         assert!(result.is_ok());
-        
+
         let json_str = result.unwrap().as_string().unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert_eq!(parsed["ws_url"], "ws://127.0.0.1:9735");
         assert_eq!(parsed["host"], "127.0.0.1");
         assert_eq!(parsed["port"], 9735);
-        assert_eq!(parsed["server_key_hex"], "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        assert_eq!(
+            parsed["server_key_hex"],
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        );
     }
 
     #[wasm_bindgen_test]
@@ -684,7 +690,7 @@ mod tests {
         let endpoint = "noise://example.com:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let result = parse_noise_endpoint_wasm(endpoint);
         assert!(result.is_ok());
-        
+
         let json_str = result.unwrap().as_string().unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert_eq!(parsed["ws_url"], "wss://example.com:9735");
@@ -702,7 +708,10 @@ mod tests {
         let uri = "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
         let result = extract_pubkey_from_uri_wasm(uri);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
+        assert_eq!(
+            result.unwrap(),
+            "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo"
+        );
     }
 
     #[wasm_bindgen_test]

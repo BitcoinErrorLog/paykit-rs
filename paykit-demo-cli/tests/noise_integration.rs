@@ -18,14 +18,11 @@ async fn test_noise_3step_handshake() {
     let server = NoiseServer::<_>::new_direct("server", b"dev", ring_server.clone());
 
     // Get server static key
-    let server_sk = ring_server
-        .derive_device_x25519("server", b"dev")
-        .unwrap();
+    let server_sk = ring_server.derive_device_x25519("server", b"dev").unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
     // Step 1: Client initiates
-    let (c_hs, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk).unwrap();
+    let (c_hs, first_msg) = client_start_ik_direct(&client, &server_static_pk).unwrap();
 
     // Step 2: Server responds
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
@@ -54,14 +51,11 @@ async fn test_noise_handshake_with_identity_payload() {
     let server = NoiseServer::<_>::new_direct("bob", b"device2", ring_server.clone());
 
     // Get server static key
-    let server_sk = ring_server
-        .derive_device_x25519("bob", b"device2")
-        .unwrap();
+    let server_sk = ring_server.derive_device_x25519("bob", b"device2").unwrap();
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
     // Client initiates
-    let (c_hs, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk).unwrap();
+    let (c_hs, first_msg) = client_start_ik_direct(&client, &server_static_pk).unwrap();
 
     // Server receives and responds
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
@@ -87,8 +81,7 @@ async fn test_noise_message_exchange() {
     let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
 
     // Perform handshake
-    let (c_hs, first_msg) =
-        client_start_ik_direct(&client, &server_static_pk).unwrap();
+    let (c_hs, first_msg) = client_start_ik_direct(&client, &server_static_pk).unwrap();
     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
     let mut c_link = client_complete_ik(c_hs, &response).unwrap();
     let mut s_link = server_complete_ik(s_hs).unwrap();

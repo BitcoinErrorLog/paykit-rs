@@ -47,10 +47,7 @@ impl NoiseClientHelper {
 
         // Create a ring key provider
         // Note: In production, you'd want a more secure key management system
-        let ring = Arc::new(DummyRing::new(
-            seed,
-            identity.public_key().to_string(),
-        ));
+        let ring = Arc::new(DummyRing::new(seed, identity.public_key().to_string()));
 
         // Create the Noise client
         Arc::new(NoiseClient::new_direct(
@@ -159,6 +156,32 @@ impl std::fmt::Display for NoisePattern {
     }
 }
 
+impl NoisePattern {
+    /// Single-byte identifier used during pattern negotiation.
+    pub fn negotiation_byte(self) -> u8 {
+        match self {
+            NoisePattern::IK => 0,
+            NoisePattern::IKRaw => 1,
+            NoisePattern::N => 2,
+            NoisePattern::NN => 3,
+        }
+    }
+}
+
+impl TryFrom<u8> for NoisePattern {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(NoisePattern::IK),
+            1 => Ok(NoisePattern::IKRaw),
+            2 => Ok(NoisePattern::N),
+            3 => Ok(NoisePattern::NN),
+            other => Err(anyhow!("Unknown Noise pattern byte: {}", other)),
+        }
+    }
+}
+
 impl std::str::FromStr for NoisePattern {
     type Err = anyhow::Error;
 
@@ -168,7 +191,10 @@ impl std::str::FromStr for NoisePattern {
             "ik-raw" | "ikraw" | "ik_raw" => Ok(NoisePattern::IKRaw),
             "n" => Ok(NoisePattern::N),
             "nn" => Ok(NoisePattern::NN),
-            _ => Err(anyhow!("Unknown pattern: {}. Valid patterns: ik, ik-raw, n, nn", s)),
+            _ => Err(anyhow!(
+                "Unknown pattern: {}. Valid patterns: ik, ik-raw, n, nn",
+                s
+            )),
         }
     }
 }
@@ -222,6 +248,10 @@ impl NoiseRawClientHelper {
     ///     "127.0.0.1:9735",
     ///     &server_pk,
     /// ).await?;
+    ///
+    /// // When connecting to a pattern-aware server, prefer
+    /// // `connect_ik_raw_with_negotiation` so the pattern byte is written
+    /// // before the handshake begins.
     /// # Ok(())
     /// # }
     /// ```
@@ -230,33 +260,62 @@ impl NoiseRawClientHelper {
         recipient_host: &str,
         recipient_static_pk: &[u8; 32],
     ) -> Result<PubkyNoiseChannel<TcpStream>> {
-        // Connect TCP
-        let mut stream = TcpStream::connect(recipient_host)
+        let stream = TcpStream::connect(recipient_host)
             .await
             .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+        Self::connect_ik_raw_with_stream(x25519_sk, stream, recipient_static_pk).await
+    }
 
-        // Start IK-raw handshake
+    /// Connect using IK-raw pattern and automatically negotiate the pattern byte.
+    pub async fn connect_ik_raw_with_negotiation(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        recipient_host: &str,
+        recipient_static_pk: &[u8; 32],
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
+        let stream = Self::connect_stream_with_pattern(recipient_host, NoisePattern::IKRaw).await?;
+        Self::connect_ik_raw_with_stream(x25519_sk, stream, recipient_static_pk).await
+    }
+
+    /// Connect using IK-raw pattern over an existing TCP stream.
+    ///
+    /// Use this when a pattern byte has already been sent (pattern-aware servers).
+    pub async fn connect_ik_raw_with_stream(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: TcpStream,
+        recipient_static_pk: &[u8; 32],
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
         let (hs, first_msg) = datalink_adapter::start_ik_raw(x25519_sk, recipient_static_pk)
             .map_err(|e| anyhow!("Handshake init failed: {}", e))?;
 
-        // Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream.write_all(&len).await.context("Failed to send handshake length")?;
-        stream.write_all(&first_msg).await.context("Failed to send handshake")?;
+        stream
+            .write_all(&len)
+            .await
+            .context("Failed to send handshake length")?;
+        stream
+            .write_all(&first_msg)
+            .await
+            .context("Failed to send handshake")?;
 
-        // Read length-prefixed response
         let mut len_bytes = [0u8; 4];
-        stream.read_exact(&mut len_bytes).await.context("Failed to read response length")?;
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .context("Failed to read response length")?;
         let response_len = u32::from_be_bytes(len_bytes) as usize;
-
         if response_len > MAX_HANDSHAKE_SIZE {
-            return Err(anyhow!("Handshake response too large: {} bytes", response_len));
+            return Err(anyhow!(
+                "Handshake response too large: {} bytes",
+                response_len
+            ));
         }
 
         let mut response = vec![0u8; response_len];
-        stream.read_exact(&mut response).await.context("Failed to read response")?;
+        stream
+            .read_exact(&mut response)
+            .await
+            .context("Failed to read response")?;
 
-        // Complete handshake
         let session = datalink_adapter::complete_raw(hs, &response)
             .map_err(|e| anyhow!("Handshake completion failed: {}", e))?;
 
@@ -293,21 +352,39 @@ impl NoiseRawClientHelper {
         recipient_host: &str,
         recipient_static_pk: &[u8; 32],
     ) -> Result<PubkyNoiseChannel<TcpStream>> {
-        // Connect TCP
-        let mut stream = TcpStream::connect(recipient_host)
+        let stream = TcpStream::connect(recipient_host)
             .await
             .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+        Self::connect_anonymous_with_stream(stream, recipient_static_pk).await
+    }
 
-        // Start N pattern handshake
+    /// Anonymous N-pattern connection with automatic pattern negotiation.
+    pub async fn connect_anonymous_with_negotiation(
+        recipient_host: &str,
+        recipient_static_pk: &[u8; 32],
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
+        let stream = Self::connect_stream_with_pattern(recipient_host, NoisePattern::N).await?;
+        Self::connect_anonymous_with_stream(stream, recipient_static_pk).await
+    }
+
+    /// Anonymous N-pattern connection over an existing TCP stream.
+    pub async fn connect_anonymous_with_stream(
+        mut stream: TcpStream,
+        recipient_static_pk: &[u8; 32],
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
         let (hs, first_msg) = datalink_adapter::start_n(recipient_static_pk)
             .map_err(|e| anyhow!("Handshake init failed: {}", e))?;
 
-        // Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream.write_all(&len).await.context("Failed to send handshake length")?;
-        stream.write_all(&first_msg).await.context("Failed to send handshake")?;
+        stream
+            .write_all(&len)
+            .await
+            .context("Failed to send handshake length")?;
+        stream
+            .write_all(&first_msg)
+            .await
+            .context("Failed to send handshake")?;
 
-        // N pattern completes in one message, convert to transport mode
         let session = datalink_adapter::complete_n(hs)
             .map_err(|e| anyhow!("Handshake completion failed: {}", e))?;
 
@@ -341,42 +418,78 @@ impl NoiseRawClientHelper {
     pub async fn connect_ephemeral(
         recipient_host: &str,
     ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
-        // Connect TCP
-        let mut stream = TcpStream::connect(recipient_host)
+        let stream = TcpStream::connect(recipient_host)
             .await
             .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+        Self::connect_ephemeral_with_stream(stream).await
+    }
 
-        // Start NN pattern handshake
-        let (hs, first_msg) = datalink_adapter::start_nn()
-            .map_err(|e| anyhow!("Handshake init failed: {}", e))?;
+    /// NN-pattern connection over an existing TCP stream.
+    pub async fn connect_ephemeral_with_stream(
+        mut stream: TcpStream,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        let (hs, first_msg) =
+            datalink_adapter::start_nn().map_err(|e| anyhow!("Handshake init failed: {}", e))?;
 
-        // Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream.write_all(&len).await.context("Failed to send handshake length")?;
-        stream.write_all(&first_msg).await.context("Failed to send handshake")?;
+        stream
+            .write_all(&len)
+            .await
+            .context("Failed to send handshake length")?;
+        stream
+            .write_all(&first_msg)
+            .await
+            .context("Failed to send handshake")?;
 
-        // Read length-prefixed response
         let mut len_bytes = [0u8; 4];
-        stream.read_exact(&mut len_bytes).await.context("Failed to read response length")?;
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .context("Failed to read response length")?;
         let response_len = u32::from_be_bytes(len_bytes) as usize;
-
         if response_len > MAX_HANDSHAKE_SIZE {
-            return Err(anyhow!("Handshake response too large: {} bytes", response_len));
+            return Err(anyhow!(
+                "Handshake response too large: {} bytes",
+                response_len
+            ));
         }
 
         let mut response = vec![0u8; response_len];
-        stream.read_exact(&mut response).await.context("Failed to read response")?;
+        stream
+            .read_exact(&mut response)
+            .await
+            .context("Failed to read response")?;
 
-        // Extract server's ephemeral key from response (first 32 bytes)
         let server_ephemeral: [u8; 32] = response[..32]
             .try_into()
             .map_err(|_| anyhow!("Invalid response length"))?;
 
-        // Complete handshake
         let session = datalink_adapter::complete_raw(hs, &response)
             .map_err(|e| anyhow!("Handshake completion failed: {}", e))?;
 
         Ok((PubkyNoiseChannel::new(stream, session), server_ephemeral))
+    }
+
+    /// NN-pattern connection with automatic pattern negotiation.
+    pub async fn connect_ephemeral_with_negotiation(
+        recipient_host: &str,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        let stream = Self::connect_stream_with_pattern(recipient_host, NoisePattern::NN).await?;
+        Self::connect_ephemeral_with_stream(stream).await
+    }
+
+    async fn connect_stream_with_pattern(
+        recipient_host: &str,
+        pattern: NoisePattern,
+    ) -> Result<TcpStream> {
+        let mut stream = TcpStream::connect(recipient_host)
+            .await
+            .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+        stream
+            .write_all(&[pattern.negotiation_byte()])
+            .await
+            .context("Failed to send pattern byte")?;
+        Ok(stream)
     }
 
     /// Derive an X25519 secret key from an Ed25519 seed.
@@ -390,7 +503,10 @@ impl NoiseRawClientHelper {
     /// let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device-001");
     /// assert_eq!(x25519_sk.len(), 32);
     /// ```
-    pub fn derive_x25519_key(ed25519_seed: &[u8; 32], device_context: &[u8]) -> Zeroizing<[u8; 32]> {
+    pub fn derive_x25519_key(
+        ed25519_seed: &[u8; 32],
+        device_context: &[u8],
+    ) -> Zeroizing<[u8; 32]> {
         Zeroizing::new(kdf::derive_x25519_static(ed25519_seed, device_context))
     }
 
@@ -464,8 +580,14 @@ mod tests {
     fn test_noise_pattern_parse() {
         assert_eq!("ik".parse::<NoisePattern>().unwrap(), NoisePattern::IK);
         assert_eq!("IK".parse::<NoisePattern>().unwrap(), NoisePattern::IK);
-        assert_eq!("ik-raw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
-        assert_eq!("IK_raw".parse::<NoisePattern>().unwrap(), NoisePattern::IKRaw);
+        assert_eq!(
+            "ik-raw".parse::<NoisePattern>().unwrap(),
+            NoisePattern::IKRaw
+        );
+        assert_eq!(
+            "IK_raw".parse::<NoisePattern>().unwrap(),
+            NoisePattern::IKRaw
+        );
         assert_eq!("n".parse::<NoisePattern>().unwrap(), NoisePattern::N);
         assert_eq!("nn".parse::<NoisePattern>().unwrap(), NoisePattern::NN);
         assert!("invalid".parse::<NoisePattern>().is_err());

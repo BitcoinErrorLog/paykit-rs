@@ -164,9 +164,7 @@ impl RingKeyProvider for WasmKeyProvider {
     ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
         // Use pubky-noise's KDF for deterministic key derivation
         let secret = self.keypair.secret_key();
-        Ok(pubky_noise::kdf::derive_x25519_static(
-            &secret, device_id,
-        ))
+        Ok(pubky_noise::kdf::derive_x25519_static(&secret, device_id))
     }
 
     fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {

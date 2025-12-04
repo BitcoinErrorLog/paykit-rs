@@ -101,7 +101,9 @@ impl SubscriptionCoordinator {
     }
 
     /// Load all subscriptions
-    pub async fn load_all_subscriptions(&self) -> Result<Vec<paykit_subscriptions::SignedSubscription>> {
+    pub async fn load_all_subscriptions(
+        &self,
+    ) -> Result<Vec<paykit_subscriptions::SignedSubscription>> {
         self.storage
             .list_active_subscriptions()
             .await
@@ -273,10 +275,7 @@ mod tests {
 
         assert!(rule.enabled);
         assert_eq!(
-            rule.max_total_amount_per_period
-                .as_ref()
-                .unwrap()
-                .as_sats(),
+            rule.max_total_amount_per_period.as_ref().unwrap().as_sats(),
             5000
         );
     }

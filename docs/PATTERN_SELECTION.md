@@ -83,8 +83,8 @@ use zeroize::Zeroizing;
 // Derive X25519 key (do once, publish to pkarr)
 let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device");
 
-// Connect without Ed25519 signing
-let channel = NoiseRawClientHelper::connect_ik_raw(
+// Connect without Ed25519 signing (pattern byte sent automatically)
+let channel = NoiseRawClientHelper::connect_ik_raw_with_negotiation(
     &x25519_sk,
     "127.0.0.1:9735",
     &server_pk_from_pkarr,
@@ -125,7 +125,7 @@ paykit-demo pay donations --connect 127.0.0.1:9735@<pubkey> --pattern n
 use paykit_demo_core::NoiseRawClientHelper;
 
 // No identity needed - client is anonymous
-let channel = NoiseRawClientHelper::connect_anonymous(
+let channel = NoiseRawClientHelper::connect_anonymous_with_negotiation(
     "127.0.0.1:9735",
     &server_pk_from_pkarr,
 ).await?;
@@ -161,7 +161,7 @@ paykit-demo pay <recipient> --connect 127.0.0.1:9735@<pubkey> --pattern nn
 use paykit_demo_core::NoiseRawClientHelper;
 
 // Connect anonymously
-let (mut channel, server_ephemeral) = NoiseRawClientHelper::connect_ephemeral(
+let (mut channel, server_ephemeral) = NoiseRawClientHelper::connect_ephemeral_with_negotiation(
     "127.0.0.1:9735",
 ).await?;
 

@@ -962,12 +962,24 @@ impl WasmAutoPayRule {
     pub fn to_json(&self) -> Result<String, JsValue> {
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"id".into(), &self.id.clone().into())?;
-        js_sys::Reflect::set(&obj, &"subscription_id".into(), &self.subscription_id.clone().into())?;
-        js_sys::Reflect::set(&obj, &"peer_pubkey".into(), &self.peer_pubkey.clone().into())?;
+        js_sys::Reflect::set(
+            &obj,
+            &"subscription_id".into(),
+            &self.subscription_id.clone().into(),
+        )?;
+        js_sys::Reflect::set(
+            &obj,
+            &"peer_pubkey".into(),
+            &self.peer_pubkey.clone().into(),
+        )?;
         js_sys::Reflect::set(&obj, &"max_amount".into(), &self.max_amount.into())?;
         js_sys::Reflect::set(&obj, &"period_seconds".into(), &self.period_seconds.into())?;
         js_sys::Reflect::set(&obj, &"enabled".into(), &self.enabled.into())?;
-        js_sys::Reflect::set(&obj, &"require_confirmation".into(), &self.require_confirmation.into())?;
+        js_sys::Reflect::set(
+            &obj,
+            &"require_confirmation".into(),
+            &self.require_confirmation.into(),
+        )?;
         js_sys::JSON::stringify(&obj.into())
             .map_err(|_| JsValue::from_str("Failed to serialize"))?
             .as_string()
@@ -976,8 +988,7 @@ impl WasmAutoPayRule {
 
     /// Create from JSON
     pub fn from_json(json: &str) -> Result<WasmAutoPayRule, JsValue> {
-        let obj = js_sys::JSON::parse(json)
-            .map_err(|_| JsValue::from_str("Invalid JSON"))?;
+        let obj = js_sys::JSON::parse(json).map_err(|_| JsValue::from_str("Invalid JSON"))?;
 
         let id = js_sys::Reflect::get(&obj, &"id".into())
             .ok()
@@ -1147,7 +1158,11 @@ impl WasmPeerSpendingLimit {
     /// Convert to JSON for storage
     pub fn to_json(&self) -> Result<String, JsValue> {
         let obj = js_sys::Object::new();
-        js_sys::Reflect::set(&obj, &"peer_pubkey".into(), &self.peer_pubkey.clone().into())?;
+        js_sys::Reflect::set(
+            &obj,
+            &"peer_pubkey".into(),
+            &self.peer_pubkey.clone().into(),
+        )?;
         js_sys::Reflect::set(&obj, &"total_limit".into(), &self.total_limit.into())?;
         js_sys::Reflect::set(&obj, &"current_spent".into(), &self.current_spent.into())?;
         js_sys::Reflect::set(&obj, &"period_seconds".into(), &self.period_seconds.into())?;
@@ -1160,8 +1175,7 @@ impl WasmPeerSpendingLimit {
 
     /// Create from JSON
     pub fn from_json(json: &str) -> Result<WasmPeerSpendingLimit, JsValue> {
-        let obj = js_sys::JSON::parse(json)
-            .map_err(|_| JsValue::from_str("Invalid JSON"))?;
+        let obj = js_sys::JSON::parse(json).map_err(|_| JsValue::from_str("Invalid JSON"))?;
 
         let peer_pubkey = js_sys::Reflect::get(&obj, &"peer_pubkey".into())
             .ok()

@@ -14,7 +14,11 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
 
     // Parse the pattern
     let pattern: NoisePattern = pattern_str.parse()?;
-    tracing::info!("Starting payment receiver on port {} with pattern {}", port, pattern);
+    tracing::info!(
+        "Starting payment receiver on port {} with pattern {}",
+        port,
+        pattern
+    );
 
     // Load current identity
     let identity = super::load_current_identity(storage_dir)?;
@@ -57,7 +61,9 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                 ui::info("  Pattern N: Anonymous client, server authenticated (donation box mode)");
             }
             NoisePattern::NN => {
-                ui::info("  Pattern NN: Both parties anonymous (requires post-handshake attestation)");
+                ui::info(
+                    "  Pattern NN: Both parties anonymous (requires post-handshake attestation)",
+                );
                 ui::warning("  WARNING: NN without attestation is vulnerable to MITM");
             }
         }
@@ -91,7 +97,8 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                 NoiseServerHelper::run_server(&identity_clone, &bind_addr, |mut channel| {
                     let storage_dir = Arc::clone(&storage_dir_arc);
                     async move {
-                        handle_payment_request(&mut channel, &storage_dir, Some("authenticated")).await
+                        handle_payment_request(&mut channel, &storage_dir, Some("authenticated"))
+                            .await
                     }
                 })
                 .await
@@ -102,14 +109,23 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                     let storage_dir = Arc::clone(&storage_dir_arc);
                     async move {
                         let client_info = match &conn {
-                            AcceptedConnection::IK { client_identity, .. } => {
-                                format!("authenticated ({})", hex::encode(&client_identity.ed25519_pub[..8]))
+                            AcceptedConnection::IK {
+                                client_identity, ..
+                            } => {
+                                format!(
+                                    "authenticated ({})",
+                                    hex::encode(&client_identity.ed25519_pub[..8])
+                                )
                             }
-                            AcceptedConnection::IKRaw { client_x25519_pk, .. } => {
+                            AcceptedConnection::IKRaw {
+                                client_x25519_pk, ..
+                            } => {
                                 format!("cold-key ({})", hex::encode(&client_x25519_pk[..8]))
                             }
                             AcceptedConnection::N { .. } => "anonymous".to_string(),
-                            AcceptedConnection::NN { client_ephemeral, .. } => {
+                            AcceptedConnection::NN {
+                                client_ephemeral, ..
+                            } => {
                                 format!("ephemeral ({})", hex::encode(&client_ephemeral[..8]))
                             }
                         };

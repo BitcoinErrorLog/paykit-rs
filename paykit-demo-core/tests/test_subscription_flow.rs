@@ -88,10 +88,7 @@ fn test_auto_pay_configuration() {
     assert_eq!(rule.subscription_id, "sub_123");
     assert_eq!(rule.peer, provider);
     assert_eq!(
-        rule.max_total_amount_per_period
-            .as_ref()
-            .unwrap()
-            .as_sats(),
+        rule.max_total_amount_per_period.as_ref().unwrap().as_sats(),
         5000
     );
 }

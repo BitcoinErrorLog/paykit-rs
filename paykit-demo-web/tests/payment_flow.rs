@@ -2,7 +2,10 @@
 //!
 //! Tests the complete payment workflow including receipt exchange.
 
-use paykit_demo_web::{Identity, WasmPaymentRequest, WasmPaymentCoordinator, WasmReceiptStorage, parse_noise_endpoint_wasm, extract_pubkey_from_uri_wasm};
+use paykit_demo_web::{
+    extract_pubkey_from_uri_wasm, parse_noise_endpoint_wasm, Identity, WasmPaymentCoordinator,
+    WasmPaymentRequest, WasmReceiptStorage,
+};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -154,24 +157,29 @@ fn test_receipt_storage_after_payment() {
 
 #[wasm_bindgen_test]
 fn test_parse_noise_endpoint_wasm() {
-    let endpoint = "noise://127.0.0.1:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let endpoint =
+        "noise://127.0.0.1:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     let result = parse_noise_endpoint_wasm(endpoint);
     assert!(result.is_ok());
-    
+
     let json_str = result.unwrap().as_string().unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed["ws_url"], "ws://127.0.0.1:9735");
     assert_eq!(parsed["host"], "127.0.0.1");
     assert_eq!(parsed["port"], 9735);
-    assert_eq!(parsed["server_key_hex"], "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    assert_eq!(
+        parsed["server_key_hex"],
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    );
 }
 
 #[wasm_bindgen_test]
 fn test_parse_noise_endpoint_wasm_remote() {
-    let endpoint = "noise://example.com:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let endpoint =
+        "noise://example.com:9735@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     let result = parse_noise_endpoint_wasm(endpoint);
     assert!(result.is_ok());
-    
+
     let json_str = result.unwrap().as_string().unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed["ws_url"], "wss://example.com:9735");
@@ -196,7 +204,10 @@ fn test_extract_pubkey_from_uri_wasm() {
     let uri = "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
     let result = extract_pubkey_from_uri_wasm(uri);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
+    assert_eq!(
+        result.unwrap(),
+        "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo"
+    );
 }
 
 #[wasm_bindgen_test]

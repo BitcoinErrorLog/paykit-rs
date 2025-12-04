@@ -1,6 +1,6 @@
 use crate::{InteractiveError, PaykitNoiseChannel, PaykitNoiseMessage, Result};
 use async_trait::async_trait;
-use pubky_noise::{datalink_adapter, NoiseClient, NoiseSession, RingKeyProvider};
+use pubky_noise::{datalink_adapter, NoiseClient, NoisePattern, NoiseSession, RingKeyProvider};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use zeroize::Zeroizing;
 
@@ -48,18 +48,17 @@ where
         server_static_pub: &[u8; 32],
     ) -> Result<Self> {
         // 1. Build the IK handshake initiation message
-        let (hs, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
-            client,
-            server_static_pub,
-        )
-        .map_err(|e| InteractiveError::Transport(format!("Handshake build failed: {}", e)))?;
+        let (hs, first_msg) =
+            pubky_noise::datalink_adapter::client_start_ik_direct(client, server_static_pub)
+                .map_err(|e| {
+                    InteractiveError::Transport(format!("Handshake build failed: {}", e))
+                })?;
 
         // 2. Send length-prefixed handshake initiation message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream
-            .write_all(&len)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake length: {}", e)))?;
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send handshake length: {}", e))
+        })?;
         stream
             .write_all(&first_msg)
             .await
@@ -67,10 +66,9 @@ where
 
         // 3. Read length-prefixed server response
         let mut len_bytes = [0u8; 4];
-        stream
-            .read_exact(&mut len_bytes)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to read response length: {}", e)))?;
+        stream.read_exact(&mut len_bytes).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read response length: {}", e))
+        })?;
         let response_len = u32::from_be_bytes(len_bytes) as usize;
 
         // Validate response length to prevent DoS via memory exhaustion
@@ -82,10 +80,9 @@ where
         }
 
         let mut response = vec![0u8; response_len];
-        stream
-            .read_exact(&mut response)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to read handshake response: {}", e)))?;
+        stream.read_exact(&mut response).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read handshake response: {}", e))
+        })?;
 
         // 4. Complete the handshake
         let session =
@@ -123,10 +120,9 @@ where
 
         // 2. Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream
-            .write_all(&len)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake length: {}", e)))?;
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send handshake length: {}", e))
+        })?;
         stream
             .write_all(&first_msg)
             .await
@@ -134,10 +130,9 @@ where
 
         // 3. Read length-prefixed server response
         let mut len_bytes = [0u8; 4];
-        stream
-            .read_exact(&mut len_bytes)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to read response length: {}", e)))?;
+        stream.read_exact(&mut len_bytes).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read response length: {}", e))
+        })?;
         let response_len = u32::from_be_bytes(len_bytes) as usize;
 
         if response_len > MAX_HANDSHAKE_SIZE {
@@ -154,10 +149,21 @@ where
             .map_err(|e| InteractiveError::Transport(format!("Failed to read response: {}", e)))?;
 
         // 4. Complete handshake
-        let session = datalink_adapter::complete_raw(hs, &response)
-            .map_err(|e| InteractiveError::Transport(format!("Handshake completion failed: {}", e)))?;
+        let session = datalink_adapter::complete_raw(hs, &response).map_err(|e| {
+            InteractiveError::Transport(format!("Handshake completion failed: {}", e))
+        })?;
 
         Ok(Self { stream, session })
+    }
+
+    /// Connect using IK-raw pattern and send the negotiation byte automatically.
+    pub async fn connect_ik_raw_with_negotiation(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: S,
+        server_static_pub: &[u8; 32],
+    ) -> Result<Self> {
+        Self::write_pattern_byte(&mut stream, NoisePattern::IKRaw).await?;
+        Self::connect_ik_raw(x25519_sk, stream, server_static_pub).await
     }
 
     /// Connect using N pattern (anonymous client, authenticated server).
@@ -177,30 +183,36 @@ where
     /// 2. Channel enters transport mode immediately
     ///
     /// Note: The client cannot be identified by the server.
-    pub async fn connect_anonymous(
-        mut stream: S,
-        server_static_pub: &[u8; 32],
-    ) -> Result<Self> {
+    pub async fn connect_anonymous(mut stream: S, server_static_pub: &[u8; 32]) -> Result<Self> {
         // 1. Start N pattern handshake
         let (hs, first_msg) = datalink_adapter::start_n(server_static_pub)
             .map_err(|e| InteractiveError::Transport(format!("Handshake init failed: {}", e)))?;
 
         // 2. Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream
-            .write_all(&len)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake length: {}", e)))?;
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send handshake length: {}", e))
+        })?;
         stream
             .write_all(&first_msg)
             .await
             .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake: {}", e)))?;
 
         // 3. N pattern completes in one message
-        let session = NoiseSession::from_handshake(hs)
-            .map_err(|e| InteractiveError::Transport(format!("Handshake completion failed: {}", e)))?;
+        let session = NoiseSession::from_handshake(hs).map_err(|e| {
+            InteractiveError::Transport(format!("Handshake completion failed: {}", e))
+        })?;
 
         Ok(Self { stream, session })
+    }
+
+    /// Connect using N pattern with automatic negotiation byte.
+    pub async fn connect_anonymous_with_negotiation(
+        mut stream: S,
+        server_static_pub: &[u8; 32],
+    ) -> Result<Self> {
+        Self::write_pattern_byte(&mut stream, NoisePattern::N).await?;
+        Self::connect_anonymous(stream, server_static_pub).await
     }
 
     /// Connect using NN pattern (fully anonymous).
@@ -233,10 +245,9 @@ where
 
         // 2. Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
-        stream
-            .write_all(&len)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to send handshake length: {}", e)))?;
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send handshake length: {}", e))
+        })?;
         stream
             .write_all(&first_msg)
             .await
@@ -244,10 +255,9 @@ where
 
         // 3. Read length-prefixed server response
         let mut len_bytes = [0u8; 4];
-        stream
-            .read_exact(&mut len_bytes)
-            .await
-            .map_err(|e| InteractiveError::Transport(format!("Failed to read response length: {}", e)))?;
+        stream.read_exact(&mut len_bytes).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read response length: {}", e))
+        })?;
         let response_len = u32::from_be_bytes(len_bytes) as usize;
 
         if response_len > MAX_HANDSHAKE_SIZE {
@@ -267,13 +277,39 @@ where
         let server_ephemeral: [u8; 32] = response
             .get(..32)
             .and_then(|slice| slice.try_into().ok())
-            .ok_or_else(|| InteractiveError::Transport("Invalid response length for NN pattern".to_string()))?;
+            .ok_or_else(|| {
+                InteractiveError::Transport("Invalid response length for NN pattern".to_string())
+            })?;
 
         // 5. Complete handshake
-        let session = datalink_adapter::complete_raw(hs, &response)
-            .map_err(|e| InteractiveError::Transport(format!("Handshake completion failed: {}", e)))?;
+        let session = datalink_adapter::complete_raw(hs, &response).map_err(|e| {
+            InteractiveError::Transport(format!("Handshake completion failed: {}", e))
+        })?;
 
         Ok((Self { stream, session }, server_ephemeral))
+    }
+
+    /// Connect using NN pattern with automatic negotiation byte.
+    pub async fn connect_ephemeral_with_negotiation(mut stream: S) -> Result<(Self, [u8; 32])> {
+        Self::write_pattern_byte(&mut stream, NoisePattern::NN).await?;
+        Self::connect_ephemeral(stream).await
+    }
+
+    async fn write_pattern_byte(stream: &mut S, pattern: NoisePattern) -> Result<()> {
+        stream
+            .write_all(&[negotiation_byte(pattern)])
+            .await
+            .map_err(|e| InteractiveError::Transport(format!("Failed to send pattern byte: {}", e)))
+    }
+}
+
+fn negotiation_byte(pattern: NoisePattern) -> u8 {
+    match pattern {
+        NoisePattern::IK => 0,
+        NoisePattern::IKRaw => 1,
+        NoisePattern::N => 2,
+        NoisePattern::NN => 3,
+        NoisePattern::XX => 4,
     }
 }
 

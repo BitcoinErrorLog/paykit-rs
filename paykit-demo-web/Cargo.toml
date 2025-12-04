@@ -63,6 +63,7 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 pkarr = "3"
 pubky-noise = { path = "../../pubky-noise" }
 hex = "0.4"
+zeroize = "1"
 
 # For async trait support
 async-trait = "0.1"

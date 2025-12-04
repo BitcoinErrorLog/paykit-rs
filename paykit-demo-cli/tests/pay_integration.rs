@@ -57,9 +57,9 @@ async fn test_pay_command_discovers_recipient_methods() {
         Some("1000".to_string()),
         Some("SAT".to_string()),
         "lightning",
-        "ik",          // pattern
-        None,          // connect
-        false,         // verbose
+        "ik",  // pattern
+        None,  // connect
+        false, // verbose
         Some(&sdk),
     )
     .await;
@@ -110,9 +110,9 @@ async fn test_pay_command_fails_when_method_not_supported() {
         Some("1000".to_string()),
         Some("SAT".to_string()),
         "onchain",
-        "ik",          // pattern
-        None,          // connect
-        false,         // verbose
+        "ik",  // pattern
+        None,  // connect
+        false, // verbose
         Some(&sdk),
     )
     .await;
@@ -178,9 +178,9 @@ async fn test_pay_command_discovers_multiple_methods() {
         Some("5000".to_string()),
         Some("SAT".to_string()),
         "onchain",
-        "ik",          // pattern
-        None,          // connect
-        true,          // verbose
+        "ik", // pattern
+        None, // connect
+        true, // verbose
         Some(&sdk),
     )
     .await;

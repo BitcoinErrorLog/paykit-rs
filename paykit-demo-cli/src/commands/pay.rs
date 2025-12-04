@@ -7,12 +7,13 @@
 //! - NN: Fully anonymous (requires post-handshake attestation)
 
 use anyhow::{anyhow, Context, Result};
-use paykit_demo_core::{DemoStorage, NoiseClientHelper, NoisePattern, NoiseRawClientHelper, Receipt};
+use paykit_demo_core::{
+    DemoStorage, NoiseClientHelper, NoisePattern, NoiseRawClientHelper, Receipt,
+};
 use paykit_interactive::{PaykitNoiseChannel, PaykitNoiseMessage};
 use paykit_lib::{MethodId, PubkyUnauthenticatedTransport, UnauthenticatedTransportRead};
 use pubky::Pubky;
 use std::path::Path;
-use tokio::io::AsyncWriteExt;
 
 use crate::ui;
 
@@ -73,11 +74,12 @@ pub async fn run_with_sdk(
         // Direct connection mode - skip discovery
         ui::info(&format!("Direct connection to: {}", connect_addr));
         ui::info(&format!("Pattern: {}", pattern));
-        
+
         // Parse address: host:port@pubkey_hex
         let (parsed_host, pk) = NoiseClientHelper::parse_recipient_address(connect_addr)?;
-        let pk = pk.ok_or_else(|| anyhow!("Direct connection requires pubkey: host:port@pubkey_hex"))?;
-        
+        let pk =
+            pk.ok_or_else(|| anyhow!("Direct connection requires pubkey: host:port@pubkey_hex"))?;
+
         (parsed_host, pk)
     } else {
         // Discovery mode - resolve recipient and query endpoints
@@ -169,55 +171,38 @@ pub async fn run_with_sdk(
                 .await
                 .context("Failed to establish Noise connection (IK)")?
         }
-        NoisePattern::IKRaw => {
-            // Cold key scenario - use raw X25519 key
-            let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
-                &identity.keypair.secret_key(),
-                format!("paykit-demo-{}", identity.public_key()).as_bytes(),
-            );
-            
-            // For pattern-aware server, send pattern byte first
-            let mut stream = tokio::net::TcpStream::connect(&host)
-                .await
-                .context("Failed to connect")?;
-            stream.write_all(&[1u8]).await.context("Failed to send pattern byte")?; // 1 = IK-raw
-            
-            // Then do handshake
-            NoiseRawClientHelper::connect_ik_raw(&x25519_sk, &host, &static_pk)
-                .await
-                .context("Failed to establish Noise connection (IK-raw)")?
-        }
-        NoisePattern::N => {
-            // Anonymous client - no identity sent
-            ui::info("  (Anonymous mode - your identity is not revealed)");
-            
-            // For pattern-aware server, send pattern byte first
-            let mut stream = tokio::net::TcpStream::connect(&host)
-                .await
-                .context("Failed to connect")?;
-            stream.write_all(&[2u8]).await.context("Failed to send pattern byte")?; // 2 = N
-            
-            NoiseRawClientHelper::connect_anonymous(&host, &static_pk)
-                .await
-                .context("Failed to establish Noise connection (N)")?
-        }
-        NoisePattern::NN => {
-            // Fully anonymous
-            ui::warning("  (Ephemeral mode - no authentication, verify manually!)");
-            
-            // For pattern-aware server, send pattern byte first
-            let mut stream = tokio::net::TcpStream::connect(&host)
-                .await
-                .context("Failed to connect")?;
-            stream.write_all(&[3u8]).await.context("Failed to send pattern byte")?; // 3 = NN
-            
-            let (channel, server_ephemeral) = NoiseRawClientHelper::connect_ephemeral(&host)
-                .await
-                .context("Failed to establish Noise connection (NN)")?;
-            
-            ui::info(&format!("  Server ephemeral: {}", hex::encode(&server_ephemeral[..8])));
-            channel
-        }
+        NoisePattern::IKRaw | NoisePattern::N | NoisePattern::NN => match pattern {
+            NoisePattern::IKRaw => {
+                let device_context = format!("paykit-demo-{}", identity.public_key());
+                let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
+                    &identity.keypair.secret_key(),
+                    device_context.as_bytes(),
+                );
+
+                NoiseRawClientHelper::connect_ik_raw_with_negotiation(&x25519_sk, &host, &static_pk)
+                    .await
+                    .context("Failed to establish Noise connection (IK-raw)")?
+            }
+            NoisePattern::N => {
+                ui::info("  (Anonymous mode - your identity is not revealed)");
+                NoiseRawClientHelper::connect_anonymous_with_negotiation(&host, &static_pk)
+                    .await
+                    .context("Failed to establish Noise connection (N)")?
+            }
+            NoisePattern::NN => {
+                ui::warning("  (Ephemeral mode - no authentication, verify manually!)");
+                let (channel, server_ephemeral) =
+                    NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host)
+                        .await
+                        .context("Failed to establish Noise connection (NN)")?;
+                ui::info(&format!(
+                    "  Server ephemeral: {}",
+                    hex::encode(&server_ephemeral[..8])
+                ));
+                channel
+            }
+            NoisePattern::IK => unreachable!("handled above"),
+        },
     };
 
     ui::success("Noise connection established");

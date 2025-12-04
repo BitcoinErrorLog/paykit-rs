@@ -1,18 +1,20 @@
 //! WebSocket-based Noise protocol transport for WASM
 //!
-//! This module provides a browser-compatible implementation of the Noise IK
-//! handshake protocol over WebSockets, enabling encrypted payment coordination
-//! in the browser.
+//! This module provides a browser-compatible implementation of the Noise
+//! handshake protocols over WebSockets, enabling encrypted payment
+//! coordination in the browser. In addition to the default IK flow it now
+//! supports IK-raw (cold keys), N (anonymous client), and NN (fully anonymous)
+//! patterns via dedicated helper methods.
 
 use crate::types::PaykitNoiseMessage;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::Uint8Array;
-use pubky_noise::{NoiseClient, NoiseSession, RingKeyProvider};
-use std::cell::RefCell;
-use std::rc::Rc;
+use pubky_noise::{datalink_adapter, NoiseClient, NoisePattern, NoiseSession, RingKeyProvider};
+use std::{cell::RefCell, convert::TryInto, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{BinaryType, CloseEvent, ErrorEvent, MessageEvent, WebSocket};
+use zeroize::Zeroizing;
 
 /// Errors that can occur during WebSocket Noise transport
 #[derive(Debug, Clone)]
@@ -65,43 +67,45 @@ pub struct WebSocketNoiseChannel {
 }
 
 impl WebSocketNoiseChannel {
-    /// Connect to a WebSocket endpoint and perform Noise handshake
-    ///
-    /// This performs the full IK handshake:
-    /// 1. Client sends `-> e, es, s, ss` (includes identity payload)
-    /// 2. Server responds with `<- e, ee, se` (completes handshake)
-    /// 3. Channel is ready for encrypted transport
-    pub async fn connect<R: RingKeyProvider>(
+    fn from_parts(
+        ws: WebSocket,
+        session: NoiseSession,
+        rx: Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
+        tx: UnboundedSender<Vec<u8>>,
+    ) -> Self {
+        Self {
+            ws,
+            session,
+            rx,
+            tx,
+        }
+    }
+
+    fn init_websocket(
         ws_url: &str,
-        client: &NoiseClient<R>,
-        server_static_pub: &[u8; 32],
-    ) -> Result<Self> {
-        // 1. Create WebSocket connection
+    ) -> Result<(
+        WebSocket,
+        Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
+        UnboundedSender<Vec<u8>>,
+    )> {
         let ws = WebSocket::new(ws_url)
             .map_err(|e| TransportError::ConnectionFailed(format!("{:?}", e)))?;
-
-        // Set binary type for raw bytes
         ws.set_binary_type(BinaryType::Arraybuffer);
 
-        // 2. Set up message queue
         let (tx, rx) = unbounded::<Vec<u8>>();
         let rx = Rc::new(RefCell::new(rx));
 
-        // 3. Set up WebSocket event handlers
         let tx_clone = tx.clone();
         let onmessage = Closure::wrap(Box::new(move |e: MessageEvent| {
             if let Ok(array_buffer) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let uint8_array = Uint8Array::new(&array_buffer);
                 let mut data = vec![0u8; uint8_array.length() as usize];
                 uint8_array.copy_to(&mut data);
-
-                // Send to message queue
                 let _ = tx_clone.unbounded_send(data);
             }
         }) as Box<dyn FnMut(MessageEvent)>);
-
         ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-        onmessage.forget(); // Keep closure alive
+        onmessage.forget();
 
         let onerror = Closure::wrap(Box::new(move |e: ErrorEvent| {
             crate::utils::error(&format!("WebSocket error: {:?}", e.message()));
@@ -119,13 +123,73 @@ impl WebSocketNoiseChannel {
         ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
         onclose.forget();
 
-        // 4. Wait for WebSocket to be ready
+        Ok((ws, rx, tx))
+    }
+
+    fn send_frame(ws: &WebSocket, payload: &[u8], context: &str) -> Result<()> {
+        let uint8_array = Uint8Array::from(payload);
+        ws.send_with_array_buffer(&uint8_array.buffer())
+            .map_err(|e| {
+                TransportError::HandshakeFailed(format!("Failed to send {}: {:?}", context, e))
+            })
+    }
+
+    fn send_pattern_byte(ws: &WebSocket, pattern: NoisePattern) -> Result<()> {
+        Self::send_frame(ws, &[negotiation_byte(pattern)], "pattern byte")
+    }
+
+    /// Connect to a WebSocket endpoint and perform Noise handshake
+    ///
+    /// This performs the full IK handshake:
+    /// 1. Client sends `-> e, es, s, ss` (includes identity payload)
+    /// 2. Server responds with `<- e, ee, se` (completes handshake)
+    /// 3. Channel is ready for encrypted transport
+    pub async fn connect<R: RingKeyProvider>(
+        ws_url: &str,
+        client: &NoiseClient<R>,
+        server_static_pub: &[u8; 32],
+    ) -> Result<Self> {
+        let (ws, rx, tx) = Self::init_websocket(ws_url)?;
         Self::wait_for_open(&ws).await?;
 
-        // 5. Perform Noise handshake
         let session = Self::perform_client_handshake(&ws, &rx, client, server_static_pub).await?;
 
-        Ok(Self { ws, session, rx, tx })
+        Ok(Self::from_parts(ws, session, rx, tx))
+    }
+
+    /// Connect using IK-raw pattern (cold key scenario).
+    pub async fn connect_ik_raw(
+        ws_url: &str,
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        server_static_pub: &[u8; 32],
+    ) -> Result<Self> {
+        let (ws, rx, tx) = Self::init_websocket(ws_url)?;
+        Self::wait_for_open(&ws).await?;
+        Self::send_pattern_byte(&ws, NoisePattern::IKRaw)?;
+        let session =
+            Self::perform_client_handshake_ik_raw(&ws, &rx, x25519_sk, server_static_pub).await?;
+        Ok(Self::from_parts(ws, session, rx, tx))
+    }
+
+    /// Connect using N pattern (anonymous client, authenticated server).
+    pub async fn connect_anonymous(ws_url: &str, server_static_pub: &[u8; 32]) -> Result<Self> {
+        let (ws, rx, tx) = Self::init_websocket(ws_url)?;
+        Self::wait_for_open(&ws).await?;
+        Self::send_pattern_byte(&ws, NoisePattern::N)?;
+        let session = Self::perform_client_handshake_n(&ws, server_static_pub).await?;
+        Ok(Self::from_parts(ws, session, rx, tx))
+    }
+
+    /// Connect using NN pattern (fully anonymous).
+    ///
+    /// Returns the channel and the server's ephemeral public key for
+    /// post-handshake attestation.
+    pub async fn connect_ephemeral(ws_url: &str) -> Result<(Self, [u8; 32])> {
+        let (ws, rx, tx) = Self::init_websocket(ws_url)?;
+        Self::wait_for_open(&ws).await?;
+        Self::send_pattern_byte(&ws, NoisePattern::NN)?;
+        let (session, server_ephemeral) = Self::perform_client_handshake_nn(&ws, &rx).await?;
+        Ok((Self::from_parts(ws, session, rx, tx), server_ephemeral))
     }
 
     /// Wait for WebSocket to reach OPEN state
@@ -169,11 +233,11 @@ impl WebSocketNoiseChannel {
         server_static_pub: &[u8; 32],
     ) -> Result<NoiseSession> {
         // 1. Build the IK handshake initiation message
-        let (hs, first_msg) = pubky_noise::datalink_adapter::client_start_ik_direct(
-            client,
-            server_static_pub,
-        )
-        .map_err(|e| TransportError::HandshakeFailed(format!("Handshake build failed: {}", e)))?;
+        let (hs, first_msg) =
+            pubky_noise::datalink_adapter::client_start_ik_direct(client, server_static_pub)
+                .map_err(|e| {
+                    TransportError::HandshakeFailed(format!("Handshake build failed: {}", e))
+                })?;
 
         // 2. Send the handshake initiation message
         let uint8_array = Uint8Array::from(&first_msg[..]);
@@ -194,6 +258,73 @@ impl WebSocketNoiseChannel {
             })?;
 
         Ok(session)
+    }
+
+    async fn perform_client_handshake_ik_raw(
+        ws: &WebSocket,
+        rx: &Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        server_static_pub: &[u8; 32],
+    ) -> Result<NoiseSession> {
+        let (hs, first_msg) = datalink_adapter::start_ik_raw(x25519_sk, server_static_pub)
+            .map_err(|e| {
+                TransportError::HandshakeFailed(format!("Handshake build failed: {}", e))
+            })?;
+
+        Self::send_frame(ws, &first_msg, "handshake")?;
+
+        let response = Self::receive_raw(rx).await.map_err(|e| {
+            TransportError::HandshakeFailed(format!("Failed to read handshake response: {}", e))
+        })?;
+
+        datalink_adapter::complete_raw(hs, &response).map_err(|e| {
+            TransportError::HandshakeFailed(format!("Failed to complete handshake: {}", e))
+        })
+    }
+
+    async fn perform_client_handshake_n(
+        ws: &WebSocket,
+        server_static_pub: &[u8; 32],
+    ) -> Result<NoiseSession> {
+        let (hs, first_msg) = datalink_adapter::start_n(server_static_pub).map_err(|e| {
+            TransportError::HandshakeFailed(format!("Handshake build failed: {}", e))
+        })?;
+
+        Self::send_frame(ws, &first_msg, "handshake")?;
+
+        datalink_adapter::complete_n(hs).map_err(|e| {
+            TransportError::HandshakeFailed(format!("Failed to complete handshake: {}", e))
+        })
+    }
+
+    async fn perform_client_handshake_nn(
+        ws: &WebSocket,
+        rx: &Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
+    ) -> Result<(NoiseSession, [u8; 32])> {
+        let (hs, first_msg) = datalink_adapter::start_nn().map_err(|e| {
+            TransportError::HandshakeFailed(format!("Handshake build failed: {}", e))
+        })?;
+
+        Self::send_frame(ws, &first_msg, "handshake")?;
+
+        let response = Self::receive_raw(rx).await.map_err(|e| {
+            TransportError::HandshakeFailed(format!("Failed to read handshake response: {}", e))
+        })?;
+
+        let server_ephemeral: [u8; 32] = response
+            .get(..32)
+            .and_then(|slice| slice.try_into().ok())
+            .ok_or_else(|| {
+                TransportError::HandshakeFailed(
+                    "Invalid response length for NN pattern".to_string(),
+                )
+            })?;
+
+        let session = datalink_adapter::complete_raw(hs, &response).map_err(|e| {
+            TransportError::HandshakeFailed(format!("Failed to complete handshake: {}", e))
+        })?;
+
+        Ok((session, server_ephemeral))
     }
 
     /// Receive raw bytes from the message queue
@@ -283,6 +414,16 @@ impl WebSocketNoiseChannel {
         self.ws
             .close()
             .map_err(|e| TransportError::WebSocketError(format!("Close failed: {:?}", e)))
+    }
+}
+
+fn negotiation_byte(pattern: NoisePattern) -> u8 {
+    match pattern {
+        NoisePattern::IK => 0,
+        NoisePattern::IKRaw => 1,
+        NoisePattern::N => 2,
+        NoisePattern::NN => 3,
+        NoisePattern::XX => 4,
     }
 }
 

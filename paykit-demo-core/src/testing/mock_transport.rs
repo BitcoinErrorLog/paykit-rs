@@ -307,12 +307,9 @@ mod tests {
         let reader = MockUnauthenticatedTransport::new(storage);
 
         // Add multiple endpoints
-        auth.upsert_payment_endpoint(
-            &MethodId("lightning".into()),
-            &EndpointData("ln".into()),
-        )
-        .await
-        .unwrap();
+        auth.upsert_payment_endpoint(&MethodId("lightning".into()), &EndpointData("ln".into()))
+            .await
+            .unwrap();
         auth.upsert_payment_endpoint(&MethodId("onchain".into()), &EndpointData("btc".into()))
             .await
             .unwrap();
@@ -339,4 +336,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

@@ -18,4 +18,3 @@
 pub mod mock_transport;
 
 pub use mock_transport::{MockAuthenticatedTransport, MockStorage, MockUnauthenticatedTransport};
-

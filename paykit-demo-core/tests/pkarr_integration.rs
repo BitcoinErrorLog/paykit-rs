@@ -9,7 +9,7 @@
 
 use paykit_demo_core::pkarr_discovery::{
     derive_noise_keypair, discover_noise_key, noise_key_path, prepare_cold_key_publication,
-    publish_noise_key, setup_cold_key, NoiseKeyConfig, NOISE_KEY_PATH_PREFIX,
+    publish_noise_key, NoiseKeyConfig, NOISE_KEY_PATH_PREFIX,
 };
 
 #[test]
@@ -204,7 +204,7 @@ mod with_testnet {
 
         // 3. Derive X25519 key and publish
         let device_id = "test-device";
-        let (x25519_sk, x25519_pk) = derive_noise_keypair(&identity.keypair.secret_key(), device_id);
+        let (_x25519_sk, x25519_pk) = derive_noise_keypair(&identity.keypair.secret_key(), device_id);
 
         publish_noise_key(&session, &identity.keypair.secret_key(), &x25519_pk, device_id)
             .await

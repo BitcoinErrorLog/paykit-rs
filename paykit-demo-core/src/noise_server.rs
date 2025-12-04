@@ -20,7 +20,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use zeroize::Zeroizing;
 
-use crate::noise_client::NoisePattern;
+use crate::noise_client::{pattern_from_byte, NoisePattern};
 use crate::Identity;
 
 /// Maximum handshake message size (Noise handshakes are typically <512 bytes)
@@ -55,6 +55,8 @@ pub enum AcceptedConnection {
         channel: PubkyNoiseChannel<TcpStream>,
         /// Client's ephemeral public key (for post-handshake verification)
         client_ephemeral: [u8; 32],
+        /// Server's ephemeral public key (for attestation)
+        server_ephemeral: [u8; 32],
     },
     /// XX pattern: Trust-on-first-use (TOFU)
     XX {
@@ -96,6 +98,17 @@ impl AcceptedConnection {
             AcceptedConnection::N { channel } => channel,
             AcceptedConnection::NN { channel, .. } => channel,
             AcceptedConnection::XX { channel, .. } => channel,
+        }
+    }
+
+    /// Return the pattern associated with this connection.
+    pub fn pattern(&self) -> NoisePattern {
+        match self {
+            AcceptedConnection::IK { .. } => NoisePattern::IK,
+            AcceptedConnection::IKRaw { .. } => NoisePattern::IKRaw,
+            AcceptedConnection::N { .. } => NoisePattern::N,
+            AcceptedConnection::NN { .. } => NoisePattern::NN,
+            AcceptedConnection::XX { .. } => NoisePattern::XX,
         }
     }
 
@@ -152,10 +165,14 @@ impl NoiseServerHelper {
         ))
     }
 
-    /// Run a Noise server and handle incoming connections
+    /// Run a Noise server and handle incoming connections (IK pattern only)
     ///
     /// This binds to the specified address and accepts incoming Noise connections.
     /// For each connection, the provided handler is called with the established channel.
+    ///
+    /// **Note:** This server only accepts IK pattern connections and does NOT read a pattern
+    /// negotiation byte. For multi-pattern support, use [`run_pattern_server`] instead, which
+    /// reads a pattern byte from the client to determine the handshake type.
     ///
     /// # Arguments
     /// * `identity` - The server's identity
@@ -180,6 +197,8 @@ impl NoiseServerHelper {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// [`run_pattern_server`]: Self::run_pattern_server
     pub async fn run_server<F, Fut>(
         identity: &Identity,
         bind_addr: &str,
@@ -340,6 +359,15 @@ impl NoiseServerHelper {
         Ok((PubkyNoiseChannel::new(stream, session), client_pk))
     }
 
+    /// Backward-compatible helper that discards the client static key.
+    pub async fn accept_ik_raw_with_stream(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        stream: TcpStream,
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
+        let (channel, _) = Self::accept_ik_raw(x25519_sk, stream).await?;
+        Ok(channel)
+    }
+
     /// Accept N pattern connection (anonymous client).
     ///
     /// The client is anonymous; only the server is authenticated.
@@ -369,6 +397,14 @@ impl NoiseServerHelper {
         Ok(PubkyNoiseChannel::new(stream, session))
     }
 
+    /// Backward-compatible helper for anonymous pattern acceptance.
+    pub async fn accept_anonymous_with_stream(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        stream: TcpStream,
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
+        Self::accept_n(x25519_sk, stream).await
+    }
+
     /// Accept NN pattern connection (fully anonymous).
     ///
     /// Neither party is authenticated during handshake.
@@ -378,10 +414,10 @@ impl NoiseServerHelper {
     /// * `stream` - The TCP connection to accept
     ///
     /// # Returns
-    /// A tuple of (channel, client_ephemeral_pk) for post-handshake verification
+    /// A tuple of (channel, client_ephemeral_pk, server_ephemeral_pk) for post-handshake verification
     pub async fn accept_nn(
         mut stream: TcpStream,
-    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
         // Read length-prefixed first message
         let first_msg = Self::read_handshake_message(&mut stream).await?;
 
@@ -393,6 +429,9 @@ impl NoiseServerHelper {
         // Accept NN pattern
         let (hs, response) = datalink_adapter::accept_nn(&first_msg)
             .map_err(|e| anyhow!("Handshake accept failed: {}", e))?;
+        let server_ephemeral: [u8; 32] = response[..32]
+            .try_into()
+            .map_err(|_| anyhow!("Invalid response length"))?;
 
         // Send length-prefixed response
         Self::write_handshake_message(&mut stream, &response).await?;
@@ -401,7 +440,18 @@ impl NoiseServerHelper {
         let session = datalink_adapter::complete_raw(hs, &[])
             .map_err(|e| anyhow!("Handshake completion failed: {}", e))?;
 
-        Ok((PubkyNoiseChannel::new(stream, session), client_ephemeral))
+        Ok((
+            PubkyNoiseChannel::new(stream, session),
+            client_ephemeral,
+            server_ephemeral,
+        ))
+    }
+
+    /// Backward-compatible helper for NN pattern acceptance.
+    pub async fn accept_ephemeral_with_stream(
+        stream: TcpStream,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
+        Self::accept_nn(stream).await
     }
 
     /// Accept XX pattern connection (trust-on-first-use).
@@ -512,10 +562,11 @@ impl NoiseServerHelper {
                 Ok(AcceptedConnection::N { channel })
             }
             NoisePattern::NN => {
-                let (channel, client_ephemeral) = Self::accept_nn(stream).await?;
+                let (channel, client_ephemeral, server_ephemeral) = Self::accept_nn(stream).await?;
                 Ok(AcceptedConnection::NN {
                     channel,
                     client_ephemeral,
+                    server_ephemeral,
                 })
             }
             NoisePattern::XX => {
@@ -572,7 +623,7 @@ impl NoiseServerHelper {
                 .await
                 .context("Failed to read pattern byte")?;
 
-            let pattern = match NoisePattern::try_from(pattern_byte[0]) {
+            let pattern = match pattern_from_byte(pattern_byte[0]) {
                 Ok(p) => p,
                 Err(e) => {
                     eprintln!("Unknown pattern byte {}: {:#}", pattern_byte[0], e);

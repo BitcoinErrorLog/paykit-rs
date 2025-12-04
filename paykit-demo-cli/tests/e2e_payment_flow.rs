@@ -127,7 +127,7 @@ async fn test_noise_handshake_between_payer_and_receiver() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_full_payment_flow_with_published_methods() {
     // Setup: Create testnet and identities
     let testnet = EphemeralTestnet::start()
@@ -140,7 +140,7 @@ async fn test_full_payment_flow_with_published_methods() {
     let storage_dir = temp_dir.path();
 
     let id_manager = IdentityManager::new(storage_dir.join("identities"));
-    let payer = id_manager.create("payer").expect("Failed to create payer");
+    let _payer = id_manager.create("payer").expect("Failed to create payer");
     let receiver = id_manager
         .create("receiver")
         .expect("Failed to create receiver");

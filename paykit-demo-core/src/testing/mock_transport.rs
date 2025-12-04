@@ -11,6 +11,9 @@ use paykit_lib::{
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+type OwnerData = HashMap<String, Vec<u8>>;
+type StorageMap = HashMap<String, OwnerData>;
+
 /// Path prefix for paykit data in mock storage.
 const PAYKIT_PATH_PREFIX: &str = "/pub/paykit.app/v0/";
 /// Path prefix for follows data in mock storage.
@@ -23,7 +26,7 @@ const PUBKY_FOLLOWS_PATH: &str = "/pub/pubky.app/follows/";
 #[derive(Clone, Default)]
 pub struct MockStorage {
     /// Map of owner -> path -> content
-    data: Arc<RwLock<HashMap<String, HashMap<String, Vec<u8>>>>>,
+    data: Arc<RwLock<StorageMap>>,
 }
 
 impl MockStorage {

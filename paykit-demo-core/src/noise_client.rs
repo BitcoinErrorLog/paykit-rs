@@ -91,6 +91,47 @@ impl NoiseClientHelper {
         Ok(channel)
     }
 
+    /// Connect with pattern negotiation (sends pattern byte before handshake).
+    ///
+    /// Use this with `NoiseServerHelper::run_pattern_server` which expects a pattern byte.
+    ///
+    /// # Arguments
+    /// * `identity` - The user's identity
+    /// * `recipient_host` - The recipient's host address (e.g., "127.0.0.1:9735")
+    /// * `recipient_static_pk` - The recipient's Noise static public key (32 bytes)
+    ///
+    /// # Returns
+    /// An encrypted Noise channel ready for payment messages
+    pub async fn connect_to_recipient_with_negotiation(
+        identity: &Identity,
+        recipient_host: &str,
+        recipient_static_pk: &[u8; 32],
+    ) -> Result<PubkyNoiseChannel<TcpStream>> {
+        use tokio::io::AsyncWriteExt;
+
+        // Create client
+        let device_id = format!("paykit-demo-{}", identity.public_key());
+        let client = Self::create_client(identity, device_id.as_bytes());
+
+        // Connect TCP and send pattern byte
+        let mut stream = TcpStream::connect(recipient_host)
+            .await
+            .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+
+        // Send IK pattern byte (0x00) for pattern-aware servers
+        stream
+            .write_all(&[NoisePattern::IK.negotiation_byte()])
+            .await
+            .context("Failed to send pattern byte")?;
+
+        // Perform Noise handshake
+        let channel = PubkyNoiseChannel::connect(&client, stream, recipient_static_pk)
+            .await
+            .context("Failed to complete Noise handshake")?;
+
+        Ok(channel)
+    }
+
     /// Parse a recipient address into host and public key
     ///
     /// Expected format: "host:port@pubkey" or just "host:port" (pubkey resolved separately)
@@ -129,82 +170,14 @@ impl NoiseClientHelper {
 /// Maximum handshake message size (Noise handshakes are typically <512 bytes)
 const MAX_HANDSHAKE_SIZE: usize = 4096;
 
-/// Noise pattern for connection establishment
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoisePattern {
-    /// IK pattern with full identity binding (default)
-    /// Use when Ed25519 keys are available at handshake time
-    IK,
-    /// IK pattern without identity binding (cold key scenario)
-    /// Use when identity is verified externally via pkarr
-    IKRaw,
-    /// N pattern - anonymous client, authenticated server
-    /// Use for anonymous payment requests (e.g., donation boxes)
-    N,
-    /// NN pattern - both parties anonymous
-    /// Use with post-handshake attestation
-    NN,
-    /// XX pattern - trust-on-first-use
-    /// Both parties exchange static keys during 3-message handshake
-    XX,
-}
+// Re-export NoisePattern from pubky-noise
+pub use pubky_noise::NoisePattern;
 
-impl std::fmt::Display for NoisePattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NoisePattern::IK => write!(f, "IK"),
-            NoisePattern::IKRaw => write!(f, "IK-raw"),
-            NoisePattern::N => write!(f, "N"),
-            NoisePattern::NN => write!(f, "NN"),
-            NoisePattern::XX => write!(f, "XX"),
-        }
-    }
-}
-
-impl NoisePattern {
-    /// Single-byte identifier used during pattern negotiation.
-    pub fn negotiation_byte(self) -> u8 {
-        match self {
-            NoisePattern::IK => 0,
-            NoisePattern::IKRaw => 1,
-            NoisePattern::N => 2,
-            NoisePattern::NN => 3,
-            NoisePattern::XX => 4,
-        }
-    }
-}
-
-impl TryFrom<u8> for NoisePattern {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(NoisePattern::IK),
-            1 => Ok(NoisePattern::IKRaw),
-            2 => Ok(NoisePattern::N),
-            3 => Ok(NoisePattern::NN),
-            4 => Ok(NoisePattern::XX),
-            other => Err(anyhow!("Unknown Noise pattern byte: {}", other)),
-        }
-    }
-}
-
-impl std::str::FromStr for NoisePattern {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "ik" => Ok(NoisePattern::IK),
-            "ik-raw" | "ikraw" | "ik_raw" => Ok(NoisePattern::IKRaw),
-            "n" => Ok(NoisePattern::N),
-            "nn" => Ok(NoisePattern::NN),
-            "xx" => Ok(NoisePattern::XX),
-            _ => Err(anyhow!(
-                "Unknown pattern: {}. Valid patterns: ik, ik-raw, n, nn, xx",
-                s
-            )),
-        }
-    }
+/// Convert a negotiation byte to NoisePattern with anyhow error handling.
+///
+/// This wraps pubky_noise::NoisePattern::from_byte for convenient error handling.
+pub fn pattern_from_byte(byte: u8) -> Result<NoisePattern> {
+    NoisePattern::from_byte(byte).ok_or_else(|| anyhow!("Unknown Noise pattern byte: {}", byte))
 }
 
 /// Helper for raw-key Noise connections (cold key scenarios).
@@ -408,24 +381,24 @@ impl NoiseRawClientHelper {
     /// * `recipient_host` - The recipient's host address (e.g., "127.0.0.1:9735")
     ///
     /// # Returns
-    /// A tuple of (channel, server_ephemeral_pk) for post-handshake verification
+    /// A tuple of (channel, server_ephemeral_pk, client_ephemeral_pk) for post-handshake verification
     ///
     /// # Example
     /// ```no_run
     /// # use paykit_demo_core::NoiseRawClientHelper;
     /// # async fn example() -> anyhow::Result<()> {
-    /// let (mut channel, server_ephemeral) = NoiseRawClientHelper::connect_ephemeral(
+    /// let (mut channel, server_ephemeral, client_ephemeral) = NoiseRawClientHelper::connect_ephemeral(
     ///     "127.0.0.1:9735",
     /// ).await?;
     ///
     /// // IMPORTANT: Perform post-handshake attestation
-    /// // e.g., server signs a challenge with their Ed25519 key
+    /// // e.g., server signs a challenge with their Ed25519 key using both ephemerals
     /// # Ok(())
     /// # }
     /// ```
     pub async fn connect_ephemeral(
         recipient_host: &str,
-    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
         let stream = TcpStream::connect(recipient_host)
             .await
             .with_context(|| format!("Failed to connect to {}", recipient_host))?;
@@ -435,9 +408,12 @@ impl NoiseRawClientHelper {
     /// NN-pattern connection over an existing TCP stream.
     pub async fn connect_ephemeral_with_stream(
         mut stream: TcpStream,
-    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
         let (hs, first_msg) =
             datalink_adapter::start_nn().map_err(|e| anyhow!("Handshake init failed: {}", e))?;
+        let client_ephemeral: [u8; 32] = first_msg[..32]
+            .try_into()
+            .map_err(|_| anyhow!("Invalid first message length"))?;
 
         let len = (first_msg.len() as u32).to_be_bytes();
         stream
@@ -475,15 +451,156 @@ impl NoiseRawClientHelper {
         let session = datalink_adapter::complete_raw(hs, &response)
             .map_err(|e| anyhow!("Handshake completion failed: {}", e))?;
 
-        Ok((PubkyNoiseChannel::new(stream, session), server_ephemeral))
+        Ok((
+            PubkyNoiseChannel::new(stream, session),
+            server_ephemeral,
+            client_ephemeral,
+        ))
     }
 
     /// NN-pattern connection with automatic pattern negotiation.
     pub async fn connect_ephemeral_with_negotiation(
         recipient_host: &str,
-    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32], [u8; 32])> {
         let stream = Self::connect_stream_with_pattern(recipient_host, NoisePattern::NN).await?;
         Self::connect_ephemeral_with_stream(stream).await
+    }
+
+    /// Connect using XX pattern (trust-on-first-use).
+    ///
+    /// Both parties exchange static keys during a 3-message handshake.
+    /// Use for TOFU scenarios where keys are cached after first contact.
+    ///
+    /// # Arguments
+    /// * `x25519_sk` - Your X25519 secret key (derived from Ed25519 seed)
+    /// * `recipient_host` - The recipient's host address (e.g., "127.0.0.1:9735")
+    ///
+    /// # Returns
+    /// A tuple of (channel, server_static_pk) - cache server_static_pk for future IK connections
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use paykit_demo_core::NoiseRawClientHelper;
+    /// # use zeroize::Zeroizing;
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let seed = [42u8; 32];
+    /// let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device");
+    ///
+    /// let (channel, server_static_pk) = NoiseRawClientHelper::connect_xx(
+    ///     &x25519_sk,
+    ///     "127.0.0.1:9735",
+    /// ).await?;
+    ///
+    /// // Cache server_static_pk for future IK pattern connections
+    /// println!("Server static key: {}", hex::encode(&server_static_pk));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn connect_xx(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        recipient_host: &str,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        let stream = TcpStream::connect(recipient_host)
+            .await
+            .with_context(|| format!("Failed to connect to {}", recipient_host))?;
+        Self::connect_xx_with_stream(x25519_sk, stream).await
+    }
+
+    /// XX-pattern connection with automatic pattern negotiation.
+    pub async fn connect_xx_with_negotiation(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        recipient_host: &str,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        let stream = Self::connect_stream_with_pattern(recipient_host, NoisePattern::XX).await?;
+        Self::connect_xx_with_stream(x25519_sk, stream).await
+    }
+
+    /// XX-pattern connection over an existing TCP stream.
+    ///
+    /// This implements the full 3-message XX handshake:
+    /// 1. Client -> Server: `e` (client ephemeral)
+    /// 2. Server -> Client: `e, ee, s, es` (server ephemeral + static)
+    /// 3. Client -> Server: `s, se` (client static)
+    pub async fn connect_xx_with_stream(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: TcpStream,
+    ) -> Result<(PubkyNoiseChannel<TcpStream>, [u8; 32])> {
+        use pubky_noise::NoiseSender;
+
+        // 1. Start XX handshake (message 1: -> e)
+        let sender = NoiseSender::new();
+        let (mut hs, first_msg) = sender
+            .initiate_xx(x25519_sk)
+            .map_err(|e| anyhow!("XX handshake init failed: {}", e))?;
+
+        // Send first message (length-prefixed)
+        let len = (first_msg.len() as u32).to_be_bytes();
+        stream
+            .write_all(&len)
+            .await
+            .context("Failed to send XX first message length")?;
+        stream
+            .write_all(&first_msg)
+            .await
+            .context("Failed to send XX first message")?;
+
+        // 2. Read server response (message 2: <- e, ee, s, es)
+        let mut len_bytes = [0u8; 4];
+        stream
+            .read_exact(&mut len_bytes)
+            .await
+            .context("Failed to read XX response length")?;
+        let response_len = u32::from_be_bytes(len_bytes) as usize;
+
+        if response_len > MAX_HANDSHAKE_SIZE {
+            return Err(anyhow!(
+                "XX handshake response too large: {} bytes (max {})",
+                response_len,
+                MAX_HANDSHAKE_SIZE
+            ));
+        }
+
+        let mut response = vec![0u8; response_len];
+        stream
+            .read_exact(&mut response)
+            .await
+            .context("Failed to read XX response")?;
+
+        // Process server's response (reads e, ee, s, es)
+        let mut buf = vec![0u8; response.len() + 256];
+        hs.read_message(&response, &mut buf)
+            .context("Failed to process XX server response")?;
+
+        // 3. Send final message (message 3: -> s, se)
+        let mut final_msg = vec![0u8; 128];
+        let n = hs
+            .write_message(&[], &mut final_msg)
+            .context("Failed to generate XX final message")?;
+        final_msg.truncate(n);
+
+        // Send final message (length-prefixed)
+        let len = (final_msg.len() as u32).to_be_bytes();
+        stream
+            .write_all(&len)
+            .await
+            .context("Failed to send XX final message length")?;
+        stream
+            .write_all(&final_msg)
+            .await
+            .context("Failed to send XX final message")?;
+
+        // Extract server's static key (learned during message 2)
+        let server_static_pk: [u8; 32] = hs
+            .get_remote_static()
+            .ok_or_else(|| anyhow!("No server static key in XX handshake"))?
+            .try_into()
+            .map_err(|_| anyhow!("Invalid server static key length"))?;
+
+        // Complete handshake to get transport session
+        let session = pubky_noise::NoiseSession::from_handshake(hs)
+            .map_err(|e| anyhow!("XX handshake completion failed: {}", e))?;
+
+        Ok((PubkyNoiseChannel::new(stream, session), server_static_pk))
     }
 
     async fn connect_stream_with_pattern(

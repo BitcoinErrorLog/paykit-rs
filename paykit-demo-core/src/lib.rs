@@ -31,6 +31,7 @@
 //! For production use, implement proper key management, secure storage,
 //! and authentication mechanisms.
 
+pub mod attestation;
 pub mod directory;
 pub mod identity;
 pub mod models;
@@ -43,10 +44,11 @@ pub mod storage;
 pub mod subscription;
 pub mod testing;
 
+pub use attestation::{create_attestation, ed25519_public_key, verify_attestation};
 pub use directory::DirectoryClient;
 pub use identity::{Identity, IdentityManager};
 pub use models::{Contact, PaymentMethod, Receipt};
-pub use noise_client::{NoiseClientHelper, NoisePattern, NoiseRawClientHelper};
+pub use noise_client::{pattern_from_byte, NoiseClientHelper, NoisePattern, NoiseRawClientHelper};
 pub use noise_server::{AcceptedConnection, NoiseServerHelper};
 pub use payment::{DemoPaykitStorage, DemoReceiptGenerator, PaymentCoordinator};
 pub use session::SessionManager;

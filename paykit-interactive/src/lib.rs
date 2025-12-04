@@ -82,6 +82,22 @@ pub enum PaykitNoiseMessage {
     Ack,
     /// Error reporting.
     Error { code: String, message: String },
+    /// NN pattern attestation - proves Ed25519 identity after ephemeral handshake.
+    ///
+    /// Used to authenticate after an NN (fully anonymous) Noise handshake.
+    /// The signature binds the Ed25519 identity to the specific session by
+    /// signing both ephemeral public keys from the handshake.
+    ///
+    /// # Security
+    /// - Prevents MITM attacks on NN connections
+    /// - Binds identity to this specific session (replay protection)
+    /// - Should be exchanged immediately after NN handshake completes
+    Attestation {
+        /// The signer's Ed25519 public key (32 bytes, hex-encoded)
+        ed25519_pk: String,
+        /// Ed25519 signature over the attestation message (64 bytes, hex-encoded)
+        signature: String,
+    },
 }
 
 /// Abstraction for a secure channel to exchange Paykit messages.

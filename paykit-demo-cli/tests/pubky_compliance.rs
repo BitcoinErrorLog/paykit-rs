@@ -12,7 +12,7 @@ use paykit_lib::{
 use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_publish_and_discover_compliance() {
     // Start testnet homeserver
     let testnet = EphemeralTestnet::start()
@@ -59,7 +59,7 @@ async fn test_publish_and_discover_compliance() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_endpoint_rotation_compliance() {
     // Test that multiple publishes to same method_id replace old values
     // per pubky-sdk spec
@@ -118,7 +118,7 @@ async fn test_endpoint_rotation_compliance() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_multiple_methods_compliance() {
     // Test publishing multiple payment methods
     let testnet = EphemeralTestnet::start()

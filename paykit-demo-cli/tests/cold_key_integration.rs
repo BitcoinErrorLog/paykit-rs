@@ -186,3 +186,127 @@ fn test_pattern_roundtrip() {
         assert_eq!(pattern, parsed);
     }
 }
+
+/// Test that stale pkarr keys are correctly rejected.
+///
+/// This is critical for cold key security - keys should expire after a configurable
+/// period to force key rotation and prevent long-term compromise.
+#[test]
+fn test_stale_pkarr_key_rejection() {
+    use paykit_demo_core::ed25519_public_key;
+    use pubky_noise::pkarr_helpers;
+
+    // Create a valid key binding
+    let ed25519_sk = [1u8; 32];
+    let ed25519_pk = ed25519_public_key(&ed25519_sk);
+
+    let x25519_pk = kdf::derive_x25519_static(&ed25519_sk, b"device");
+    let x25519_pk_public = kdf::x25519_pk_from_sk(&x25519_pk);
+
+    // Create signature binding
+    let signature =
+        pkarr_helpers::sign_pkarr_key_binding(&ed25519_sk, &x25519_pk_public, "test-device");
+
+    // Create record with OLD timestamp (1 day old)
+    let old_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        - (24 * 60 * 60); // 1 day ago
+
+    let txt_record = pkarr_helpers::format_x25519_for_pkarr_with_timestamp(
+        &x25519_pk_public,
+        Some(&signature),
+        old_timestamp,
+    );
+
+    // Verify with 1-hour max age - should REJECT (too old)
+    let result = pkarr_helpers::parse_and_verify_with_expiry(
+        &txt_record,
+        &ed25519_pk,
+        "test-device",
+        60 * 60, // 1 hour max age
+    );
+    assert!(result.is_err(), "Stale key (1 day old) should be rejected with 1-hour max age");
+
+    // Verify with 7-day max age - should ACCEPT (within range)
+    let result = pkarr_helpers::parse_and_verify_with_expiry(
+        &txt_record,
+        &ed25519_pk,
+        "test-device",
+        7 * 24 * 60 * 60, // 7 days max age
+    );
+    assert!(result.is_ok(), "Key within 7-day window should be accepted");
+    assert_eq!(result.unwrap(), x25519_pk_public);
+}
+
+/// Test that missing timestamp causes rejection when expiry is required.
+#[test]
+fn test_pkarr_key_missing_timestamp_rejected() {
+    use paykit_demo_core::ed25519_public_key;
+    use pubky_noise::pkarr_helpers;
+
+    let ed25519_sk = [2u8; 32];
+    let ed25519_pk = ed25519_public_key(&ed25519_sk);
+
+    let x25519_pk = kdf::derive_x25519_static(&ed25519_sk, b"device");
+    let x25519_pk_public = kdf::x25519_pk_from_sk(&x25519_pk);
+
+    let signature =
+        pkarr_helpers::sign_pkarr_key_binding(&ed25519_sk, &x25519_pk_public, "test-device");
+
+    // Create record WITHOUT timestamp
+    let txt_record = pkarr_helpers::format_x25519_for_pkarr(&x25519_pk_public, Some(&signature));
+
+    // Verify with expiry - should REJECT (no timestamp)
+    let result = pkarr_helpers::parse_and_verify_with_expiry(
+        &txt_record,
+        &ed25519_pk,
+        "test-device",
+        24 * 60 * 60, // 1 day max age
+    );
+    assert!(result.is_err(), "Record without timestamp should be rejected when expiry is required");
+}
+
+/// Test that future timestamps are handled correctly.
+///
+/// Future timestamps indicate either clock skew or an attempt to forge freshness.
+/// The current implementation rejects far-future timestamps as a security measure.
+#[test]
+fn test_pkarr_key_future_timestamp() {
+    use paykit_demo_core::ed25519_public_key;
+    use pubky_noise::pkarr_helpers;
+
+    let ed25519_sk = [3u8; 32];
+    let ed25519_pk = ed25519_public_key(&ed25519_sk);
+
+    let x25519_pk = kdf::derive_x25519_static(&ed25519_sk, b"device");
+    let x25519_pk_public = kdf::x25519_pk_from_sk(&x25519_pk);
+
+    let signature =
+        pkarr_helpers::sign_pkarr_key_binding(&ed25519_sk, &x25519_pk_public, "test-device");
+
+    // Create record with FUTURE timestamp (1 hour in future)
+    let future_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + (60 * 60); // 1 hour in future
+
+    let txt_record = pkarr_helpers::format_x25519_for_pkarr_with_timestamp(
+        &x25519_pk_public,
+        Some(&signature),
+        future_timestamp,
+    );
+
+    // Far future timestamps are rejected as they could be an attempt to forge freshness
+    let result = pkarr_helpers::parse_and_verify_with_expiry(
+        &txt_record,
+        &ed25519_pk,
+        "test-device",
+        24 * 60 * 60, // 1 day max age
+    );
+    // pubky-noise rejects timestamps that are significantly in the future
+    // This prevents attackers from creating keys that appear fresh indefinitely
+    assert!(result.is_err(), "Far-future timestamps should be rejected as a security measure");
+}

@@ -8,7 +8,7 @@ use paykit_lib::{
 use pubky_testnet::EphemeralTestnet;
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_publish_and_query_payment_methods() {
     // Start testnet
     let testnet = EphemeralTestnet::start()
@@ -61,7 +61,7 @@ async fn test_publish_and_query_payment_methods() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_delete_payment_method() {
     // Start testnet
     let testnet = EphemeralTestnet::start()

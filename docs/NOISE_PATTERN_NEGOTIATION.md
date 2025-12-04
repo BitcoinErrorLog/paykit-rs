@@ -16,9 +16,10 @@ When connecting to a pattern-aware server (e.g., `NoiseServerHelper::run_pattern
 | `0x03` | NN | Ephemeral | Ephemeral | Post-handshake attestation |
 | `0x04` | XX | TOFU (learned) | TOFU (learned) | Trust-on-first-use |
 
-> **Note:** The pattern-aware server (`NoiseServerHelper::run_pattern_server`) is
-> currently used for IK-raw, N, NN, and XX. IK connections continue to use the
-> legacy `run_server` helper and therefore do **not** send a pattern byte.
+> **Note:** All patterns are now supported by the pattern-aware server
+> (`NoiseServerHelper::run_pattern_server`). For IK pattern with negotiation, use
+> `NoiseClientHelper::connect_to_recipient_with_negotiation`. Legacy servers using
+> `run_server` only accept IK pattern without a pattern byte.
 
 ## Wire Format
 
@@ -53,8 +54,10 @@ async fn connect_with_pattern(
 ) -> Result<PubkyNoiseChannel<TcpStream>> {
     match pattern {
         NoisePattern::IK => {
-            // IK uses the legacy server (no pattern byte).
-            NoiseClientHelper::connect_to_recipient(&identity, host, &pk).await
+            // IK with pattern negotiation (recommended for new code)
+            NoiseClientHelper::connect_to_recipient_with_negotiation(&identity, host, &pk).await
+            // Or legacy (no pattern byte): 
+            // NoiseClientHelper::connect_to_recipient(&identity, host, &pk).await
         }
         NoisePattern::IKRaw => {
             let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device");
@@ -64,9 +67,16 @@ async fn connect_with_pattern(
             NoiseRawClientHelper::connect_anonymous_with_negotiation(host, &pk).await
         }
         NoisePattern::NN => {
-            let (channel, server_ephemeral) =
+            let (channel, server_ephemeral, client_ephemeral) =
                 NoiseRawClientHelper::connect_ephemeral_with_negotiation(host).await?;
-            // Application-specific attestation logic goes here using server_ephemeral.
+            // Application-specific attestation logic goes here using both ephemerals.
+            Ok(channel)
+        }
+        NoisePattern::XX => {
+            let x25519_sk = NoiseRawClientHelper::derive_x25519_key(&seed, b"device");
+            let (channel, server_static_pk) =
+                NoiseRawClientHelper::connect_xx_with_negotiation(&x25519_sk, host).await?;
+            // Cache server_static_pk for future IK connections
             Ok(channel)
         }
     }
@@ -90,8 +100,8 @@ let channel = PubkyNoiseChannel::connect_anonymous_with_negotiation(stream, &ser
 
 // For ephemeral connections (returns server's ephemeral for attestation)
 let stream = TcpStream::connect(host).await?;
-let (channel, server_ephemeral) =
-    PubkyNoiseChannel::connect_ephemeral_with_negotiation(stream).await?;
+let (channel, server_ephemeral, client_ephemeral) =
+    PubkyNoiseChannel::connect_ephemeral_with_negotiation(stream).await?; // Use both for attestation
 ```
 
 ## Server Implementation
@@ -142,7 +152,7 @@ NoiseServerHelper::run_pattern_server(
 When using NN pattern, the server should sign a challenge with their Ed25519 key:
 
 ```rust
-let (channel, server_ephemeral) = PubkyNoiseChannel::connect_ephemeral(stream).await?;
+let (channel, server_ephemeral, client_ephemeral) = PubkyNoiseChannel::connect_ephemeral(stream).await?;
 
 // Server sends signed attestation
 let attestation = channel.recv().await?;

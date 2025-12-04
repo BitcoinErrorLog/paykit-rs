@@ -66,6 +66,27 @@ fn test_noise_key_path_format() {
 }
 
 #[test]
+fn test_pkarr_binding_roundtrip_without_network() {
+    use ed25519_dalek::SigningKey;
+
+    let ed25519_sk = SigningKey::from_bytes(&[7u8; 32]);
+    let ed25519_pk = ed25519_sk.verifying_key().to_bytes();
+    let x25519_pk = [3u8; 32];
+    let signature = pubky_noise::pkarr_helpers::sign_pkarr_key_binding(
+        ed25519_sk.as_bytes(),
+        &x25519_pk,
+        "default",
+    );
+    let txt_value =
+        pubky_noise::pkarr_helpers::format_x25519_for_pkarr(&x25519_pk, Some(&signature));
+
+    let parsed =
+        pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(&txt_value, &ed25519_pk, "default")
+            .expect("verify pkarr binding");
+    assert_eq!(parsed, x25519_pk);
+}
+
+#[test]
 fn test_noise_key_config_default() {
     let config = NoiseKeyConfig::default();
     assert_eq!(config.device_id, "default");
@@ -134,8 +155,11 @@ fn test_wrong_ed25519_key_fails_verification() {
     let wrong_signing_key = SigningKey::from_bytes(&wrong_sk);
     let wrong_ed25519_pk = wrong_signing_key.verifying_key().to_bytes();
 
-    let result =
-        pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(&txt_value, &wrong_ed25519_pk, device_id);
+    let result = pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(
+        &txt_value,
+        &wrong_ed25519_pk,
+        device_id,
+    );
 
     assert!(result.is_err());
 }
@@ -159,31 +183,159 @@ mod with_testnet {
     // to avoid CI issues with network access.
 
     #[tokio::test]
-    #[ignore = "Requires local testnet - run with cargo test -- --ignored"]
+    #[ignore] // Requires local testnet - run with cargo test -- --ignored
     async fn test_publish_and_discover_noise_key() {
-        // This test would:
-        // 1. Start EphemeralTestnet
-        // 2. Create a session
-        // 3. Publish X25519 key
-        // 4. Discover it via PublicStorage
-        // 5. Verify the binding
+        use pubky_testnet::EphemeralTestnet;
 
-        // Placeholder - requires testnet infrastructure
-        println!("Run this test with: cargo test -- --ignored test_publish_and_discover_noise_key");
+        // 1. Start testnet
+        let testnet = EphemeralTestnet::start()
+            .await
+            .expect("Failed to start testnet");
+        let homeserver = testnet.homeserver();
+        let sdk = testnet.sdk().expect("Failed to get SDK");
+
+        // 2. Create identity and session
+        let identity = paykit_demo_core::Identity::generate();
+        let signer = sdk.signer(identity.keypair.clone());
+        let session = signer
+            .signup(&homeserver.public_key(), None)
+            .await
+            .expect("Failed to signup");
+
+        // 3. Derive X25519 key and publish
+        let device_id = "test-device";
+        let (x25519_sk, x25519_pk) = derive_noise_keypair(&identity.keypair.secret_key(), device_id);
+
+        publish_noise_key(&session, &identity.keypair.secret_key(), &x25519_pk, device_id)
+            .await
+            .expect("Failed to publish noise key");
+
+        // 4. Discover via PublicStorage
+        let discovered_key = discover_noise_key(
+            &sdk.public_storage(),
+            &identity.public_key(),
+            device_id,
+        )
+        .await
+        .expect("Failed to discover noise key");
+
+        // 5. Verify the discovered key matches
+        assert_eq!(discovered_key, x25519_pk);
+
+        // 6. Verify timestamp is present and recent
+        let path = format!(
+            "pubky://{}{}{}",
+            identity.public_key(),
+            NOISE_KEY_PATH_PREFIX,
+            device_id
+        );
+        let response = sdk.public_storage().get(&path).await.expect("Failed to fetch");
+        let txt_record = response.text().await.expect("Failed to read");
+        
+        let timestamp = pubky_noise::pkarr_helpers::extract_timestamp_from_pkarr(&txt_record);
+        assert!(timestamp.is_some(), "Timestamp should be present");
+        
+        println!("✅ pkarr publish-discover roundtrip successful");
     }
 
     #[tokio::test]
-    #[ignore = "Requires local testnet - run with cargo test -- --ignored"]
+    #[ignore] // Requires local testnet - run with cargo test -- --ignored
     async fn test_cold_key_ik_raw_handshake() {
-        // This test would:
-        // 1. Setup testnet
-        // 2. Create identities for client and server
-        // 3. Publish X25519 keys via pkarr
-        // 4. Discover server's X25519 key
-        // 5. Perform IK-raw handshake
-        // 6. Exchange encrypted messages
+        use paykit_demo_core::{NoiseRawClientHelper, NoiseServerHelper};
+        use paykit_interactive::{PaykitNoiseChannel, PaykitNoiseMessage};
+        use pubky_testnet::EphemeralTestnet;
+        use tokio::net::TcpListener;
 
-        println!("Run this test with: cargo test -- --ignored test_cold_key_ik_raw_handshake");
+        // 1. Setup testnet
+        let testnet = EphemeralTestnet::start()
+            .await
+            .expect("Failed to start testnet");
+        let homeserver = testnet.homeserver();
+        let sdk = testnet.sdk().expect("Failed to get SDK");
+
+        // 2. Create server identity and session
+        let server_identity = paykit_demo_core::Identity::generate();
+        let server_signer = sdk.signer(server_identity.keypair.clone());
+        let server_session = server_signer
+            .signup(&homeserver.public_key(), None)
+            .await
+            .expect("Failed to signup server");
+
+        // 3. Server publishes X25519 key
+        let device_id = "server-device";
+        let (server_x25519_sk, server_x25519_pk) =
+            derive_noise_keypair(&server_identity.keypair.secret_key(), device_id);
+
+        publish_noise_key(
+            &server_session,
+            &server_identity.keypair.secret_key(),
+            &server_x25519_pk,
+            device_id,
+        )
+        .await
+        .expect("Failed to publish server key");
+
+        // 4. Client discovers server's X25519 key via pkarr
+        let discovered_server_pk = discover_noise_key(
+            &sdk.public_storage(),
+            &server_identity.public_key(),
+            device_id,
+        )
+        .await
+        .expect("Failed to discover server key");
+
+        assert_eq!(discovered_server_pk, server_x25519_pk);
+
+        // 5. Setup TCP server
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let server_addr = listener.local_addr().expect("addr");
+
+        // 6. Server task: Accept IK-raw connection
+        use zeroize::Zeroizing;
+        let server_task = tokio::spawn({
+            let server_x25519_sk = Zeroizing::new(server_x25519_sk);
+            async move {
+                let (stream, _) = listener.accept().await.expect("accept");
+                let (mut channel, _client_pk) =
+                    NoiseServerHelper::accept_ik_raw(&server_x25519_sk, stream)
+                        .await
+                        .expect("IK-raw handshake");
+
+                // Receive encrypted message
+                let msg = channel.recv().await.expect("recv");
+                assert!(matches!(msg, PaykitNoiseMessage::Ack));
+
+                // Send response
+                channel
+                    .send(PaykitNoiseMessage::Ack)
+                    .await
+                    .expect("send");
+            }
+        });
+
+        // 7. Client: Derive X25519 and connect with IK-raw
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        let client_seed = [99u8; 32];
+        let client_sk = NoiseRawClientHelper::derive_x25519_key(&client_seed, b"client");
+
+        let mut channel = NoiseRawClientHelper::connect_ik_raw(
+            &client_sk,
+            &server_addr.to_string(),
+            &discovered_server_pk,
+        )
+        .await
+        .expect("IK-raw connect");
+
+        // 8. Exchange encrypted messages
+        channel
+            .send(PaykitNoiseMessage::Ack)
+            .await
+            .expect("send");
+        let response = channel.recv().await.expect("recv");
+        assert!(matches!(response, PaykitNoiseMessage::Ack));
+
+        server_task.await.expect("server task");
+
+        println!("✅ Cold key IK-raw handshake with pkarr discovery successful");
     }
 }
-

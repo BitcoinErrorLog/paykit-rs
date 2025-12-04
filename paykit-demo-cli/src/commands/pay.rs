@@ -6,9 +6,10 @@
 //! - N: Anonymous client, authenticated server (donation box)
 //! - NN: Fully anonymous (requires post-handshake attestation)
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use paykit_demo_core::{
-    DemoStorage, NoiseClientHelper, NoisePattern, NoiseRawClientHelper, Receipt,
+    create_attestation, verify_attestation, DemoStorage, Identity, NoiseClientHelper, NoisePattern,
+    NoiseRawClientHelper, Receipt,
 };
 use paykit_interactive::{PaykitNoiseChannel, PaykitNoiseMessage};
 use paykit_lib::{MethodId, PubkyUnauthenticatedTransport, UnauthenticatedTransportRead};
@@ -17,6 +18,7 @@ use std::path::Path;
 
 use crate::ui;
 
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(storage_dir))]
 pub async fn run(
     storage_dir: &Path,
@@ -43,6 +45,7 @@ pub async fn run(
 }
 
 /// Internal version that accepts an optional SDK (for testing)
+#[allow(clippy::too_many_arguments)]
 pub async fn run_with_sdk(
     storage_dir: &Path,
     recipient: &str,
@@ -166,8 +169,7 @@ pub async fn run_with_sdk(
     // Connect using the appropriate pattern
     let mut channel = match pattern {
         NoisePattern::IK => {
-            // Standard IK with full identity binding
-            NoiseClientHelper::connect_to_recipient(&identity, &host, &static_pk)
+            NoiseClientHelper::connect_to_recipient_with_negotiation(&identity, &host, &static_pk)
                 .await
                 .context("Failed to establish Noise connection (IK)")?
         }
@@ -189,8 +191,8 @@ pub async fn run_with_sdk(
                 .context("Failed to establish Noise connection (N)")?
         }
         NoisePattern::NN => {
-            ui::warning("  (Ephemeral mode - no authentication, verify manually!)");
-            let (channel, server_ephemeral) =
+            ui::warning("  (Ephemeral mode - requires post-handshake attestation)");
+            let (mut channel, server_ephemeral, client_ephemeral) =
                 NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host)
                     .await
                     .context("Failed to establish Noise connection (NN)")?;
@@ -198,13 +200,32 @@ pub async fn run_with_sdk(
                 "  Server ephemeral: {}",
                 hex::encode(&server_ephemeral[..8])
             ));
+            perform_nn_attestation_client(
+                &mut channel,
+                &identity,
+                &payee_pubkey,
+                &client_ephemeral,
+                &server_ephemeral,
+            )
+            .await?;
             channel
         }
         NoisePattern::XX => {
             ui::info("  (Trust-on-first-use - keys exchanged during handshake)");
-            // XX pattern requires client-side implementation
-            // For now, return an error as this needs more work on the client side
-            anyhow::bail!("XX pattern client-side not yet implemented in CLI demo");
+            let device_context = format!("paykit-demo-{}", identity.public_key());
+            let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
+                &identity.keypair.secret_key(),
+                device_context.as_bytes(),
+            );
+            let (channel, server_static_pk) =
+                NoiseRawClientHelper::connect_xx_with_negotiation(&x25519_sk, &host)
+                    .await
+                    .context("Failed to establish Noise connection (XX)")?;
+            ui::info(&format!(
+                "  Server static key (cache for future): {}",
+                hex::encode(&server_static_pk[..8])
+            ));
+            channel
         }
     };
 
@@ -281,6 +302,73 @@ pub async fn run_with_sdk(
     ui::success("Payment completed successfully");
 
     Ok(())
+}
+
+async fn perform_nn_attestation_client<C: PaykitNoiseChannel>(
+    channel: &mut C,
+    identity: &Identity,
+    expected_server_pk: &pubky::PublicKey,
+    client_ephemeral: &[u8; 32],
+    server_ephemeral: &[u8; 32],
+) -> Result<()> {
+    ui::info("  Authenticating NN session via attestation...");
+
+    let (server_pk_bytes, server_signature) = recv_attestation(channel).await?;
+    if server_pk_bytes != expected_server_pk.to_bytes() {
+        bail!("Server attestation did not match expected recipient");
+    }
+
+    if !verify_attestation(
+        &server_pk_bytes,
+        &server_signature,
+        server_ephemeral,
+        client_ephemeral,
+    ) {
+        bail!("Server attestation signature invalid");
+    }
+
+    let client_signature = create_attestation(
+        &identity.keypair.secret_key(),
+        client_ephemeral,
+        server_ephemeral,
+    );
+    channel
+        .send(PaykitNoiseMessage::Attestation {
+            ed25519_pk: hex::encode(identity.public_key().to_bytes()),
+            signature: hex::encode(client_signature),
+        })
+        .await
+        .context("Failed to send client attestation")?;
+
+    Ok(())
+}
+
+async fn recv_attestation<C: PaykitNoiseChannel>(channel: &mut C) -> Result<([u8; 32], [u8; 64])> {
+    match channel.recv().await? {
+        PaykitNoiseMessage::Attestation {
+            ed25519_pk,
+            signature,
+        } => {
+            let pk = decode_hex_array::<32>(&ed25519_pk, "attestation public key")?;
+            let sig = decode_hex_array::<64>(&signature, "attestation signature")?;
+            Ok((pk, sig))
+        }
+        other => Err(anyhow!(
+            "Expected attestation message, received {:?}",
+            other
+        )),
+    }
+}
+
+fn decode_hex_array<const N: usize>(hex_str: &str, label: &str) -> Result<[u8; N]> {
+    let bytes =
+        hex::decode(hex_str).with_context(|| format!("Invalid {} hex: {}", label, hex_str))?;
+    if bytes.len() != N {
+        bail!("{} must be {} bytes, got {}", label, N, bytes.len());
+    }
+    let mut arr = [0u8; N];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
 }
 
 fn resolve_recipient(storage_dir: &Path, recipient: &str) -> Result<String> {

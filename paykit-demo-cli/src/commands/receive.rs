@@ -1,7 +1,10 @@
 //! Receive command - start payment receiver
 
-use anyhow::Result;
-use paykit_demo_core::{AcceptedConnection, DemoStorage, NoisePattern, NoiseServerHelper, Receipt};
+use anyhow::{anyhow, bail, Context, Result};
+use paykit_demo_core::{
+    create_attestation, verify_attestation, AcceptedConnection, DemoStorage, Identity,
+    NoisePattern, NoiseServerHelper, Receipt,
+};
 use paykit_interactive::{transport::PubkyNoiseChannel, PaykitNoiseChannel, PaykitNoiseMessage};
 use std::path::Path;
 use std::sync::Arc;
@@ -67,7 +70,9 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
                 ui::warning("  WARNING: NN without attestation is vulnerable to MITM");
             }
             NoisePattern::XX => {
-                ui::info("  Pattern XX: Trust-on-first-use, static keys exchanged during handshake");
+                ui::info(
+                    "  Pattern XX: Trust-on-first-use, static keys exchanged during handshake",
+                );
                 ui::info("  Use for TOFU scenarios where keys are cached after first contact");
             }
         }
@@ -93,59 +98,89 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
     let identity_clone = identity.clone();
     let storage_dir_arc = Arc::new(storage_dir.to_path_buf());
     let server_task = tokio::spawn(async move {
-        // For IK pattern, use the standard server
-        // For other patterns, use the pattern-aware server
-        let result = match pattern {
-            NoisePattern::IK => {
-                // Standard IK pattern with full identity binding
-                NoiseServerHelper::run_server(&identity_clone, &bind_addr, |mut channel| {
-                    let storage_dir = Arc::clone(&storage_dir_arc);
-                    async move {
-                        handle_payment_request(&mut channel, &storage_dir, Some("authenticated"))
-                            .await
-                    }
-                })
-                .await
-            }
-            _ => {
-                // Pattern-aware server for IK-raw, N, NN
-                NoiseServerHelper::run_pattern_server(&identity_clone, &bind_addr, |conn| {
-                    let storage_dir = Arc::clone(&storage_dir_arc);
-                    async move {
-                        let client_info = match &conn {
-                            AcceptedConnection::IK {
-                                client_identity, ..
-                            } => {
-                                format!(
-                                    "authenticated ({})",
-                                    hex::encode(&client_identity.ed25519_pub[..8])
-                                )
-                            }
-                            AcceptedConnection::IKRaw {
-                                client_x25519_pk, ..
-                            } => {
-                                format!("cold-key ({})", hex::encode(&client_x25519_pk[..8]))
-                            }
-                            AcceptedConnection::N { .. } => "anonymous".to_string(),
-                            AcceptedConnection::NN {
-                                client_ephemeral, ..
-                            } => {
-                                format!("ephemeral ({})", hex::encode(&client_ephemeral[..8]))
-                            }
-                            AcceptedConnection::XX {
-                                client_static_pk, ..
-                            } => {
-                                format!("TOFU ({})", hex::encode(&client_static_pk[..8]))
-                            }
-                        };
+        // Run pattern-aware server for the selected pattern
+        let selected_pattern = pattern;
+        let result = NoiseServerHelper::run_pattern_server(&identity_clone, &bind_addr, |conn| {
+            let storage_dir = Arc::clone(&storage_dir_arc);
+            let identity_for_conn = identity_clone.clone();
+            async move {
+                if conn.pattern() != selected_pattern {
+                    return Err(anyhow!(
+                        "Client requested {:?} but server configured for {:?}",
+                        conn.pattern(),
+                        selected_pattern
+                    ));
+                }
 
-                        let mut channel = conn.into_channel();
-                        handle_payment_request(&mut channel, &storage_dir, Some(&client_info)).await
+                match conn {
+                    AcceptedConnection::IK {
+                        mut channel,
+                        client_identity,
+                    } => {
+                        let context = ClientContext {
+                            description: format!(
+                                "authenticated ({})",
+                                hex::encode(&client_identity.ed25519_pub[..8])
+                            ),
+                            attested_ed25519: Some(client_identity.ed25519_pub),
+                        };
+                        handle_payment_request(&mut channel, &storage_dir, context).await
                     }
-                })
-                .await
+                    AcceptedConnection::IKRaw {
+                        mut channel,
+                        client_x25519_pk,
+                    } => {
+                        let context = ClientContext {
+                            description: format!(
+                                "cold-key ({})",
+                                hex::encode(&client_x25519_pk[..8])
+                            ),
+                            attested_ed25519: None,
+                        };
+                        handle_payment_request(&mut channel, &storage_dir, context).await
+                    }
+                    AcceptedConnection::N { mut channel } => {
+                        let context = ClientContext {
+                            description: "anonymous".to_string(),
+                            attested_ed25519: None,
+                        };
+                        handle_payment_request(&mut channel, &storage_dir, context).await
+                    }
+                    AcceptedConnection::NN {
+                        mut channel,
+                        client_ephemeral,
+                        server_ephemeral,
+                    } => {
+                        let attested_pk = perform_nn_attestation_server(
+                            &mut channel,
+                            &identity_for_conn,
+                            &client_ephemeral,
+                            &server_ephemeral,
+                        )
+                        .await?;
+                        let context = ClientContext {
+                            description: format!(
+                                "ephemeral ({})",
+                                hex::encode(&client_ephemeral[..8])
+                            ),
+                            attested_ed25519: Some(attested_pk),
+                        };
+                        handle_payment_request(&mut channel, &storage_dir, context).await
+                    }
+                    AcceptedConnection::XX {
+                        mut channel,
+                        client_static_pk,
+                    } => {
+                        let context = ClientContext {
+                            description: format!("TOFU ({})", hex::encode(&client_static_pk[..8])),
+                            attested_ed25519: None,
+                        };
+                        handle_payment_request(&mut channel, &storage_dir, context).await
+                    }
+                }
             }
-        };
+        })
+        .await;
 
         if let Err(e) = result {
             eprintln!("Server error: {:#}", e);
@@ -163,14 +198,85 @@ pub async fn run(storage_dir: &Path, port: u16, pattern_str: &str, verbose: bool
     Ok(())
 }
 
+struct ClientContext {
+    description: String,
+    attested_ed25519: Option<[u8; 32]>,
+}
+
+async fn perform_nn_attestation_server(
+    channel: &mut PubkyNoiseChannel<tokio::net::TcpStream>,
+    identity: &Identity,
+    client_ephemeral: &[u8; 32],
+    server_ephemeral: &[u8; 32],
+) -> Result<[u8; 32]> {
+    ui::info("Verifying NN attestation...");
+
+    let server_signature = create_attestation(
+        &identity.keypair.secret_key(),
+        server_ephemeral,
+        client_ephemeral,
+    );
+    channel
+        .send(PaykitNoiseMessage::Attestation {
+            ed25519_pk: hex::encode(identity.public_key().to_bytes()),
+            signature: hex::encode(server_signature),
+        })
+        .await?;
+
+    let (client_pk, client_signature) = recv_attestation(channel).await?;
+    if !verify_attestation(
+        &client_pk,
+        &client_signature,
+        client_ephemeral,
+        server_ephemeral,
+    ) {
+        bail!("Client attestation signature invalid");
+    }
+
+    Ok(client_pk)
+}
+
+async fn recv_attestation(
+    channel: &mut PubkyNoiseChannel<tokio::net::TcpStream>,
+) -> Result<([u8; 32], [u8; 64])> {
+    match channel.recv().await? {
+        PaykitNoiseMessage::Attestation {
+            ed25519_pk,
+            signature,
+        } => {
+            let pk = decode_hex_array::<32>(&ed25519_pk, "attestation public key")?;
+            let sig = decode_hex_array::<64>(&signature, "attestation signature")?;
+            Ok((pk, sig))
+        }
+        other => Err(anyhow!(
+            "Expected attestation message, received {:?}",
+            other
+        )),
+    }
+}
+
+fn decode_hex_array<const N: usize>(hex_str: &str, label: &str) -> Result<[u8; N]> {
+    let bytes =
+        hex::decode(hex_str).with_context(|| format!("Invalid {} hex: {}", label, hex_str))?;
+    if bytes.len() != N {
+        bail!("{} must be {} bytes, got {}", label, N, bytes.len());
+    }
+    let mut arr = [0u8; N];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
+}
+
 /// Handle a payment request on an established channel.
 async fn handle_payment_request(
     channel: &mut PubkyNoiseChannel<tokio::net::TcpStream>,
     storage_dir: &Path,
-    client_info: Option<&str>,
+    context: ClientContext,
 ) -> Result<()> {
-    let client_desc = client_info.unwrap_or("unknown");
-    ui::success(&format!("Accepted new connection ({})", client_desc));
+    let ClientContext {
+        description,
+        attested_ed25519,
+    } = context;
+    ui::success(&format!("Accepted new connection ({})", description));
 
     // Receive payment request
     match channel.recv().await {
@@ -191,6 +297,16 @@ async fn handle_payment_request(
                             .unwrap_or(&"SAT".to_string()),
                         provisional_receipt.payer
                     ));
+
+                    if let Some(expected_pk) = attested_ed25519 {
+                        let payer_bytes = provisional_receipt.payer.to_bytes();
+                        if payer_bytes != expected_pk {
+                            bail!(
+                                "Payer identity {} did not match NN attestation",
+                                provisional_receipt.payer
+                            );
+                        }
+                    }
 
                     // Generate receipt
                     ui::info("Generating receipt...");

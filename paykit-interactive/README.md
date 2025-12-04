@@ -23,7 +23,43 @@ The wire protocol for exchanging payment information over an encrypted channel:
 
 ### 3. PaykitNoiseChannel
 
-An abstraction for the secure transport layer. In the future, this will be implemented using `pubky-noise` to provide end-to-end encryption and mutual authentication using Pubky identities.
+The secure transport layer implemented using `pubky-noise` for end-to-end encryption and mutual authentication using Pubky identities.
+
+### 4. Noise Pattern Support
+
+This crate re-exports `NoisePattern` from `pubky-noise` for selecting the appropriate handshake pattern:
+
+| Pattern | Use Case | Authentication |
+|---------|----------|----------------|
+| **IK** | Standard payments | Full Ed25519 binding in handshake |
+| **IK-raw** | Cold key scenarios | Identity via pkarr lookup |
+| **N** | Anonymous donations | Client anonymous, server authenticated |
+| **NN** | Ephemeral exchange | Post-handshake attestation required |
+| **XX** | Trust-on-first-use | Static keys learned during handshake |
+
+```rust
+use paykit_interactive::NoisePattern;
+
+// Parse from string
+let pattern: NoisePattern = "ik-raw".parse()?;
+
+// Get negotiation byte for wire protocol
+let byte = pattern.negotiation_byte(); // 0x01 for IK-raw
+```
+
+### 5. Attestation Message
+
+For NN (ephemeral) connections, use the `Attestation` message type for post-handshake identity verification:
+
+```rust
+use paykit_interactive::PaykitNoiseMessage;
+
+// After NN handshake, exchange attestations
+channel.send(PaykitNoiseMessage::Attestation {
+    ed25519_pk: hex::encode(&my_ed25519_pk),
+    signature: hex::encode(&attestation_signature),
+}).await?;
+```
 
 ## Usage Example
 

@@ -224,8 +224,8 @@ where
     /// * `stream` - The underlying transport stream (TCP, etc.)
     ///
     /// # Returns
-    /// A tuple of (channel, server_ephemeral_pk) for post-handshake verification.
-    /// The caller should implement attestation (e.g., server signs a challenge).
+    /// A tuple of (channel, server_ephemeral_pk, client_ephemeral_pk) for post-handshake
+    /// verification. The caller should implement attestation (e.g., server signs a challenge).
     ///
     /// # Noise_NN Pattern
     ///
@@ -238,10 +238,14 @@ where
     ///
     /// NN provides forward secrecy but NO authentication. You MUST implement
     /// post-handshake attestation to prevent MITM attacks.
-    pub async fn connect_ephemeral(mut stream: S) -> Result<(Self, [u8; 32])> {
+    pub async fn connect_ephemeral(mut stream: S) -> Result<(Self, [u8; 32], [u8; 32])> {
         // 1. Start NN pattern handshake
         let (hs, first_msg) = datalink_adapter::start_nn()
             .map_err(|e| InteractiveError::Transport(format!("Handshake init failed: {}", e)))?;
+        let client_ephemeral: [u8; 32] = first_msg
+            .get(..32)
+            .and_then(|slice| slice.try_into().ok())
+            .ok_or_else(|| InteractiveError::Transport("Invalid NN first message length".into()))?;
 
         // 2. Send length-prefixed first message
         let len = (first_msg.len() as u32).to_be_bytes();
@@ -286,13 +290,123 @@ where
             InteractiveError::Transport(format!("Handshake completion failed: {}", e))
         })?;
 
-        Ok((Self { stream, session }, server_ephemeral))
+        Ok((Self { stream, session }, server_ephemeral, client_ephemeral))
     }
 
     /// Connect using NN pattern with automatic negotiation byte.
-    pub async fn connect_ephemeral_with_negotiation(mut stream: S) -> Result<(Self, [u8; 32])> {
+    pub async fn connect_ephemeral_with_negotiation(
+        mut stream: S,
+    ) -> Result<(Self, [u8; 32], [u8; 32])> {
         Self::write_pattern_byte(&mut stream, NoisePattern::NN).await?;
         Self::connect_ephemeral(stream).await
+    }
+
+    /// Connect using XX pattern (trust-on-first-use).
+    ///
+    /// Both parties exchange static keys during a 3-message handshake.
+    /// Use for TOFU scenarios where keys are cached after first contact.
+    ///
+    /// # Arguments
+    /// * `x25519_sk` - Your X25519 secret key (derived from Ed25519 seed)
+    /// * `stream` - The underlying transport stream (TCP, etc.)
+    ///
+    /// # Returns
+    /// A tuple of (channel, server_static_pk) - cache server_static_pk for future IK connections
+    ///
+    /// # Noise_XX Pattern (3-message TOFU)
+    ///
+    /// 1. Client sends `-> e` (ephemeral)
+    /// 2. Server responds `<- e, ee, s, es` (ephemeral + static)
+    /// 3. Client sends `-> s, se` (client static)
+    /// 4. Both sides enter transport mode with mutual knowledge of static keys
+    pub async fn connect_xx(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: S,
+    ) -> Result<(Self, [u8; 32])> {
+        use pubky_noise::NoiseSender;
+
+        // 1. Start XX handshake (message 1: -> e)
+        let sender = NoiseSender::new();
+        let (mut hs, first_msg) = sender
+            .initiate_xx(x25519_sk)
+            .map_err(|e| InteractiveError::Transport(format!("XX handshake init failed: {}", e)))?;
+
+        // Send first message (length-prefixed)
+        let len = (first_msg.len() as u32).to_be_bytes();
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send XX first message length: {}", e))
+        })?;
+        stream.write_all(&first_msg).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send XX first message: {}", e))
+        })?;
+
+        // 2. Read server response (message 2: <- e, ee, s, es)
+        let mut len_bytes = [0u8; 4];
+        stream.read_exact(&mut len_bytes).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read XX response length: {}", e))
+        })?;
+        let response_len = u32::from_be_bytes(len_bytes) as usize;
+
+        if response_len > MAX_HANDSHAKE_SIZE {
+            return Err(InteractiveError::Transport(format!(
+                "XX handshake response too large: {} bytes (max {})",
+                response_len, MAX_HANDSHAKE_SIZE
+            )));
+        }
+
+        let mut response = vec![0u8; response_len];
+        stream.read_exact(&mut response).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to read XX response: {}", e))
+        })?;
+
+        // Process server's response (reads e, ee, s, es)
+        let mut buf = vec![0u8; response.len() + 256];
+        hs.read_message(&response, &mut buf).map_err(|e| {
+            InteractiveError::Transport(format!("Failed to process XX server response: {}", e))
+        })?;
+
+        // 3. Send final message (message 3: -> s, se)
+        let mut final_msg = vec![0u8; 128];
+        let n = hs.write_message(&[], &mut final_msg).map_err(|e| {
+            InteractiveError::Transport(format!("Failed to generate XX final message: {}", e))
+        })?;
+        final_msg.truncate(n);
+
+        // Send final message (length-prefixed)
+        let len = (final_msg.len() as u32).to_be_bytes();
+        stream.write_all(&len).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send XX final message length: {}", e))
+        })?;
+        stream.write_all(&final_msg).await.map_err(|e| {
+            InteractiveError::Transport(format!("Failed to send XX final message: {}", e))
+        })?;
+
+        // Extract server's static key (learned during message 2)
+        let server_static_pk: [u8; 32] = hs
+            .get_remote_static()
+            .ok_or_else(|| {
+                InteractiveError::Transport("No server static key in XX handshake".to_string())
+            })?
+            .try_into()
+            .map_err(|_| {
+                InteractiveError::Transport("Invalid server static key length".to_string())
+            })?;
+
+        // Complete handshake to get transport session
+        let session = NoiseSession::from_handshake(hs).map_err(|e| {
+            InteractiveError::Transport(format!("XX handshake completion failed: {}", e))
+        })?;
+
+        Ok((Self { stream, session }, server_static_pk))
+    }
+
+    /// Connect using XX pattern with automatic negotiation byte.
+    pub async fn connect_xx_with_negotiation(
+        x25519_sk: &Zeroizing<[u8; 32]>,
+        mut stream: S,
+    ) -> Result<(Self, [u8; 32])> {
+        Self::write_pattern_byte(&mut stream, NoisePattern::XX).await?;
+        Self::connect_xx(x25519_sk, stream).await
     }
 
     async fn write_pattern_byte(stream: &mut S, pattern: NoisePattern) -> Result<()> {

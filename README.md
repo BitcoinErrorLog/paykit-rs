@@ -275,7 +275,6 @@ See [CLI README](paykit-demo-cli/README.md) for complete examples.
 
 ### 🚧 In Progress
 
-- Full Noise protocol integration for live payments
 - Pubky session creation API
 - Real-time payment negotiation
 
@@ -354,13 +353,16 @@ Paykit uses [pubky-noise](../pubky-noise/) for encrypted communication channels.
 
 ### Pattern Selection for Paykit/Bitkit
 
-| Pattern | Use Case | Ed25519 Required | Identity Binding |
-|---------|----------|------------------|------------------|
-| **IK** | Authenticated payments | Yes (at handshake) | Full identity proof |
-| **IK-raw** | Cold key scenarios | Via pkarr lookup | pkarr-based binding |
-| **N** | Anonymous payment requests | No | Recipient only |
-| **NN** | Ephemeral data exchange | No | None |
-| **XX** | Trust-on-first-use | No | TOFU (learned) |
+| Pattern | Use Case | Ed25519 Required | Identity Binding | Bidirectional |
+|---------|----------|------------------|------------------|---------------|
+| **IK** | Authenticated payments | Yes (at handshake) | Full identity proof | ✅ Yes |
+| **IK-raw** | Cold key scenarios | Via pkarr lookup | pkarr-based binding | ✅ Yes |
+| **N** | Anonymous donations | No | Recipient only | ⚠️ **ONE-WAY** |
+| **NN** | Ephemeral data exchange | No | None | ✅ Yes |
+| **XX** | Trust-on-first-use | No | TOFU (learned) | ✅ Yes |
+
+> ⚠️ **N Pattern Limitation**: The N pattern only supports client → server encryption.
+> Server cannot send encrypted responses. Use NN or IK-raw for bidirectional anonymous communication.
 
 ### Cold Key Integration (Bitkit)
 
@@ -441,7 +443,7 @@ This is a demonstration/reference implementation. Contributions welcome:
 3. Add tests for new functionality
 4. Update documentation
 
-See [repository guidelines](./_RULES.md) for detailed conventions.
+See [BUILD.md](BUILD.md) for detailed conventions and coding standards.
 
 ## Dependencies
 

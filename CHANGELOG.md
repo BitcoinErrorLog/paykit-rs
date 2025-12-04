@@ -4,14 +4,29 @@ All notable changes to the Paykit project are documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2025-12-04
+
 ### Added
 - **Cold Key Pattern Support** for hardware wallet / Bitkit integration
-  - New `NoiseRawClientHelper` with `connect_ik_raw`, `connect_anonymous`, `connect_ephemeral` methods
-  - New `NoiseServerHelper` pattern-aware accept methods: `accept_ik_raw`, `accept_n`, `accept_nn`
+  - New `NoiseRawClientHelper` with `connect_ik_raw`, `connect_anonymous`, `connect_ephemeral`, `connect_xx` methods
+  - New `NoiseServerHelper` pattern-aware accept methods: `accept_ik_raw`, `accept_n`, `accept_nn`, `accept_xx`
   - New `AcceptedConnection` enum for pattern-specific connection handling
-  - New `NoisePattern` enum: `IK`, `IKRaw`, `N`, `NN`
+  - New `NoisePattern` enum: `IK`, `IKRaw`, `N`, `NN`, `XX`
+- **XX Pattern (Trust-On-First-Use)**
+  - Full 3-message XX handshake implementation
+  - Returns server's static key for caching (upgrade to IK on subsequent connections)
+  - E2E tests for TOFU payment scenarios
+- **NN Post-Handshake Attestation with Full Verification**
+  - `attestation` module in `paykit-demo-core` for Ed25519 identity binding
+  - `create_attestation()` and `verify_attestation()` functions using both ephemeral keys
+  - `PaykitNoiseMessage::Attestation` variant for over-the-wire attestation
+  - CLI `pay` and `receive` commands enforce NN attestation automatically
+  - Updated `connect_ephemeral()` returns 3-tuple `(channel, server_ephemeral, client_ephemeral)`
+- **Pattern Negotiation Unification**
+  - `NoiseClientHelper::connect_to_recipient_with_negotiation()` for IK with pattern byte
+  - All patterns now supported by pattern-aware server
 - **CLI Pattern Selection**
-  - `--pattern` flag for `receive` command (ik, ik-raw, n, nn)
+  - `--pattern` flag for `receive` command (ik, ik-raw, n, nn, xx)
   - `--pattern` flag for `pay` command
   - `--connect` flag for direct connections bypassing discovery
 - **Demo Scripts**
@@ -19,8 +34,10 @@ All notable changes to the Paykit project are documented in this file.
   - `04-anonymous-payment.sh` - Demonstrates N pattern for donation boxes
 - **Documentation**
   - `docs/PATTERN_SELECTION.md` - Comprehensive pattern selection guide
+  - `docs/NOISE_PATTERN_NEGOTIATION.md` - Wire protocol documentation
   - Updated `paykit-demo-cli/demos/README.md` with pattern reference
 - Cold key integration tests (`tests/cold_key_integration.rs`)
+- Pattern E2E tests (`tests/pattern_e2e.rs`)
 
 ### Changed
 - **BREAKING**: Upgraded to pubky-noise v0.8.0
@@ -31,7 +48,7 @@ All notable changes to the Paykit project are documented in this file.
   - Updated return types: `server_accept_ik()` now returns 2-tuple `(hs, response)`
 - Fixed pubky-noise dependency paths (now points to `../../pubky-noise`)
 - Updated `.gitignore` to match pubky-noise patterns
-- Added `zeroize` dependency to `paykit-demo-core`
+- Added `zeroize` and `sha2` dependencies to `paykit-demo-core`
 
 ### Documentation
 - Comprehensive documentation cleanup and consolidation

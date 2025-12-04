@@ -1,10 +1,11 @@
 use anyhow::Result;
 use paykit_demo_core::{
-    AcceptedConnection, Identity, NoisePattern, NoiseRawClientHelper, NoiseServerHelper,
+    noise_client::pattern_from_byte, AcceptedConnection, Identity, NoisePattern,
+    NoiseRawClientHelper, NoiseServerHelper,
 };
 use paykit_interactive::{PaykitNoiseChannel, PaykitNoiseMessage};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 
 async fn roundtrip(pattern: NoisePattern) -> Result<()> {
@@ -27,7 +28,7 @@ async fn roundtrip(pattern: NoisePattern) -> Result<()> {
 
             let mut pattern_byte = [0u8; 1];
             stream.read_exact(&mut pattern_byte).await?;
-            let requested = NoisePattern::try_from(pattern_byte[0])?;
+            let requested = pattern_from_byte(pattern_byte[0])?;
             assert_eq!(requested, pattern);
 
             let conn =
@@ -43,9 +44,26 @@ async fn roundtrip(pattern: NoisePattern) -> Result<()> {
                 (NoisePattern::N, AcceptedConnection::N { mut channel }) => {
                     let msg = channel.recv().await?;
                     assert!(matches!(msg, PaykitNoiseMessage::Ack));
-                    // N is one-way: server does not send encrypted data back.
+                    // N pattern is one-way: only initiator can encrypt to responder
+                    // Server cannot send encrypted messages back
                 }
                 (NoisePattern::NN, AcceptedConnection::NN { mut channel, .. }) => {
+                    let msg = channel.recv().await?;
+                    assert!(matches!(msg, PaykitNoiseMessage::Ack));
+                    channel.send(PaykitNoiseMessage::Ack).await?;
+                }
+                (
+                    NoisePattern::XX,
+                    AcceptedConnection::XX {
+                        mut channel,
+                        client_static_pk,
+                    },
+                ) => {
+                    // XX pattern: server learned client's static key during handshake
+                    assert_ne!(
+                        client_static_pk, [0u8; 32],
+                        "Client static key should be non-zero"
+                    );
                     let msg = channel.recv().await?;
                     assert!(matches!(msg, PaykitNoiseMessage::Ack));
                     channel.send(PaykitNoiseMessage::Ack).await?;
@@ -74,16 +92,32 @@ async fn roundtrip(pattern: NoisePattern) -> Result<()> {
                 NoiseRawClientHelper::connect_anonymous_with_negotiation(&host, &server_pk).await?
             }
             NoisePattern::NN => {
-                let (channel, _) =
+                let (channel, _, _) =
                     NoiseRawClientHelper::connect_ephemeral_with_negotiation(&host).await?;
                 channel
             }
-            NoisePattern::IK | NoisePattern::XX => {
-                unreachable!("pattern-aware tests cover IK-raw, N, and NN only")
+            NoisePattern::XX => {
+                let ctx = format!("pattern-client-{}", client_identity.public_key());
+                let x25519_sk = NoiseRawClientHelper::derive_x25519_key(
+                    &client_identity.keypair.secret_key(),
+                    ctx.as_bytes(),
+                );
+                let (channel, server_static) =
+                    NoiseRawClientHelper::connect_xx_with_negotiation(&x25519_sk, &host).await?;
+                // XX pattern: client learned server's static key during handshake
+                assert_ne!(
+                    server_static, [0u8; 32],
+                    "Server static key should be non-zero"
+                );
+                channel
+            }
+            NoisePattern::IK => {
+                unreachable!("pattern-aware tests cover IK-raw, N, NN, and XX only")
             }
         };
 
         channel.send(PaykitNoiseMessage::Ack).await?;
+        // N pattern is one-way (only initiator can send), all others are bidirectional
         if pattern != NoisePattern::N {
             let reply = channel.recv().await?;
             assert!(matches!(reply, PaykitNoiseMessage::Ack));
@@ -110,4 +144,9 @@ async fn test_pattern_server_n_roundtrip() -> Result<()> {
 #[tokio::test]
 async fn test_pattern_server_nn_roundtrip() -> Result<()> {
     roundtrip(NoisePattern::NN).await
+}
+
+#[tokio::test]
+async fn test_pattern_server_xx_roundtrip() -> Result<()> {
+    roundtrip(NoisePattern::XX).await
 }

@@ -41,6 +41,9 @@ pub struct NoiseKeyConfig {
     pub device_id: String,
     /// Whether to verify the Ed25519 binding signature
     pub verify_binding: bool,
+    /// Maximum acceptable key age in seconds (None = accept any age)
+    /// Recommended: 30 days (2,592,000 seconds)
+    pub max_age_seconds: Option<u64>,
 }
 
 impl Default for NoiseKeyConfig {
@@ -48,6 +51,7 @@ impl Default for NoiseKeyConfig {
         Self {
             device_id: "default".to_string(),
             verify_binding: true,
+            max_age_seconds: Some(pubky_noise::pkarr_helpers::DEFAULT_MAX_KEY_AGE_SECONDS),
         }
     }
 }
@@ -75,19 +79,22 @@ pub async fn discover_noise_key(
     device_id: &str,
 ) -> Result<[u8; 32]> {
     // Construct the storage path
-    let path = format!("pubky://{}{}{}", peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id);
-    
+    let path = format!(
+        "pubky://{}{}{}",
+        peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id
+    );
+
     // Fetch the noise key record
     let response = storage
         .get(&path)
         .await
         .with_context(|| format!("Failed to fetch noise key for {}", peer_pubkey))?;
-    
+
     let txt_record = response
         .text()
         .await
         .with_context(|| "Failed to read noise key response body")?;
-    
+
     if txt_record.is_empty() {
         return Err(anyhow!(
             "No noise key published for {} device '{}'",
@@ -95,7 +102,7 @@ pub async fn discover_noise_key(
             device_id
         ));
     }
-    
+
     // Parse and verify the key binding
     let ed25519_pk_bytes = peer_pubkey.to_bytes();
     let x25519_pk = pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(
@@ -104,7 +111,7 @@ pub async fn discover_noise_key(
         device_id,
     )
     .map_err(|e| anyhow!("Invalid noise key record: {}", e))?;
-    
+
     Ok(x25519_pk)
 }
 
@@ -117,18 +124,21 @@ pub async fn discover_noise_key_unverified(
     peer_pubkey: &pubky::PublicKey,
     device_id: &str,
 ) -> Result<[u8; 32]> {
-    let path = format!("pubky://{}{}{}", peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id);
-    
+    let path = format!(
+        "pubky://{}{}{}",
+        peer_pubkey, NOISE_KEY_PATH_PREFIX, device_id
+    );
+
     let response = storage
         .get(&path)
         .await
         .with_context(|| format!("Failed to fetch noise key for {}", peer_pubkey))?;
-    
+
     let txt_record = response
         .text()
         .await
         .with_context(|| "Failed to read noise key response body")?;
-    
+
     if txt_record.is_empty() {
         return Err(anyhow!(
             "No noise key published for {} device '{}'",
@@ -136,31 +146,95 @@ pub async fn discover_noise_key_unverified(
             device_id
         ));
     }
-    
+
     // Parse without verification
     let x25519_pk = pubky_noise::pkarr_helpers::parse_x25519_from_pkarr(&txt_record)
         .map_err(|e| anyhow!("Invalid noise key record format: {}", e))?;
-    
+
     Ok(x25519_pk)
 }
 
 /// Discover a peer's X25519 key with full configuration.
+///
+/// This function supports:
+/// - Signature verification (if `verify_binding` is true)
+/// - Timestamp verification (if `max_age_seconds` is set)
+/// - Device-specific key lookup
+///
+/// # Arguments
+/// * `storage` - The pubky PublicStorage client
+/// * `peer_pubkey` - The peer's Ed25519 public key
+/// * `config` - Configuration for discovery and verification
+///
+/// # Returns
+/// The verified 32-byte X25519 public key
 pub async fn discover_noise_key_with_config(
     storage: &pubky::PublicStorage,
     peer_pubkey: &pubky::PublicKey,
     config: &NoiseKeyConfig,
 ) -> Result<[u8; 32]> {
-    if config.verify_binding {
-        discover_noise_key(storage, peer_pubkey, &config.device_id).await
-    } else {
-        discover_noise_key_unverified(storage, peer_pubkey, &config.device_id).await
+    // Construct the storage path
+    let path = format!(
+        "pubky://{}{}{}",
+        peer_pubkey, NOISE_KEY_PATH_PREFIX, config.device_id
+    );
+
+    // Fetch the noise key record
+    let response = storage
+        .get(&path)
+        .await
+        .with_context(|| format!("Failed to fetch noise key for {}", peer_pubkey))?;
+
+    let txt_record = response
+        .text()
+        .await
+        .with_context(|| "Failed to read noise key response body")?;
+
+    if txt_record.is_empty() {
+        return Err(anyhow!(
+            "No noise key published for {} device '{}'",
+            peer_pubkey,
+            config.device_id
+        ));
+    }
+
+    let ed25519_pk_bytes = peer_pubkey.to_bytes();
+
+    // Choose verification strategy based on config
+    match (config.verify_binding, config.max_age_seconds) {
+        (true, Some(max_age)) => {
+            // Full verification with timestamp check
+            pubky_noise::pkarr_helpers::parse_and_verify_with_expiry(
+                &txt_record,
+                &ed25519_pk_bytes,
+                &config.device_id,
+                max_age,
+            )
+            .map_err(|e| anyhow!("pkarr verification failed: {}", e))
+        }
+        (true, None) => {
+            // Signature verification only (no timestamp check)
+            pubky_noise::pkarr_helpers::parse_and_verify_pkarr_key(
+                &txt_record,
+                &ed25519_pk_bytes,
+                &config.device_id,
+            )
+            .map_err(|e| anyhow!("pkarr signature verification failed: {}", e))
+        }
+        (false, _) => {
+            // No verification (parse only)
+            pubky_noise::pkarr_helpers::parse_x25519_from_pkarr(&txt_record)
+                .map_err(|e| anyhow!("pkarr parsing failed: {}", e))
+        }
     }
 }
 
-/// Publish your X25519 Noise key to pubky storage.
+/// Publish your X25519 Noise key to pubky storage with timestamp.
 ///
 /// This should be called once during device setup (cold signing operation).
 /// The Ed25519 key signs the X25519 key binding, then can be stored cold.
+///
+/// The published record includes a timestamp for freshness validation.
 ///
 /// # Arguments
 /// * `session` - Authenticated pubky session for writing
@@ -177,30 +251,41 @@ pub async fn publish_noise_key(
     x25519_pk: &[u8; 32],
     device_id: &str,
 ) -> Result<()> {
+    // Get current timestamp
+    let timestamp = current_unix_timestamp();
+
     // Sign the key binding
-    let signature = pubky_noise::pkarr_helpers::sign_pkarr_key_binding(
-        ed25519_sk,
-        x25519_pk,
-        device_id,
-    );
-    
-    // Format the record
-    let txt_value = pubky_noise::pkarr_helpers::format_x25519_for_pkarr(
+    let signature =
+        pubky_noise::pkarr_helpers::sign_pkarr_key_binding(ed25519_sk, x25519_pk, device_id);
+
+    // Format the record with timestamp (recommended for production)
+    let txt_value = pubky_noise::pkarr_helpers::format_x25519_for_pkarr_with_timestamp(
         x25519_pk,
         Some(&signature),
+        timestamp,
     );
-    
+
     // Construct the storage path
     let path = format!("{}{}", NOISE_KEY_PATH_PREFIX, device_id);
-    
+
     // Publish to pubky storage via session's storage API
     session
         .storage()
         .put(path, txt_value)
         .await
         .with_context(|| "Failed to publish noise key")?;
-    
+
     Ok(())
+}
+
+/// Get current Unix timestamp (seconds since epoch).
+fn current_unix_timestamp() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Complete cold key setup: derive X25519 key, sign binding, and publish.
@@ -222,9 +307,9 @@ pub async fn setup_cold_key(
     device_id: &str,
 ) -> Result<([u8; 32], [u8; 32])> {
     let (x25519_sk, x25519_pk) = derive_noise_keypair(ed25519_sk, device_id);
-    
+
     publish_noise_key(session, ed25519_sk, &x25519_pk, device_id).await?;
-    
+
     Ok((x25519_sk, x25519_pk))
 }
 
@@ -249,10 +334,12 @@ pub fn derive_noise_keypair(ed25519_sk: &[u8; 32], device_id: &str) -> ([u8; 32]
     (x25519_sk, public)
 }
 
-/// Prepare cold key data for publication (offline operation).
+/// Prepare cold key data for publication (offline operation) with timestamp.
 ///
 /// This creates the signed record without publishing. Use this when you need
 /// to prepare the data offline before publishing.
+///
+/// The record includes a timestamp for freshness validation (recommended for production).
 ///
 /// # Arguments
 /// * `ed25519_sk` - Your Ed25519 secret key (32 bytes)
@@ -266,13 +353,19 @@ pub fn prepare_cold_key_publication(
 ) -> ([u8; 32], [u8; 32], String) {
     let (x25519_sk, x25519_pk) = derive_noise_keypair(ed25519_sk, device_id);
 
+    // Get current timestamp
+    let timestamp = current_unix_timestamp();
+
     // Sign the key binding
     let signature =
         pubky_noise::pkarr_helpers::sign_pkarr_key_binding(ed25519_sk, &x25519_pk, device_id);
 
-    // Format for pkarr
-    let txt_value =
-        pubky_noise::pkarr_helpers::format_x25519_for_pkarr(&x25519_pk, Some(&signature));
+    // Format for pkarr with timestamp
+    let txt_value = pubky_noise::pkarr_helpers::format_x25519_for_pkarr_with_timestamp(
+        &x25519_pk,
+        Some(&signature),
+        timestamp,
+    );
 
     (x25519_sk, x25519_pk, txt_value)
 }
@@ -321,13 +414,20 @@ mod tests {
         assert_ne!(x25519_sk, [0u8; 32]);
         assert_ne!(x25519_pk, [0u8; 32]);
 
-        // Verify the TXT record format
+        // Verify the TXT record format includes timestamp
         assert!(txt_value.starts_with("v=1;k="));
         assert!(txt_value.contains(";sig="));
+        assert!(txt_value.contains(";ts="), "TXT record should include timestamp");
 
         // Verify we can parse it back
         let parsed = pubky_noise::pkarr_helpers::parse_x25519_from_pkarr(&txt_value).unwrap();
         assert_eq!(parsed, x25519_pk);
+
+        // Verify timestamp is present and reasonable
+        let timestamp = pubky_noise::pkarr_helpers::extract_timestamp_from_pkarr(&txt_value);
+        assert!(timestamp.is_some(), "Timestamp should be present");
+        let ts = timestamp.unwrap();
+        assert!(ts > 1700000000, "Timestamp should be recent (after Nov 2023)");
     }
 
     #[test]
@@ -341,5 +441,10 @@ mod tests {
         let config = NoiseKeyConfig::default();
         assert_eq!(config.device_id, "default");
         assert!(config.verify_binding);
+        assert!(config.max_age_seconds.is_some(), "Default should have max age");
+        assert_eq!(
+            config.max_age_seconds.unwrap(),
+            pubky_noise::pkarr_helpers::DEFAULT_MAX_KEY_AGE_SECONDS
+        );
     }
 }

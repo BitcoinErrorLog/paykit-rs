@@ -66,6 +66,12 @@ pub struct WebSocketNoiseChannel {
     tx: UnboundedSender<Vec<u8>>,
 }
 
+type WebSocketChannels = (
+    WebSocket,
+    Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
+    UnboundedSender<Vec<u8>>,
+);
+
 impl WebSocketNoiseChannel {
     fn from_parts(
         ws: WebSocket,
@@ -81,13 +87,7 @@ impl WebSocketNoiseChannel {
         }
     }
 
-    fn init_websocket(
-        ws_url: &str,
-    ) -> Result<(
-        WebSocket,
-        Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
-        UnboundedSender<Vec<u8>>,
-    )> {
+    fn init_websocket(ws_url: &str) -> Result<WebSocketChannels> {
         let ws = WebSocket::new(ws_url)
             .map_err(|e| TransportError::ConnectionFailed(format!("{:?}", e)))?;
         ws.set_binary_type(BinaryType::Arraybuffer);
@@ -184,12 +184,17 @@ impl WebSocketNoiseChannel {
     ///
     /// Returns the channel and the server's ephemeral public key for
     /// post-handshake attestation.
-    pub async fn connect_ephemeral(ws_url: &str) -> Result<(Self, [u8; 32])> {
+    pub async fn connect_ephemeral(ws_url: &str) -> Result<(Self, [u8; 32], [u8; 32])> {
         let (ws, rx, tx) = Self::init_websocket(ws_url)?;
         Self::wait_for_open(&ws).await?;
         Self::send_pattern_byte(&ws, NoisePattern::NN)?;
-        let (session, server_ephemeral) = Self::perform_client_handshake_nn(&ws, &rx).await?;
-        Ok((Self::from_parts(ws, session, rx, tx), server_ephemeral))
+        let (session, server_ephemeral, client_ephemeral) =
+            Self::perform_client_handshake_nn(&ws, &rx).await?;
+        Ok((
+            Self::from_parts(ws, session, rx, tx),
+            server_ephemeral,
+            client_ephemeral,
+        ))
     }
 
     /// Wait for WebSocket to reach OPEN state
@@ -300,10 +305,16 @@ impl WebSocketNoiseChannel {
     async fn perform_client_handshake_nn(
         ws: &WebSocket,
         rx: &Rc<RefCell<UnboundedReceiver<Vec<u8>>>>,
-    ) -> Result<(NoiseSession, [u8; 32])> {
+    ) -> Result<(NoiseSession, [u8; 32], [u8; 32])> {
         let (hs, first_msg) = datalink_adapter::start_nn().map_err(|e| {
             TransportError::HandshakeFailed(format!("Handshake build failed: {}", e))
         })?;
+        let client_ephemeral: [u8; 32] = first_msg
+            .get(..32)
+            .and_then(|slice| slice.try_into().ok())
+            .ok_or_else(|| {
+                TransportError::HandshakeFailed("Invalid NN first message length".into())
+            })?;
 
         Self::send_frame(ws, &first_msg, "handshake")?;
 
@@ -324,7 +335,7 @@ impl WebSocketNoiseChannel {
             TransportError::HandshakeFailed(format!("Failed to complete handshake: {}", e))
         })?;
 
-        Ok((session, server_ephemeral))
+        Ok((session, server_ephemeral, client_ephemeral))
     }
 
     /// Receive raw bytes from the message queue

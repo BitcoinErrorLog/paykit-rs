@@ -148,6 +148,12 @@ impl PaykitInteractiveManager {
                 // Log error?
                 Ok(None)
             }
+            PaykitNoiseMessage::Attestation { .. } => {
+                // Attestation is handled separately by the application layer
+                // during NN pattern post-handshake authentication.
+                // If received here, just acknowledge it.
+                Ok(Some(PaykitNoiseMessage::Ack))
+            }
         }
     }
 

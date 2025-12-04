@@ -10,7 +10,7 @@ use pubky_testnet::EphemeralTestnet;
 use tempfile::TempDir;
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_publish_command_end_to_end() {
     // Setup: Create testnet and temporary storage
     let testnet = EphemeralTestnet::start()
@@ -70,7 +70,7 @@ async fn test_publish_command_end_to_end() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_publish_multiple_methods() {
     // Setup
     let testnet = EphemeralTestnet::start()

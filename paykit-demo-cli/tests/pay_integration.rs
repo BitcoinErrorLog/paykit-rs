@@ -9,7 +9,7 @@ use pubky_testnet::EphemeralTestnet;
 use tempfile::TempDir;
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_pay_command_discovers_recipient_methods() {
     // Setup: Create testnet and identities
     let testnet = EphemeralTestnet::start()
@@ -73,7 +73,7 @@ async fn test_pay_command_discovers_recipient_methods() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_pay_command_fails_when_method_not_supported() {
     // Setup
     let testnet = EphemeralTestnet::start()
@@ -86,7 +86,7 @@ async fn test_pay_command_fails_when_method_not_supported() {
     let storage_dir = temp_dir.path();
 
     let id_manager = IdentityManager::new(storage_dir.join("identities"));
-    let payer = id_manager.create("payer").expect("Failed to create payer");
+    let _payer = id_manager.create("payer").expect("Failed to create payer");
 
     std::fs::write(storage_dir.join(".current_identity"), "payer")
         .expect("Failed to save current identity");
@@ -122,7 +122,7 @@ async fn test_pay_command_fails_when_method_not_supported() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_pay_command_discovers_multiple_methods() {
     // Setup
     let testnet = EphemeralTestnet::start()
@@ -135,7 +135,7 @@ async fn test_pay_command_discovers_multiple_methods() {
     let storage_dir = temp_dir.path();
 
     let id_manager = IdentityManager::new(storage_dir.join("identities"));
-    let payer = id_manager.create("payer").expect("Failed to create payer");
+    let _payer = id_manager.create("payer").expect("Failed to create payer");
 
     std::fs::write(storage_dir.join(".current_identity"), "payer")
         .expect("Failed to save current identity");

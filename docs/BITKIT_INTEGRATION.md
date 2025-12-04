@@ -356,6 +356,39 @@ test('key derivation matches test vector', () => {
 });
 ```
 
+## Pattern Selection for Bitkit
+
+| Scenario | Pattern | When |
+|----------|---------|------|
+| Known contact | IK-raw | Recipient's X25519 key in pkarr |
+| First contact | XX | No key available, learn during handshake |
+| Anonymous donation | N | Client anonymity required |
+
+### Using XX for First Contact
+
+When contacting a new recipient for the first time and their key isn't in pkarr:
+
+```typescript
+// 1. Derive X25519 for this session
+const x25519SecretKey = await SecureStorage.get('x25519_sk');
+
+// 2. Connect with XX pattern (learns server's key during handshake)
+const result = manager.initiateXx(x25519SecretKey);
+await socket.send(result.message);
+
+const response1 = await socket.receive();
+const response2 = manager.processXxResponse(result.sessionId, response1);
+await socket.send(response2);
+
+// 3. Session established - extract server's static key
+const serverStaticPk = manager.getRemoteStatic(result.sessionId);
+
+// 4. Cache server's key for future IK-raw connections
+await ContactStorage.saveNoiseKey(recipientPubky, serverStaticPk);
+
+// 5. Next time, use IK-raw with cached key
+```
+
 ## Migration from v0.7.0
 
 If upgrading from pubky-noise v0.7.0:

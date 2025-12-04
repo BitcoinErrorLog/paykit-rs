@@ -17,7 +17,7 @@ fn create_test_endpoint(method: &str, data: &str) -> (MethodId, EndpointData) {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_pubky_directory_operations() {
     // Test 1: Directory publish/query roundtrip
 
@@ -141,7 +141,7 @@ async fn test_pubky_directory_operations() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_pubky_authenticated_transport() {
     // Test 2: Transport adapter compliance
 
@@ -207,7 +207,7 @@ async fn test_pubky_authenticated_transport() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_endpoint_rotation_logic() {
     // Test 3: Endpoint rotation
 
@@ -319,7 +319,7 @@ async fn test_endpoint_rotation_logic() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_unauthenticated_transport_404_handling() {
     // Test: Verify 404 handling for non-existent users
 
@@ -386,7 +386,7 @@ async fn test_unauthenticated_transport_404_handling() {
 }
 
 #[tokio::test]
-#[ignore = "Requires external DHT - run manually with --ignored"]
+#[ignore] // Requires external DHT - run manually with --ignored
 async fn test_concurrent_operations() {
     // Test: Verify transport adapters are safe for concurrent use
 

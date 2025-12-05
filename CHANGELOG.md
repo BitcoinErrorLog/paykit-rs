@@ -41,19 +41,25 @@ All notable changes to the Paykit project are documented in this file.
 
 ### Changed
 - **BREAKING**: Upgraded to pubky-noise v0.8.0
-  - Removed `epoch` parameter from all Noise API calls
-  - Removed `()` phantom type parameter from `NoiseClient<R>` and `NoiseServer<R>`
-  - Updated `derive_x25519_for_device_epoch()` to `derive_x25519_static()`
-  - Updated return types: `client_start_ik_direct()` now returns 2-tuple `(hs, msg)`
-  - Updated return types: `server_accept_ik()` now returns 2-tuple `(hs, response)`
+  - Simplified API: Removed internal `epoch` tracking (Noise nonces provide replay protection)
+  - Cleaner types: Removed phantom type parameters from `NoiseClient` and `NoiseServer`
+  - Updated KDF: `derive_x25519_static()` provides device-bound key derivation
+  - Streamlined returns: Handshake functions return tuples without redundant fields
 - Fixed pubky-noise dependency paths (now points to `../../pubky-noise`)
 - Updated `.gitignore` to match pubky-noise patterns
 - Added `zeroize` and `sha2` dependencies to `paykit-demo-core`
 
 ### Documentation
-- Comprehensive documentation cleanup and consolidation
-- Component relationship documentation
-- Cross-component consistency improvements
+- Created comprehensive documentation index at `docs/README.md`
+- Added `pattern_comparison` and `cold_key_workflow` runnable examples
+- Updated all component READMEs to reflect current architecture
+- Added security warnings to all key handling modules
+
+### Security
+- All demo code now prominently warns that `DummyRing` is for demo purposes only
+- Added pkarr signature verification by default (with 30-day max age)
+- Improved key zeroization practices across all examples
+- Documented platform-specific secure storage requirements (iOS Keychain, Android KeyStore)
 
 ## [1.0.0] - 2024
 

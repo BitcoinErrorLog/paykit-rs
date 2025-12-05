@@ -6,6 +6,9 @@
 use paykit_lib::{MethodId, PublicKey};
 use serde::{Deserialize, Serialize};
 
+// Re-export NoisePattern so downstream consumers can choose patterns directly.
+pub use pubky_noise::NoisePattern;
+
 /// A cryptographic receipt shared between two peers for a payment.
 ///
 /// This struct is designed to be forward-compatible with future features like
@@ -119,8 +122,7 @@ pub use manager::{PaykitInteractiveManager, ReceiptGenerator};
 pub use storage::PaykitStorage;
 pub use transport::PubkyNoiseChannel;
 
-// Re-export pubky-noise types for pattern selection
-pub use pubky_noise::NoisePattern;
+// Re-export types for pattern selection and key handling
 pub use zeroize::Zeroizing;
 
 /// Result type for interactive operations.

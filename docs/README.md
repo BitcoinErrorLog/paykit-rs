@@ -1,88 +1,101 @@
-# Paykit Documentation Index
+# Paykit Documentation
 
-This directory contains comprehensive guides for building, deploying, and integrating Paykit.
+Complete documentation for the Paykit payment protocol and its integration with Pubky and Noise.
 
-## Integration Guides
+## Table of Contents
 
-- **[BITKIT_INTEGRATION.md](BITKIT_INTEGRATION.md)** - Complete guide for integrating Paykit into Bitkit
-  - React Native bridge examples (iOS Swift + Android Kotlin)
-  - Cold key architecture for hardware wallets
-  - One-time setup flow with Ed25519/X25519 derivation
-  - Runtime payment flows
-  - pkarr-based key discovery
-  - Pattern selection for Bitkit use cases
+### Getting Started
+- [Main README](../README.md) - Project overview and quick start
+- [Build Instructions](../BUILD.md) - How to build all components
+- [Deployment Guide](../DEPLOYMENT.md) - Deployment considerations
 
-- **[PATTERN_SELECTION.md](PATTERN_SELECTION.md)** - Noise pattern selection guide
-  - When to use each pattern (IK, IK-raw, N, NN, XX)
-  - Security comparison table
-  - Best practices and recommendations
-  - Code examples for each pattern
-  - Pattern selection flowchart
+### Architecture & Design
+- [Pattern Selection Guide](PATTERN_SELECTION.md) - Choose the right Noise pattern for your use case
+- [Noise Pattern Negotiation](NOISE_PATTERN_NEGOTIATION.md) - Wire protocol for pattern negotiation
+- [Key Caching Strategy](KEY_CACHING_STRATEGY.md) - How to cache and rotate Noise keys
+- [Key Rotation](KEY_ROTATION.md) - Strategies for rotating X25519 keys
+- [Threat Model](THREAT_MODEL.md) - Security analysis and threat vectors
 
-- **[NOISE_PATTERN_NEGOTIATION.md](NOISE_PATTERN_NEGOTIATION.md)** - Pattern negotiation protocol
-  - Wire format specification
-  - Pattern byte mapping (0x00-0x04)
-  - Client and server implementation
-  - Security considerations
+### Integration Guides
+- [Bitkit Integration](BITKIT_INTEGRATION.md) - Mobile wallet integration with cold keys
+- [Production Deployment](PRODUCTION_DEPLOYMENT.md) - Production deployment checklist
+- [Production Checklist](PRODUCTION_CHECKLIST.md) - Pre-launch verification
 
-## Deployment Guides
+### Security
+- [Security Policy](../SECURITY.md) - Vulnerability reporting and security practices
+- [Threat Model](THREAT_MODEL.md) - Comprehensive security analysis
 
-- **[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)** - Production deployment checklist
-  - Security configuration
-  - Environment setup
-  - Monitoring and logging
-  - Incident response
+### Development
+- [Changelog](../CHANGELOG.md) - Version history and release notes
+- [Release Process](../RELEASING.md) - How to cut a new release
+- [Agents Guide](../AGENTS.md) - AI agent conventions for this codebase
 
-## Related Documentation
+### External References
+- [pubky-noise](../../pubky-noise/README.md) - Noise protocol implementation
+- [pubky-noise Cold Key Architecture](../../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) - Detailed cold key design
+- [pubky-noise Mobile Integration](../../pubky-noise/docs/MOBILE_INTEGRATION.md) - Mobile-specific considerations
 
-### pubky-noise Library
-- [pubky-noise README](../../pubky-noise/README.md) - Noise library overview
-- [Cold Key Architecture](../../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) - pkarr-based cold key design
-- [Mobile Integration](../../pubky-noise/docs/MOBILE_INTEGRATION.md) - Mobile app integration guide
-- [FFI Guide](../../pubky-noise/docs/FFI_GUIDE.md) - UniFFI bindings for iOS/Android
+## Quick Navigation
 
-### Component Documentation
-- [paykit-lib README](../paykit-lib/README.md) - Core library API
-- [paykit-interactive README](../paykit-interactive/README.md) - Interactive payment protocol
-- [paykit-subscriptions README](../paykit-subscriptions/README.md) - Subscription management
-- [paykit-demo-cli README](../paykit-demo-cli/README.md) - CLI demo user guide
-- [paykit-demo-web README](../paykit-demo-web/README.md) - Web demo user guide
+### By Use Case
 
-### Project Documentation
-- [Main README](../README.md) - Project overview
-- [BUILD.md](../BUILD.md) - Build and development setup
-- [CHANGELOG.md](../CHANGELOG.md) - Version history
-- [SECURITY.md](../SECURITY.md) - Security considerations
-- [DEPLOYMENT.md](../DEPLOYMENT.md) - Deployment instructions
+**Building a payment application:**
+1. Start with [Main README](../README.md)
+2. Review [Pattern Selection Guide](PATTERN_SELECTION.md)
+3. Check [Production Checklist](PRODUCTION_CHECKLIST.md)
 
-## Recommended Reading Order
+**Integrating with Bitkit/mobile:**
+1. Read [Bitkit Integration](BITKIT_INTEGRATION.md)
+2. Review [pubky-noise Cold Key Architecture](../../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md)
+3. Run [cold_key_workflow example](../paykit-demo-core/examples/README.md)
 
-### For New Developers
-1. [Main README](../README.md) - Start here for project overview
-2. [BUILD.md](../BUILD.md) - Set up your development environment
-3. [PATTERN_SELECTION.md](PATTERN_SELECTION.md) - Understand Noise patterns
-4. Component READMEs - Dive into specific crates
+**Understanding security:**
+1. Read [Threat Model](THREAT_MODEL.md)
+2. Review [Security Policy](../SECURITY.md)
+3. Check [Production Deployment](PRODUCTION_DEPLOYMENT.md)
 
-### For Bitkit Integration
-1. [BITKIT_INTEGRATION.md](BITKIT_INTEGRATION.md) - Primary integration guide
-2. [Cold Key Architecture](../../pubky-noise/docs/COLD_KEY_ARCHITECTURE.md) - Understand cold key design
-3. [PATTERN_SELECTION.md](PATTERN_SELECTION.md) - Choose the right patterns
-4. [Mobile Integration](../../pubky-noise/docs/MOBILE_INTEGRATION.md) - Mobile-specific considerations
+### By Role
 
-### For Security Review
-1. [SECURITY.md](../SECURITY.md) - Security best practices
-2. [pubky-noise Threat Model](../../pubky-noise/THREAT_MODEL.md) - Threat analysis
-3. [pubky-noise Audit Report](../../pubky-noise/PUBKY_NOISE_AUDIT_REPORT.md) - Audit findings
-4. [PATTERN_SELECTION.md](PATTERN_SELECTION.md) - Pattern security comparison
+**Developers:**
+- [Build Instructions](../BUILD.md)
+- [Pattern Selection Guide](PATTERN_SELECTION.md)
+- [Examples](../paykit-demo-core/examples/README.md)
 
-## Quick Links
+**Security Reviewers:**
+- [Threat Model](THREAT_MODEL.md)
+- [Security Policy](../SECURITY.md)
+- [Key Rotation](KEY_ROTATION.md)
 
-- **Demo Scripts**: [paykit-demo-cli/demos/](../paykit-demo-cli/demos/README.md)
-- **API Reference**: [paykit-demo-web/API_REFERENCE.md](../paykit-demo-web/API_REFERENCE.md)
-- **Architecture**: [paykit-demo-web/ARCHITECTURE.md](../paykit-demo-web/ARCHITECTURE.md)
-- **Testing**: [paykit-demo-cli/TESTING.md](../paykit-demo-cli/TESTING.md)
+**Operators:**
+- [Production Deployment](PRODUCTION_DEPLOYMENT.md)
+- [Production Checklist](PRODUCTION_CHECKLIST.md)
+- [Deployment Guide](../DEPLOYMENT.md)
 
----
+## Documentation Conventions
 
-**Last Updated**: December 2025 (Paykit v2.0.0 + pubky-noise v0.8.0)
+### Code Examples
+All code examples in documentation are tested against the current API. If you find outdated examples, please open an issue.
 
+### Pattern References
+When referring to Noise patterns, we use:
+- **IK** - Interactive Key (standard authenticated)
+- **IK-raw** - Interactive Key without handshake signing (cold key scenario)
+- **N** - Anonymous client, authenticated server
+- **NN** - Fully anonymous (requires post-handshake attestation)
+- **XX** - Trust-on-first-use
+
+### Security Notes
+Documents marked with 🔒 contain security-critical information that must be understood before production deployment.
+
+## Contributing to Documentation
+
+When updating docs:
+1. Keep examples current with the API
+2. Test all code snippets
+3. Use clear, concise language
+4. Link to related documentation
+5. Mark security-critical sections clearly
+
+## Archived Documentation
+
+Historical documentation has been moved to [`archive/`](../archive/README.md). These docs are preserved for reference but may be outdated.

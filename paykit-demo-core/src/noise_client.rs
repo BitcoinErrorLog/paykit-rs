@@ -2,6 +2,17 @@
 //!
 //! Provides helpers to establish encrypted Noise channels with payment recipients.
 //!
+//! # Security Warning
+//!
+//! **This module uses `DummyRing` for demonstration purposes only!**
+//!
+//! Production applications MUST use platform-specific secure storage:
+//! - **iOS**: Keychain with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+//! - **Android**: KeyStore with `setUserAuthenticationRequired(true)`
+//! - **Desktop**: OS credential manager or hardware security module (HSM)
+//!
+//! Never store Ed25519 seeds in plaintext files, environment variables, or unprotected memory.
+//!
 //! ## Pattern Support
 //!
 //! - **IK (default)**: Mutual authentication, Ed25519 signing at handshake time

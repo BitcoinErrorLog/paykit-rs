@@ -62,7 +62,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } = payer_channel.recv().await?
     {
         println!("  Received offer for method: {}", method_id.0);
-        println!("  Endpoint: {}...\n", &endpoint[..20]);
+        let truncated = if endpoint.len() > 20 {
+            &endpoint[..20]
+        } else {
+            &endpoint
+        };
+        println!("  Endpoint: {}...\n", truncated);
         payer_storage
             .save_private_endpoint(&payee_pk, &method_id, &endpoint)
             .await?;

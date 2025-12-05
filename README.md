@@ -93,6 +93,7 @@ Interactive payment protocol using:
 - Receipt negotiation
 - Private endpoint exchange
 - Payment coordination
+- Pattern-aware Noise connections (IK, IK-raw, N, NN, XX) with a 1-byte negotiation prefix. See [`docs/NOISE_PATTERN_NEGOTIATION.md`](docs/NOISE_PATTERN_NEGOTIATION.md).
 
 **Key APIs**:
 ```rust
@@ -114,10 +115,15 @@ let response = manager.handle_message(msg, &payer, &payee).await?;
 
 Shared business logic for demo applications:
 - Identity management (Ed25519/X25519 keypairs)
+- Noise protocol helpers (IK, IK-raw, N, NN, XX patterns)
+- pkarr-based key discovery and publication
 - Directory client wrapper
 - Payment coordinator
 - File-based storage
 - Contact management
+
+**Pattern Support:**
+All 5 Noise patterns are supported for encrypted payment channels. See [`paykit-demo-core/examples`](paykit-demo-core/examples/README.md) for working examples of each pattern.
 
 ### paykit-subscriptions
 

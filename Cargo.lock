@@ -2885,6 +2885,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "md5",
+ "paykit-interactive",
+ "paykit-subscriptions",
  "pubky",
  "pubky-testnet",
  "serde",

@@ -25,4 +25,6 @@ tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 pubky-testnet = { version = "0.6.0-rc.6" }
+paykit-subscriptions = { path = "../paykit-subscriptions" }
+paykit-interactive = { path = "../paykit-interactive" }
 

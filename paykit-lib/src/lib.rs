@@ -42,8 +42,10 @@ pub mod private_endpoints;
 pub mod routing;
 pub mod selection;
 pub mod rotation;
+pub mod uri;
 
 pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
+pub use uri::{parse_uri, PaykitUri};
 
 /// Pubky adapters are only exposed when the default `pubky` feature is enabled.
 #[cfg(feature = "pubky")]

@@ -17,6 +17,7 @@
 //! Async operations use the Tokio runtime.
 
 pub mod async_bridge;
+pub mod scanner;
 pub mod storage;
 
 use std::sync::Arc;
@@ -773,6 +774,31 @@ impl PaykitClient {
                 message: e.to_string() 
             })?;
         Ok(metadata_json)
+    }
+
+    // ========================================================================
+    // Scanner Methods
+    // ========================================================================
+
+    /// Parse scanned QR code data as a Paykit URI.
+    pub fn parse_scanned_qr(&self, scanned_data: String) -> Result<scanner::ScannedUri> {
+        scanner::parse_scanned_uri(scanned_data)
+            .map_err(|e| PaykitMobileError::Validation { message: e })
+    }
+
+    /// Check if scanned data looks like a Paykit URI.
+    pub fn is_paykit_qr(&self, scanned_data: String) -> bool {
+        scanner::is_paykit_uri(scanned_data)
+    }
+
+    /// Extract public key from scanned QR code.
+    pub fn extract_key_from_qr(&self, scanned_data: String) -> Option<String> {
+        scanner::extract_public_key(scanned_data)
+    }
+
+    /// Extract payment method from scanned QR code.
+    pub fn extract_method_from_qr(&self, scanned_data: String) -> Option<String> {
+        scanner::extract_payment_method(scanned_data)
     }
 }
 

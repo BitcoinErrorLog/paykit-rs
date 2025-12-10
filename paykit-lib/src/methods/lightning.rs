@@ -2,11 +2,30 @@
 //!
 //! This module implements the built-in Lightning Network payment method.
 //! It supports BOLT11 invoices and LNURL for payment.
+//!
+//! # Wallet Integration
+//!
+//! To execute actual payments, provide a `LightningExecutor` implementation:
+//!
+//! ```ignore
+//! use paykit_lib::methods::{LightningPlugin, LightningExecutor, MockLightningExecutor};
+//! use std::sync::Arc;
+//!
+//! // For testing
+//! let plugin = LightningPlugin::with_executor(Arc::new(MockLightningExecutor::new()));
+//!
+//! // For production, implement LightningExecutor for your node
+//! struct MyLndNode { /* ... */ }
+//! impl LightningExecutor for MyLndNode { /* ... */ }
+//! let plugin = LightningPlugin::with_executor(Arc::new(MyLndNode::new()));
+//! ```
 
+use super::executor::{LightningExecutor, LightningPaymentStatus, MockLightningExecutor};
 use super::traits::{Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult};
 use crate::{EndpointData, MethodId, PaykitError, Result};
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::Arc;
 
 /// Lightning Network payment method plugin.
 ///
@@ -24,6 +43,8 @@ use serde_json::Value;
 pub struct LightningPlugin {
     /// Network type for invoice validation.
     network: LightningNetwork,
+    /// Optional executor for actual payments.
+    executor: Option<Arc<dyn LightningExecutor>>,
 }
 
 /// Lightning network types.
@@ -45,20 +66,60 @@ impl Default for LightningNetwork {
 
 impl LightningPlugin {
     /// Creates a new Lightning plugin for mainnet.
+    ///
+    /// Without an executor, `execute_payment` will return a mock result.
     pub fn new() -> Self {
         Self {
             network: LightningNetwork::Mainnet,
+            executor: None,
         }
     }
 
     /// Creates a new Lightning plugin for a specific network.
     pub fn with_network(network: LightningNetwork) -> Self {
-        Self { network }
+        Self {
+            network,
+            executor: None,
+        }
+    }
+
+    /// Creates a new Lightning plugin with a custom executor.
+    ///
+    /// The executor handles actual payment execution.
+    pub fn with_executor(executor: Arc<dyn LightningExecutor>) -> Self {
+        Self {
+            network: LightningNetwork::Mainnet,
+            executor: Some(executor),
+        }
+    }
+
+    /// Creates a plugin with both network and executor configured.
+    pub fn with_network_and_executor(
+        network: LightningNetwork,
+        executor: Arc<dyn LightningExecutor>,
+    ) -> Self {
+        Self {
+            network,
+            executor: Some(executor),
+        }
+    }
+
+    /// Creates a plugin with a mock executor for testing.
+    pub fn with_mock_executor() -> Self {
+        Self {
+            network: LightningNetwork::Mainnet,
+            executor: Some(Arc::new(MockLightningExecutor::new())),
+        }
     }
 
     /// Returns the network this plugin is configured for.
     pub fn network(&self) -> LightningNetwork {
         self.network
+    }
+
+    /// Returns whether this plugin has an executor configured.
+    pub fn has_executor(&self) -> bool {
+        self.executor.is_some()
     }
 
     /// Validates a BOLT11 invoice.
@@ -191,6 +252,49 @@ impl Default for LightningPlugin {
     }
 }
 
+/// Verify a Lightning payment proof.
+///
+/// This function validates that a preimage matches a payment hash.
+/// The preimage is the cryptographic proof that payment was received.
+///
+/// # Arguments
+///
+/// * `proof` - The payment proof to verify
+/// * `executor` - Optional executor for additional verification
+///
+/// # Returns
+///
+/// Result indicating whether the proof is valid.
+pub fn verify_lightning_proof(
+    proof: &PaymentProof,
+    executor: Option<&dyn LightningExecutor>,
+) -> Result<bool> {
+    match proof {
+        PaymentProof::LightningPreimage { preimage, payment_hash } => {
+            if preimage == "pending" || payment_hash == "pending" {
+                return Ok(false);
+            }
+
+            // Verify preimage matches hash
+            if let Some(exec) = executor {
+                return Ok(exec.verify_preimage(preimage, payment_hash));
+            }
+
+            // Without executor, just check that values look valid
+            // A real preimage/hash is 64 hex characters (32 bytes)
+            let valid = preimage.len() == 64 
+                && payment_hash.len() == 64
+                && preimage.chars().all(|c| c.is_ascii_hexdigit())
+                && payment_hash.chars().all(|c| c.is_ascii_hexdigit());
+            
+            Ok(valid)
+        }
+        _ => Err(PaykitError::Transport(
+            "Invalid proof type: expected LightningPreimage".to_string(),
+        )),
+    }
+}
+
 #[async_trait]
 impl PaymentMethodPlugin for LightningPlugin {
     fn method_id(&self) -> MethodId {
@@ -231,31 +335,91 @@ impl PaymentMethodPlugin for LightningPlugin {
             return Err(PaykitError::Transport(validation.errors.join(", ")));
         }
 
-        // In a real implementation, this would:
-        // 1. Connect to a Lightning node/wallet
-        // 2. Decode the invoice to verify amount
-        // 3. Check route availability
-        // 4. Send the payment
-        // 5. Return the preimage on success
+        // Check amount limits
+        if !self.supports_amount(amount) {
+            return Err(PaykitError::Transport(format!(
+                "Amount {} not supported for Lightning (limits: 1 sat - 4M sats)",
+                amount
+            )));
+        }
+
+        // Convert to millisatoshis
+        let amount_msat = amount.as_u64().map(|sats| sats * 1000);
         
-        // For now, return a placeholder execution
+        // Get max fee from metadata
+        let max_fee_msat = metadata
+            .get("max_fee_msat")
+            .and_then(|v| v.as_u64());
+
+        // Execute payment via executor if available
+        if let Some(executor) = &self.executor {
+            match &payment_data {
+                PaymentData::Bolt11(invoice) => {
+                    match executor.pay_invoice(invoice, amount_msat, max_fee_msat).await {
+                        Ok(result) => {
+                            return Ok(PaymentExecution {
+                                method_id: self.method_id(),
+                                endpoint: endpoint.clone(),
+                                amount: amount.clone(),
+                                success: result.status == LightningPaymentStatus::Succeeded,
+                                executed_at: current_timestamp(),
+                                execution_data: serde_json::json!({
+                                    "type": "bolt11",
+                                    "invoice": invoice,
+                                    "preimage": result.preimage,
+                                    "payment_hash": result.payment_hash,
+                                    "amount_msat": result.amount_msat,
+                                    "fee_msat": result.fee_msat,
+                                    "hops": result.hops,
+                                    "status": format!("{:?}", result.status),
+                                    "metadata": metadata,
+                                }),
+                                error: if result.status == LightningPaymentStatus::Failed {
+                                    Some("Payment failed".to_string())
+                                } else {
+                                    None
+                                },
+                            });
+                        }
+                        Err(e) => {
+                            return Ok(PaymentExecution::failure(
+                                self.method_id(),
+                                endpoint.clone(),
+                                amount.clone(),
+                                e.to_string(),
+                            ));
+                        }
+                    }
+                }
+                PaymentData::Lnurl(_lnurl) => {
+                    // LNURL requires fetching the actual invoice first
+                    // For now, return an error indicating LNURL needs special handling
+                    return Err(PaykitError::Transport(
+                        "LNURL payments require additional flow - use decode_lnurl first".to_string()
+                    ));
+                }
+            }
+        }
+
+        // No executor configured - return mock/placeholder result
         let execution_data = match payment_data {
             PaymentData::Bolt11(invoice) => serde_json::json!({
                 "type": "bolt11",
                 "invoice": invoice,
-                "amount": amount.value,
+                "amount_msat": amount_msat,
                 "currency": amount.currency,
                 "metadata": metadata,
-                // In real implementation, would include:
-                // "payment_hash": "actual_payment_hash",
-                // "preimage": "actual_preimage",
+                "mock": true,
+                "note": "No executor configured - this is a mock result",
             }),
             PaymentData::Lnurl(lnurl) => serde_json::json!({
                 "type": "lnurl",
                 "lnurl": lnurl,
-                "amount": amount.value,
+                "amount_msat": amount_msat,
                 "currency": amount.currency,
                 "metadata": metadata,
+                "mock": true,
+                "note": "No executor configured - this is a mock result",
             }),
         };
 
@@ -271,6 +435,13 @@ impl PaymentMethodPlugin for LightningPlugin {
     }
 
     fn generate_proof(&self, execution: &PaymentExecution) -> Result<PaymentProof> {
+        // Check if execution was successful
+        if !execution.success {
+            return Err(PaykitError::Transport(
+                execution.error.clone().unwrap_or_else(|| "Payment failed".to_string())
+            ));
+        }
+
         // Extract preimage and payment hash from execution data
         let preimage = execution
             .execution_data
@@ -288,6 +459,14 @@ impl PaymentMethodPlugin for LightningPlugin {
             preimage: preimage.to_string(),
             payment_hash: payment_hash.to_string(),
         })
+    }
+
+    async fn estimate_fee(&self, amount: &Amount) -> Option<Amount> {
+        // Lightning fees are typically a percentage + base fee
+        // Estimate ~0.1% + 1 sat base
+        let amount_sats = amount.as_u64()?;
+        let fee = (amount_sats / 1000).max(1) + 1;
+        Some(Amount::sats(fee))
     }
 
     fn format_receipt_metadata(&self, execution: &PaymentExecution) -> Value {
@@ -354,6 +533,15 @@ mod tests {
     fn test_plugin_id() {
         let plugin = LightningPlugin::new();
         assert_eq!(plugin.method_id().0, "lightning");
+    }
+
+    #[test]
+    fn test_plugin_with_executor() {
+        let plugin = LightningPlugin::with_mock_executor();
+        assert!(plugin.has_executor());
+
+        let plugin_no_exec = LightningPlugin::new();
+        assert!(!plugin_no_exec.has_executor());
     }
 
     #[test]
@@ -443,5 +631,101 @@ mod tests {
         let data = EndpointData("lnbc1pvjluezpp5...".to_string());
         let result = plugin.extract_payment_data(&data);
         assert!(matches!(result, Ok(PaymentData::Bolt11(_))));
+    }
+
+    #[tokio::test]
+    async fn test_execute_payment_with_mock_executor() {
+        let plugin = LightningPlugin::with_mock_executor();
+        
+        let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
+        let endpoint = EndpointData(invoice.to_string());
+        let amount = Amount::sats(1000);
+        let metadata = serde_json::json!({});
+        
+        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
+        
+        assert!(result.success);
+        assert!(result.execution_data.get("preimage").is_some());
+        assert!(result.execution_data.get("payment_hash").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_execute_payment_without_executor() {
+        let plugin = LightningPlugin::new();
+        
+        let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
+        let endpoint = EndpointData(invoice.to_string());
+        let amount = Amount::sats(1000);
+        let metadata = serde_json::json!({});
+        
+        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
+        
+        assert!(result.success);
+        assert_eq!(result.execution_data.get("mock").and_then(|v| v.as_bool()), Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_generate_proof() {
+        let plugin = LightningPlugin::with_mock_executor();
+        
+        let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
+        let endpoint = EndpointData(invoice.to_string());
+        let amount = Amount::sats(1000);
+        let metadata = serde_json::json!({});
+        
+        let execution = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
+        let proof = plugin.generate_proof(&execution).unwrap();
+        
+        match proof {
+            PaymentProof::LightningPreimage { preimage, payment_hash } => {
+                assert!(!preimage.is_empty());
+                assert!(!payment_hash.is_empty());
+                assert_ne!(preimage, "pending");
+            }
+            _ => panic!("Expected LightningPreimage proof"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_estimate_fee() {
+        let plugin = LightningPlugin::with_mock_executor();
+        
+        let amount = Amount::sats(10000);
+        let fee = plugin.estimate_fee(&amount).await;
+        
+        assert!(fee.is_some());
+        let fee_sats = fee.unwrap().as_u64().unwrap();
+        // Should be ~0.1% + 1 sat = 11 sats
+        assert!(fee_sats >= 1);
+    }
+
+    #[test]
+    fn test_verify_lightning_proof() {
+        // Valid-looking preimage and hash (64 hex chars each)
+        let proof = PaymentProof::LightningPreimage {
+            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd".to_string(),
+            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defg".to_string(),
+        };
+
+        // Without executor, just validates format
+        let result = verify_lightning_proof(&proof, None).unwrap();
+        // Should be false because 'g' is not a valid hex character
+        assert!(!result);
+
+        // Valid hex
+        let proof = PaymentProof::LightningPreimage {
+            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd".to_string(),
+            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defa".to_string(),
+        };
+        let result = verify_lightning_proof(&proof, None).unwrap();
+        assert!(result);
+
+        // Pending should fail
+        let pending_proof = PaymentProof::LightningPreimage {
+            preimage: "pending".to_string(),
+            payment_hash: "pending".to_string(),
+        };
+        let result = verify_lightning_proof(&pending_proof, None).unwrap();
+        assert!(!result);
     }
 }

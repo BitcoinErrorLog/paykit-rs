@@ -3391,6 +3391,7 @@ dependencies = [
  "pubky",
  "secrecy",
  "serde",
+ "serde_bytes",
  "serde_json",
  "sha2",
  "snow",

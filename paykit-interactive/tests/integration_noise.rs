@@ -125,14 +125,21 @@ async fn test_noise_client_server_handshake() {
             .expect("Failed to read handshake");
 
         // Process handshake - Step 2: Server processes client's message and sends response
-        let (hs_state, _identity, response_msg) =
-            pubky_noise::datalink_adapter::server_accept_ik(&server, &handshake_msg)
-                .expect("Handshake failed");
+        let (mut hs_state, _identity) = server
+            .build_responder_read_ik(&handshake_msg)
+            .expect("Handshake failed");
+
+        // Generate response message
+        let mut response = vec![0u8; 128];
+        let n = hs_state
+            .write_message(&[], &mut response)
+            .expect("Failed to write response");
+        response.truncate(n);
 
         // Send handshake response
-        let len = (response_msg.len() as u32).to_be_bytes();
+        let len = (response.len() as u32).to_be_bytes();
         stream.write_all(&len).await.expect("Write failed");
-        stream.write_all(&response_msg).await.expect("Write failed");
+        stream.write_all(&response).await.expect("Write failed");
 
         // Step 3: Complete handshake to get transport mode
         let mut link = pubky_noise::datalink_adapter::server_complete_ik(hs_state)

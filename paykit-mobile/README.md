@@ -99,13 +99,28 @@ print("Net charge: \(proration.netSats) sats")
 
 ## Android Integration
 
-### 1. Add the Generated Files
+### 1. Add Dependencies
+
+Add to your `build.gradle`:
+
+```kotlin
+dependencies {
+    // AndroidX Security for EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    
+    // Kotlin coroutines (if using async extensions)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+}
+```
+
+### 2. Add the Generated Files
 
 Copy the generated files to your Android project:
 - `kotlin/uniffi/paykit_mobile/paykit_mobile.kt` - Kotlin bindings
+- `kotlin/EncryptedPreferencesStorage.kt` - Secure storage implementation
 - Copy the compiled library (`.so` for your target architecture)
 
-### 2. Configure build.gradle
+### 3. Configure build.gradle
 
 ```kotlin
 android {
@@ -119,13 +134,41 @@ android {
 }
 ```
 
-### 3. Usage Example
+### 4. Secure Storage Setup
+
+```kotlin
+import com.paykit.storage.EncryptedPreferencesStorage
+import com.paykit.storage.asPaykitStorage
+
+// Create secure storage (in Application.onCreate or similar)
+val storage = EncryptedPreferencesStorage.create(
+    context = applicationContext,
+    fileName = "paykit_secure_prefs"
+)
+
+// For high-security apps, use biometric protection
+val biometricStorage = EncryptedPreferencesStorage.createWithBiometrics(
+    context = applicationContext,
+    fileName = "paykit_biometric_prefs"
+)
+
+// Use with Paykit
+val paykitStorage = storage.asPaykitStorage()
+```
+
+### 5. Usage Example
 
 ```kotlin
 import uniffi.paykit_mobile.*
+import com.paykit.storage.EncryptedPreferencesStorage
+import com.paykit.storage.asPaykitStorage
 
-// Create the client
-val client = PaykitClient()
+// Create secure storage
+val storage = EncryptedPreferencesStorage.create(context)
+val paykitStorage = storage.asPaykitStorage()
+
+// Create the client with secure storage
+val client = PaykitClient(storage = paykitStorage)
 
 // List available payment methods
 val methods = client.listMethods()
@@ -161,7 +204,24 @@ val subscription = client.createSubscription(
     )
 )
 println("Created subscription: ${subscription.subscriptionId}")
+
+// Using coroutine extensions for async operations
+lifecycleScope.launch {
+    storage.storeAsync("private_key", keyBytes)
+    val key = storage.retrieveAsync("private_key")
+}
 ```
+
+### Android Security Features
+
+The `EncryptedPreferencesStorage` provides:
+
+- **AES-256-GCM** encryption for values
+- **AES-256-SIV** encryption for keys
+- **Hardware-backed keystore** when available
+- **StrongBox** support on compatible devices
+- **Biometric authentication** option for sensitive data
+- **Coroutine extensions** for async operations
 
 ## API Reference
 

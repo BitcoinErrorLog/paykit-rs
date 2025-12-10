@@ -107,9 +107,23 @@ paykit-demo receipts
 | `subscriptions respond` | Respond to request | `paykit-demo subscriptions respond --request-id <id> --action accept` |
 | `subscriptions propose` | Propose subscription | `paykit-demo subscriptions propose --recipient pubky://... --amount 1000 --frequency monthly:1` |
 | `subscriptions accept` | Accept subscription | `paykit-demo subscriptions accept --subscription-id <id>` |
-| `subscriptions enable-auto-pay` | Enable auto-pay | `paykit-demo subscriptions enable-auto-pay --subscription-id <id> --max-amount 5000` |
-| `subscriptions set-limit` | Set spending limits | `paykit-demo subscriptions set-limit --peer pubky://... --limit 10000 --period monthly` |
+
+### Auto-Pay & Spending Limits
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `subscriptions enable-auto-pay` | Enable auto-pay | `paykit-demo subscriptions enable-auto-pay <sub-id> --max-amount 5000` |
+| `subscriptions disable-auto-pay` | Disable auto-pay | `paykit-demo subscriptions disable-auto-pay <sub-id>` |
+| `subscriptions show-auto-pay` | Show auto-pay status | `paykit-demo subscriptions show-auto-pay <sub-id>` |
+| `subscriptions list-auto-pay` | List all auto-pay rules | `paykit-demo subscriptions list-auto-pay` |
+| `subscriptions delete-auto-pay` | Delete auto-pay rule | `paykit-demo subscriptions delete-auto-pay <sub-id>` |
+| `subscriptions set-limit` | Set spending limit | `paykit-demo subscriptions set-limit <peer> --limit 10000 --period monthly` |
 | `subscriptions show-limits` | Show spending limits | `paykit-demo subscriptions show-limits` |
+| `subscriptions delete-limit` | Delete spending limit | `paykit-demo subscriptions delete-limit <peer>` |
+| `subscriptions reset-limit` | Reset spending counter | `paykit-demo subscriptions reset-limit <peer>` |
+| `subscriptions global-settings` | Show global settings | `paykit-demo subscriptions global-settings` |
+| `subscriptions configure-global` | Configure global settings | `paykit-demo subscriptions configure-global --enable --daily-limit 100000` |
+| `subscriptions recent-payments` | Show recent auto-payments | `paykit-demo subscriptions recent-payments --count 20` |
 
 For detailed subscription workflows, see [QUICKSTART.md](./QUICKSTART.md#4-subscriptions).
 

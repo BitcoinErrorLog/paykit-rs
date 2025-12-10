@@ -183,4 +183,34 @@ impl PaykitStorage for DemoPaykitStorage {
         let key = (format!("{:?}", peer), method.0.clone());
         Ok(endpoints.get(&key).cloned())
     }
+
+    async fn list_receipts(&self) -> paykit_interactive::Result<Vec<PaykitReceipt>> {
+        let receipts = self.receipts.lock().await;
+        Ok(receipts.values().cloned().collect())
+    }
+
+    async fn list_private_endpoints_for_peer(
+        &self,
+        peer: &PublicKey,
+    ) -> paykit_interactive::Result<Vec<(MethodId, String)>> {
+        let endpoints = self.endpoints.lock().await;
+        let peer_key = format!("{:?}", peer);
+        let results: Vec<(MethodId, String)> = endpoints
+            .iter()
+            .filter(|((pk, _), _)| pk == &peer_key)
+            .map(|((_, method), endpoint)| (MethodId(method.clone()), endpoint.clone()))
+            .collect();
+        Ok(results)
+    }
+
+    async fn remove_private_endpoint(
+        &self,
+        peer: &PublicKey,
+        method: &MethodId,
+    ) -> paykit_interactive::Result<()> {
+        let mut endpoints = self.endpoints.lock().await;
+        let key = (format!("{:?}", peer), method.0.clone());
+        endpoints.remove(&key);
+        Ok(())
+    }
 }

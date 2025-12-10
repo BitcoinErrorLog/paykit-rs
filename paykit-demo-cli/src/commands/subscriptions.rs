@@ -868,8 +868,400 @@ pub async fn show_peer_limits(storage_dir: &Path, peer: Option<String>) -> Resul
             ui::info(&format!("No spending limit set for peer {}", p));
         }
     } else {
-        ui::info("Use --peer <peer> to view specific peer limits");
+        // List all peer limits from files
+        let limits = list_peer_limits_from_files(storage_dir)?;
+        
+        if limits.is_empty() {
+            ui::info("No spending limits configured.");
+            ui::info("Use 'paykit-demo subscriptions set-limit' to add one.");
+            return Ok(());
+        }
+        
+        for limit in limits {
+            let peer_short = &limit.peer.to_z32()[..20.min(limit.peer.to_z32().len())];
+            let percentage = if limit.total_amount_limit.as_sats() > 0 {
+                (limit.current_spent.as_sats() as f64 / limit.total_amount_limit.as_sats() as f64 * 100.0) as u32
+            } else {
+                0
+            };
+            
+            ui::key_value("Peer", &format!("{}...", peer_short));
+            ui::key_value(
+                "Limit",
+                &format!(
+                    "{} / {} {} ({}%)",
+                    limit.current_spent.to_string(),
+                    limit.total_amount_limit.to_string(),
+                    limit.period,
+                    percentage
+                ),
+            );
+            ui::key_value("Remaining", &limit.remaining_limit().to_string());
+            ui::separator();
+        }
     }
+
+    Ok(())
+}
+
+/// Helper: list all peer limits from files
+fn list_peer_limits_from_files(storage_dir: &Path) -> Result<Vec<paykit_subscriptions::PeerSpendingLimit>> {
+    let limits_dir = storage_dir.join("subscriptions").join("peer_limits");
+    let mut limits = Vec::new();
+    
+    if !limits_dir.exists() {
+        return Ok(limits);
+    }
+    
+    for entry in std::fs::read_dir(limits_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if let Ok(json) = std::fs::read_to_string(&path) {
+                if let Ok(limit) = serde_json::from_str::<paykit_subscriptions::PeerSpendingLimit>(&json) {
+                    limits.push(limit);
+                }
+            }
+        }
+    }
+    
+    Ok(limits)
+}
+
+/// Delete a spending limit
+pub async fn delete_peer_limit(storage_dir: &Path, peer: &str) -> Result<()> {
+    let peer_pk = resolve_recipient(storage_dir, peer)?;
+    let storage = create_subscription_storage(storage_dir)?;
+
+    ui::header("Delete Spending Limit");
+
+    if storage.get_peer_limit(&peer_pk).await?.is_some() {
+        // Delete the file directly
+        let peer_str = format!("{:?}", peer_pk);
+        let path = storage_dir.join("subscriptions").join("peer_limits").join(format!("{}.json", peer_str));
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        ui::success(&format!("Spending limit deleted for peer {}", peer));
+    } else {
+        ui::warning(&format!("No spending limit found for peer {}", peer));
+    }
+
+    Ok(())
+}
+
+/// Reset a spending limit's usage counter
+pub async fn reset_peer_limit(storage_dir: &Path, peer: &str) -> Result<()> {
+    let peer_pk = resolve_recipient(storage_dir, peer)?;
+    let storage = create_subscription_storage(storage_dir)?;
+
+    ui::header("Reset Spending Limit");
+
+    if let Some(mut limit) = storage.get_peer_limit(&peer_pk).await? {
+        let old_spent = limit.current_spent.clone();
+        // Reset the limit using the reset method
+        limit.reset();
+        storage.save_peer_limit(&limit).await?;
+        
+        ui::success(&format!("Spending limit reset for peer {}", peer));
+        ui::key_value("Previous Usage", &old_spent.to_string());
+        ui::key_value("Current Usage", "0 sats");
+        ui::key_value("Limit", &limit.total_amount_limit.to_string());
+    } else {
+        ui::warning(&format!("No spending limit found for peer {}", peer));
+    }
+
+    Ok(())
+}
+
+/// List all auto-pay rules
+pub async fn list_autopay_rules(storage_dir: &Path) -> Result<()> {
+    ui::header("Auto-Pay Rules");
+
+    let rules = list_autopay_rules_from_files(storage_dir)?;
+
+    if rules.is_empty() {
+        ui::info("No auto-pay rules configured.");
+        ui::info("Use 'paykit-demo subscriptions enable-auto-pay <subscription-id>' to add one.");
+        return Ok(());
+    }
+
+    for rule in &rules {
+        let sub_id_short = &rule.subscription_id[..12.min(rule.subscription_id.len())];
+        let peer_short = &rule.peer.to_z32()[..16.min(rule.peer.to_z32().len())];
+        
+        let status = if rule.enabled { "✓ ENABLED" } else { "○ DISABLED" };
+        
+        ui::key_value("Subscription", &format!("{}...", sub_id_short));
+        ui::key_value("Peer", &format!("{}...", peer_short));
+        ui::key_value("Method", &rule.method_id.0);
+        ui::key_value("Status", status);
+        
+        if let Some(ref max) = rule.max_amount_per_payment {
+            ui::key_value("Max Per Payment", &format!("{} sats", max.as_sats()));
+        }
+        
+        if rule.require_confirmation {
+            ui::key_value("Confirmation", "Required");
+        }
+        
+        ui::separator();
+    }
+
+    ui::info(&format!("Total: {} auto-pay rule(s)", rules.len()));
+
+    Ok(())
+}
+
+/// Helper: list all auto-pay rules from files
+fn list_autopay_rules_from_files(storage_dir: &Path) -> Result<Vec<paykit_subscriptions::AutoPayRule>> {
+    let rules_dir = storage_dir.join("subscriptions").join("autopay_rules");
+    let mut rules = Vec::new();
+    
+    if !rules_dir.exists() {
+        return Ok(rules);
+    }
+    
+    for entry in std::fs::read_dir(rules_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if let Ok(json) = std::fs::read_to_string(&path) {
+                if let Ok(rule) = serde_json::from_str::<paykit_subscriptions::AutoPayRule>(&json) {
+                    rules.push(rule);
+                }
+            }
+        }
+    }
+    
+    Ok(rules)
+}
+
+/// Delete an auto-pay rule
+pub async fn delete_autopay_rule(storage_dir: &Path, subscription_id: &str) -> Result<()> {
+    let storage = create_subscription_storage(storage_dir)?;
+
+    ui::header("Delete Auto-Pay Rule");
+
+    if storage.get_autopay_rule(subscription_id).await?.is_some() {
+        // Delete the file directly
+        let path = storage_dir.join("subscriptions").join("autopay_rules").join(format!("{}.json", subscription_id));
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        ui::success(&format!("Auto-pay rule deleted for subscription {}", subscription_id));
+    } else {
+        ui::warning(&format!("No auto-pay rule found for subscription {}", subscription_id));
+    }
+
+    Ok(())
+}
+
+// ============================================================
+// Global Auto-Pay Settings
+// ============================================================
+
+use serde::{Deserialize, Serialize};
+
+/// Global auto-pay settings file
+fn global_settings_path(storage_dir: &Path) -> std::path::PathBuf {
+    storage_dir.join("autopay_global_settings.json")
+}
+
+/// Global settings structure
+#[derive(Serialize, Deserialize, Default)]
+struct GlobalAutoPaySettings {
+    enabled: bool,
+    daily_limit_sats: i64,
+    used_today_sats: i64,
+    last_reset_date: String,
+}
+
+/// Load global settings
+fn load_global_settings(storage_dir: &Path) -> GlobalAutoPaySettings {
+    let path = global_settings_path(storage_dir);
+    if path.exists() {
+        if let Ok(data) = std::fs::read_to_string(&path) {
+            if let Ok(mut settings) = serde_json::from_str::<GlobalAutoPaySettings>(&data) {
+                // Check if we need to reset for a new day
+                let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+                if settings.last_reset_date != today {
+                    settings.used_today_sats = 0;
+                    settings.last_reset_date = today;
+                    let _ = save_global_settings(storage_dir, &settings);
+                }
+                return settings;
+            }
+        }
+    }
+    GlobalAutoPaySettings {
+        enabled: false,
+        daily_limit_sats: 100000, // Default 100k sats
+        used_today_sats: 0,
+        last_reset_date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+    }
+}
+
+/// Save global settings
+fn save_global_settings(storage_dir: &Path, settings: &GlobalAutoPaySettings) -> Result<()> {
+    let path = global_settings_path(storage_dir);
+    let data = serde_json::to_string_pretty(settings)?;
+    std::fs::write(path, data)?;
+    Ok(())
+}
+
+/// Show global auto-pay settings
+pub async fn show_global_settings(storage_dir: &Path) -> Result<()> {
+    ui::header("Global Auto-Pay Settings");
+
+    let settings = load_global_settings(storage_dir);
+
+    let status = if settings.enabled { "✓ ENABLED" } else { "○ DISABLED" };
+    ui::key_value("Global Auto-Pay", status);
+    
+    ui::key_value("Daily Limit", &format!("{} sats", settings.daily_limit_sats));
+    ui::key_value("Used Today", &format!("{} sats", settings.used_today_sats));
+    
+    let remaining = std::cmp::max(0, settings.daily_limit_sats - settings.used_today_sats);
+    ui::key_value("Remaining", &format!("{} sats", remaining));
+    
+    let percentage = if settings.daily_limit_sats > 0 {
+        (settings.used_today_sats as f64 / settings.daily_limit_sats as f64 * 100.0) as u32
+    } else {
+        0
+    };
+    ui::key_value("Usage", &format!("{}%", percentage));
+    
+    ui::key_value("Last Reset", &settings.last_reset_date);
+
+    ui::separator();
+    ui::info("Configure with: paykit-demo subscriptions configure-global");
+
+    Ok(())
+}
+
+/// Configure global auto-pay settings
+pub async fn configure_global_settings(
+    storage_dir: &Path,
+    enable: bool,
+    disable: bool,
+    daily_limit: Option<String>,
+) -> Result<()> {
+    ui::header("Configure Global Auto-Pay");
+
+    let mut settings = load_global_settings(storage_dir);
+    let mut changed = false;
+
+    if enable && disable {
+        return Err(anyhow!("Cannot both enable and disable at the same time"));
+    }
+
+    if enable {
+        settings.enabled = true;
+        ui::success("Global auto-pay ENABLED");
+        changed = true;
+    }
+
+    if disable {
+        settings.enabled = false;
+        ui::warning("Global auto-pay DISABLED");
+        changed = true;
+    }
+
+    if let Some(limit) = daily_limit {
+        let limit_sats: i64 = limit
+            .parse()
+            .map_err(|_| anyhow!("Invalid daily limit: {}", limit))?;
+        
+        if limit_sats <= 0 {
+            return Err(anyhow!("Daily limit must be positive"));
+        }
+        
+        settings.daily_limit_sats = limit_sats;
+        ui::success(&format!("Daily limit set to {} sats", limit_sats));
+        changed = true;
+    }
+
+    if changed {
+        save_global_settings(storage_dir, &settings)?;
+        ui::success("Settings saved");
+    } else {
+        ui::info("No changes made. Use --enable, --disable, or --daily-limit");
+    }
+
+    Ok(())
+}
+
+// ============================================================
+// Recent Auto-Payments
+// ============================================================
+
+/// Recent auto-payments file
+fn recent_autopayments_path(storage_dir: &Path) -> std::path::PathBuf {
+    storage_dir.join("autopay_recent.json")
+}
+
+/// Recent auto-payment record
+#[derive(Serialize, Deserialize)]
+struct AutoPaymentRecord {
+    timestamp: i64,
+    peer: String,
+    amount_sats: i64,
+    subscription_id: Option<String>,
+    description: Option<String>,
+}
+
+/// Show recent auto-payments
+pub async fn show_recent_autopayments(storage_dir: &Path, count: usize) -> Result<()> {
+    ui::header("Recent Auto-Payments");
+
+    let path = recent_autopayments_path(storage_dir);
+    
+    if !path.exists() {
+        ui::info("No auto-payments recorded yet.");
+        return Ok(());
+    }
+
+    let data = std::fs::read_to_string(&path)?;
+    let mut records: Vec<AutoPaymentRecord> = serde_json::from_str(&data)?;
+    
+    if records.is_empty() {
+        ui::info("No auto-payments recorded yet.");
+        return Ok(());
+    }
+
+    // Sort by timestamp descending
+    records.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+    // Show up to 'count' records
+    for record in records.iter().take(count) {
+        let dt = chrono::DateTime::from_timestamp(record.timestamp, 0)
+            .unwrap_or_else(chrono::Utc::now);
+        
+        let peer_short = &record.peer[..16.min(record.peer.len())];
+        
+        ui::key_value("Date", &dt.format("%Y-%m-%d %H:%M:%S").to_string());
+        ui::key_value("Peer", &format!("{}...", peer_short));
+        ui::key_value("Amount", &format!("{} sats", record.amount_sats));
+        
+        if let Some(ref sub_id) = record.subscription_id {
+            let sub_short = &sub_id[..12.min(sub_id.len())];
+            ui::key_value("Subscription", &format!("{}...", sub_short));
+        }
+        
+        if let Some(ref desc) = record.description {
+            ui::key_value("Description", desc);
+        }
+        
+        ui::separator();
+    }
+
+    ui::info(&format!("Showing {} of {} total auto-payments", 
+        std::cmp::min(count, records.len()), 
+        records.len()
+    ));
 
     Ok(())
 }

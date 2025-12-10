@@ -17,6 +17,7 @@ pubky = "0.6.0-rc.6"
 clap = { version = "4", features = ["derive", "color"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Terminal UI

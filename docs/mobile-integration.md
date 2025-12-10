@@ -404,8 +404,94 @@ if (client.isPaykitQr(scannedData)) {
 **Problem**: Runtime errors
 - **Solution**: Check that all required dependencies are linked and native libraries are accessible
 
+## Auto-Pay Integration
+
+### iOS Auto-Pay Storage
+
+Use the `AutoPayStorage` adapter for managing spending limits and rules:
+
+```swift
+import PaykitMobile
+
+// Create storage backed by Keychain
+let storage = AutoPayStorage(keychain: KeychainStorage.default)
+
+// Set spending limit
+storage.setSpendingLimit(peer: peerPubkey, limit: 50000, period: .monthly)
+
+// Configure auto-pay rule
+let rule = AutoPayRule(
+    subscriptionId: "sub_premium",
+    peer: peerPubkey,
+    maxPerPayment: 5000,
+    maxPerPeriod: 30000,
+    period: .monthly,
+    enabled: true
+)
+storage.saveAutoPayRule(rule)
+
+// Check if payment can auto-approve
+if storage.canAutoApprove(peer: peerPubkey, amount: 1000) {
+    storage.recordPayment(peer: peerPubkey, amount: 1000)
+} else {
+    showApprovalSheet()
+}
+```
+
+### Android Auto-Pay Storage
+
+Use the `AutoPayStorage` class for Kotlin:
+
+```kotlin
+import com.paykit.autopay.AutoPayStorage
+
+val storage = AutoPayStorage(context)
+
+// Set spending limit
+storage.setSpendingLimit(
+    peer = peerPubkey,
+    limit = 50_000L,
+    period = "monthly"
+)
+
+// Configure auto-pay rule
+storage.saveAutoPayRule(
+    AutoPayRule(
+        subscriptionId = "sub_premium",
+        peer = peerPubkey,
+        maxPerPayment = 5_000L,
+        maxPerPeriod = 30_000L,
+        period = "monthly",
+        enabled = true
+    )
+)
+
+// Check and process payment
+if (storage.canAutoApprove(peerPubkey, 1000L)) {
+    storage.recordPayment(peerPubkey, 1000L)
+} else {
+    showApprovalDialog()
+}
+```
+
+## Demo Apps
+
+Complete demo applications are available:
+
+- **iOS Demo**: `paykit-mobile/ios-demo/` - SwiftUI app with full Paykit features
+- **Android Demo**: `paykit-mobile/android-demo/` - Jetpack Compose app with Material 3
+
+Both demos include:
+- Identity management
+- Contact directory
+- Payment method configuration
+- Subscription management
+- Auto-pay rules and spending limits
+- Receipt tracking
+
 ## Next Steps
 
 - Review the [API Reference](../target/doc/paykit_mobile/index.html)
 - See [Examples](../paykit-lib/examples/) for complete code samples
 - Check [BIP Compliance](./bip-compliance.md) for specification details
+- Read the [Auto-Pay Guide](./autopay-guide.md) for detailed auto-pay documentation

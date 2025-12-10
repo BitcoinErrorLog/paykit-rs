@@ -16,6 +16,11 @@ This directory contains additional documentation for the Paykit project.
 ### Architecture & Design
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and component relationships
 
+### Feature Guides
+- **[autopay-guide.md](./autopay-guide.md)** - Auto-pay rules and spending limits
+- **[mobile-integration.md](./mobile-integration.md)** - iOS and Android integration guide
+- **[bip-compliance.md](./bip-compliance.md)** - BIP-0000 specification compliance
+
 ### Component Documentation
 
 #### Core Libraries
@@ -27,6 +32,11 @@ This directory contains additional documentation for the Paykit project.
 - **[paykit-demo-core/README.md](../paykit-demo-core/README.md)** - Shared demo logic
 - **[paykit-demo-cli/README.md](../paykit-demo-cli/README.md)** - CLI demo user guide
 - **[paykit-demo-web/README.md](../paykit-demo-web/README.md)** - Web demo user guide
+- **[paykit-mobile/README.md](../paykit-mobile/README.md)** - Mobile FFI bindings
+
+#### Mobile Demo Apps
+- **[paykit-mobile/ios-demo/README.md](../paykit-mobile/ios-demo/README.md)** - iOS demo app (SwiftUI)
+- **[paykit-mobile/android-demo/README.md](../paykit-mobile/android-demo/README.md)** - Android demo app (Jetpack Compose)
 
 ### Build Documentation
 - **[BUILD.md](../BUILD.md)** - Workspace build guide
@@ -84,6 +94,8 @@ When adding new documentation:
 - [Getting Started](../README.md#quick-start)
 - [Architecture Overview](./ARCHITECTURE.md)
 - [Component Relationships](./ARCHITECTURE.md#component-dependencies)
+- [Auto-Pay Guide](./autopay-guide.md)
+- [Mobile Integration](./mobile-integration.md)
 - [Security Best Practices](../SECURITY.md)
 - [Build Instructions](../BUILD.md)
 

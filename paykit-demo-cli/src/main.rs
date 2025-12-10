@@ -260,6 +260,52 @@ enum SubscriptionAction {
         #[arg(short, long)]
         peer: Option<String>,
     },
+
+    /// Delete a spending limit
+    DeleteLimit {
+        /// Peer Pubky URI or contact name
+        peer: String,
+    },
+
+    /// Reset a spending limit's usage counter
+    ResetLimit {
+        /// Peer Pubky URI or contact name
+        peer: String,
+    },
+
+    /// List all auto-pay rules
+    ListAutoPay,
+
+    /// Delete an auto-pay rule
+    DeleteAutoPay {
+        /// Subscription ID
+        subscription_id: String,
+    },
+
+    /// Show global auto-pay settings
+    GlobalSettings,
+
+    /// Configure global auto-pay settings
+    ConfigureGlobal {
+        /// Enable global auto-pay
+        #[arg(long)]
+        enable: bool,
+
+        /// Disable global auto-pay
+        #[arg(long)]
+        disable: bool,
+
+        /// Set global daily limit (sats)
+        #[arg(long)]
+        daily_limit: Option<String>,
+    },
+
+    /// Show recent auto-payments
+    RecentPayments {
+        /// Number of recent payments to show
+        #[arg(short, long, default_value = "10")]
+        count: usize,
+    },
 }
 
 #[derive(Subcommand)]
@@ -480,6 +526,45 @@ async fn main() -> Result<()> {
 
             SubscriptionAction::ShowLimits { peer } => {
                 commands::subscriptions::show_peer_limits(&storage_dir, peer).await?;
+            }
+
+            SubscriptionAction::DeleteLimit { peer } => {
+                commands::subscriptions::delete_peer_limit(&storage_dir, &peer).await?;
+            }
+
+            SubscriptionAction::ResetLimit { peer } => {
+                commands::subscriptions::reset_peer_limit(&storage_dir, &peer).await?;
+            }
+
+            SubscriptionAction::ListAutoPay => {
+                commands::subscriptions::list_autopay_rules(&storage_dir).await?;
+            }
+
+            SubscriptionAction::DeleteAutoPay { subscription_id } => {
+                commands::subscriptions::delete_autopay_rule(&storage_dir, &subscription_id)
+                    .await?;
+            }
+
+            SubscriptionAction::GlobalSettings => {
+                commands::subscriptions::show_global_settings(&storage_dir).await?;
+            }
+
+            SubscriptionAction::ConfigureGlobal {
+                enable,
+                disable,
+                daily_limit,
+            } => {
+                commands::subscriptions::configure_global_settings(
+                    &storage_dir,
+                    enable,
+                    disable,
+                    daily_limit,
+                )
+                .await?;
+            }
+
+            SubscriptionAction::RecentPayments { count } => {
+                commands::subscriptions::show_recent_autopayments(&storage_dir, count).await?;
             }
         },
     }

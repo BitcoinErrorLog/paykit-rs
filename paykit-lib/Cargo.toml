@@ -10,7 +10,7 @@ edition = "2021"
 default = ["pubky"]
 pubky = ["dep:pubky"]
 tracing = ["dep:tracing"]
-file-storage = ["dep:md5"]
+file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:sha2", "dep:rand"]
 
 [dependencies]
 async-trait = "0.1.89"
@@ -22,9 +22,15 @@ tokio = "1.48.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = { version = "0.1", optional = true }
+# Encryption dependencies for file-storage feature
+aes-gcm = { version = "0.10", optional = true }
+hkdf = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+rand = { version = "0.8", optional = true }
 
 [dev-dependencies]
 pubky-testnet = { version = "0.6.0-rc.6" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive" }
+tempfile = "3.10"
 

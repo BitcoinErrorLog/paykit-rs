@@ -165,83 +165,7 @@ fn derive_x25519_for_device_epoch(seed: &[u8; 32], device_id: &[u8], epoch: u32)
 }
 ```
 
-**Note**: The `epoch` parameter is an internal concept (always `0`). Key rotation should be handled at the application level.
-
-## Key Rotation Strategy
-
-The `pubky-noise` library originally exposed an `epoch` parameter for key rotation, but this has been internalized to simplify the API. Applications should implement key rotation at a higher level.
-
-### Recommended Approaches
-
-#### 1. Device ID Rotation
-
-The simplest approach is to change the `device_id` parameter:
-
-```rust
-struct MyKeyProvider {
-    seed: [u8; 32],
-    device_id: Vec<u8>,
-}
-
-impl MyKeyProvider {
-    /// Rotate to a new device key
-    fn rotate_device_key(&mut self) {
-        // Generate new device ID (e.g., random or sequential)
-        let mut new_id = vec![0u8; 16];
-        rand::thread_rng().fill_bytes(&mut new_id);
-        self.device_id = new_id;
-        
-        // Publish new X25519 public key via Pkarr/DHT
-        self.publish_new_key();
-    }
-}
-```
-
-#### 2. Key Identifier (KID) Rotation
-
-For multi-key scenarios, use different `kid` values:
-
-```rust
-impl RingKeyProvider for MultiKeyProvider {
-    fn derive_device_x25519(&self, kid: &str, device_id: &[u8], _epoch: u32) 
-        -> Result<[u8; 32], NoiseError> {
-        let seed = self.keys.get(kid)
-            .ok_or(NoiseError::Other(format!("Unknown kid: {}", kid)))?;
-        Ok(pubky_noise::kdf::derive_x25519_for_device_epoch(seed, device_id, 0))
-    }
-}
-
-// Rotate by adding a new key and updating kid
-let new_kid = format!("key_{}", current_timestamp());
-provider.add_key(&new_kid, new_seed);
-let new_client = NoiseClient::new_direct(new_kid, device_id, provider);
-```
-
-#### 3. Full Identity Rotation
-
-For maximum security, rotate the entire Ed25519 identity:
-
-```rust
-struct RotatingIdentity {
-    current: Ed25519Keypair,
-    rotation_time: Instant,
-}
-
-impl RotatingIdentity {
-    fn rotate(&mut self) {
-        self.current = Ed25519Keypair::generate();
-        self.rotation_time = Instant::now();
-        
-        // Update Pkarr records with new public key
-        self.publish_identity();
-    }
-    
-    fn should_rotate(&self) -> bool {
-        // Rotate every 30 days
-        self.rotation_time.elapsed() > Duration::from_secs(30 * 24 * 60 * 60)
-    }
-}
-```
+**Note**: Key rotation should be handled at the application level using device IDs, key identifiers, or full identity rotation.
 
 ## Security Considerations
 
@@ -303,14 +227,6 @@ if let Some(hint) = &identity.server_hint {
     }
 }
 ```
-
-### Key Rotation Strategy
-
-Since the `epoch` parameter has been internalized (always `0`), handle key rotation by:
-
-1. **Device ID Rotation**: Change the `device_id` parameter to derive new keys
-2. **Key ID Rotation**: Use different `kid` values for different key generations
-3. **Full Identity Rotation**: Create new Ed25519 keypairs when needed
 
 ## WebSocket Transport
 

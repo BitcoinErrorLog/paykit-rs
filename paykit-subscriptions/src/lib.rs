@@ -17,8 +17,13 @@
 
 pub mod amount;
 pub mod autopay;
+pub mod discovery;
+pub mod fallback;
+pub mod invoice;
 pub mod manager;
+pub mod modifications;
 pub mod nonce_store;
+pub mod proration;
 pub mod request;
 pub mod signing;
 pub mod storage;
@@ -33,8 +38,9 @@ pub mod monitor;
 // pub mod storage_wasm;
 
 pub use amount::Amount;
+pub use invoice::{Invoice, InvoiceFormat, InvoiceItem, ShippingAddress, ShippingInfo, ShippingMethod, TaxInfo};
 pub use nonce_store::NonceStore;
-pub use request::{PaymentRequest, PaymentRequestResponse, RequestStatus};
+pub use request::{PaymentRequest, PaymentRequestResponse, RequestNotification, RequestStatus};
 pub use storage::{Direction, RequestFilter, ReservationToken, SubscriptionStorage};
 
 // Platform-specific storage implementations
@@ -44,7 +50,10 @@ pub use storage::FileSubscriptionStorage;
 // WASM storage implementation (WasmSubscriptionStorage) is future work
 // See FINAL_SWEEP_REPORT.md for details
 pub use autopay::{AutoPayRule, PeerSpendingLimit};
+pub use fallback::{FallbackHandler, FallbackRecord, FallbackStatus, SubscriptionFallbackPolicy};
 pub use manager::SubscriptionManager;
+pub use modifications::{ModificationHistory, ModificationRequest, ModificationRecord, ModificationType, RequestedBy, SubscriptionVersion};
+pub use proration::{ProratedAmount, ProrationCalculator, ProrationDetails, RoundingMode};
 pub use signing::{sign_subscription_ed25519, verify_signature_ed25519, Signature};
 pub use subscription::{PaymentFrequency, SignedSubscription, Subscription, SubscriptionTerms};
 

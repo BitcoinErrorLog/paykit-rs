@@ -1,3 +1,4 @@
+use crate::invoice::{Invoice, ShippingInfo, TaxInfo};
 use crate::Amount;
 use paykit_lib::{MethodId, PublicKey};
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,21 @@ pub struct PaymentRequest {
     pub metadata: serde_json::Value,
     pub created_at: i64,
     pub expires_at: Option<i64>,
+    /// Optional invoice number for formal invoicing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invoice_number: Option<String>,
+    /// Line items for itemized billing (optional).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<crate::invoice::InvoiceItem>,
+    /// Tax information (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tax: Option<TaxInfo>,
+    /// Shipping information (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shipping: Option<ShippingInfo>,
+    /// Notes for the recipient.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 impl PaymentRequest {
@@ -39,6 +55,11 @@ impl PaymentRequest {
             metadata: serde_json::json!({}),
             created_at: now,
             expires_at: None,
+            invoice_number: None,
+            items: Vec::new(),
+            tax: None,
+            shipping: None,
+            notes: None,
         }
     }
 
@@ -57,12 +78,89 @@ impl PaymentRequest {
         self
     }
 
+    /// Set the invoice number for formal invoicing.
+    pub fn with_invoice_number(mut self, number: impl Into<String>) -> Self {
+        self.invoice_number = Some(number.into());
+        self
+    }
+
+    /// Add line items for itemized billing.
+    pub fn with_items(mut self, items: Vec<crate::invoice::InvoiceItem>) -> Self {
+        self.items = items;
+        self
+    }
+
+    /// Add a single line item.
+    pub fn add_item(mut self, item: crate::invoice::InvoiceItem) -> Self {
+        self.items.push(item);
+        self
+    }
+
+    /// Add tax information.
+    pub fn with_tax(mut self, tax: TaxInfo) -> Self {
+        self.tax = Some(tax);
+        self
+    }
+
+    /// Add shipping information.
+    pub fn with_shipping(mut self, shipping: ShippingInfo) -> Self {
+        self.shipping = Some(shipping);
+        self
+    }
+
+    /// Add notes for the recipient.
+    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
     pub fn is_expired(&self) -> bool {
         if let Some(expires_at) = self.expires_at {
             chrono::Utc::now().timestamp() > expires_at
         } else {
             false
         }
+    }
+
+    /// Check if this request has itemized billing.
+    pub fn has_items(&self) -> bool {
+        !self.items.is_empty()
+    }
+
+    /// Check if this request has tax.
+    pub fn has_tax(&self) -> bool {
+        self.tax.is_some()
+    }
+
+    /// Check if this request has shipping.
+    pub fn has_shipping(&self) -> bool {
+        self.shipping.is_some()
+    }
+
+    /// Convert this request to a full Invoice for export/display.
+    pub fn to_invoice(&self) -> Invoice {
+        let invoice_number = self.invoice_number.clone()
+            .unwrap_or_else(|| self.request_id.clone());
+        
+        let mut invoice = Invoice::new(invoice_number, self.items.clone());
+        
+        if let Some(ref tax) = self.tax {
+            invoice = invoice.with_tax(tax.clone());
+        }
+        
+        if let Some(ref shipping) = self.shipping {
+            invoice = invoice.with_shipping(shipping.clone());
+        }
+        
+        if let Some(ref notes) = self.notes {
+            invoice = invoice.with_notes(notes.clone());
+        }
+        
+        if let Some(due_date) = self.due_date {
+            invoice = invoice.with_due_date(due_date);
+        }
+        
+        invoice
     }
 }
 

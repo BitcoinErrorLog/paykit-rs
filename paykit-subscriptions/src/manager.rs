@@ -777,6 +777,22 @@ mod tests {
         ) -> paykit_interactive::Result<Option<String>> {
             Ok(None)
         }
+        async fn list_receipts(&self) -> paykit_interactive::Result<Vec<paykit_interactive::PaykitReceipt>> {
+            Ok(Vec::new())
+        }
+        async fn list_private_endpoints_for_peer(
+            &self,
+            _peer: &PublicKey,
+        ) -> paykit_interactive::Result<Vec<(MethodId, String)>> {
+            Ok(Vec::new())
+        }
+        async fn remove_private_endpoint(
+            &self,
+            _peer: &PublicKey,
+            _method: &MethodId,
+        ) -> paykit_interactive::Result<()> {
+            Ok(())
+        }
     }
 
     #[async_trait::async_trait]

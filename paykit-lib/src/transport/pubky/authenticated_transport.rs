@@ -53,4 +53,44 @@ impl AuthenticatedTransport for PubkyAuthenticatedTransport {
             .map_err(|err| PaykitError::Transport(format!("delete endpoint: {err}")))?;
         Ok(())
     }
+
+    async fn put(&self, path: &str, content: &str) -> Result<()> {
+        self.session
+            .storage()
+            .put(path.to_string(), content.to_string())
+            .await
+            .map_err(|err| PaykitError::Transport(format!("put: {err}")))?;
+        Ok(())
+    }
+
+    async fn get(&self, path: &str) -> Result<Option<String>> {
+        match self.session.storage().get(path).await {
+            Ok(response) => {
+                let bytes = response.bytes().await
+                    .map_err(|e| PaykitError::Transport(format!("get bytes: {e}")))?;
+                if bytes.is_empty() {
+                    return Ok(None);
+                }
+                let content = String::from_utf8_lossy(&bytes).to_string();
+                Ok(Some(content))
+            }
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("404") || err_str.contains("not found") {
+                    Ok(None)
+                } else {
+                    Err(PaykitError::Transport(format!("get: {e}")))
+                }
+            }
+        }
+    }
+
+    async fn delete(&self, path: &str) -> Result<()> {
+        self.session
+            .storage()
+            .delete(path.to_string())
+            .await
+            .map_err(|err| PaykitError::Transport(format!("delete: {err}")))?;
+        Ok(())
+    }
 }

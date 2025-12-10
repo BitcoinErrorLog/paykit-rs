@@ -152,6 +152,31 @@ impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
 
         Ok(contacts)
     }
+
+    async fn get(&self, owner: &PublicKey, path: &str) -> Result<Option<String>> {
+        let addr = format!("pubky{owner}{path}");
+        self.fetch_text(addr, "get").await
+    }
+
+    async fn list_directory(&self, owner: &PublicKey, path: &str) -> Result<Vec<String>> {
+        let addr = format!("pubky{owner}{path}");
+        let entries = self.list_entries(addr, "list directory").await?;
+
+        let names: Vec<String> = entries
+            .into_iter()
+            .filter_map(|resource| {
+                resource
+                    .path
+                    .as_str()
+                    .rsplit('/')
+                    .next()
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+            })
+            .collect();
+
+        Ok(names)
+    }
 }
 
 fn is_not_found(err: &PubkyError) -> bool {

@@ -1,0 +1,32 @@
+[package]
+name = "paykit-mobile"
+version = "0.1.0"
+edition = "2021"
+description = "Mobile FFI bindings for Paykit (iOS/Android)"
+license = "MIT"
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+name = "paykit_mobile"
+
+[dependencies]
+# Core Paykit crates
+paykit-lib = { path = "../paykit-lib" }
+paykit-interactive = { path = "../paykit-interactive" }
+paykit-subscriptions = { path = "../paykit-subscriptions" }
+
+# UniFFI for cross-platform bindings
+uniffi = { version = "0.25", features = ["cli"] }
+
+# Async runtime
+tokio = { version = "1.48", features = ["rt-multi-thread", "sync"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }

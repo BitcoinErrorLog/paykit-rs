@@ -1,6 +1,6 @@
 //! Integration tests for subscription flows
 
-use paykit_demo_core::{DemoSubscription, SubscriptionCoordinator};
+use paykit_demo_core::SubscriptionCoordinator;
 use paykit_lib::MethodId;
 use paykit_subscriptions::PaymentFrequency;
 use pubky::Keypair;

@@ -9,6 +9,7 @@
 //! - **Enhanced Privacy**: Dedicated per-peer addresses avoid public address reuse
 //! - **Custom Channels**: Per-peer dedicated payment addresses or Lightning channels
 //! - **Expiration**: Endpoints can expire for security
+//! - **Encryption**: Secure storage with AES-256-GCM (with `file-storage` feature)
 //!
 //! # Architecture
 //!
@@ -45,12 +46,40 @@
 //!     // Use the private endpoint
 //! }
 //! ```
+//!
+//! # Encrypted Storage
+//!
+//! With the `file-storage` feature, endpoints can be stored encrypted:
+//!
+//! ```ignore
+//! use paykit_lib::private_endpoints::{PrivateEndpointManager, FileStore, encryption};
+//!
+//! // Generate a random encryption key (store this securely!)
+//! let key = encryption::generate_key();
+//!
+//! // Create encrypted file store
+//! let store = FileStore::new_encrypted("./private_endpoints", key)?;
+//! let manager = PrivateEndpointManager::new(store);
+//!
+//! // Or use a passphrase
+//! let store = FileStore::new_with_passphrase(
+//!     "./private_endpoints",
+//!     b"user_passphrase",
+//!     b"app_unique_salt"
+//! )?;
+//! ```
 
 mod storage;
 mod types;
 
+#[cfg(feature = "file-storage")]
+pub mod encryption;
+
 pub use storage::{InMemoryStore, PrivateEndpointStore};
 pub use types::{PrivateEndpoint, EndpointPolicy, ExpirationPolicy};
+
+#[cfg(feature = "file-storage")]
+pub use storage::FileStore;
 
 use crate::{EndpointData, MethodId, PublicKey, Result, PaykitError};
 use std::sync::Arc;

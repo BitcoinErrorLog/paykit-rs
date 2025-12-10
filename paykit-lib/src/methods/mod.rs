@@ -85,6 +85,7 @@ mod traits;
 mod registry;
 mod onchain;
 mod lightning;
+mod executor;
 
 // Re-export core traits and types
 pub use traits::{
@@ -99,8 +100,20 @@ pub use traits::{
 pub use registry::{PaymentMethodRegistry, global};
 
 // Re-export built-in plugins
-pub use onchain::{OnchainPlugin, BitcoinNetwork};
-pub use lightning::{LightningPlugin, LightningNetwork};
+pub use onchain::{OnchainPlugin, BitcoinNetwork, verify_bitcoin_proof};
+pub use lightning::{LightningPlugin, LightningNetwork, verify_lightning_proof};
+
+// Re-export executor traits and types
+pub use executor::{
+    BitcoinExecutor,
+    BitcoinTxResult,
+    LightningExecutor,
+    LightningPaymentResult,
+    LightningPaymentStatus,
+    DecodedInvoice,
+    MockBitcoinExecutor,
+    MockLightningExecutor,
+};
 
 /// Convenience function to create a registry with all built-in plugins.
 pub fn default_registry() -> PaymentMethodRegistry {

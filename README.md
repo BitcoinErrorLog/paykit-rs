@@ -18,7 +18,13 @@ paykit-rs-master/
 ├── paykit-subscriptions/    # Subscription management and auto-pay
 ├── paykit-demo-core/        # Shared demo application logic
 ├── paykit-demo-cli/         # Command-line demo application
-└── paykit-demo-web/         # WebAssembly browser demo application
+├── paykit-demo-web/         # WebAssembly browser demo application
+└── paykit-mobile/           # Mobile FFI bindings and demo apps
+    ├── src/                 # UniFFI bindings (Rust)
+    ├── swift/               # iOS Keychain storage adapter
+    ├── kotlin/              # Android EncryptedSharedPreferences adapter
+    ├── ios-demo/            # Complete iOS demo app (SwiftUI)
+    └── android-demo/        # Complete Android demo app (Jetpack Compose)
 ```
 
 ## Quick Start
@@ -162,10 +168,32 @@ WebAssembly browser application:
 - Contact management and directory discovery
 - Payment method configuration
 - Subscription and auto-pay management
+- Spending limits with visual progress tracking
 - Receipt tracking
 - Interactive dashboard
 
 See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
+
+### paykit-mobile
+
+Mobile FFI bindings and demo applications:
+- UniFFI-based bindings for iOS (Swift) and Android (Kotlin)
+- Platform-native secure storage adapters
+- Complete demo apps with all Paykit features
+
+**iOS Demo (SwiftUI)**:
+- Keychain-based secure storage
+- Auto-pay configuration with spending limits
+- Subscription management
+- Payment method discovery
+
+**Android Demo (Jetpack Compose)**:
+- EncryptedSharedPreferences storage with biometric support
+- Material 3 design
+- Auto-pay rules and spending tracking
+- Full subscription workflow
+
+See the [Mobile README](paykit-mobile/README.md) and [Mobile Integration Guide](docs/mobile-integration.md) for complete documentation.
 
 ## Installation
 
@@ -258,20 +286,30 @@ See [CLI README](paykit-demo-cli/README.md) for complete examples.
 - `paykit-lib`: Core library with transport traits and public directory operations
 - `paykit-interactive`: Interactive payment protocol with Noise encryption and receipts
 - `paykit-subscriptions`: Subscription management, payment requests, and auto-pay automation
-- `paykit-demo-core`: Shared business logic for demo applications
+- `paykit-demo-core`: Shared business logic with SubscriptionCoordinator for demo applications
 
 **Demo Applications**
 - `paykit-demo-cli`: Full-featured command-line demo with all Paykit features
 - `paykit-demo-web`: Complete WebAssembly browser demo with interactive UI
+- `paykit-mobile/ios-demo`: iOS demo app with SwiftUI and Keychain storage
+- `paykit-mobile/android-demo`: Android demo app with Jetpack Compose and EncryptedSharedPreferences
 
 **Features**
 - Identity management (Ed25519/X25519 keypairs)
 - Payment method discovery and publishing
 - Contact management
 - Subscription agreements and payment requests
-- Auto-pay rules with spending limits
+- Auto-pay rules with per-payment and per-period limits
+- Peer spending limits with daily/weekly/monthly periods
+- Atomic spending reservations with commit/rollback
 - Receipt exchange and tracking
 - Noise protocol encryption for private channels
+- Platform-native secure storage (Keychain, EncryptedSharedPreferences)
+- Comprehensive test coverage (100+ tests)
+
+**Payment Plugins**
+- `OnchainPlugin`: Bitcoin on-chain payment execution with proof generation
+- `LightningPlugin`: Lightning Network payments (BOLT11, LNURL)
 
 ### 🚧 In Progress
 
@@ -339,6 +377,11 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 - [paykit-demo-core](paykit-demo-core/BUILD.md) - Shared demo logic
 - [paykit-demo-cli](paykit-demo-cli/README.md) - CLI demo user guide
 - [paykit-demo-web](paykit-demo-web/README.md) - Web demo user guide
+- [paykit-mobile](paykit-mobile/README.md) - Mobile FFI bindings
+
+### Feature Guides
+- [Auto-Pay Guide](docs/autopay-guide.md) - Auto-pay rules and spending limits
+- [Mobile Integration](docs/mobile-integration.md) - iOS and Android integration
 
 ### Project Documentation
 - [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and component relationships

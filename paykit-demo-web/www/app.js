@@ -1735,6 +1735,545 @@ window.resetPeerLimit = resetPeerLimit;
 window.deletePeerLimit = deletePeerLimit;
 
 // ============================================================
+// Enhanced Auto-Pay Tab Functions
+// ============================================================
+
+// Global auto-pay settings storage key
+const AUTOPAY_GLOBAL_SETTINGS_KEY = 'paykit_autopay_global_settings';
+const AUTOPAY_RECENT_PAYMENTS_KEY = 'paykit_autopay_recent_payments';
+
+// Load global auto-pay settings from localStorage
+function loadGlobalAutoPaySettings() {
+    try {
+        const settingsJson = localStorage.getItem(AUTOPAY_GLOBAL_SETTINGS_KEY);
+        if (settingsJson) {
+            return JSON.parse(settingsJson);
+        }
+    } catch (e) {
+        console.warn('Failed to load auto-pay settings:', e);
+    }
+    return {
+        enabled: false,
+        globalDailyLimit: 100000,
+        usedToday: 0,
+        lastResetDate: new Date().toDateString()
+    };
+}
+
+// Save global auto-pay settings to localStorage
+function saveGlobalAutoPaySettings(settings) {
+    try {
+        // Reset daily usage if new day
+        const today = new Date().toDateString();
+        if (settings.lastResetDate !== today) {
+            settings.usedToday = 0;
+            settings.lastResetDate = today;
+        }
+        localStorage.setItem(AUTOPAY_GLOBAL_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Failed to save auto-pay settings:', e);
+    }
+}
+
+// Update global auto-pay UI
+function updateGlobalAutoPayUI() {
+    const settings = loadGlobalAutoPaySettings();
+    
+    // Toggle
+    const toggle = document.getElementById('autopay-global-toggle');
+    const statusIcon = document.getElementById('autopay-status-icon');
+    const statusText = document.getElementById('autopay-status-text');
+    
+    if (toggle) {
+        toggle.checked = settings.enabled;
+    }
+    
+    if (statusIcon && statusText) {
+        if (settings.enabled) {
+            statusIcon.textContent = '✅';
+            statusText.textContent = 'Enabled - Auto-approving payments within limits';
+        } else {
+            statusIcon.textContent = '⏸️';
+            statusText.textContent = 'Disabled - All payments require manual approval';
+        }
+    }
+    
+    // Slider and values
+    const slider = document.getElementById('global-daily-limit-slider');
+    const limitValue = document.getElementById('global-daily-limit-value');
+    const usedValue = document.getElementById('global-daily-used');
+    const remainingValue = document.getElementById('global-daily-remaining');
+    const progressFill = document.getElementById('global-daily-progress');
+    
+    if (slider) {
+        slider.value = settings.globalDailyLimit;
+    }
+    
+    if (limitValue) {
+        limitValue.textContent = formatSats(settings.globalDailyLimit);
+    }
+    
+    if (usedValue) {
+        usedValue.textContent = formatSats(settings.usedToday);
+        const usagePercent = (settings.usedToday / settings.globalDailyLimit) * 100;
+        if (usagePercent > 80) {
+            usedValue.classList.add('danger');
+            usedValue.classList.remove('warning');
+        } else if (usagePercent > 50) {
+            usedValue.classList.add('warning');
+            usedValue.classList.remove('danger');
+        } else {
+            usedValue.classList.remove('warning', 'danger');
+        }
+    }
+    
+    const remaining = Math.max(0, settings.globalDailyLimit - settings.usedToday);
+    if (remainingValue) {
+        remainingValue.textContent = formatSats(remaining);
+    }
+    
+    if (progressFill) {
+        const percent = (settings.usedToday / settings.globalDailyLimit) * 100;
+        progressFill.style.width = Math.min(percent, 100) + '%';
+    }
+}
+
+// Format sats for display
+function formatSats(amount) {
+    return new Intl.NumberFormat().format(amount) + ' sats';
+}
+
+// Initialize enhanced auto-pay tab event listeners
+function initEnhancedAutoPayTab() {
+    // Global toggle
+    const globalToggle = document.getElementById('autopay-global-toggle');
+    if (globalToggle) {
+        globalToggle.addEventListener('change', function() {
+            const settings = loadGlobalAutoPaySettings();
+            settings.enabled = this.checked;
+            saveGlobalAutoPaySettings(settings);
+            updateGlobalAutoPayUI();
+            showNotification(
+                settings.enabled ? 'Auto-Pay enabled' : 'Auto-Pay disabled', 
+                settings.enabled ? 'success' : 'info'
+            );
+        });
+    }
+    
+    // Daily limit slider
+    const limitSlider = document.getElementById('global-daily-limit-slider');
+    if (limitSlider) {
+        limitSlider.addEventListener('input', function() {
+            const limitValue = document.getElementById('global-daily-limit-value');
+            if (limitValue) {
+                limitValue.textContent = formatSats(parseInt(this.value));
+            }
+        });
+    }
+    
+    // Save settings button
+    const saveSettingsBtn = document.getElementById('save-global-settings-btn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', function() {
+            const settings = loadGlobalAutoPaySettings();
+            const slider = document.getElementById('global-daily-limit-slider');
+            if (slider) {
+                settings.globalDailyLimit = parseInt(slider.value);
+            }
+            saveGlobalAutoPaySettings(settings);
+            updateGlobalAutoPayUI();
+            showNotification('Auto-pay settings saved', 'success');
+        });
+    }
+    
+    // Add peer limit button
+    const addPeerLimitBtn = document.getElementById('add-peer-limit-btn');
+    if (addPeerLimitBtn) {
+        addPeerLimitBtn.addEventListener('click', async function() {
+            const peerInput = document.getElementById('autopay-limit-peer-input');
+            const nameInput = document.getElementById('autopay-limit-name-input');
+            const amountInput = document.getElementById('autopay-limit-amount-input');
+            const periodSelect = document.getElementById('autopay-limit-period-select');
+            
+            const peer = peerInput?.value.trim();
+            const amount = amountInput?.value;
+            const periodSeconds = periodSelect?.value || '86400';
+            
+            if (!peer || !amount) {
+                showNotification('Peer public key and limit amount are required', 'error');
+                return;
+            }
+            
+            try {
+                const period = periodSeconds === '86400' ? 'daily' : 
+                              periodSeconds === '604800' ? 'weekly' : 
+                              periodSeconds === '2592000' ? 'monthly' : 'daily';
+                await setPeerLimit(peer, amount, period);
+                
+                // Clear form
+                if (peerInput) peerInput.value = '';
+                if (nameInput) nameInput.value = '';
+                if (amountInput) amountInput.value = '50000';
+                
+                // Update the enhanced list
+                await updateEnhancedPeerLimitsList();
+            } catch (error) {
+                showNotification('Failed to add peer limit: ' + error.message, 'error');
+            }
+        });
+    }
+    
+    // Add auto-pay rule button
+    const addRuleBtn = document.getElementById('add-autopay-rule-btn');
+    if (addRuleBtn) {
+        addRuleBtn.addEventListener('click', async function() {
+            const nameInput = document.getElementById('autopay-rule-name-input');
+            const maxAmountInput = document.getElementById('autopay-rule-max-amount');
+            const methodFilter = document.getElementById('autopay-rule-method-filter');
+            const requireConfirmation = document.getElementById('autopay-rule-require-confirmation');
+            
+            const ruleName = nameInput?.value.trim() || 'Unnamed Rule';
+            const maxAmount = parseInt(maxAmountInput?.value || '1000');
+            const method = methodFilter?.value || '';
+            const needsConfirmation = requireConfirmation?.checked || false;
+            
+            if (maxAmount <= 0) {
+                showNotification('Max amount must be positive', 'error');
+                return;
+            }
+            
+            try {
+                // Create rule using existing system
+                const ruleId = 'rule_' + Date.now();
+                const rule = new WasmAutoPayRule(
+                    ruleId,  // Use as subscription ID for compatibility
+                    '',  // No specific peer
+                    maxAmount,
+                    86400,  // Daily period
+                    needsConfirmation
+                );
+                
+                await autopayRuleStorage.save_autopay_rule(rule);
+                
+                // Also save the display name and method filter to localStorage
+                const ruleMetadata = JSON.parse(localStorage.getItem('paykit_autopay_rule_metadata') || '{}');
+                ruleMetadata[ruleId] = { name: ruleName, methodFilter: method };
+                localStorage.setItem('paykit_autopay_rule_metadata', JSON.stringify(ruleMetadata));
+                
+                showNotification('Auto-pay rule created', 'success');
+                
+                // Clear form
+                if (nameInput) nameInput.value = '';
+                if (maxAmountInput) maxAmountInput.value = '1000';
+                if (methodFilter) methodFilter.value = '';
+                if (requireConfirmation) requireConfirmation.checked = false;
+                
+                await updateEnhancedAutoPayRulesList();
+            } catch (error) {
+                showNotification('Failed to create rule: ' + error.message, 'error');
+            }
+        });
+    }
+    
+    // Refresh recent auto-payments button
+    const refreshRecentBtn = document.getElementById('refresh-recent-autopay-btn');
+    if (refreshRecentBtn) {
+        refreshRecentBtn.addEventListener('click', updateRecentAutoPaymentsList);
+    }
+    
+    // Clear recent auto-payments button
+    const clearRecentBtn = document.getElementById('clear-recent-autopay-btn');
+    if (clearRecentBtn) {
+        clearRecentBtn.addEventListener('click', function() {
+            if (confirm('Clear all auto-payment history?')) {
+                localStorage.removeItem(AUTOPAY_RECENT_PAYMENTS_KEY);
+                updateRecentAutoPaymentsList();
+                showNotification('Auto-payment history cleared', 'success');
+            }
+        });
+    }
+    
+    // Initial updates
+    updateGlobalAutoPayUI();
+    updateEnhancedPeerLimitsList();
+    updateEnhancedAutoPayRulesList();
+    updateRecentAutoPaymentsList();
+}
+
+// Update enhanced peer limits list for the Auto-Pay tab
+async function updateEnhancedPeerLimitsList() {
+    const listEl = document.getElementById('autopay-peer-limits-list');
+    if (!listEl) return;
+    
+    try {
+        const limits = await listPeerLimits();
+        
+        if (limits.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No peer spending limits configured</p>';
+            return;
+        }
+        
+        listEl.innerHTML = limits.map(limit => {
+            const currentSpent = Number(limit.current_spent);
+            const totalLimit = Number(limit.total_limit);
+            const periodSeconds = Number(limit.period_seconds);
+            const peerPubkey = String(limit.peer_pubkey);
+            
+            const percentage = Math.min((currentSpent / totalLimit) * 100, 100);
+            const periodName = periodSeconds <= 3600 ? 'Hourly' :
+                              periodSeconds === 86400 ? 'Daily' :
+                              periodSeconds === 604800 ? 'Weekly' :
+                              periodSeconds === 2592000 ? 'Monthly' : 'Custom';
+            
+            const escapedPubkey = peerPubkey.replace(/'/g, "\\'");
+            
+            return `
+                <div class="peer-limit-card">
+                    <div class="peer-limit-header">
+                        <div>
+                            <div class="peer-limit-name">${peerPubkey.substring(0, 12)}...</div>
+                            <div class="peer-limit-key">${peerPubkey.substring(0, 32)}...</div>
+                        </div>
+                        <span class="peer-limit-period-badge">${periodName}</span>
+                    </div>
+                    <div class="peer-limit-progress">
+                        <div class="peer-limit-stats">
+                            <span>Used: ${formatSats(currentSpent)}</span>
+                            <span>Limit: ${formatSats(totalLimit)}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                    <div class="peer-limit-actions">
+                        <button class="btn btn-small" onclick="resetPeerLimit('${escapedPubkey}'); updateEnhancedPeerLimitsList();">
+                            Reset
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="deletePeerLimit('${escapedPubkey}'); updateEnhancedPeerLimitsList();">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to update enhanced peer limits:', error);
+        listEl.innerHTML = '<p class="empty-state">Error loading peer limits</p>';
+    }
+}
+
+// Update enhanced auto-pay rules list for the Auto-Pay tab
+async function updateEnhancedAutoPayRulesList() {
+    const listEl = document.getElementById('autopay-rules-list-enhanced');
+    if (!listEl) return;
+    
+    try {
+        if (!autopayRuleStorage) {
+            listEl.innerHTML = '<p class="empty-state">Auto-pay storage not initialized</p>';
+            return;
+        }
+        
+        const rules = await autopayRuleStorage.list_autopay_rules();
+        const ruleMetadata = JSON.parse(localStorage.getItem('paykit_autopay_rule_metadata') || '{}');
+        
+        if (rules.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No auto-pay rules configured</p>';
+            return;
+        }
+        
+        listEl.innerHTML = rules.map(rule => {
+            const ruleId = String(rule.subscription_id || rule.id);
+            const maxAmount = Number(rule.max_amount);
+            const enabled = Boolean(rule.enabled);
+            const requireConfirmation = Boolean(rule.require_confirmation);
+            
+            const metadata = ruleMetadata[ruleId] || {};
+            const ruleName = metadata.name || 'Auto-Pay Rule';
+            const methodFilter = metadata.methodFilter || 'Any method';
+            
+            const escapedId = ruleId.replace(/'/g, "\\'");
+            
+            return `
+                <div class="autopay-rule-card">
+                    <div class="rule-status-indicator ${enabled ? 'enabled' : 'disabled'}"></div>
+                    <div class="rule-info">
+                        <div class="rule-name">${ruleName}</div>
+                        <div class="rule-description">
+                            Auto-approve payments up to ${formatSats(maxAmount)}
+                        </div>
+                        <div class="rule-badges">
+                            <span class="rule-badge amount">Max: ${formatSats(maxAmount)}</span>
+                            <span class="rule-badge">${methodFilter || 'Any method'}</span>
+                            ${requireConfirmation ? '<span class="rule-badge">⚠️ Requires confirmation</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="rule-actions">
+                        <button class="btn btn-small" onclick="toggleAutoPayRuleEnhanced('${escapedId}', ${!enabled})">
+                            ${enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="deleteAutoPayRuleEnhanced('${escapedId}')">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to update enhanced auto-pay rules:', error);
+        listEl.innerHTML = '<p class="empty-state">Error loading rules</p>';
+    }
+}
+
+// Toggle auto-pay rule (enhanced version)
+async function toggleAutoPayRuleEnhanced(ruleId, enable) {
+    try {
+        const rule = await autopayRuleStorage.get_autopay_rule(ruleId);
+        if (rule) {
+            if (enable) {
+                rule.enable();
+            } else {
+                rule.disable();
+            }
+            await autopayRuleStorage.save_autopay_rule(rule);
+            showNotification(`Rule ${enable ? 'enabled' : 'disabled'}`, 'success');
+            await updateEnhancedAutoPayRulesList();
+        }
+    } catch (error) {
+        showNotification('Failed to toggle rule: ' + error.message, 'error');
+    }
+}
+window.toggleAutoPayRuleEnhanced = toggleAutoPayRuleEnhanced;
+
+// Delete auto-pay rule (enhanced version)
+async function deleteAutoPayRuleEnhanced(ruleId) {
+    if (!confirm('Delete this auto-pay rule?')) return;
+    
+    try {
+        await autopayRuleStorage.delete_autopay_rule(ruleId);
+        
+        // Also remove metadata
+        const ruleMetadata = JSON.parse(localStorage.getItem('paykit_autopay_rule_metadata') || '{}');
+        delete ruleMetadata[ruleId];
+        localStorage.setItem('paykit_autopay_rule_metadata', JSON.stringify(ruleMetadata));
+        
+        showNotification('Rule deleted', 'success');
+        await updateEnhancedAutoPayRulesList();
+    } catch (error) {
+        showNotification('Failed to delete rule: ' + error.message, 'error');
+    }
+}
+window.deleteAutoPayRuleEnhanced = deleteAutoPayRuleEnhanced;
+
+// Update recent auto-payments list
+function updateRecentAutoPaymentsList() {
+    const listEl = document.getElementById('recent-autopayments-list');
+    if (!listEl) return;
+    
+    try {
+        const recentPaymentsJson = localStorage.getItem(AUTOPAY_RECENT_PAYMENTS_KEY);
+        const recentPayments = recentPaymentsJson ? JSON.parse(recentPaymentsJson) : [];
+        
+        if (recentPayments.length === 0) {
+            listEl.innerHTML = '<p class="empty-state">No recent auto-payments</p>';
+            return;
+        }
+        
+        // Sort by timestamp, newest first
+        recentPayments.sort((a, b) => b.timestamp - a.timestamp);
+        
+        listEl.innerHTML = recentPayments.slice(0, 20).map(payment => {
+            const date = new Date(payment.timestamp);
+            const timeAgo = getTimeAgo(date);
+            
+            return `
+                <div class="recent-payment-item">
+                    <div class="recent-payment-info">
+                        <div class="recent-payment-peer">${payment.peerName || payment.peer?.substring(0, 16) + '...' || 'Unknown'}</div>
+                        <div class="recent-payment-desc">${payment.description || 'Auto-payment'}</div>
+                    </div>
+                    <div class="recent-payment-amount">
+                        <div class="recent-payment-sats">-${formatSats(payment.amount)}</div>
+                        <div class="recent-payment-time">${timeAgo}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Failed to update recent payments:', error);
+        listEl.innerHTML = '<p class="empty-state">Error loading recent payments</p>';
+    }
+}
+
+// Helper: Get time ago string
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + ' min ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + ' hours ago';
+    if (seconds < 604800) return Math.floor(seconds / 86400) + ' days ago';
+    return date.toLocaleDateString();
+}
+
+// Record an auto-payment (call this when an auto-payment is processed)
+function recordAutoPayment(peer, amount, description = '') {
+    try {
+        const recentPaymentsJson = localStorage.getItem(AUTOPAY_RECENT_PAYMENTS_KEY);
+        const recentPayments = recentPaymentsJson ? JSON.parse(recentPaymentsJson) : [];
+        
+        recentPayments.unshift({
+            peer: peer,
+            amount: amount,
+            description: description,
+            timestamp: Date.now()
+        });
+        
+        // Keep only last 100 payments
+        if (recentPayments.length > 100) {
+            recentPayments.length = 100;
+        }
+        
+        localStorage.setItem(AUTOPAY_RECENT_PAYMENTS_KEY, JSON.stringify(recentPayments));
+        
+        // Update global daily usage
+        const settings = loadGlobalAutoPaySettings();
+        settings.usedToday += amount;
+        saveGlobalAutoPaySettings(settings);
+        updateGlobalAutoPayUI();
+        
+    } catch (error) {
+        console.warn('Failed to record auto-payment:', error);
+    }
+}
+window.recordAutoPayment = recordAutoPayment;
+
+// Check if an auto-payment should be approved
+function canAutoApprove(peerPubkey, amount, methodId = '') {
+    const settings = loadGlobalAutoPaySettings();
+    
+    // Check if auto-pay is enabled
+    if (!settings.enabled) {
+        return { approved: false, reason: 'Auto-pay is disabled' };
+    }
+    
+    // Check global daily limit
+    if (settings.usedToday + amount > settings.globalDailyLimit) {
+        return { approved: false, reason: 'Would exceed daily limit' };
+    }
+    
+    // TODO: Check peer-specific limits
+    // TODO: Check matching rules
+    
+    return { approved: true, reason: 'Within limits' };
+}
+window.canAutoApprove = canAutoApprove;
+
+// Make enhanced functions global
+window.updateEnhancedPeerLimitsList = updateEnhancedPeerLimitsList;
+window.updateEnhancedAutoPayRulesList = updateEnhancedAutoPayRulesList;
+window.updateRecentAutoPaymentsList = updateRecentAutoPaymentsList;
+
+// ============================================================
 // Contact Management
 // ============================================================
 
@@ -2469,6 +3008,14 @@ async function updateDashboard() {
         document.getElementById('dash-receipts').textContent = stats.total_receipts || 0;
         document.getElementById('dash-subscriptions').textContent = stats.total_subscriptions || 0;
         
+        // Update auto-pay status
+        const autoPayStatusEl = document.getElementById('dash-autopay-status');
+        if (autoPayStatusEl) {
+            const settings = loadGlobalAutoPaySettings();
+            autoPayStatusEl.textContent = settings.enabled ? 'On' : 'Off';
+            autoPayStatusEl.style.color = settings.enabled ? 'var(--success)' : 'var(--text-dim)';
+        }
+        
         // Update setup checklist
         const checklist = await dashboard.get_setup_checklist();
         updateSetupItem('setup-identity', true);
@@ -2758,6 +3305,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp().catch(err => {
         console.error('Failed to initialize app:', err);
         showNotification('App initialization had errors - some features may not work', 'error');
+    }).finally(() => {
+        // Initialize enhanced auto-pay tab after WASM is ready
+        initEnhancedAutoPayTab();
     });
     
     // Ensure tab navigation works even if initialization fails

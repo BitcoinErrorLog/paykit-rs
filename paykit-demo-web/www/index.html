@@ -26,6 +26,7 @@
             <button class="tab" data-tab="receipts" role="tab" aria-selected="false" aria-controls="receipts-tab" id="tab-receipts">Receipts</button>
             <button class="tab" data-tab="requests" role="tab" aria-selected="false" aria-controls="requests-tab" id="tab-requests">Requests</button>
             <button class="tab" data-tab="subscriptions" role="tab" aria-selected="false" aria-controls="subscriptions-tab" id="tab-subscriptions">Subscriptions</button>
+            <button class="tab" data-tab="autopay" role="tab" aria-selected="false" aria-controls="autopay-tab" id="tab-autopay">Auto-Pay</button>
             <button class="tab" data-tab="about" role="tab" aria-selected="false" aria-controls="about-tab" id="tab-about">About</button>
         </nav>
 
@@ -63,6 +64,13 @@
                         <div class="stat-content">
                             <div class="stat-value" id="dash-subscriptions">0</div>
                             <div class="stat-label">Subscriptions</div>
+                        </div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="dash-autopay-status">Off</div>
+                            <div class="stat-label">Auto-Pay</div>
                         </div>
                     </div>
                 </div>
@@ -123,6 +131,10 @@
                         <button class="action-btn" onclick="switchTab('subscriptions')">
                             <span class="action-icon">🔄</span>
                             <span class="action-text">Subscriptions</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('autopay')">
+                            <span class="action-icon">⚡</span>
+                            <span class="action-text">Auto-Pay</span>
                         </button>
                     </div>
                 </div>
@@ -561,63 +573,11 @@
             </div>
 
             <div class="card">
-                <h3>Auto-Pay Configuration</h3>
-                <p>Enable automatic payments for your subscriptions</p>
-                
-                <div class="form-group">
-                    <label for="autopay-subscription-select">Subscription</label>
-                    <select id="autopay-subscription-select">
-                        <option value="">Select a subscription...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="autopay-max-amount-input">Max Amount per Payment (sats)</label>
-                    <input type="number" id="autopay-max-amount-input" placeholder="10000">
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="autopay-require-confirmation">
-                        Require manual confirmation before each payment
-                    </label>
-                </div>
-                <div class="form-group">
-                    <button id="enable-autopay-btn" class="btn btn-primary">Enable Auto-Pay</button>
-                    <button id="refresh-autopay-btn" class="btn btn-secondary">Refresh List</button>
-                </div>
-                
-                <div id="autopay-rules-list" class="autopay-rules-list">
-                    <p class="empty-state">No auto-pay rules configured</p>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Spending Limits (Allowances)</h3>
-                <p>Set spending limits per peer to control auto-payments</p>
-                
-                <div class="form-group">
-                    <label for="limit-peer-input">Peer Public Key</label>
-                    <input type="text" id="limit-peer-input" placeholder="Enter peer's public key or select contact">
-                </div>
-                <div class="form-group">
-                    <label for="limit-amount-input">Limit Amount (sats)</label>
-                    <input type="number" id="limit-amount-input" placeholder="100000">
-                </div>
-                <div class="form-group">
-                    <label for="limit-period-select">Period</label>
-                    <select id="limit-period-select">
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly" selected>Monthly</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <button id="set-limit-btn" class="btn btn-primary">Set Limit</button>
-                    <button id="refresh-limits-btn" class="btn btn-secondary">Refresh List</button>
-                </div>
-                
-                <div id="peer-limits-list" class="peer-limits-list">
-                    <p class="empty-state">No spending limits configured</p>
-                </div>
+                <h3>Quick Access: Auto-Pay</h3>
+                <p>Configure automatic payments with spending limits and rules</p>
+                <button class="btn btn-primary" onclick="switchTab('autopay')">
+                    ⚡ Open Auto-Pay Settings →
+                </button>
             </div>
 
             <div class="card">
@@ -647,6 +607,180 @@
             </div>
         </section>
 
+
+        <!-- Auto-Pay Tab -->
+        <section id="autopay-tab" class="tab-content">
+            <h2>Auto-Pay Settings</h2>
+            <p>Configure automatic payments with spending limits and rules</p>
+
+            <div class="card autopay-status-card">
+                <h3>Auto-Pay Status</h3>
+                <div class="autopay-toggle-row">
+                    <div class="autopay-toggle-info">
+                        <span class="autopay-status-icon" id="autopay-status-icon">⏸️</span>
+                        <div>
+                            <div class="autopay-status-title">Auto-Pay</div>
+                            <div class="autopay-status-subtitle" id="autopay-status-text">Disabled</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autopay-global-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card" id="autopay-settings-section">
+                <h3>Global Daily Limit</h3>
+                <p>Maximum amount that can be auto-paid per day</p>
+                
+                <div class="spending-limit-display">
+                    <div class="limit-header">
+                        <span>Daily Limit</span>
+                        <span id="global-daily-limit-value">100,000 sats</span>
+                    </div>
+                    <input type="range" id="global-daily-limit-slider" min="1000" max="1000000" step="1000" value="100000">
+                    
+                    <div class="limit-usage">
+                        <span>Used Today</span>
+                        <span id="global-daily-used" class="usage-value">0 sats</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="global-daily-progress" style="width: 0%"></div>
+                    </div>
+                    <div class="limit-remaining">
+                        Remaining: <span id="global-daily-remaining">100,000 sats</span>
+                    </div>
+                </div>
+                
+                <button id="save-global-settings-btn" class="btn btn-primary">Save Settings</button>
+            </div>
+
+            <div class="card">
+                <h3>Per-Peer Spending Limits</h3>
+                <p>Set individual limits for specific peers</p>
+                
+                <div class="form-group">
+                    <label for="autopay-limit-peer-input">Peer Public Key</label>
+                    <input type="text" id="autopay-limit-peer-input" placeholder="Enter peer's public key">
+                </div>
+                <div class="form-group">
+                    <label for="autopay-limit-name-input">Display Name (optional)</label>
+                    <input type="text" id="autopay-limit-name-input" placeholder="e.g., Coffee Shop">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="autopay-limit-amount-input">Limit Amount (sats)</label>
+                        <input type="number" id="autopay-limit-amount-input" placeholder="50000" value="50000">
+                    </div>
+                    <div class="form-group">
+                        <label for="autopay-limit-period-select">Period</label>
+                        <select id="autopay-limit-period-select">
+                            <option value="3600">Hourly</option>
+                            <option value="86400" selected>Daily</option>
+                            <option value="604800">Weekly</option>
+                            <option value="2592000">Monthly</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="add-peer-limit-btn" class="btn btn-primary">Add Peer Limit</button>
+                
+                <div id="autopay-peer-limits-list" class="peer-limits-list">
+                    <p class="empty-state">No peer spending limits configured</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Auto-Pay Rules</h3>
+                <p>Create rules to automatically approve payments matching conditions</p>
+                
+                <div class="form-group">
+                    <label for="autopay-rule-name-input">Rule Name</label>
+                    <input type="text" id="autopay-rule-name-input" placeholder="e.g., Small Lightning Payments">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="autopay-rule-max-amount">Max Amount (sats)</label>
+                        <input type="number" id="autopay-rule-max-amount" placeholder="1000" value="1000">
+                    </div>
+                    <div class="form-group">
+                        <label for="autopay-rule-method-filter">Payment Method</label>
+                        <select id="autopay-rule-method-filter">
+                            <option value="">Any</option>
+                            <option value="lightning">Lightning Only</option>
+                            <option value="onchain">On-Chain Only</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="autopay-rule-require-confirmation">
+                        <span>Require manual confirmation</span>
+                    </label>
+                </div>
+                <button id="add-autopay-rule-btn" class="btn btn-primary">Add Rule</button>
+                
+                <div id="autopay-rules-list-enhanced" class="autopay-rules-list">
+                    <p class="empty-state">No auto-pay rules configured</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Recent Auto-Payments</h3>
+                <div class="form-group">
+                    <button id="refresh-recent-autopay-btn" class="btn btn-secondary">Refresh</button>
+                    <button id="clear-recent-autopay-btn" class="btn btn-secondary" style="background: var(--error)">Clear History</button>
+                </div>
+                <div id="recent-autopayments-list" class="recent-payments-list">
+                    <p class="empty-state">No recent auto-payments</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>How Auto-Pay Works</h3>
+                <div class="autopay-flow">
+                    <div class="flow-step">
+                        <div class="flow-icon">1️⃣</div>
+                        <div class="flow-text">
+                            <strong>Payment Request Received</strong>
+                            <p>A peer requests payment from you</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-step">
+                        <div class="flow-icon">2️⃣</div>
+                        <div class="flow-text">
+                            <strong>Check Auto-Pay Enabled</strong>
+                            <p>Is the global toggle on?</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-step">
+                        <div class="flow-icon">3️⃣</div>
+                        <div class="flow-text">
+                            <strong>Verify Limits</strong>
+                            <p>Check daily limit and peer-specific limit</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-step">
+                        <div class="flow-icon">4️⃣</div>
+                        <div class="flow-text">
+                            <strong>Match Rules</strong>
+                            <p>Find a matching auto-pay rule</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-step success">
+                        <div class="flow-icon">✅</div>
+                        <div class="flow-text">
+                            <strong>Auto-Approve</strong>
+                            <p>Payment proceeds automatically</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- About Tab -->
         <section id="about-tab" class="tab-content">

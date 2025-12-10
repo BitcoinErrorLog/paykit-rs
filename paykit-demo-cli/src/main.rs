@@ -1,0 +1,488 @@
+//! Paykit Demo CLI
+//!
+//! Command-line interface for testing and demonstrating Paykit functionality.
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+
+mod commands;
+mod ui;
+
+#[derive(Parser)]
+#[command(name = "paykit-demo")]
+#[command(about = "Paykit Demo CLI - Test and demonstrate Paykit payment protocol", long_about = None)]
+#[command(version)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+
+    /// Enable verbose output
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    /// Custom storage directory (can also be set via PAYKIT_DEMO_DIR env var)
+    #[arg(long, global = true)]
+    storage_dir: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Setup a new identity
+    Setup {
+        /// Name for this identity
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+
+    /// Show current identity
+    Whoami,
+
+    /// List all saved identities
+    List,
+
+    /// Switch to a different identity
+    Switch {
+        /// Identity name to switch to
+        name: String,
+    },
+
+    /// Publish payment methods to the public directory
+    Publish {
+        /// Bitcoin onchain address
+        #[arg(long)]
+        onchain: Option<String>,
+
+        /// Lightning invoice or LNURL
+        #[arg(long)]
+        lightning: Option<String>,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+
+    /// Query payment methods from a Pubky URI
+    Discover {
+        /// Pubky URI (e.g., pubky://...)
+        uri: String,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+
+    /// Manage contacts
+    Contacts {
+        #[command(subcommand)]
+        action: ContactAction,
+    },
+
+    /// Start payment receiver (server mode)
+    Receive {
+        /// Port to listen on
+        #[arg(short, long, default_value = "8888")]
+        port: u16,
+    },
+
+    /// Initiate a payment (client mode)
+    Pay {
+        /// Recipient Pubky URI or contact name
+        recipient: String,
+
+        /// Amount (optional)
+        #[arg(short, long)]
+        amount: Option<String>,
+
+        /// Currency (optional)
+        #[arg(short, long)]
+        currency: Option<String>,
+
+        /// Payment method (onchain, lightning)
+        #[arg(short, long, default_value = "lightning")]
+        method: String,
+    },
+
+    /// Show payment receipts
+    Receipts,
+
+    /// Manage payment requests and subscriptions
+    Subscriptions {
+        #[command(subcommand)]
+        action: SubscriptionAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum SubscriptionAction {
+    /// Send a payment request to a peer
+    Request {
+        /// Recipient Pubky URI or contact name
+        recipient: String,
+
+        /// Amount
+        #[arg(short, long)]
+        amount: String,
+
+        /// Currency (SAT, BTC, USD)
+        #[arg(short, long, default_value = "SAT")]
+        currency: String,
+
+        /// Description
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// Expiration time in seconds (default: 24 hours)
+        #[arg(short, long)]
+        expires_in: Option<u64>,
+    },
+
+    /// List payment requests
+    List {
+        /// Filter type: incoming, outgoing, or all
+        #[arg(short, long, default_value = "all")]
+        filter: String,
+
+        /// Filter by peer (contact name or public key)
+        #[arg(short, long)]
+        peer: Option<String>,
+    },
+
+    /// Show request details
+    Show {
+        /// Request ID
+        request_id: String,
+    },
+
+    /// Respond to a payment request
+    Respond {
+        /// Request ID
+        request_id: String,
+
+        /// Action: accept or decline
+        #[arg(short, long)]
+        action: String,
+
+        /// Reason for declining (optional)
+        #[arg(short, long)]
+        reason: Option<String>,
+    },
+
+    // Phase 2: Subscription Agreements
+    /// Propose a subscription agreement to a peer
+    Propose {
+        /// Recipient Pubky URI or contact name
+        recipient: String,
+
+        /// Amount per payment
+        #[arg(short, long)]
+        amount: String,
+
+        /// Currency (SAT, BTC, USD)
+        #[arg(short, long, default_value = "SAT")]
+        currency: String,
+
+        /// Payment frequency (daily, weekly, monthly[:DAY], yearly:MONTH:DAY, custom:SECONDS)
+        #[arg(short, long)]
+        frequency: String,
+
+        /// Description
+        #[arg(short, long)]
+        description: String,
+    },
+
+    /// Accept a subscription proposal
+    Accept {
+        /// Subscription ID
+        subscription_id: String,
+    },
+
+    /// List subscription agreements
+    ListAgreements {
+        /// Filter by peer (contact name or public key)
+        #[arg(short, long)]
+        peer: Option<String>,
+
+        /// Show only active subscriptions
+        #[arg(short, long)]
+        active: bool,
+    },
+
+    /// Show subscription details
+    ShowSubscription {
+        /// Subscription ID
+        subscription_id: String,
+    },
+
+    // Phase 3: Auto-Pay Automation
+    /// Enable auto-pay for a subscription
+    EnableAutoPay {
+        /// Subscription ID
+        subscription_id: String,
+
+        /// Maximum amount per payment (optional)
+        #[arg(long)]
+        max_amount: Option<String>,
+
+        /// Require manual confirmation before each payment
+        #[arg(long)]
+        require_confirmation: bool,
+    },
+
+    /// Disable auto-pay for a subscription
+    DisableAutoPay {
+        /// Subscription ID
+        subscription_id: String,
+    },
+
+    /// Show auto-pay status for a subscription
+    ShowAutoPay {
+        /// Subscription ID
+        subscription_id: String,
+    },
+
+    /// Set spending limit for a peer
+    SetLimit {
+        /// Peer Pubky URI or contact name
+        peer: String,
+
+        /// Maximum amount
+        #[arg(short, long)]
+        limit: String,
+
+        /// Period: daily, weekly, or monthly
+        #[arg(short, long, default_value = "monthly")]
+        period: String,
+    },
+
+    /// Show spending limits
+    ShowLimits {
+        /// Filter by peer (optional)
+        #[arg(short, long)]
+        peer: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ContactAction {
+    /// Add a new contact
+    Add {
+        /// Contact name
+        name: String,
+
+        /// Pubky URI
+        uri: String,
+
+        /// Optional notes
+        #[arg(short, long)]
+        notes: Option<String>,
+    },
+
+    /// List all contacts
+    List,
+
+    /// Remove a contact
+    Remove {
+        /// Contact name or public key
+        name: String,
+    },
+
+    /// Show contact details
+    Show {
+        /// Contact name
+        name: String,
+    },
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // Initialize tracing
+    if cli.verbose {
+        tracing_subscriber::fmt()
+            .with_env_filter("paykit_demo_cli=debug,paykit_lib=debug,paykit_interactive=debug,paykit_subscriptions=debug")
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter("paykit_demo_cli=info,paykit_lib=warn,paykit_interactive=warn")
+            .init();
+    }
+
+    // Setup storage directory
+    let storage_dir = if let Some(dir) = cli.storage_dir {
+        std::path::PathBuf::from(dir)
+    } else {
+        dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("paykit-demo")
+    };
+
+    // Dispatch commands
+    match cli.command {
+        Commands::Setup { name } => {
+            commands::setup::run(&storage_dir, name, cli.verbose).await?;
+        }
+        Commands::Whoami => {
+            commands::whoami::run(&storage_dir, cli.verbose).await?;
+        }
+        Commands::List => {
+            commands::list::run(&storage_dir, cli.verbose).await?;
+        }
+        Commands::Switch { name } => {
+            commands::switch::run(&storage_dir, &name, cli.verbose).await?;
+        }
+        Commands::Publish {
+            onchain,
+            lightning,
+            homeserver,
+        } => {
+            commands::publish::run(&storage_dir, onchain, lightning, &homeserver, cli.verbose)
+                .await?;
+        }
+        Commands::Discover { uri, homeserver } => {
+            commands::discover::run(&storage_dir, &uri, &homeserver, cli.verbose).await?;
+        }
+        Commands::Contacts { action } => match action {
+            ContactAction::Add { name, uri, notes } => {
+                commands::contacts::add(&storage_dir, &name, &uri, notes.as_deref(), cli.verbose)
+                    .await?;
+            }
+            ContactAction::List => {
+                commands::contacts::list(&storage_dir, cli.verbose).await?;
+            }
+            ContactAction::Remove { name } => {
+                commands::contacts::remove(&storage_dir, &name, cli.verbose).await?;
+            }
+            ContactAction::Show { name } => {
+                commands::contacts::show(&storage_dir, &name, cli.verbose).await?;
+            }
+        },
+        Commands::Receive { port } => {
+            commands::receive::run(&storage_dir, port, cli.verbose).await?;
+        }
+        Commands::Pay {
+            recipient,
+            amount,
+            currency,
+            method,
+        } => {
+            commands::pay::run(
+                &storage_dir,
+                &recipient,
+                amount,
+                currency,
+                &method,
+                cli.verbose,
+            )
+            .await?;
+        }
+        Commands::Receipts => {
+            commands::receipts::run(&storage_dir, cli.verbose).await?;
+        }
+        Commands::Subscriptions { action } => match action {
+            SubscriptionAction::Request {
+                recipient,
+                amount,
+                currency,
+                description,
+                expires_in,
+            } => {
+                commands::subscriptions::send_request(
+                    &storage_dir,
+                    &recipient,
+                    &amount,
+                    &currency,
+                    description,
+                    expires_in,
+                )
+                .await?;
+            }
+            SubscriptionAction::List { filter, peer } => {
+                commands::subscriptions::list_requests(&storage_dir, &filter, peer).await?;
+            }
+            SubscriptionAction::Show { request_id } => {
+                commands::subscriptions::show_request(&storage_dir, &request_id).await?;
+            }
+            SubscriptionAction::Respond {
+                request_id,
+                action,
+                reason,
+            } => {
+                commands::subscriptions::respond_to_request(
+                    &storage_dir,
+                    &request_id,
+                    &action,
+                    reason,
+                )
+                .await?;
+            }
+            // Phase 2: Subscription Agreements
+            SubscriptionAction::Propose {
+                recipient,
+                amount,
+                currency,
+                frequency,
+                description,
+            } => {
+                commands::subscriptions::propose_subscription(
+                    &storage_dir,
+                    &recipient,
+                    &amount,
+                    &currency,
+                    &frequency,
+                    &description,
+                )
+                .await?;
+            }
+            SubscriptionAction::Accept { subscription_id } => {
+                commands::subscriptions::accept_subscription(&storage_dir, &subscription_id)
+                    .await?;
+            }
+            SubscriptionAction::ListAgreements { peer, active } => {
+                commands::subscriptions::list_subscriptions(&storage_dir, peer, active).await?;
+            }
+            SubscriptionAction::ShowSubscription { subscription_id } => {
+                commands::subscriptions::show_subscription(&storage_dir, &subscription_id).await?;
+            }
+
+            // Phase 3: Auto-Pay Commands
+            SubscriptionAction::EnableAutoPay {
+                subscription_id,
+                max_amount,
+                require_confirmation,
+            } => {
+                commands::subscriptions::enable_autopay(
+                    &storage_dir,
+                    &subscription_id,
+                    max_amount,
+                    require_confirmation,
+                )
+                .await?;
+            }
+
+            SubscriptionAction::DisableAutoPay { subscription_id } => {
+                commands::subscriptions::disable_autopay(&storage_dir, &subscription_id).await?;
+            }
+
+            SubscriptionAction::ShowAutoPay { subscription_id } => {
+                commands::subscriptions::show_autopay_status(&storage_dir, &subscription_id)
+                    .await?;
+            }
+
+            SubscriptionAction::SetLimit {
+                peer,
+                limit,
+                period,
+            } => {
+                commands::subscriptions::set_peer_limit(&storage_dir, &peer, &limit, &period)
+                    .await?;
+            }
+
+            SubscriptionAction::ShowLimits { peer } => {
+                commands::subscriptions::show_peer_limits(&storage_dir, peer).await?;
+            }
+        },
+    }
+
+    Ok(())
+}

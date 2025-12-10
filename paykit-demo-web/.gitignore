@@ -1,0 +1,22 @@
+# Rust/Cargo
+/target
+Cargo.lock
+
+# WASM build output
+/www/pkg
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+

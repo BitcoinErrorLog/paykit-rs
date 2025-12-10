@@ -1,0 +1,314 @@
+   Compiling paykit-demo-cli v0.1.0 (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-demo-cli)
+warning: use of deprecated function `pubky_noise::datalink_adapter::server_accept_ik`: Use 3-step handshake functions instead
+ --> paykit-demo-cli/tests/noise_integration.rs:6:49
+  |
+6 |     client_complete_ik, client_start_ik_direct, server_accept_ik, server_complete_ik,
+  |                                                 ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated function `pubky_noise::datalink_adapter::server_accept_ik`: Use 3-step handshake functions instead
+  --> paykit-demo-cli/tests/noise_integration.rs:31:39
+   |
+31 |     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
+   |                                       ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `pubky_noise::datalink_adapter::server_accept_ik`: Use 3-step handshake functions instead
+  --> paykit-demo-cli/tests/noise_integration.rs:67:38
+   |
+67 |     let (s_hs, identity, response) = server_accept_ik(&server, &first_msg).unwrap();
+   |                                      ^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `pubky_noise::datalink_adapter::server_accept_ik`: Use 3-step handshake functions instead
+  --> paykit-demo-cli/tests/noise_integration.rs:96:39
+   |
+96 |     let (s_hs, _identity, response) = server_accept_ik(&server, &first_msg).unwrap();
+   |                                       ^^^^^^^^^^^^^^^^
+
+warning: `paykit-demo-cli` (test "noise_integration") generated 4 warnings
+warning: unused variable: `payer`
+   --> paykit-demo-cli/tests/e2e_payment_flow.rs:127:9
+    |
+127 |     let payer = id_manager.create("payer").expect("Failed to create payer");
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_payer`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TestContext` is never constructed
+ --> paykit-demo-cli/tests/common/mod.rs:9:12
+  |
+9 | pub struct TestContext {
+  |            ^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated functions `new` and `get_free_port` are never used
+  --> paykit-demo-cli/tests/common/mod.rs:18:12
+   |
+16 | impl TestContext {
+   | ---------------- associated functions in this implementation
+17 |     /// Create a new test context with Alice and Bob identities
+18 |     pub fn new() -> Self {
+   |            ^^^
+...
+36 |     pub fn get_free_port() -> u16 {
+   |            ^^^^^^^^^^^^^
+
+warning: function `wait_for_server` is never used
+  --> paykit-demo-cli/tests/common/mod.rs:47:8
+   |
+47 | pub fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
+   |        ^^^^^^^^^^^^^^^
+
+warning: function `create_test_payment_request` is never used
+  --> paykit-demo-cli/tests/common/mod.rs:65:8
+   |
+65 | pub fn create_test_payment_request(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_test_subscription` is never used
+  --> paykit-demo-cli/tests/common/mod.rs:83:8
+   |
+83 | pub fn create_test_subscription(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `payer`
+  --> paykit-demo-cli/tests/pay_integration.rs:84:9
+   |
+84 |     let payer = id_manager.create("payer").expect("Failed to create payer");
+   |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_payer`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `payer`
+   --> paykit-demo-cli/tests/pay_integration.rs:130:9
+    |
+130 |     let payer = id_manager.create("payer").expect("Failed to create payer");
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_payer`
+
+warning: `paykit-demo-cli` (test "pay_integration") generated 7 warnings (5 duplicates)
+warning: `paykit-demo-cli` (test "workflow_integration") generated 5 warnings (5 duplicates)
+warning: `paykit-demo-cli` (test "pubky_compliance") generated 5 warnings
+warning: `paykit-demo-cli` (test "publish_integration") generated 5 warnings (5 duplicates)
+warning: `paykit-demo-cli` (test "e2e_payment_flow") generated 6 warnings (5 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.90s
+     Running unittests src/lib.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/paykit_demo_cli-a9b58e8d187bd37f)
+
+running 8 tests
+test commands::pay::tests::test_parse_noise_endpoint_invalid_format ... ok
+test commands::pay::tests::test_extract_pubkey_from_uri ... ok
+test commands::publish::tests::test_parse_homeserver_pubkey_http_unsupported ... ok
+test commands::pay::tests::test_extract_pubkey_without_prefix ... ok
+test commands::publish::tests::test_parse_homeserver_pubkey_direct ... ok
+test commands::pay::tests::test_parse_noise_endpoint ... ok
+test commands::pay::tests::test_parse_noise_endpoint_invalid_hex ... ok
+test commands::publish::tests::test_parse_homeserver_pubkey_uri ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/paykit_demo-a95e144d1def611b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e_payment_flow.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/e2e_payment_flow-3d61bdb5e97e969e)
+
+running 3 tests
+test test_full_payment_flow_with_published_methods ... FAILED
+test test_noise_handshake_between_payer_and_receiver ... FAILED
+test test_multiple_concurrent_payment_requests ... FAILED
+
+failures:
+
+---- test_full_payment_flow_with_published_methods stdout ----
+
+thread 'test_full_payment_flow_with_published_methods' (4647149) panicked at paykit-demo-cli/tests/e2e_payment_flow.rs:119:10:
+Failed to start testnet: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_noise_handshake_between_payer_and_receiver stdout ----
+
+thread 'test_noise_handshake_between_payer_and_receiver' (4647151) panicked at paykit-demo-cli/tests/e2e_payment_flow.rs:32:10:
+Failed to bind listener: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+---- test_multiple_concurrent_payment_requests stdout ----
+
+thread 'test_multiple_concurrent_payment_requests' (4647150) panicked at paykit-demo-cli/tests/e2e_payment_flow.rs:213:10:
+Failed to bind listener: Os { code: 1, kind: PermissionDenied, message: "Operation not permitted" }
+
+
+failures:
+    test_full_payment_flow_with_published_methods
+    test_multiple_concurrent_payment_requests
+    test_noise_handshake_between_payer_and_receiver
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test e2e_payment_flow`
+     Running tests/noise_integration.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/noise_integration-e5a657d544917b4d)
+
+running 3 tests
+test test_noise_handshake_with_identity_payload ... ok
+test test_noise_3step_handshake ... ok
+test test_noise_message_exchange ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/pay_integration.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/pay_integration-bbbaddf39e24585c)
+
+running 3 tests
+test test_pay_command_fails_when_method_not_supported ... FAILED
+test test_pay_command_discovers_multiple_methods ... FAILED
+test test_pay_command_discovers_recipient_methods ... FAILED
+
+failures:
+
+---- test_pay_command_fails_when_method_not_supported stdout ----
+
+thread 'test_pay_command_fails_when_method_not_supported' (4647176) panicked at paykit-demo-cli/tests/pay_integration.rs:76:10:
+Failed to start testnet: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_pay_command_discovers_multiple_methods stdout ----
+
+thread 'test_pay_command_discovers_multiple_methods' (4647174) panicked at paykit-demo-cli/tests/pay_integration.rs:122:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+---- test_pay_command_discovers_recipient_methods stdout ----
+
+thread 'test_pay_command_discovers_recipient_methods' (4647175) panicked at paykit-demo-cli/tests/pay_integration.rs:15:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+
+failures:
+    test_pay_command_discovers_multiple_methods
+    test_pay_command_discovers_recipient_methods
+    test_pay_command_fails_when_method_not_supported
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test pay_integration`
+     Running tests/property_tests.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/property_tests-b6b7262a8a03b4e0)
+
+running 9 tests
+test integration_tests::test_noise_endpoint_edge_cases ... ok
+test integration_tests::test_pubkey_uri_edge_cases ... ok
+test integration_tests::test_noise_endpoint_localhost_variants ... ok
+test test_noise_endpoint_missing_separator ... ok
+test test_noise_endpoint_wrong_length ... ok
+test test_noise_endpoint_with_valid_hex ... ok
+test test_noise_endpoint_invalid_hex ... ok
+test test_pubkey_prefix_handling ... ok
+test test_pubkey_uri_parsing ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/pubky_compliance.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/pubky_compliance-1560c9d4c11d53ef)
+
+running 3 tests
+test test_endpoint_rotation_compliance ... FAILED
+test test_publish_and_discover_compliance ... FAILED
+test test_multiple_methods_compliance ... FAILED
+
+failures:
+
+---- test_endpoint_rotation_compliance stdout ----
+
+thread 'test_endpoint_rotation_compliance' (4647197) panicked at paykit-demo-cli/tests/pubky_compliance.rs:66:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+---- test_publish_and_discover_compliance stdout ----
+
+thread 'test_publish_and_discover_compliance' (4647199) panicked at paykit-demo-cli/tests/pubky_compliance.rs:19:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+---- test_multiple_methods_compliance stdout ----
+
+thread 'test_multiple_methods_compliance' (4647198) panicked at paykit-demo-cli/tests/pubky_compliance.rs:123:10:
+Failed to start testnet: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_endpoint_rotation_compliance
+    test_multiple_methods_compliance
+    test_publish_and_discover_compliance
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test pubky_compliance`
+     Running tests/publish_integration.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/publish_integration-2d1ecb81679208cb)
+
+running 3 tests
+test test_publish_command_end_to_end ... FAILED
+test test_publish_multiple_methods ... FAILED
+test test_publish_no_methods_specified ... ok
+
+failures:
+
+---- test_publish_command_end_to_end stdout ----
+
+thread 'test_publish_command_end_to_end' (4647207) panicked at paykit-demo-cli/tests/publish_integration.rs:17:10:
+Failed to start testnet: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_publish_multiple_methods stdout ----
+
+thread 'test_publish_multiple_methods' (4647208) panicked at paykit-demo-cli/tests/publish_integration.rs:76:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+
+failures:
+    test_publish_command_end_to_end
+    test_publish_multiple_methods
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test publish_integration`
+     Running tests/workflow_integration.rs (/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/debug/deps/workflow_integration-69cd9c0b94215e84)
+
+running 3 tests
+test test_multiple_users_publishing ... FAILED
+test test_complete_publish_discover_workflow ... FAILED
+test test_method_rotation_and_updates ... FAILED
+
+failures:
+
+---- test_multiple_users_publishing stdout ----
+
+thread 'test_multiple_users_publishing' (4647217) panicked at paykit-demo-cli/tests/workflow_integration.rs:163:10:
+Failed to start testnet: Operation not permitted (os error 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- test_complete_publish_discover_workflow stdout ----
+
+thread 'test_complete_publish_discover_workflow' (4647215) panicked at paykit-demo-cli/tests/workflow_integration.rs:22:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+---- test_method_rotation_and_updates stdout ----
+
+thread 'test_method_rotation_and_updates' (4647216) panicked at paykit-demo-cli/tests/workflow_integration.rs:100:10:
+Failed to start testnet: Operation not permitted (os error 1)
+
+
+failures:
+    test_complete_publish_discover_workflow
+    test_method_rotation_and_updates
+    test_multiple_users_publishing
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test workflow_integration`
+   Doc-tests paykit_demo_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 5 targets failed:
+    `--test e2e_payment_flow`
+    `--test pay_integration`
+    `--test pubky_compliance`
+    `--test publish_integration`
+    `--test workflow_integration`

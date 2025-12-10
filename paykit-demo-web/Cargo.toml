@@ -1,0 +1,73 @@
+[package]
+name = "paykit-demo-web"
+version = "0.1.0"
+edition = "2021"
+description = "WebAssembly demo for Paykit"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Core Paykit libraries (WASM-compatible)
+paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
+# Note: paykit-subscriptions and paykit-interactive use tokio/native-only features
+# We'll implement WASM-compatible versions directly in this crate
+
+# WASM bindings
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Storage",
+    "Event",
+    "EventTarget",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    # WebSocket support for Noise protocol transport
+    "WebSocket",
+    "MessageEvent",
+    "ErrorEvent",
+    "BinaryType",
+    "CloseEvent",
+    "Blob",
+    "FileReader",
+    "ProgressEvent",
+] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+serde_json = "1"
+
+# Async
+futures = "0.3"
+futures-channel = "0.3"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Time
+chrono = "0.4"
+uuid = { version = "1", features = ["v4", "js"] }
+
+# Crypto (WASM-compatible)
+getrandom = { version = "0.3", features = ["wasm_js"] }
+pkarr = "3"
+pubky-noise = { path = "../../pubky-noise-main" }
+hex = "0.4"
+
+# For async trait support
+async-trait = "0.1"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+console_error_panic_hook = "0.1"
+

@@ -1,0 +1,48 @@
+[package]
+name = "paykit-demo-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line demo application for Paykit"
+
+[[bin]]
+name = "paykit-demo"
+path = "src/main.rs"
+
+[dependencies]
+paykit-demo-core = { path = "../paykit-demo-core" }
+paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
+paykit-subscriptions = { path = "../paykit-subscriptions" }
+paykit-interactive = { path = "../paykit-interactive" }
+pubky = "0.6.0-rc.6"
+clap = { version = "4", features = ["derive", "color"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+serde_json = "1"
+
+# Terminal UI
+console = "0.15"
+dialoguer = "0.11"
+indicatif = "0.17"
+colored = "2"
+
+# QR code generation
+qrcode = { version = "0.14", default-features = false }
+
+# Other utilities
+dirs = "5"
+chrono = "0.4"
+rand = "0.8"
+hex = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
+
+# Logging/tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+pubky-testnet = { version = "0.6.0-rc.6" }
+pubky-noise = { path = "../../pubky-noise-main" }
+proptest = "1.4"
+

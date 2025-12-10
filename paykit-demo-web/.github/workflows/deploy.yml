@@ -1,0 +1,35 @@
+name: Deploy Web Demo
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+        
+      - name: Build WASM
+        working-directory: ./paykit-demo-web
+        run: wasm-pack build --target web --release --out-dir www/pkg
+        
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./paykit-demo-web/www
+          cname: paykit-demo.example.com  # Optional: set your custom domain
+

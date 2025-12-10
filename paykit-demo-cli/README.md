@@ -259,6 +259,83 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for comprehensive troubleshooting
 | Property Tests | ✅ Complete | 9/9 |
 | Documentation | ✅ Complete | 5/5 |
 
+## 🛣️ Roadmap & Future Improvements
+
+Based on comprehensive code review, the following enhancements are recommended:
+
+### High Priority
+
+#### Enhanced E2E Payment Testing
+- **Status**: ⚠️ Partial - Some E2E tests failing (edge cases)
+- **Action**: Add more comprehensive E2E test scenarios
+- **Impact**: Improved confidence in payment flows
+- **Details**: 
+  - Create test fixtures for complete payment flows
+  - Add automated tests for full payment lifecycle
+  - Fix edge case failures in `e2e_payment_flow.rs`
+
+#### Payment Flow Completion
+- **Status**: ⚠️ Simulation mode - `pay` command shows simulation message
+- **Action**: Complete full payment flow implementation or clearly document as demonstration-only
+- **Impact**: Better user experience for demonstrations
+- **Details**: Currently shows "Full payment flow implementation pending" message
+
+### Medium Priority
+
+#### Error Type Refinement
+- **Status**: ✅ Good - Currently uses `anyhow::Result`
+- **Action**: Add specific error types for different failure modes
+- **Impact**: Better error handling and debugging
+- **Details**: 
+  - Create custom error types for payment failures
+  - Better error categorization
+  - More detailed error messages
+
+#### Performance Testing
+- **Status**: ❌ Not implemented
+- **Action**: Add performance tests and benchmarks
+- **Impact**: Identify performance bottlenecks
+- **Details**:
+  - Benchmark storage operations
+  - Test with large datasets (many contacts/receipts)
+  - Profile payment flow performance
+
+### Low Priority
+
+#### Additional Demo Scripts
+- **Status**: ✅ 2 scripts available (basic payment, subscription)
+- **Action**: Add more demo scenarios
+- **Impact**: Better demonstration capabilities
+- **Details**:
+  - Multi-party payment scenarios
+  - Complex subscription workflows
+  - Error recovery scenarios
+
+#### Test Documentation Enhancement
+- **Status**: ✅ Good - TESTING.md exists
+- **Action**: Enhance test documentation
+- **Impact**: Easier test maintenance and debugging
+- **Details**:
+  - Add test scenario documentation
+  - Document test data requirements
+  - Add troubleshooting guide for test failures
+
+### Known Limitations
+
+The following are documented limitations appropriate for demo applications:
+
+- ⚠️ Private keys stored in plaintext JSON files (not for production)
+- ⚠️ No encryption at rest
+- ⚠️ No OS-level secure storage
+- ⚠️ Some payment flows are simulation-only (documented)
+
+**For production use**, implement:
+- Secure key storage (Keychain/KeyStore/Credential Manager)
+- Encryption at rest
+- Hardware security modules for high-value keys
+- Proper session management
+- Rate limiting and DoS protection
+
 ## 🤝 Contributing
 
 This is a demonstration application. Contributions welcome for:
@@ -266,6 +343,7 @@ This is a demonstration application. Contributions welcome for:
 - Documentation improvements
 - Example workflows
 - Bug fixes
+- Roadmap items above
 
 ## 📄 License
 

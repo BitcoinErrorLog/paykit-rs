@@ -639,18 +639,96 @@ This web demo application uses and integrates with:
 - Requires WebSocket relay server for receiving payments
 - No encryption at rest (demo purposes only)
 
-## 🎯 Future Enhancements
+## 🛣️ Roadmap & Future Enhancements
 
-- WebRTC data channels for true P2P
-- Service Worker for offline support
-- IndexedDB for larger storage
-- Push notifications for receipts
-- QR code scanner for URIs
-- Mobile app wrappers (Capacitor/Tauri)
-- Desktop app (Tauri)
-- Real Pubky homeserver publishing
-- Client-side encryption
-- Cross-device synchronization
+Based on comprehensive code review, the following enhancements are recommended:
+
+### High Priority
+
+#### Enhanced E2E Payment Testing
+- **Status**: ⚠️ Partial - Limited automated E2E tests
+- **Action**: Add more comprehensive E2E test scenarios
+- **Impact**: Improved confidence in payment flows
+- **Details**: 
+  - Create test fixtures for complete payment flows
+  - Add automated tests for WebSocket payment flows
+  - Test complete payment lifecycle end-to-end
+
+#### Payment Flow Documentation
+- **Status**: ✅ Good - PAYMENTS.md exists
+- **Action**: Enhance payment flow documentation
+- **Impact**: Better understanding of payment limitations
+- **Details**: 
+  - Document WebSocket relay server requirements more clearly
+  - Add troubleshooting guide for payment failures
+  - Document simulation vs real payment flows
+
+### Medium Priority
+
+#### Error Type Refinement
+- **Status**: ✅ Good - Currently uses `Result<(), JsValue>`
+- **Action**: Add specific error types for different failure modes
+- **Impact**: Better error handling and debugging
+- **Details**: 
+  - Create custom error types for payment failures
+  - Better error categorization
+  - More detailed error messages in UI
+
+#### Performance Testing
+- **Status**: ❌ Not implemented
+- **Action**: Add performance tests and benchmarks
+- **Impact**: Identify performance bottlenecks
+- **Details**:
+  - Benchmark localStorage operations
+  - Test with large datasets (many contacts/receipts)
+  - Profile WASM module performance
+  - Test memory usage with many items
+
+#### Real Pubky Homeserver Publishing
+- **Status**: ⚠️ Mock publishing only
+- **Action**: Implement real homeserver publishing
+- **Impact**: Full protocol demonstration
+- **Details**: Currently methods are saved locally only, not published to homeserver
+
+### Low Priority
+
+#### Additional Features
+- **WebRTC data channels** for true P2P (no relay server needed)
+- **Service Worker** for offline support
+- **IndexedDB** for larger storage (beyond localStorage limits)
+- **Push notifications** for receipts
+- **QR code scanner** for URIs
+- **Mobile app wrappers** (Capacitor/Tauri)
+- **Desktop app** (Tauri)
+- **Client-side encryption** for sensitive data
+- **Cross-device synchronization**
+
+#### Test Documentation Enhancement
+- **Status**: ✅ Excellent - TESTING.md is comprehensive (~800 lines)
+- **Action**: Minor enhancements
+- **Impact**: Easier test maintenance
+- **Details**:
+  - Add more test scenario examples
+  - Document test data requirements
+  - Add troubleshooting guide for common test failures
+
+### Known Limitations
+
+The following are documented limitations appropriate for demo applications:
+
+- ⚠️ Private keys stored in plaintext localStorage (not for production)
+- ⚠️ No encryption at rest
+- ⚠️ Browser localStorage limits (~5-10MB)
+- ⚠️ Mock publishing (methods not actually published to homeserver)
+- ⚠️ Requires WebSocket relay server for receiving payments
+- ⚠️ No offline support
+
+**For production use**, implement:
+- Secure key storage (OS keychain or hardware security modules)
+- Encryption at rest
+- Proper session management
+- Rate limiting and DoS protection
+- Security audit required
 
 ---
 

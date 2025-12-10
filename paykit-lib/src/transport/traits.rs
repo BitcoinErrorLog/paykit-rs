@@ -19,6 +19,16 @@ pub trait UnauthenticatedTransportRead {
 
     /// Returns the set of known contacts (public keys) reachable to the caller.
     async fn fetch_known_contacts(&self, owner: &PublicKey) -> Result<Vec<PublicKey>>;
+
+    /// Get a file at the given path from a public key's storage.
+    ///
+    /// Returns the content as a string if found, None if the file doesn't exist.
+    async fn get(&self, owner: &PublicKey, path: &str) -> Result<Option<String>>;
+
+    /// List entries in a directory from a public key's storage.
+    ///
+    /// Returns a list of file/directory names (not full paths).
+    async fn list_directory(&self, owner: &PublicKey, path: &str) -> Result<Vec<String>>;
 }
 
 /// Trait describing authenticated write (and optional read) access.
@@ -30,4 +40,15 @@ pub trait AuthenticatedTransport {
 
     /// Removes an existing payment endpoint for the provided method.
     async fn remove_payment_endpoint(&self, method: &MethodId) -> Result<()>;
+
+    /// Put (create or update) a file at the given path.
+    async fn put(&self, path: &str, content: &str) -> Result<()>;
+
+    /// Get a file at the given path.
+    ///
+    /// Returns the content as a string if found, None if the file doesn't exist.
+    async fn get(&self, path: &str) -> Result<Option<String>>;
+
+    /// Delete a file at the given path.
+    async fn delete(&self, path: &str) -> Result<()>;
 }

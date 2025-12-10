@@ -202,6 +202,131 @@ impl Amount {
     pub fn is_zero(&self) -> bool {
         self.value.is_zero()
     }
+
+    /// Create from a Decimal value and currency (for proration calculations).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// use rust_decimal::Decimal;
+    /// let amt = Amount::new(Decimal::from(1000), "SAT".to_string());
+    /// assert_eq!(amt.as_sats(), 1000);
+    /// ```
+    pub fn new(value: Decimal, _currency: String) -> Self {
+        Self { value }
+    }
+
+    /// Get the internal Decimal value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// use rust_decimal::Decimal;
+    /// let amt = Amount::from_sats(1000);
+    /// assert_eq!(amt.as_decimal(), Decimal::from(1000));
+    /// ```
+    pub fn as_decimal(&self) -> Decimal {
+        self.value
+    }
+
+    /// Add two amounts (convenience wrapper around checked_add).
+    ///
+    /// Returns zero if overflow occurs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// let a = Amount::from_sats(100);
+    /// let b = Amount::from_sats(50);
+    /// let sum = a.add(&b);
+    /// assert_eq!(sum.as_sats(), 150);
+    /// ```
+    pub fn add(&self, other: &Self) -> Self {
+        self.checked_add(other).unwrap_or_else(Self::zero)
+    }
+
+    /// Subtract amount (convenience wrapper around checked_sub).
+    ///
+    /// Returns zero if underflow would occur (negative result).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// let a = Amount::from_sats(100);
+    /// let b = Amount::from_sats(50);
+    /// let diff = a.subtract(&b);
+    /// assert_eq!(diff.as_sats(), 50);
+    /// ```
+    pub fn subtract(&self, other: &Self) -> Self {
+        self.checked_sub(other)
+            .filter(|r| r.value >= Decimal::ZERO)
+            .unwrap_or_else(Self::zero)
+    }
+
+    /// Multiply by a quantity.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// let price = Amount::from_sats(100);
+    /// let total = price.multiply(5);
+    /// assert_eq!(total.as_sats(), 500);
+    /// ```
+    pub fn multiply(&self, quantity: u32) -> Self {
+        self.value
+            .checked_mul(Decimal::from(quantity))
+            .map(|value| Self { value })
+            .unwrap_or_else(|| Self { value: Decimal::MAX })
+    }
+
+    /// Calculate a percentage of this amount.
+    ///
+    /// # Arguments
+    ///
+    /// * `rate` - The percentage rate (e.g., 8.25 for 8.25%)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// let amount = Amount::from_sats(10000);
+    /// let tax = amount.percentage(10.0); // 10%
+    /// assert_eq!(tax.as_sats(), 1000);
+    /// ```
+    pub fn percentage(&self, rate: f64) -> Self {
+        let rate_decimal = Decimal::from_f64_retain(rate / 100.0)
+            .unwrap_or(Decimal::ZERO);
+        self.value
+            .checked_mul(rate_decimal)
+            .map(|value| Self { value: value.round_dp(0) })
+            .unwrap_or_else(Self::zero)
+    }
+
+    /// Divide by a divisor.
+    ///
+    /// Returns None if divisor is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// let total = Amount::from_sats(1000);
+    /// let portion = total.divide(4).unwrap();
+    /// assert_eq!(portion.as_sats(), 250);
+    /// ```
+    pub fn divide(&self, divisor: u32) -> Option<Self> {
+        if divisor == 0 {
+            return None;
+        }
+        self.value
+            .checked_div(Decimal::from(divisor))
+            .map(|value| Self { value: value.round_dp(0) })
+    }
 }
 
 impl fmt::Display for Amount {

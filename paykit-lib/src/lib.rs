@@ -2,6 +2,29 @@
 //!
 //! This crate intentionally stays stateless and delegates authenticated access
 //! to callers through trait-based dependency injection.
+//!
+//! # Features
+//!
+//! - **Directory Protocol**: Publish and discover payment endpoints via Pubky homeservers
+//! - **Payment Method Plugins**: Extensible system for adding new payment methods
+//! - **Transport Abstraction**: Trait-based design for custom transport implementations
+//!
+//! # Example
+//!
+//! ```ignore
+//! use paykit_lib::{MethodId, EndpointData, set_payment_endpoint, get_payment_list};
+//! use paykit_lib::methods::{PaymentMethodRegistry, OnchainPlugin, LightningPlugin};
+//!
+//! // Create a registry with plugins
+//! let registry = PaymentMethodRegistry::new();
+//! registry.register(Box::new(OnchainPlugin::new()));
+//! registry.register(Box::new(LightningPlugin::new()));
+//!
+//! // Validate an endpoint before publishing
+//! let plugin = registry.get(&MethodId("onchain".into())).unwrap();
+//! let result = plugin.validate_endpoint(&EndpointData("bc1q...".into()));
+//! assert!(result.valid);
+//! ```
 
 use std::{collections::HashMap, fmt};
 
@@ -13,6 +36,12 @@ pub use pubky::PublicKey;
 pub struct PublicKey(pub String);
 
 mod transport;
+pub mod health;
+pub mod methods;
+pub mod private_endpoints;
+pub mod routing;
+pub mod selection;
+pub mod rotation;
 
 pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
 

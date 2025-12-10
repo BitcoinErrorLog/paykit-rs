@@ -96,12 +96,21 @@ pub trait PaykitNoiseChannel {
 }
 
 pub mod manager;
+pub mod metadata;
+pub mod proof;
 pub mod rate_limit;
+pub mod status;
 pub mod storage;
 pub mod transport;
 
 pub use manager::{PaykitInteractiveManager, ReceiptGenerator};
-pub use storage::PaykitStorage;
+pub use metadata::{MetadataItem, MetadataValidator, OrderMetadata, PaymentMetadata, ShippingMetadata, TaxMetadata};
+pub use proof::{PaymentProof, ProofType, ProofVerifier, ProofVerifierRegistry, VerificationResult};
+pub use status::{PaymentStatus, PaymentStatusInfo, PaymentStatusTracker};
+pub use storage::{
+    CheckoutResult, PaykitStorage, StorageAdapter,
+    smart_checkout, smart_checkout_all_methods, smart_checkout_detailed,
+};
 
 /// Result type for interactive operations.
 pub type Result<T> = std::result::Result<T, InteractiveError>;

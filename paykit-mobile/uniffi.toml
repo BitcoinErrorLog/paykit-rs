@@ -1,0 +1,17 @@
+# uniffi.toml
+# Configuration for UniFFI binding generation
+
+[bindings.kotlin]
+package_name = "com.paykit.mobile"
+cdylib_name = "paykit_mobile"
+
+[bindings.swift]
+module_name = "PaykitMobile"
+cdylib_name = "paykit_mobile"
+
+# Optional: Custom type mappings
+# [bindings.kotlin.custom_types]
+# Timestamp = "Long"
+
+# [bindings.swift.custom_types]
+# Timestamp = "Int64"

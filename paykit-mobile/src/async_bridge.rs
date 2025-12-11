@@ -28,6 +28,9 @@
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
+use crate::transport_ffi::{AuthenticatedTransportFFI, UnauthenticatedTransportFFI};
+use crate::{PaykitMobileError, PaymentMethod};
+
 /// Result callback interface for mobile.
 ///
 /// This trait is implemented by mobile code to receive async results.
@@ -279,6 +282,127 @@ where
             }
         }
     }
+}
+
+// ============================================================================
+// Directory Operation Async Wrappers
+// ============================================================================
+
+/// Async directory operations manager.
+///
+/// Provides non-blocking directory operations with callback support.
+#[derive(uniffi::Object)]
+pub struct DirectoryOperationsAsync {
+    runtime: tokio::runtime::Runtime,
+}
+
+#[uniffi::export]
+impl DirectoryOperationsAsync {
+    /// Create a new async directory operations manager.
+    #[uniffi::constructor]
+    pub fn new() -> Result<Arc<Self>, PaykitMobileError> {
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PaykitMobileError::Internal { message: format!("Failed to create runtime: {}", e) })?;
+        Ok(Arc::new(Self { runtime }))
+    }
+
+    /// Publish a payment endpoint asynchronously.
+    ///
+    /// This is a blocking call that wraps the async operation.
+    /// For true non-blocking behavior, use the callback-based methods from mobile SDKs.
+    pub fn publish_payment_endpoint(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        method_id: String,
+        endpoint_data: String,
+    ) -> Result<(), PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::publish_payment_endpoint(&transport, &method_id, &endpoint_data)
+        })
+    }
+
+    /// Remove a payment endpoint asynchronously.
+    pub fn remove_payment_endpoint(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        method_id: String,
+    ) -> Result<(), PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::remove_payment_endpoint(&transport, &method_id)
+        })
+    }
+
+    /// Fetch all supported payment methods asynchronously.
+    pub fn fetch_supported_payments(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+    ) -> Result<Vec<PaymentMethod>, PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::fetch_supported_payments(&transport, &owner_pubkey)
+        })
+    }
+
+    /// Fetch a specific payment endpoint asynchronously.
+    pub fn fetch_payment_endpoint(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+        method_id: String,
+    ) -> Result<Option<String>, PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::fetch_payment_endpoint(&transport, &owner_pubkey, &method_id)
+        })
+    }
+
+    /// Fetch known contacts asynchronously.
+    pub fn fetch_known_contacts(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+    ) -> Result<Vec<String>, PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::fetch_known_contacts(&transport, &owner_pubkey)
+        })
+    }
+
+    /// Add a contact asynchronously.
+    pub fn add_contact(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        contact_pubkey: String,
+    ) -> Result<(), PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::add_contact(&transport, &contact_pubkey)
+        })
+    }
+
+    /// Remove a contact asynchronously.
+    pub fn remove_contact(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        contact_pubkey: String,
+    ) -> Result<(), PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::remove_contact(&transport, &contact_pubkey)
+        })
+    }
+
+    /// List all contacts asynchronously.
+    pub fn list_contacts(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+    ) -> Result<Vec<String>, PaykitMobileError> {
+        self.runtime.block_on(async {
+            crate::transport_ffi::list_contacts(&transport)
+        })
+    }
+}
+
+/// Create a new async directory operations manager.
+#[uniffi::export]
+pub fn create_directory_operations_async() -> Result<Arc<DirectoryOperationsAsync>, PaykitMobileError> {
+    DirectoryOperationsAsync::new()
 }
 
 #[cfg(test)]

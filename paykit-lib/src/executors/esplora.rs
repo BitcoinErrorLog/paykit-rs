@@ -232,7 +232,8 @@ impl FeeEstimates {
         for key in self.estimates.keys() {
             if let Ok(k) = key.parse::<u32>() {
                 let diff = (k as i32 - target_blocks as i32).unsigned_abs();
-                if diff < closest_diff {
+                // Prefer lower block counts on ties (faster confirmation, safer)
+                if diff < closest_diff || (diff == closest_diff && k < closest_key) {
                     closest_diff = diff;
                     closest_key = k;
                 }
@@ -365,8 +366,11 @@ mod tests {
 
         assert_eq!(fee_estimates.get_rate_for_blocks(1), 50.0);
         assert_eq!(fee_estimates.get_rate_for_blocks(3), 25.0);
-        assert_eq!(fee_estimates.get_rate_for_blocks(2), 25.0); // Closest to 3
-                                                                // 100 blocks is closest to 144, so should get its rate
+        // 2 is equidistant from 1 and 3, prefer lower (1) for safety
+        assert_eq!(fee_estimates.get_rate_for_blocks(2), 50.0);
+        // 4 is closer to 3 than to 6
+        assert_eq!(fee_estimates.get_rate_for_blocks(4), 25.0);
+        // 100 blocks is closest to 144, so should get its rate
         assert_eq!(fee_estimates.get_rate_for_blocks(100), 1.0);
     }
 

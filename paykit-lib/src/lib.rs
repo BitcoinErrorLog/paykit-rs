@@ -26,7 +26,7 @@
 //! assert!(result.valid);
 //! ```
 
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 #[cfg(feature = "pubky")]
 pub use pubky::PublicKey;
@@ -35,15 +35,17 @@ pub use pubky::PublicKey;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PublicKey(pub String);
 
-mod transport;
+pub mod errors;
 pub mod health;
 pub mod methods;
 pub mod private_endpoints;
+pub mod rotation;
 pub mod routing;
 pub mod selection;
-pub mod rotation;
+mod transport;
 pub mod uri;
 
+pub use errors::{PaykitError, PaykitErrorCode};
 pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
 pub use uri::{parse_uri, PaykitUri};
 
@@ -53,31 +55,6 @@ pub use transport::{PubkyAuthenticatedTransport, PubkyUnauthenticatedTransport};
 
 /// Common result alias for Paykit operations.
 pub type Result<T> = std::result::Result<T, PaykitError>;
-
-/// Domain-specific error type.
-#[derive(Debug)]
-pub enum PaykitError {
-    /// Placeholder for unimplemented logic in the current scaffold.
-    Unimplemented(&'static str),
-    /// Wrapper for transport layer failures.
-    ///
-    /// Most user-facing failures bubble up through this variant, encapsulating
-    /// lower-level SDK/network errors. Other variants are reserved for future use.
-    Transport(String),
-}
-
-impl fmt::Display for PaykitError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PaykitError::Unimplemented(label) => {
-                write!(f, "{label} is not implemented yet")
-            }
-            PaykitError::Transport(msg) => write!(f, "transport error: {msg}"),
-        }
-    }
-}
-
-impl std::error::Error for PaykitError {}
 
 /// Identifier for a payment method specification.
 ///

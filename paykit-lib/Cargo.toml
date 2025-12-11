@@ -11,6 +11,8 @@ default = ["pubky"]
 pubky = ["dep:pubky"]
 tracing = ["dep:tracing"]
 file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:sha2", "dep:rand"]
+# Enable test utilities for integration testing
+test-utils = []
 
 [dependencies]
 async-trait = "0.1.89"

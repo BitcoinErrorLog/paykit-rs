@@ -47,6 +47,12 @@ pub mod selection;
 mod transport;
 pub mod uri;
 
+/// Test utilities for payment testing.
+///
+/// This module is only available with the `test-utils` feature or in test builds.
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;
+
 pub use errors::{PaykitError, PaykitErrorCode};
 pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
 pub use uri::{parse_uri, PaykitUri};

@@ -288,7 +288,10 @@ mod tests {
         let ciphertext = ctx.encrypt(plaintext, context).unwrap();
 
         // Check format: version (1) + nonce (12) + plaintext (4) + tag (16) = 33
-        assert_eq!(ciphertext.len(), 1 + NONCE_SIZE + plaintext.len() + TAG_SIZE);
+        assert_eq!(
+            ciphertext.len(),
+            1 + NONCE_SIZE + plaintext.len() + TAG_SIZE
+        );
         assert_eq!(ciphertext[0], ENCRYPTION_VERSION);
     }
 
@@ -344,7 +347,10 @@ mod tests {
         let mut bad_version = vec![99u8]; // Invalid version
         bad_version.extend_from_slice(&[0u8; 28]); // Padding
         let result = ctx.decrypt(&bad_version, b"ctx");
-        assert!(matches!(result, Err(EncryptionError::UnsupportedVersion(99))));
+        assert!(matches!(
+            result,
+            Err(EncryptionError::UnsupportedVersion(99))
+        ));
     }
 
     #[test]

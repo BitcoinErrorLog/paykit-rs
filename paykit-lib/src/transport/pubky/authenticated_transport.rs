@@ -66,7 +66,9 @@ impl AuthenticatedTransport for PubkyAuthenticatedTransport {
     async fn get(&self, path: &str) -> Result<Option<String>> {
         match self.session.storage().get(path).await {
             Ok(response) => {
-                let bytes = response.bytes().await
+                let bytes = response
+                    .bytes()
+                    .await
                     .map_err(|e| PaykitError::Transport(format!("get bytes: {e}")))?;
                 if bytes.is_empty() {
                     return Ok(None);

@@ -89,7 +89,11 @@ mod autopay_rule_storage_tests {
         storage.save_autopay_rule(&rule).await.unwrap();
 
         // Verify update
-        let loaded = storage.get_autopay_rule("sub_update").await.unwrap().unwrap();
+        let loaded = storage
+            .get_autopay_rule("sub_update")
+            .await
+            .unwrap()
+            .unwrap();
         assert!(!loaded.enabled);
         assert!(loaded.require_confirmation);
     }

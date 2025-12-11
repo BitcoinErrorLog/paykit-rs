@@ -31,7 +31,10 @@ pub enum PaymentStatus {
 impl PaymentStatus {
     /// Check if this is a terminal state.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Finalized | Self::Failed | Self::Cancelled | Self::Expired)
+        matches!(
+            self,
+            Self::Finalized | Self::Failed | Self::Cancelled | Self::Expired
+        )
     }
 
     /// Check if payment is still in progress.
@@ -95,7 +98,7 @@ impl PaymentStatusInfo {
     pub fn update_confirmations(&mut self, confirmations: u64, required: u64) {
         self.confirmations = Some(confirmations);
         self.required_confirmations = Some(required);
-        
+
         if confirmations >= required {
             self.status = PaymentStatus::Finalized;
         } else if confirmations > 0 {
@@ -117,7 +120,9 @@ impl PaymentStatusInfo {
             PaymentStatus::Pending => 0.0,
             PaymentStatus::Processing => 25.0,
             PaymentStatus::Confirmed => {
-                if let (Some(confs), Some(required)) = (self.confirmations, self.required_confirmations) {
+                if let (Some(confs), Some(required)) =
+                    (self.confirmations, self.required_confirmations)
+                {
                     50.0 + (confs as f64 / required as f64) * 50.0
                 } else {
                     75.0
@@ -158,12 +163,12 @@ impl PaymentStatusTracker {
     /// Create a new pending status for a receipt.
     pub fn track(&self, receipt: &PaykitReceipt) {
         let status = PaymentStatusInfo::pending(&receipt.receipt_id, receipt.method_id.clone());
-        
+
         {
             let mut statuses = self.statuses.write().expect("lock poisoned");
             statuses.insert(receipt.receipt_id.clone(), status.clone());
         }
-        
+
         self.notify(&status);
     }
 
@@ -176,7 +181,7 @@ impl PaymentStatusTracker {
     /// Update status for a receipt.
     pub fn update(&self, receipt_id: &str, new_status: PaymentStatus) -> Option<PaymentStatusInfo> {
         let mut statuses = self.statuses.write().expect("lock poisoned");
-        
+
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update(new_status);
             let status_clone = status.clone();
@@ -189,9 +194,14 @@ impl PaymentStatusTracker {
     }
 
     /// Update confirmations for a receipt.
-    pub fn update_confirmations(&self, receipt_id: &str, confirmations: u64, required: u64) -> Option<PaymentStatusInfo> {
+    pub fn update_confirmations(
+        &self,
+        receipt_id: &str,
+        confirmations: u64,
+        required: u64,
+    ) -> Option<PaymentStatusInfo> {
         let mut statuses = self.statuses.write().expect("lock poisoned");
-        
+
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update_confirmations(confirmations, required);
             let status_clone = status.clone();
@@ -204,9 +214,13 @@ impl PaymentStatusTracker {
     }
 
     /// Mark a payment as failed.
-    pub fn mark_failed(&self, receipt_id: &str, error: impl Into<String>) -> Option<PaymentStatusInfo> {
+    pub fn mark_failed(
+        &self,
+        receipt_id: &str,
+        error: impl Into<String>,
+    ) -> Option<PaymentStatusInfo> {
         let mut statuses = self.statuses.write().expect("lock poisoned");
-        
+
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.mark_failed(error);
             let status_clone = status.clone();
@@ -301,11 +315,11 @@ mod tests {
         assert!(PaymentStatus::Processing.is_in_progress());
         assert!(PaymentStatus::Confirmed.is_in_progress());
         assert!(!PaymentStatus::Finalized.is_in_progress());
-        
+
         assert!(PaymentStatus::Finalized.is_terminal());
         assert!(PaymentStatus::Failed.is_terminal());
         assert!(!PaymentStatus::Pending.is_terminal());
-        
+
         assert!(PaymentStatus::Confirmed.is_success());
         assert!(PaymentStatus::Finalized.is_success());
         assert!(!PaymentStatus::Failed.is_success());
@@ -316,14 +330,14 @@ mod tests {
         let mut info = PaymentStatusInfo::pending("rcpt_1", MethodId("onchain".to_string()));
         assert_eq!(info.status, PaymentStatus::Pending);
         assert_eq!(info.progress_percentage(), 0.0);
-        
+
         info.update(PaymentStatus::Processing);
         assert_eq!(info.status, PaymentStatus::Processing);
-        
+
         info.update_confirmations(3, 6);
         assert_eq!(info.status, PaymentStatus::Confirmed);
         assert!(info.progress_percentage() > 50.0);
-        
+
         info.update_confirmations(6, 6);
         assert_eq!(info.status, PaymentStatus::Finalized);
         assert_eq!(info.progress_percentage(), 100.0);
@@ -333,9 +347,9 @@ mod tests {
     fn test_tracker_basic() {
         let tracker = PaymentStatusTracker::new();
         let receipt = test_receipt();
-        
+
         tracker.track(&receipt);
-        
+
         let status = tracker.get(&receipt.receipt_id);
         assert!(status.is_some());
         assert_eq!(status.unwrap().status, PaymentStatus::Pending);
@@ -345,10 +359,10 @@ mod tests {
     fn test_tracker_update() {
         let tracker = PaymentStatusTracker::new();
         let receipt = test_receipt();
-        
+
         tracker.track(&receipt);
         tracker.update(&receipt.receipt_id, PaymentStatus::Processing);
-        
+
         let status = tracker.get(&receipt.receipt_id).unwrap();
         assert_eq!(status.status, PaymentStatus::Processing);
     }
@@ -357,10 +371,10 @@ mod tests {
     fn test_tracker_confirmations() {
         let tracker = PaymentStatusTracker::new();
         let receipt = test_receipt();
-        
+
         tracker.track(&receipt);
         tracker.update_confirmations(&receipt.receipt_id, 3, 6);
-        
+
         let status = tracker.get(&receipt.receipt_id).unwrap();
         assert_eq!(status.status, PaymentStatus::Confirmed);
         assert_eq!(status.confirmations, Some(3));
@@ -369,18 +383,18 @@ mod tests {
     #[test]
     fn test_tracker_callbacks() {
         use std::sync::atomic::{AtomicBool, Ordering};
-        
+
         let tracker = PaymentStatusTracker::new();
         let called = Arc::new(AtomicBool::new(false));
         let called_clone = called.clone();
-        
+
         tracker.on_status_change(Arc::new(move |_status| {
             called_clone.store(true, Ordering::SeqCst);
         }));
-        
+
         let receipt = test_receipt();
         tracker.track(&receipt);
-        
+
         assert!(called.load(Ordering::SeqCst));
     }
 
@@ -390,11 +404,11 @@ mod tests {
         let receipt1 = test_receipt();
         let mut receipt2 = test_receipt();
         receipt2.receipt_id = "receipt_2".to_string();
-        
+
         tracker.track(&receipt1);
         tracker.track(&receipt2);
         tracker.update(&receipt2.receipt_id, PaymentStatus::Finalized);
-        
+
         let in_progress = tracker.get_in_progress();
         assert_eq!(in_progress.len(), 1);
         assert_eq!(in_progress[0].receipt_id, receipt1.receipt_id);

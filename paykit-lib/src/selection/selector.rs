@@ -82,28 +82,25 @@ impl PaymentMethodSelector {
     ) -> Result<SelectionResult> {
         // Get available methods from supported payments
         let available: Vec<MethodId> = supported.entries.keys().cloned().collect();
-        
+
         if available.is_empty() {
             return Err(PaykitError::Transport(
-                "No payment methods available".to_string()
+                "No payment methods available".to_string(),
             ));
         }
 
         // Score and rank methods
         let scored = self.score_methods(&available, amount, preferences)?;
-        
+
         if scored.is_empty() {
             return Err(PaykitError::Transport(
-                "No suitable payment methods found".to_string()
+                "No suitable payment methods found".to_string(),
             ));
         }
 
         // Build result
         let primary = scored[0].clone();
-        let fallbacks: Vec<MethodId> = scored[1..]
-            .iter()
-            .map(|s| s.method_id.clone())
-            .collect();
+        let fallbacks: Vec<MethodId> = scored[1..].iter().map(|s| s.method_id.clone()).collect();
 
         let reason = self.format_reason(&primary, preferences);
 
@@ -164,7 +161,7 @@ impl PaymentMethodSelector {
 
             // Calculate score
             let score = self.calculate_score(&plugin, amount, preferences);
-            
+
             scored.push(ScoredMethod {
                 method_id: method_id.clone(),
                 score,
@@ -173,7 +170,11 @@ impl PaymentMethodSelector {
         }
 
         // Sort by score (descending)
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(scored)
     }
@@ -252,11 +253,7 @@ impl PaymentMethodSelector {
     }
 
     /// Cost-optimized scoring.
-    fn score_cost_optimized(
-        &self,
-        plugin: &Arc<dyn PaymentMethodPlugin>,
-        amount: &Amount,
-    ) -> f64 {
+    fn score_cost_optimized(&self, plugin: &Arc<dyn PaymentMethodPlugin>, amount: &Amount) -> f64 {
         let mut score = 0.0;
         let method_id = plugin.method_id();
         let method = method_id.0.as_str();
@@ -298,7 +295,7 @@ impl PaymentMethodSelector {
     fn score_privacy_optimized(&self, plugin: &Arc<dyn PaymentMethodPlugin>) -> f64 {
         let method_id = plugin.method_id();
         let method = method_id.0.as_str();
-        
+
         match method {
             "lightning" => 40.0, // Off-chain, no public record
             "onchain" => 10.0,   // Public blockchain
@@ -313,7 +310,7 @@ impl PaymentMethodSelector {
         preferences: &SelectionPreferences,
     ) -> f64 {
         let method = plugin.method_id();
-        
+
         if let Some(index) = preferences.priority_index(&method) {
             // Higher score for earlier in the list
             let max_priority = preferences.priority_list.len() as f64;
@@ -362,7 +359,7 @@ impl PaymentMethodSelector {
     /// Format a human-readable reason for the selection.
     fn format_reason(&self, selected: &ScoredMethod, preferences: &SelectionPreferences) -> String {
         let method_name = selected.plugin.display_name();
-        
+
         match preferences.strategy {
             SelectionStrategy::Balanced => {
                 format!("Selected {} as best balanced option", method_name)
@@ -390,14 +387,8 @@ mod tests {
 
     fn create_test_supported() -> SupportedPayments {
         let mut entries = std::collections::HashMap::new();
-        entries.insert(
-            MethodId("onchain".into()),
-            EndpointData("bc1q...".into()),
-        );
-        entries.insert(
-            MethodId("lightning".into()),
-            EndpointData("lnbc...".into()),
-        );
+        entries.insert(MethodId("onchain".into()), EndpointData("bc1q...".into()));
+        entries.insert(MethodId("lightning".into()), EndpointData("lnbc...".into()));
         SupportedPayments { entries }
     }
 
@@ -409,7 +400,7 @@ mod tests {
         let prefs = SelectionPreferences::balanced();
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // Lightning should be preferred for small amounts
         assert_eq!(result.primary.0, "lightning");
         assert!(!result.fallbacks.is_empty());
@@ -423,7 +414,7 @@ mod tests {
         let prefs = SelectionPreferences::balanced();
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // On-chain should be preferred for large amounts
         assert_eq!(result.primary.0, "onchain");
     }
@@ -436,7 +427,7 @@ mod tests {
         let prefs = SelectionPreferences::speed_optimized();
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // Lightning should be selected for speed
         assert_eq!(result.primary.0, "lightning");
     }
@@ -449,7 +440,7 @@ mod tests {
         let prefs = SelectionPreferences::privacy_optimized();
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // Lightning should be selected for privacy
         assert_eq!(result.primary.0, "lightning");
     }
@@ -465,7 +456,7 @@ mod tests {
         ]);
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // On-chain should be selected due to priority
         assert_eq!(result.primary.0, "onchain");
     }
@@ -475,11 +466,10 @@ mod tests {
         let selector = PaymentMethodSelector::with_defaults();
         let supported = create_test_supported();
         let amount = Amount::sats(10000);
-        let prefs = SelectionPreferences::balanced()
-            .exclude_method(MethodId("lightning".into()));
+        let prefs = SelectionPreferences::balanced().exclude_method(MethodId("lightning".into()));
 
         let result = selector.select(&supported, &amount, &prefs).unwrap();
-        
+
         // On-chain should be selected since lightning is excluded
         assert_eq!(result.primary.0, "onchain");
         assert!(result.fallbacks.is_empty());

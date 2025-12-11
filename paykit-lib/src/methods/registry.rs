@@ -39,11 +39,11 @@ impl PaymentMethodRegistry {
     /// Creates a registry with the default built-in plugins.
     pub fn with_defaults() -> Self {
         let registry = Self::new();
-        
+
         // Register built-in plugins
         registry.register(Box::new(super::onchain::OnchainPlugin::new()));
         registry.register(Box::new(super::lightning::LightningPlugin::new()));
-        
+
         registry
     }
 
@@ -103,13 +103,14 @@ impl PaymentMethodRegistry {
     /// Gets plugins for multiple method IDs.
     ///
     /// Returns a vector of (method_id, plugin) pairs for methods that exist.
-    pub fn get_multiple(&self, method_ids: &[MethodId]) -> Vec<(MethodId, Arc<dyn PaymentMethodPlugin>)> {
+    pub fn get_multiple(
+        &self,
+        method_ids: &[MethodId],
+    ) -> Vec<(MethodId, Arc<dyn PaymentMethodPlugin>)> {
         let plugins = self.plugins.read().expect("lock poisoned");
         method_ids
             .iter()
-            .filter_map(|id| {
-                plugins.get(&id.0).map(|p| (id.clone(), p.clone()))
-            })
+            .filter_map(|id| plugins.get(&id.0).map(|p| (id.clone(), p.clone())))
             .collect()
     }
 
@@ -175,8 +176,8 @@ pub mod global {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::traits::{Amount, PaymentExecution, PaymentProof, ValidationResult};
+    use super::*;
     use async_trait::async_trait;
     use serde_json::Value;
 

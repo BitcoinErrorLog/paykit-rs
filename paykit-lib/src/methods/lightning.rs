@@ -21,7 +21,9 @@
 //! ```
 
 use super::executor::{LightningExecutor, LightningPaymentStatus, MockLightningExecutor};
-use super::traits::{Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult};
+use super::traits::{
+    Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult,
+};
 use crate::{EndpointData, MethodId, PaykitError, Result};
 use async_trait::async_trait;
 use serde_json::Value;
@@ -125,7 +127,7 @@ impl LightningPlugin {
     /// Validates a BOLT11 invoice.
     fn validate_bolt11(&self, invoice: &str) -> ValidationResult {
         let invoice = invoice.trim().to_lowercase();
-        
+
         if invoice.is_empty() {
             return ValidationResult::invalid(vec!["Invoice is empty".to_string()]);
         }
@@ -133,7 +135,9 @@ impl LightningPlugin {
         // Check invoice prefix based on network
         let valid_prefix = match self.network {
             LightningNetwork::Mainnet => invoice.starts_with("lnbc"),
-            LightningNetwork::Testnet => invoice.starts_with("lntb") || invoice.starts_with("lnbcrt"),
+            LightningNetwork::Testnet => {
+                invoice.starts_with("lntb") || invoice.starts_with("lnbcrt")
+            }
             LightningNetwork::Regtest => invoice.starts_with("lnbcrt"),
         };
 
@@ -143,9 +147,10 @@ impl LightningPlugin {
                 LightningNetwork::Testnet => "lntb or lnbcrt",
                 LightningNetwork::Regtest => "lnbcrt",
             };
-            return ValidationResult::invalid(vec![
-                format!("Invalid invoice prefix. Expected {} for {:?}", expected, self.network)
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "Invalid invoice prefix. Expected {} for {:?}",
+                expected, self.network
+            )]);
         }
 
         // Basic structure check (BOLT11 invoices are bech32 encoded)
@@ -155,7 +160,7 @@ impl LightningPlugin {
         // 3. Separator '1'
         // 4. Data part (timestamp, payment hash, etc.)
         // 5. Signature
-        
+
         if !invoice.contains('1') {
             return ValidationResult::invalid(vec![
                 "Invalid invoice format: missing separator".to_string()
@@ -164,9 +169,10 @@ impl LightningPlugin {
 
         // Check minimum length (prefix + separator + minimal data + signature)
         if invoice.len() < 100 {
-            return ValidationResult::invalid(vec![
-                format!("Invoice too short: {} chars (minimum ~100)", invoice.len())
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "Invoice too short: {} chars (minimum ~100)",
+                invoice.len()
+            )]);
         }
 
         let mut result = ValidationResult::valid();
@@ -181,7 +187,7 @@ impl LightningPlugin {
     /// Validates an LNURL.
     fn validate_lnurl(&self, lnurl: &str) -> ValidationResult {
         let lnurl = lnurl.trim().to_lowercase();
-        
+
         if lnurl.is_empty() {
             return ValidationResult::invalid(vec!["LNURL is empty".to_string()]);
         }
@@ -189,15 +195,16 @@ impl LightningPlugin {
         // LNURL should start with "lnurl"
         if !lnurl.starts_with("lnurl") {
             return ValidationResult::invalid(vec![
-                "Invalid LNURL format: must start with 'lnurl'".to_string()
+                "Invalid LNURL format: must start with 'lnurl'".to_string(),
             ]);
         }
 
         // Basic length check (bech32 encoded URL)
         if lnurl.len() < 20 {
-            return ValidationResult::invalid(vec![
-                format!("LNURL too short: {} chars", lnurl.len())
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "LNURL too short: {} chars",
+                lnurl.len()
+            )]);
         }
 
         ValidationResult::valid()
@@ -206,32 +213,32 @@ impl LightningPlugin {
     /// Extracts payment data from endpoint.
     fn extract_payment_data(&self, data: &EndpointData) -> Result<PaymentData> {
         let data_str = data.0.trim();
-        
+
         // Try parsing as JSON first
         if data_str.starts_with('{') {
             let json: serde_json::Value = serde_json::from_str(data_str)
                 .map_err(|e| PaykitError::Transport(format!("Invalid JSON: {}", e)))?;
-            
+
             // Look for BOLT11 invoice
             if let Some(bolt11) = json.get("bolt11").and_then(|v| v.as_str()) {
                 return Ok(PaymentData::Bolt11(bolt11.to_string()));
             }
-            
+
             // Look for LNURL
             if let Some(lnurl) = json.get("lnurl").and_then(|v| v.as_str()) {
                 return Ok(PaymentData::Lnurl(lnurl.to_string()));
             }
-            
+
             return Err(PaykitError::Transport(
-                "No bolt11 or lnurl field found in JSON endpoint".to_string()
+                "No bolt11 or lnurl field found in JSON endpoint".to_string(),
             ));
         }
-        
+
         // Check if it's an LNURL
         if data_str.to_lowercase().starts_with("lnurl") {
             return Ok(PaymentData::Lnurl(data_str.to_string()));
         }
-        
+
         // Otherwise, treat as BOLT11 invoice
         Ok(PaymentData::Bolt11(data_str.to_string()))
     }
@@ -270,7 +277,10 @@ pub fn verify_lightning_proof(
     executor: Option<&dyn LightningExecutor>,
 ) -> Result<bool> {
     match proof {
-        PaymentProof::LightningPreimage { preimage, payment_hash } => {
+        PaymentProof::LightningPreimage {
+            preimage,
+            payment_hash,
+        } => {
             if preimage == "pending" || payment_hash == "pending" {
                 return Ok(false);
             }
@@ -282,11 +292,11 @@ pub fn verify_lightning_proof(
 
             // Without executor, just check that values look valid
             // A real preimage/hash is 64 hex characters (32 bytes)
-            let valid = preimage.len() == 64 
+            let valid = preimage.len() == 64
                 && payment_hash.len() == 64
                 && preimage.chars().all(|c| c.is_ascii_hexdigit())
                 && payment_hash.chars().all(|c| c.is_ascii_hexdigit());
-            
+
             Ok(valid)
         }
         _ => Err(PaykitError::Transport(
@@ -325,12 +335,12 @@ impl PaymentMethodPlugin for LightningPlugin {
     ) -> Result<PaymentExecution> {
         // Extract and validate payment data
         let payment_data = self.extract_payment_data(endpoint)?;
-        
+
         let validation = match &payment_data {
             PaymentData::Bolt11(invoice) => self.validate_bolt11(invoice),
             PaymentData::Lnurl(lnurl) => self.validate_lnurl(lnurl),
         };
-        
+
         if !validation.valid {
             return Err(PaykitError::Transport(validation.errors.join(", ")));
         }
@@ -345,17 +355,18 @@ impl PaymentMethodPlugin for LightningPlugin {
 
         // Convert to millisatoshis
         let amount_msat = amount.as_u64().map(|sats| sats * 1000);
-        
+
         // Get max fee from metadata
-        let max_fee_msat = metadata
-            .get("max_fee_msat")
-            .and_then(|v| v.as_u64());
+        let max_fee_msat = metadata.get("max_fee_msat").and_then(|v| v.as_u64());
 
         // Execute payment via executor if available
         if let Some(executor) = &self.executor {
             match &payment_data {
                 PaymentData::Bolt11(invoice) => {
-                    match executor.pay_invoice(invoice, amount_msat, max_fee_msat).await {
+                    match executor
+                        .pay_invoice(invoice, amount_msat, max_fee_msat)
+                        .await
+                    {
                         Ok(result) => {
                             return Ok(PaymentExecution {
                                 method_id: self.method_id(),
@@ -395,7 +406,8 @@ impl PaymentMethodPlugin for LightningPlugin {
                     // LNURL requires fetching the actual invoice first
                     // For now, return an error indicating LNURL needs special handling
                     return Err(PaykitError::Transport(
-                        "LNURL payments require additional flow - use decode_lnurl first".to_string()
+                        "LNURL payments require additional flow - use decode_lnurl first"
+                            .to_string(),
                     ));
                 }
             }
@@ -438,7 +450,10 @@ impl PaymentMethodPlugin for LightningPlugin {
         // Check if execution was successful
         if !execution.success {
             return Err(PaykitError::Transport(
-                execution.error.clone().unwrap_or_else(|| "Payment failed".to_string())
+                execution
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Payment failed".to_string()),
             ));
         }
 
@@ -475,7 +490,7 @@ impl PaymentMethodPlugin for LightningPlugin {
             .get("type")
             .cloned()
             .unwrap_or(Value::String("bolt11".to_string()));
-        
+
         let preimage = execution
             .execution_data
             .get("preimage")
@@ -583,7 +598,7 @@ mod tests {
     #[test]
     fn test_validate_endpoint_json() {
         let plugin = LightningPlugin::new();
-        
+
         let data = EndpointData(r#"{"bolt11":"lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w"}"#.to_string());
         let result = plugin.validate_endpoint(&data);
         assert!(result.valid);
@@ -611,22 +626,24 @@ mod tests {
     #[test]
     fn test_extract_payment_data() {
         let plugin = LightningPlugin::new();
-        
+
         // BOLT11 from JSON
         let data = EndpointData(r#"{"bolt11":"lnbc1..."}"#.to_string());
         let result = plugin.extract_payment_data(&data);
         assert!(matches!(result, Ok(PaymentData::Bolt11(_))));
-        
+
         // LNURL from JSON
         let data = EndpointData(r#"{"lnurl":"lnurl1..."}"#.to_string());
         let result = plugin.extract_payment_data(&data);
         assert!(matches!(result, Ok(PaymentData::Lnurl(_))));
-        
+
         // Raw LNURL
-        let data = EndpointData("lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf0v9cxj0m385ekvcenxc6r2c35".to_string());
+        let data = EndpointData(
+            "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf0v9cxj0m385ekvcenxc6r2c35".to_string(),
+        );
         let result = plugin.extract_payment_data(&data);
         assert!(matches!(result, Ok(PaymentData::Lnurl(_))));
-        
+
         // Raw BOLT11
         let data = EndpointData("lnbc1pvjluezpp5...".to_string());
         let result = plugin.extract_payment_data(&data);
@@ -636,14 +653,17 @@ mod tests {
     #[tokio::test]
     async fn test_execute_payment_with_mock_executor() {
         let plugin = LightningPlugin::with_mock_executor();
-        
+
         let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
         let endpoint = EndpointData(invoice.to_string());
         let amount = Amount::sats(1000);
         let metadata = serde_json::json!({});
-        
-        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
-        
+
+        let result = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
+
         assert!(result.success);
         assert!(result.execution_data.get("preimage").is_some());
         assert!(result.execution_data.get("payment_hash").is_some());
@@ -652,32 +672,44 @@ mod tests {
     #[tokio::test]
     async fn test_execute_payment_without_executor() {
         let plugin = LightningPlugin::new();
-        
+
         let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
         let endpoint = EndpointData(invoice.to_string());
         let amount = Amount::sats(1000);
         let metadata = serde_json::json!({});
-        
-        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
-        
+
+        let result = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
+
         assert!(result.success);
-        assert_eq!(result.execution_data.get("mock").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            result.execution_data.get("mock").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 
     #[tokio::test]
     async fn test_generate_proof() {
         let plugin = LightningPlugin::with_mock_executor();
-        
+
         let invoice = "lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w";
         let endpoint = EndpointData(invoice.to_string());
         let amount = Amount::sats(1000);
         let metadata = serde_json::json!({});
-        
-        let execution = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
+
+        let execution = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
         let proof = plugin.generate_proof(&execution).unwrap();
-        
+
         match proof {
-            PaymentProof::LightningPreimage { preimage, payment_hash } => {
+            PaymentProof::LightningPreimage {
+                preimage,
+                payment_hash,
+            } => {
                 assert!(!preimage.is_empty());
                 assert!(!payment_hash.is_empty());
                 assert_ne!(preimage, "pending");
@@ -689,10 +721,10 @@ mod tests {
     #[tokio::test]
     async fn test_estimate_fee() {
         let plugin = LightningPlugin::with_mock_executor();
-        
+
         let amount = Amount::sats(10000);
         let fee = plugin.estimate_fee(&amount).await;
-        
+
         assert!(fee.is_some());
         let fee_sats = fee.unwrap().as_u64().unwrap();
         // Should be ~0.1% + 1 sat = 11 sats
@@ -703,8 +735,10 @@ mod tests {
     fn test_verify_lightning_proof() {
         // Valid-looking preimage and hash (64 hex chars each)
         let proof = PaymentProof::LightningPreimage {
-            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd".to_string(),
-            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defg".to_string(),
+            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+                .to_string(),
+            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defg"
+                .to_string(),
         };
 
         // Without executor, just validates format
@@ -714,8 +748,10 @@ mod tests {
 
         // Valid hex
         let proof = PaymentProof::LightningPreimage {
-            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd".to_string(),
-            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defa".to_string(),
+            preimage: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd"
+                .to_string(),
+            payment_hash: "def456abc123def456abc123def456abc123def456abc123def456abc123defa"
+                .to_string(),
         };
         let result = verify_lightning_proof(&proof, None).unwrap();
         assert!(result);

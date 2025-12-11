@@ -167,10 +167,16 @@ pub fn parse_uri(uri: &str) -> Result<PaykitUri> {
 /// Parse a pubky:// URI.
 fn parse_pubky_uri(key_str: &str) -> Result<PaykitUri> {
     // Remove any trailing slashes or fragments
-    let key_str = key_str.trim_end_matches('/').split('#').next().unwrap_or(key_str);
+    let key_str = key_str
+        .trim_end_matches('/')
+        .split('#')
+        .next()
+        .unwrap_or(key_str);
 
     if key_str.is_empty() {
-        return Err(PaykitError::Transport("Empty public key in pubky:// URI".to_string()));
+        return Err(PaykitError::Transport(
+            "Empty public key in pubky:// URI".to_string(),
+        ));
     }
 
     // Try to parse as PublicKey
@@ -278,12 +284,10 @@ fn parse_invoice_uri(query: &str) -> Result<PaykitUri> {
         }
     }
 
-    let method = method.ok_or_else(|| {
-        PaykitError::Transport("Missing 'method' in invoice URI".to_string())
-    })?;
-    let data = data.ok_or_else(|| {
-        PaykitError::Transport("Missing 'data' in invoice URI".to_string())
-    })?;
+    let method = method
+        .ok_or_else(|| PaykitError::Transport("Missing 'method' in invoice URI".to_string()))?;
+    let data =
+        data.ok_or_else(|| PaykitError::Transport("Missing 'data' in invoice URI".to_string()))?;
 
     Ok(PaykitUri::Invoice { method, data })
 }
@@ -292,9 +296,8 @@ fn parse_invoice_uri(query: &str) -> Result<PaykitUri> {
 fn parse_pubky_key(key_str: &str) -> Result<PublicKey> {
     #[cfg(feature = "pubky")]
     {
-        PublicKey::from_str(key_str).map_err(|e| {
-            PaykitError::Transport(format!("Invalid public key format: {}", e))
-        })
+        PublicKey::from_str(key_str)
+            .map_err(|e| PaykitError::Transport(format!("Invalid public key format: {}", e)))
     }
 
     #[cfg(not(feature = "pubky"))]
@@ -310,14 +313,15 @@ fn url_decode(encoded: &str) -> Result<String> {
 
     while let Some(ch) = chars.next() {
         if ch == '%' {
-            let hex1 = chars.next().ok_or_else(|| {
-                PaykitError::Transport("Incomplete percent encoding".to_string())
+            let hex1 = chars
+                .next()
+                .ok_or_else(|| PaykitError::Transport("Incomplete percent encoding".to_string()))?;
+            let hex2 = chars
+                .next()
+                .ok_or_else(|| PaykitError::Transport("Incomplete percent encoding".to_string()))?;
+            let byte = u8::from_str_radix(&format!("{}{}", hex1, hex2), 16).map_err(|_| {
+                PaykitError::Transport("Invalid hex in percent encoding".to_string())
             })?;
-            let hex2 = chars.next().ok_or_else(|| {
-                PaykitError::Transport("Incomplete percent encoding".to_string())
-            })?;
-            let byte = u8::from_str_radix(&format!("{}{}", hex1, hex2), 16)
-                .map_err(|_| PaykitError::Transport("Invalid hex in percent encoding".to_string()))?;
             decoded.push(byte as char);
         } else if ch == '+' {
             decoded.push(' ');
@@ -435,10 +439,8 @@ mod tests {
     fn test_parse_payment_request_uri() {
         #[cfg(not(feature = "pubky"))]
         {
-            let uri = parse_uri(
-                "paykit:request?request_id=req_123&from=pubky://abc123def456",
-            )
-            .unwrap();
+            let uri =
+                parse_uri("paykit:request?request_id=req_123&from=pubky://abc123def456").unwrap();
             match uri {
                 PaykitUri::PaymentRequest { request_id, .. } => {
                     assert_eq!(request_id, "req_123");
@@ -503,7 +505,7 @@ mod tests {
         // We skip pubky parsing test when pubky feature requires valid encoding
         let bitcoin = parse_uri("bitcoin:bc1q...").unwrap();
         assert_eq!(bitcoin.method_id().unwrap().0, "onchain");
-        
+
         // For pubky URIs, we can't easily test without valid keys when pubky feature is enabled
         // The important part is that invoice URIs have method_id, which we've tested
     }

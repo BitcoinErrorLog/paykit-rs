@@ -57,7 +57,10 @@ impl StorageError {
     }
 
     pub fn not_found(key: &str) -> Self {
-        Self::new(StorageErrorCode::NotFound, format!("Key not found: {}", key))
+        Self::new(
+            StorageErrorCode::NotFound,
+            format!("Key not found: {}", key),
+        )
     }
 
     pub fn access_denied(message: impl Into<String>) -> Self {
@@ -182,32 +185,36 @@ impl InMemoryStorage {
 
 impl SecureStorage for InMemoryStorage {
     fn store(&self, key: &str, value: &[u8]) -> StorageResult<()> {
-        let mut data = self.data.write().map_err(|_| {
-            StorageError::new(StorageErrorCode::Unknown, "Lock poisoned")
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| StorageError::new(StorageErrorCode::Unknown, "Lock poisoned"))?;
         data.insert(key.to_string(), value.to_vec());
         Ok(())
     }
 
     fn retrieve(&self, key: &str) -> StorageResult<Option<Vec<u8>>> {
-        let data = self.data.read().map_err(|_| {
-            StorageError::new(StorageErrorCode::Unknown, "Lock poisoned")
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| StorageError::new(StorageErrorCode::Unknown, "Lock poisoned"))?;
         Ok(data.get(key).cloned())
     }
 
     fn delete(&self, key: &str) -> StorageResult<()> {
-        let mut data = self.data.write().map_err(|_| {
-            StorageError::new(StorageErrorCode::Unknown, "Lock poisoned")
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| StorageError::new(StorageErrorCode::Unknown, "Lock poisoned"))?;
         data.remove(key);
         Ok(())
     }
 
     fn list_keys(&self) -> StorageResult<Vec<String>> {
-        let data = self.data.read().map_err(|_| {
-            StorageError::new(StorageErrorCode::Unknown, "Lock poisoned")
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| StorageError::new(StorageErrorCode::Unknown, "Lock poisoned"))?;
         Ok(data.keys().cloned().collect())
     }
 }
@@ -387,7 +394,10 @@ impl<S: SecureStorage> LocalContactCache<S> {
 
     /// Get all cached contacts.
     pub fn get_all(&self) -> StorageResult<Vec<CachedContact>> {
-        match self.storage.retrieve_json::<Vec<CachedContact>>(&self.cache_key)? {
+        match self
+            .storage
+            .retrieve_json::<Vec<CachedContact>>(&self.cache_key)?
+        {
             Some(contacts) => Ok(contacts),
             None => Ok(Vec::new()),
         }
@@ -402,14 +412,14 @@ impl<S: SecureStorage> LocalContactCache<S> {
     /// Add or update a contact.
     pub fn upsert(&self, contact: CachedContact) -> StorageResult<()> {
         let mut contacts = self.get_all()?;
-        
+
         // Find and update existing, or add new
         if let Some(existing) = contacts.iter_mut().find(|c| c.pubkey == contact.pubkey) {
             *existing = contact;
         } else {
             contacts.push(contact);
         }
-        
+
         self.storage.store_json(&self.cache_key, &contacts)
     }
 
@@ -419,7 +429,11 @@ impl<S: SecureStorage> LocalContactCache<S> {
     }
 
     /// Add a contact with a display name.
-    pub fn add_with_name(&self, pubkey: impl Into<String>, name: impl Into<String>) -> StorageResult<()> {
+    pub fn add_with_name(
+        &self,
+        pubkey: impl Into<String>,
+        name: impl Into<String>,
+    ) -> StorageResult<()> {
         self.upsert(CachedContact::with_name(pubkey, name))
     }
 
@@ -459,10 +473,10 @@ impl<S: SecureStorage> LocalContactCache<S> {
     pub fn sync(&self, remote_pubkeys: &[String]) -> StorageResult<SyncResult> {
         let mut local = self.get_all()?;
         let now = current_timestamp();
-        
+
         let mut added = 0;
         let removed = 0;
-        
+
         // Add new remote contacts
         for pubkey in remote_pubkeys {
             if !local.iter().any(|c| &c.pubkey == pubkey) {
@@ -480,13 +494,13 @@ impl<S: SecureStorage> LocalContactCache<S> {
                 }
             }
         }
-        
+
         // Optionally remove contacts not in remote (commented out to preserve local-only contacts)
         // let remote_set: std::collections::HashSet<_> = remote_pubkeys.iter().collect();
         // local.retain(|c| remote_set.contains(&c.pubkey));
-        
+
         self.storage.store_json(&self.cache_key, &local)?;
-        
+
         Ok(SyncResult {
             total: local.len(),
             added,
@@ -518,14 +532,16 @@ pub struct SyncResult {
 pub enum StorageCacheError {
     #[error("Storage error: {message}")]
     Storage { message: String },
-    
+
     #[error("Lock error: {message}")]
     Lock { message: String },
 }
 
 impl From<StorageError> for StorageCacheError {
     fn from(e: StorageError) -> Self {
-        Self::Storage { message: e.to_string() }
+        Self::Storage {
+            message: e.to_string(),
+        }
     }
 }
 
@@ -545,67 +561,87 @@ impl ContactCacheFFI {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            cache: std::sync::RwLock::new(LocalContactCache::with_default_key(InMemoryStorage::new())),
+            cache: std::sync::RwLock::new(LocalContactCache::with_default_key(
+                InMemoryStorage::new(),
+            )),
         })
     }
 
     /// Get all cached contacts.
     pub fn get_all(&self) -> Result<Vec<CachedContactFFI>, StorageCacheError> {
-        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         let contacts = cache.get_all()?;
         Ok(contacts.into_iter().map(CachedContactFFI::from).collect())
     }
 
     /// Get a specific contact by public key.
     pub fn get(&self, pubkey: String) -> Result<Option<CachedContactFFI>, StorageCacheError> {
-        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         let contact = cache.get(&pubkey)?;
         Ok(contact.map(CachedContactFFI::from))
     }
 
     /// Add a contact by public key.
     pub fn add(&self, pubkey: String) -> Result<(), StorageCacheError> {
-        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         cache.add(pubkey)?;
         Ok(())
     }
 
     /// Add a contact with a display name.
     pub fn add_with_name(&self, pubkey: String, name: String) -> Result<(), StorageCacheError> {
-        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         cache.add_with_name(pubkey, name)?;
         Ok(())
     }
 
     /// Remove a contact by public key.
     pub fn remove(&self, pubkey: String) -> Result<(), StorageCacheError> {
-        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         cache.remove(&pubkey)?;
         Ok(())
     }
 
     /// Check if a contact exists.
     pub fn contains(&self, pubkey: String) -> Result<bool, StorageCacheError> {
-        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         Ok(cache.contains(&pubkey)?)
     }
 
     /// Get the number of cached contacts.
     pub fn count(&self) -> Result<u32, StorageCacheError> {
-        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         Ok(cache.count()? as u32)
     }
 
     /// Clear all cached contacts.
     pub fn clear(&self) -> Result<(), StorageCacheError> {
-        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         cache.clear()?;
         Ok(())
     }
 
     /// Sync with remote contacts.
     pub fn sync(&self, remote_pubkeys: Vec<String>) -> Result<SyncResultFFI, StorageCacheError> {
-        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock { message: "Lock poisoned".to_string() })?;
+        let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
+            message: "Lock poisoned".to_string(),
+        })?;
         let result = cache.sync(&remote_pubkeys)?;
         Ok(SyncResultFFI::from(result))
     }
@@ -834,15 +870,12 @@ mod tests {
         cache.add_with_name("local_only", "Local").unwrap();
 
         // Sync with remote
-        let remote = vec![
-            "remote1".to_string(),
-            "remote2".to_string(),
-        ];
+        let remote = vec!["remote1".to_string(), "remote2".to_string()];
         let result = cache.sync(&remote).unwrap();
 
         // Should add 2 remote contacts
         assert_eq!(result.added, 2);
-        
+
         // Local contact should be preserved
         assert!(cache.contains("local_only").unwrap());
         assert!(cache.contains("remote1").unwrap());

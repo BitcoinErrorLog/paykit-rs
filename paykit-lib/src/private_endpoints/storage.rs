@@ -328,7 +328,12 @@ impl FileStore {
     }
 
     /// Encrypt data if encryption is enabled.
-    fn encrypt(&self, data: &[u8], peer: &PublicKey, method_id: &MethodId) -> StorageResult<Vec<u8>> {
+    fn encrypt(
+        &self,
+        data: &[u8],
+        peer: &PublicKey,
+        method_id: &MethodId,
+    ) -> StorageResult<Vec<u8>> {
         match &self.encryption {
             Some(ctx) => {
                 let context = self.encryption_context(peer, method_id);
@@ -340,7 +345,12 @@ impl FileStore {
     }
 
     /// Decrypt data if encryption is enabled.
-    fn decrypt(&self, data: &[u8], peer: &PublicKey, method_id: &MethodId) -> StorageResult<Vec<u8>> {
+    fn decrypt(
+        &self,
+        data: &[u8],
+        peer: &PublicKey,
+        method_id: &MethodId,
+    ) -> StorageResult<Vec<u8>> {
         match &self.encryption {
             Some(ctx) => {
                 let context = self.encryption_context(peer, method_id);
@@ -361,7 +371,9 @@ impl FileStore {
     /// The number of endpoints migrated.
     pub async fn migrate_to_encrypted(&self) -> StorageResult<usize> {
         if self.encryption.is_none() {
-            return Err(StorageError::Other("No encryption key configured".to_string()));
+            return Err(StorageError::Other(
+                "No encryption key configured".to_string(),
+            ));
         }
 
         let mut count = 0;
@@ -443,8 +455,8 @@ impl PrivateEndpointStore for FileStore {
 
         let data = std::fs::read(&path)?;
         let decrypted = self.decrypt(&data, peer, method_id)?;
-        let json = String::from_utf8(decrypted)
-            .map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let json =
+            String::from_utf8(decrypted).map_err(|e| StorageError::Serialization(e.to_string()))?;
         let endpoint: PrivateEndpoint = serde_json::from_str(&json)?;
 
         Ok(Some(endpoint))
@@ -477,9 +489,10 @@ impl PrivateEndpointStore for FileStore {
 
                     // Try decryption if encrypted, otherwise parse directly
                     let json_result = if ext == Some("enc") {
-                        self.decrypt(&data, peer, &method_id)
-                            .and_then(|d| String::from_utf8(d)
-                                .map_err(|e| StorageError::Serialization(e.to_string())))
+                        self.decrypt(&data, peer, &method_id).and_then(|d| {
+                            String::from_utf8(d)
+                                .map_err(|e| StorageError::Serialization(e.to_string()))
+                        })
                     } else {
                         String::from_utf8(data)
                             .map_err(|e| StorageError::Serialization(e.to_string()))
@@ -534,7 +547,8 @@ impl PrivateEndpointStore for FileStore {
                             };
 
                             if let Ok(json) = json_result {
-                                if let Ok(endpoint) = serde_json::from_str::<PrivateEndpoint>(&json) {
+                                if let Ok(endpoint) = serde_json::from_str::<PrivateEndpoint>(&json)
+                                {
                                     peers.push(endpoint.peer);
                                     break;
                                 }
@@ -950,7 +964,8 @@ mod file_storage_tests {
         // Save with one key
         {
             let store = FileStore::new_encrypted(temp_dir.path(), test_key()).unwrap();
-            let private = PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), None);
+            let private =
+                PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), None);
             store.save(private).await.unwrap();
         }
 
@@ -997,24 +1012,17 @@ mod file_storage_tests {
 
         // Save with passphrase
         {
-            let store = FileStore::new_with_passphrase(
-                temp_dir.path(),
-                b"my_passphrase",
-                b"salt",
-            )
-            .unwrap();
-            let private = PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), None);
+            let store =
+                FileStore::new_with_passphrase(temp_dir.path(), b"my_passphrase", b"salt").unwrap();
+            let private =
+                PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), None);
             store.save(private).await.unwrap();
         }
 
         // Read with same passphrase (new store instance)
         {
-            let store = FileStore::new_with_passphrase(
-                temp_dir.path(),
-                b"my_passphrase",
-                b"salt",
-            )
-            .unwrap();
+            let store =
+                FileStore::new_with_passphrase(temp_dir.path(), b"my_passphrase", b"salt").unwrap();
             let retrieved = store.get(&peer, &method).await.unwrap().unwrap();
             assert_eq!(retrieved.endpoint, endpoint);
         }

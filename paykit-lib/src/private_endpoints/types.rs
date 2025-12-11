@@ -317,7 +317,8 @@ mod tests {
 
         // Future expiration
         let future = chrono::Utc::now().timestamp() + 3600;
-        let valid = PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), Some(future));
+        let valid =
+            PrivateEndpoint::new(peer.clone(), method.clone(), endpoint.clone(), Some(future));
         let remaining = valid.time_until_expiry().unwrap();
         assert!(remaining > 3590 && remaining <= 3600);
 

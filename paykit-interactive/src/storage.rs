@@ -1,6 +1,6 @@
 use crate::{PaykitReceipt, Result};
-use paykit_lib::{EndpointData, MethodId, PublicKey};
 use paykit_lib::private_endpoints::PrivateEndpoint;
+use paykit_lib::{EndpointData, MethodId, PublicKey};
 
 /// Trait for persisting Paykit data.
 ///
@@ -42,11 +42,7 @@ pub trait PaykitStorage: Send + Sync {
     ) -> Result<Vec<(MethodId, String)>>;
 
     /// Remove a private endpoint.
-    async fn remove_private_endpoint(
-        &self,
-        peer: &PublicKey,
-        method: &MethodId,
-    ) -> Result<()>;
+    async fn remove_private_endpoint(&self, peer: &PublicKey, method: &MethodId) -> Result<()>;
 }
 
 /// Adapter that bridges PaykitStorage to the new PrivateEndpointStore trait.

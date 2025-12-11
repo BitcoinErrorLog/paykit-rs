@@ -102,36 +102,30 @@ pub fn parse_scanned_uri(scanned_data: String) -> Result<ScannedUri, String> {
     let uri = parse_uri(&scanned_data).map_err(|e| e.to_string())?;
 
     match uri {
-        PaykitUri::Pubky { public_key } => {
-            Ok(ScannedUri {
-                uri_type: UriType::Pubky,
-                public_key: Some(public_key_to_string(&public_key)),
-                method_id: None,
-                data: None,
-                request_id: None,
-                requester: None,
-            })
-        }
-        PaykitUri::Invoice { method, data } => {
-            Ok(ScannedUri {
-                uri_type: UriType::Invoice,
-                public_key: None,
-                method_id: Some(method.0),
-                data: Some(data),
-                request_id: None,
-                requester: None,
-            })
-        }
-        PaykitUri::PaymentRequest { request_id, from } => {
-            Ok(ScannedUri {
-                uri_type: UriType::PaymentRequest,
-                public_key: None,
-                method_id: None,
-                data: None,
-                request_id: Some(request_id),
-                requester: Some(public_key_to_string(&from)),
-            })
-        }
+        PaykitUri::Pubky { public_key } => Ok(ScannedUri {
+            uri_type: UriType::Pubky,
+            public_key: Some(public_key_to_string(&public_key)),
+            method_id: None,
+            data: None,
+            request_id: None,
+            requester: None,
+        }),
+        PaykitUri::Invoice { method, data } => Ok(ScannedUri {
+            uri_type: UriType::Invoice,
+            public_key: None,
+            method_id: Some(method.0),
+            data: Some(data),
+            request_id: None,
+            requester: None,
+        }),
+        PaykitUri::PaymentRequest { request_id, from } => Ok(ScannedUri {
+            uri_type: UriType::PaymentRequest,
+            public_key: None,
+            method_id: None,
+            data: None,
+            request_id: Some(request_id),
+            requester: Some(public_key_to_string(&from)),
+        }),
     }
 }
 
@@ -207,7 +201,7 @@ mod tests {
         // For now, test with invoice which doesn't require valid keys
         let result = parse_scanned_uri("lightning:lnbc1u1p3abc123".to_string()).unwrap();
         assert_eq!(result.uri_type, UriType::Invoice);
-        
+
         // Pubky URI test requires valid z-base32 encoded keys when pubky feature is enabled
         // This is tested in integration tests with real keys
     }
@@ -222,7 +216,9 @@ mod tests {
 
     #[test]
     fn test_parse_scanned_bitcoin_address() {
-        let result = parse_scanned_uri("bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string()).unwrap();
+        let result =
+            parse_scanned_uri("bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string())
+                .unwrap();
         assert_eq!(result.uri_type, UriType::Invoice);
         assert_eq!(result.method_id, Some("onchain".to_string()));
     }
@@ -242,7 +238,7 @@ mod tests {
         // Test that non-pubky URIs return None
         let none = extract_public_key("lightning:lnbc1...".to_string());
         assert!(none.is_none());
-        
+
         // Pubky URI extraction requires valid z-base32 keys when pubky feature is enabled
         // This is tested in integration tests with real keys
     }

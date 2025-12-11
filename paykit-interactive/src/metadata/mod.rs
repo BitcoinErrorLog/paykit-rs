@@ -50,7 +50,12 @@ pub struct MetadataItem {
 
 impl MetadataItem {
     /// Create a new metadata item.
-    pub fn new(description: impl Into<String>, quantity: u32, unit_price: impl Into<String>, currency: impl Into<String>) -> Self {
+    pub fn new(
+        description: impl Into<String>,
+        quantity: u32,
+        unit_price: impl Into<String>,
+        currency: impl Into<String>,
+    ) -> Self {
         Self {
             description: description.into(),
             quantity,
@@ -363,7 +368,10 @@ impl PaymentMetadata {
 
     /// Check if metadata is empty.
     pub fn is_empty(&self) -> bool {
-        self.order.is_none() && self.shipping.is_none() && self.tax.is_none() && self.custom.is_empty()
+        self.order.is_none()
+            && self.shipping.is_none()
+            && self.tax.is_none()
+            && self.custom.is_empty()
     }
 }
 
@@ -407,13 +415,23 @@ impl MetadataValidator {
         let mut errors = Vec::new();
 
         if self.require_order_id {
-            if metadata.order.as_ref().and_then(|o| o.order_id.as_ref()).is_none() {
+            if metadata
+                .order
+                .as_ref()
+                .and_then(|o| o.order_id.as_ref())
+                .is_none()
+            {
                 errors.push("Order ID is required".to_string());
             }
         }
 
         if self.require_shipping {
-            if metadata.shipping.as_ref().and_then(|s| s.address.as_ref()).is_none() {
+            if metadata
+                .shipping
+                .as_ref()
+                .and_then(|s| s.address.as_ref())
+                .is_none()
+            {
                 errors.push("Shipping address is required".to_string());
             }
         }
@@ -452,14 +470,23 @@ mod tests {
     #[test]
     fn test_shipping_metadata() {
         let shipping = ShippingMetadata::new()
-            .with_address(MetadataAddress::new("John Doe", "123 Main St", "Anytown", "12345", "US"))
+            .with_address(MetadataAddress::new(
+                "John Doe",
+                "123 Main St",
+                "Anytown",
+                "12345",
+                "US",
+            ))
             .with_method("Express")
             .with_cost("500", "SAT")
             .with_tracking("1Z999AA10123456784", "UPS");
 
         assert!(shipping.address.is_some());
         assert_eq!(shipping.method, Some("Express".to_string()));
-        assert_eq!(shipping.tracking_number, Some("1Z999AA10123456784".to_string()));
+        assert_eq!(
+            shipping.tracking_number,
+            Some("1Z999AA10123456784".to_string())
+        );
     }
 
     #[test]
@@ -487,14 +514,17 @@ mod tests {
 
     #[test]
     fn test_metadata_serialization() {
-        let metadata = PaymentMetadata::new()
-            .with_order(OrderMetadata::new().with_order_id("TEST"));
+        let metadata =
+            PaymentMetadata::new().with_order(OrderMetadata::new().with_order_id("TEST"));
 
         let json = metadata.to_json();
         let parsed = PaymentMetadata::from_json(&json);
-        
+
         assert!(parsed.is_some());
-        assert_eq!(parsed.unwrap().order.unwrap().order_id, Some("TEST".to_string()));
+        assert_eq!(
+            parsed.unwrap().order.unwrap().order_id,
+            Some("TEST".to_string())
+        );
     }
 
     #[test]
@@ -516,11 +546,9 @@ mod tests {
 
     #[test]
     fn test_validator() {
-        let validator = MetadataValidator::new()
-            .require_order_id();
+        let validator = MetadataValidator::new().require_order_id();
 
-        let valid = PaymentMetadata::new()
-            .with_order(OrderMetadata::new().with_order_id("ORD-1"));
+        let valid = PaymentMetadata::new().with_order(OrderMetadata::new().with_order_id("ORD-1"));
 
         let invalid = PaymentMetadata::new();
 

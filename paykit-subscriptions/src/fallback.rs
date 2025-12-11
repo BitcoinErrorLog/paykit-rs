@@ -107,7 +107,10 @@ impl SubscriptionFallbackPolicy {
 
     /// Get methods in priority order.
     pub fn ordered_methods(&self) -> Vec<MethodId> {
-        self.method_priorities.iter().map(|(m, _)| m.clone()).collect()
+        self.method_priorities
+            .iter()
+            .map(|(m, _)| m.clone())
+            .collect()
     }
 
     /// Get priority for a method.
@@ -272,9 +275,12 @@ impl FallbackHandler {
         let primary_endpoint = available_endpoints
             .get(&primary_method)
             .cloned()
-            .ok_or_else(|| SubscriptionError::NotFound(
-                format!("No endpoint for primary method: {}", primary_method.0)
-            ))?;
+            .ok_or_else(|| {
+                SubscriptionError::NotFound(format!(
+                    "No endpoint for primary method: {}",
+                    primary_method.0
+                ))
+            })?;
 
         let mut routing = RoutingInfo::single(primary_method.clone(), primary_endpoint);
 

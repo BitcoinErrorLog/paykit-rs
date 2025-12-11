@@ -176,11 +176,7 @@ impl ModificationRequest {
     }
 
     /// Create an upgrade request.
-    pub fn upgrade(
-        subscription: &Subscription,
-        new_amount: Amount,
-        effective_date: i64,
-    ) -> Self {
+    pub fn upgrade(subscription: &Subscription, new_amount: Amount, effective_date: i64) -> Self {
         Self::new(
             subscription.subscription_id.clone(),
             ModificationType::Upgrade {
@@ -192,11 +188,7 @@ impl ModificationRequest {
     }
 
     /// Create a downgrade request.
-    pub fn downgrade(
-        subscription: &Subscription,
-        new_amount: Amount,
-        effective_date: i64,
-    ) -> Self {
+    pub fn downgrade(subscription: &Subscription, new_amount: Amount, effective_date: i64) -> Self {
         Self::new(
             subscription.subscription_id.clone(),
             ModificationType::Downgrade {
@@ -226,7 +218,11 @@ impl ModificationRequest {
     }
 
     /// Create a cancellation request.
-    pub fn cancel(subscription: &Subscription, effective_date: i64, reason: Option<String>) -> Self {
+    pub fn cancel(
+        subscription: &Subscription,
+        effective_date: i64,
+        reason: Option<String>,
+    ) -> Self {
         Self::new(
             subscription.subscription_id.clone(),
             ModificationType::Cancel {
@@ -246,10 +242,9 @@ impl ModificationRequest {
     /// Validate the modification request against a subscription.
     pub fn validate(&self, subscription: &Subscription) -> Result<()> {
         if self.subscription_id != subscription.subscription_id {
-            return Err(SubscriptionError::InvalidArgument(
-                "Subscription ID mismatch".to_string(),
-            )
-            .into());
+            return Err(
+                SubscriptionError::InvalidArgument("Subscription ID mismatch".to_string()).into(),
+            );
         }
 
         match &self.modification_type {
@@ -291,12 +286,18 @@ impl ModificationRequest {
         let now = chrono::Utc::now().timestamp();
 
         match &self.modification_type {
-            ModificationType::Upgrade { new_amount, effective_date } => {
+            ModificationType::Upgrade {
+                new_amount,
+                effective_date,
+            } => {
                 if now >= *effective_date {
                     modified.terms.amount = new_amount.clone();
                 }
             }
-            ModificationType::Downgrade { new_amount, effective_date } => {
+            ModificationType::Downgrade {
+                new_amount,
+                effective_date,
+            } => {
                 if now >= *effective_date {
                     modified.terms.amount = new_amount.clone();
                 }
@@ -306,9 +307,9 @@ impl ModificationRequest {
             }
             ModificationType::ChangeBillingDate { new_day } => {
                 modified.terms.frequency = match &modified.terms.frequency {
-                    PaymentFrequency::Monthly { .. } => {
-                        PaymentFrequency::Monthly { day_of_month: *new_day }
-                    }
+                    PaymentFrequency::Monthly { .. } => PaymentFrequency::Monthly {
+                        day_of_month: *new_day,
+                    },
                     other => other.clone(),
                 };
             }
@@ -609,7 +610,8 @@ mod tests {
             amount: Amount::from_sats(2000),
             ..terms
         };
-        let v2 = SubscriptionVersion::from_modification(v1.version, v2_terms, "mod_123".to_string());
+        let v2 =
+            SubscriptionVersion::from_modification(v1.version, v2_terms, "mod_123".to_string());
         assert_eq!(v2.version, 2);
         assert_eq!(v2.modification_request_id, Some("mod_123".to_string()));
     }

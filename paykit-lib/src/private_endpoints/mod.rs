@@ -76,12 +76,12 @@ mod types;
 pub mod encryption;
 
 pub use storage::{InMemoryStore, PrivateEndpointStore};
-pub use types::{PrivateEndpoint, EndpointPolicy, ExpirationPolicy};
+pub use types::{EndpointPolicy, ExpirationPolicy, PrivateEndpoint};
 
 #[cfg(feature = "file-storage")]
 pub use storage::FileStore;
 
-use crate::{EndpointData, MethodId, PublicKey, Result, PaykitError};
+use crate::{EndpointData, MethodId, PaykitError, PublicKey, Result};
 use std::sync::Arc;
 
 /// Manager for private payment endpoints.
@@ -159,10 +159,7 @@ impl<S: PrivateEndpointStore> PrivateEndpointManager<S> {
     /// Get all private endpoints for a peer.
     ///
     /// Returns only non-expired endpoints.
-    pub async fn get_endpoints_for_peer(
-        &self,
-        peer: &PublicKey,
-    ) -> Result<Vec<PrivateEndpoint>> {
+    pub async fn get_endpoints_for_peer(&self, peer: &PublicKey) -> Result<Vec<PrivateEndpoint>> {
         let all = self
             .store
             .list_for_peer(peer)
@@ -181,11 +178,7 @@ impl<S: PrivateEndpointStore> PrivateEndpointManager<S> {
     }
 
     /// Remove a specific private endpoint.
-    pub async fn remove_endpoint(
-        &self,
-        peer: &PublicKey,
-        method_id: &MethodId,
-    ) -> Result<()> {
+    pub async fn remove_endpoint(&self, peer: &PublicKey, method_id: &MethodId) -> Result<()> {
         self.store
             .remove(peer, method_id)
             .await
@@ -303,7 +296,12 @@ mod tests {
         let expired_at = chrono::Utc::now().timestamp() - 3600;
 
         manager
-            .store_endpoint(peer.clone(), method.clone(), endpoint.clone(), Some(expired_at))
+            .store_endpoint(
+                peer.clone(),
+                method.clone(),
+                endpoint.clone(),
+                Some(expired_at),
+            )
             .await
             .unwrap();
 
@@ -370,11 +368,21 @@ mod tests {
         let valid_until = chrono::Utc::now().timestamp() + 3600;
 
         manager
-            .store_endpoint(peer.clone(), method1.clone(), endpoint.clone(), Some(expired_at))
+            .store_endpoint(
+                peer.clone(),
+                method1.clone(),
+                endpoint.clone(),
+                Some(expired_at),
+            )
             .await
             .unwrap();
         manager
-            .store_endpoint(peer.clone(), method2.clone(), endpoint.clone(), Some(valid_until))
+            .store_endpoint(
+                peer.clone(),
+                method2.clone(),
+                endpoint.clone(),
+                Some(valid_until),
+            )
             .await
             .unwrap();
 

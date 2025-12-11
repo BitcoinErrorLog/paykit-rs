@@ -118,8 +118,9 @@ impl PaykitMessageBuilder {
                 "endpoint": endpoint
             }
         });
-        serde_json::to_string(&msg)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Create a receipt request message.
@@ -132,9 +133,9 @@ impl PaykitMessageBuilder {
     ///
     /// JSON-encoded message ready to send over Noise channel.
     pub fn create_receipt_request(&self, request: ReceiptRequest) -> Result<String> {
-        let metadata: serde_json::Value = serde_json::from_str(&request.metadata_json)
-            .unwrap_or(serde_json::json!({}));
-        
+        let metadata: serde_json::Value =
+            serde_json::from_str(&request.metadata_json).unwrap_or(serde_json::json!({}));
+
         let provisional_receipt = serde_json::json!({
             "receipt_id": request.receipt_id,
             "payer": request.payer,
@@ -145,16 +146,17 @@ impl PaykitMessageBuilder {
             "created_at": current_timestamp(),
             "metadata": metadata
         });
-        
+
         let msg = serde_json::json!({
             "type": "RequestReceipt",
             "payload": {
                 "provisional_receipt": provisional_receipt
             }
         });
-        
-        serde_json::to_string(&msg)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+
+        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Create a receipt confirmation message.
@@ -167,9 +169,9 @@ impl PaykitMessageBuilder {
     ///
     /// JSON-encoded message ready to send over Noise channel.
     pub fn create_receipt_confirm(&self, receipt: ReceiptRequest) -> Result<String> {
-        let metadata: serde_json::Value = serde_json::from_str(&receipt.metadata_json)
-            .unwrap_or(serde_json::json!({}));
-        
+        let metadata: serde_json::Value =
+            serde_json::from_str(&receipt.metadata_json).unwrap_or(serde_json::json!({}));
+
         let confirmed_receipt = serde_json::json!({
             "receipt_id": receipt.receipt_id,
             "payer": receipt.payer,
@@ -180,16 +182,17 @@ impl PaykitMessageBuilder {
             "created_at": current_timestamp(),
             "metadata": metadata
         });
-        
+
         let msg = serde_json::json!({
             "type": "ConfirmReceipt",
             "payload": {
                 "receipt": confirmed_receipt
             }
         });
-        
-        serde_json::to_string(&msg)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+
+        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Create an acknowledgment message.
@@ -202,8 +205,9 @@ impl PaykitMessageBuilder {
             "type": "Ack",
             "payload": null
         });
-        serde_json::to_string(&msg)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Create an error message.
@@ -224,8 +228,9 @@ impl PaykitMessageBuilder {
                 "message": message
             }
         });
-        serde_json::to_string(&msg)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Parse a received message.
@@ -238,83 +243,107 @@ impl PaykitMessageBuilder {
     ///
     /// Parsed message for processing.
     pub fn parse_message(&self, message_json: String) -> Result<ParsedMessage> {
-        let value: serde_json::Value = serde_json::from_str(&message_json)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid message JSON: {}", e) 
+        let value: serde_json::Value =
+            serde_json::from_str(&message_json).map_err(|e| PaykitMobileError::Validation {
+                message: format!("Invalid message JSON: {}", e),
             })?;
-        
-        let msg_type = value.get("type")
-            .and_then(|t| t.as_str())
-            .ok_or_else(|| PaykitMobileError::Validation { 
-                message: "Missing message type".to_string() 
-            })?;
-        
+
+        let msg_type = value.get("type").and_then(|t| t.as_str()).ok_or_else(|| {
+            PaykitMobileError::Validation {
+                message: "Missing message type".to_string(),
+            }
+        })?;
+
         match msg_type {
             "OfferPrivateEndpoint" => {
-                let payload = value.get("payload").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing payload".to_string()
-                })?;
-                
-                let method_id = payload.get("method_id")
+                let payload =
+                    value
+                        .get("payload")
+                        .ok_or_else(|| PaykitMobileError::Validation {
+                            message: "Missing payload".to_string(),
+                        })?;
+
+                let method_id = payload
+                    .get("method_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                let endpoint = payload.get("endpoint")
+                let endpoint = payload
+                    .get("endpoint")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                
+
                 Ok(ParsedMessage::OfferPrivateEndpoint {
-                    offer: PrivateEndpointOffer { method_id, endpoint },
+                    offer: PrivateEndpointOffer {
+                        method_id,
+                        endpoint,
+                    },
                 })
             }
             "RequestReceipt" => {
-                let payload = value.get("payload").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing payload".to_string()
+                let payload =
+                    value
+                        .get("payload")
+                        .ok_or_else(|| PaykitMobileError::Validation {
+                            message: "Missing payload".to_string(),
+                        })?;
+
+                let receipt = payload.get("provisional_receipt").ok_or_else(|| {
+                    PaykitMobileError::Validation {
+                        message: "Missing provisional_receipt".to_string(),
+                    }
                 })?;
-                
-                let receipt = payload.get("provisional_receipt").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing provisional_receipt".to_string()
-                })?;
-                
+
                 Ok(ParsedMessage::RequestReceipt {
                     request: parse_receipt_from_value(receipt)?,
                 })
             }
             "ConfirmReceipt" => {
-                let payload = value.get("payload").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing payload".to_string()
-                })?;
-                
-                let receipt = payload.get("receipt").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing receipt".to_string()
-                })?;
-                
+                let payload =
+                    value
+                        .get("payload")
+                        .ok_or_else(|| PaykitMobileError::Validation {
+                            message: "Missing payload".to_string(),
+                        })?;
+
+                let receipt =
+                    payload
+                        .get("receipt")
+                        .ok_or_else(|| PaykitMobileError::Validation {
+                            message: "Missing receipt".to_string(),
+                        })?;
+
                 Ok(ParsedMessage::ConfirmReceipt {
                     receipt: parse_receipt_from_value(receipt)?,
                 })
             }
             "Ack" => Ok(ParsedMessage::Ack),
             "Error" => {
-                let payload = value.get("payload").ok_or_else(|| PaykitMobileError::Validation {
-                    message: "Missing payload".to_string()
-                })?;
-                
-                let code = payload.get("code")
+                let payload =
+                    value
+                        .get("payload")
+                        .ok_or_else(|| PaykitMobileError::Validation {
+                            message: "Missing payload".to_string(),
+                        })?;
+
+                let code = payload
+                    .get("code")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                let message = payload.get("message")
+                let message = payload
+                    .get("message")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                
+
                 Ok(ParsedMessage::Error {
                     error: ErrorMessage { code, message },
                 })
             }
-            _ => Err(PaykitMobileError::Validation { 
-                message: format!("Unknown message type: {}", msg_type) 
+            _ => Err(PaykitMobileError::Validation {
+                message: format!("Unknown message type: {}", msg_type),
             }),
         }
     }
@@ -329,25 +358,25 @@ impl PaykitMessageBuilder {
     ///
     /// The message type.
     pub fn get_message_type(&self, message_json: String) -> Result<PaykitMessageType> {
-        let value: serde_json::Value = serde_json::from_str(&message_json)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid message JSON: {}", e) 
+        let value: serde_json::Value =
+            serde_json::from_str(&message_json).map_err(|e| PaykitMobileError::Validation {
+                message: format!("Invalid message JSON: {}", e),
             })?;
-        
-        let msg_type = value.get("type")
-            .and_then(|t| t.as_str())
-            .ok_or_else(|| PaykitMobileError::Validation { 
-                message: "Missing message type".to_string() 
-            })?;
-        
+
+        let msg_type = value.get("type").and_then(|t| t.as_str()).ok_or_else(|| {
+            PaykitMobileError::Validation {
+                message: "Missing message type".to_string(),
+            }
+        })?;
+
         match msg_type {
             "OfferPrivateEndpoint" => Ok(PaykitMessageType::OfferPrivateEndpoint),
             "RequestReceipt" => Ok(PaykitMessageType::RequestReceipt),
             "ConfirmReceipt" => Ok(PaykitMessageType::ConfirmReceipt),
             "Ack" => Ok(PaykitMessageType::Ack),
             "Error" => Ok(PaykitMessageType::Error),
-            _ => Err(PaykitMobileError::Validation { 
-                message: format!("Unknown message type: {}", msg_type) 
+            _ => Err(PaykitMobileError::Validation {
+                message: format!("Unknown message type: {}", msg_type),
             }),
         }
     }
@@ -380,62 +409,87 @@ impl ReceiptStore {
 
     /// Save a receipt.
     pub fn save_receipt(&self, receipt: ReceiptRequest) -> Result<()> {
-        let mut receipts = self.receipts.write().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let mut receipts = self
+            .receipts
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         receipts.insert(receipt.receipt_id.clone(), receipt);
         Ok(())
     }
 
     /// Get a receipt by ID.
     pub fn get_receipt(&self, receipt_id: String) -> Result<Option<ReceiptRequest>> {
-        let receipts = self.receipts.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let receipts = self
+            .receipts
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         Ok(receipts.get(&receipt_id).cloned())
     }
 
     /// List all receipts.
     pub fn list_receipts(&self) -> Result<Vec<ReceiptRequest>> {
-        let receipts = self.receipts.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let receipts = self
+            .receipts
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         Ok(receipts.values().cloned().collect())
     }
 
     /// Delete a receipt.
     pub fn delete_receipt(&self, receipt_id: String) -> Result<()> {
-        let mut receipts = self.receipts.write().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let mut receipts = self
+            .receipts
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         receipts.remove(&receipt_id);
         Ok(())
     }
 
     /// Save a private endpoint.
     pub fn save_private_endpoint(&self, peer: String, offer: PrivateEndpointOffer) -> Result<()> {
-        let mut endpoints = self.private_endpoints.write().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let mut endpoints =
+            self.private_endpoints
+                .write()
+                .map_err(|_| PaykitMobileError::Internal {
+                    message: "Lock poisoned".to_string(),
+                })?;
         let key = format!("{}:{}", peer, offer.method_id);
         endpoints.insert(key, offer);
         Ok(())
     }
 
     /// Get a private endpoint.
-    pub fn get_private_endpoint(&self, peer: String, method_id: String) -> Result<Option<PrivateEndpointOffer>> {
-        let endpoints = self.private_endpoints.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+    pub fn get_private_endpoint(
+        &self,
+        peer: String,
+        method_id: String,
+    ) -> Result<Option<PrivateEndpointOffer>> {
+        let endpoints = self
+            .private_endpoints
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         let key = format!("{}:{}", peer, method_id);
         Ok(endpoints.get(&key).cloned())
     }
 
     /// List all private endpoints for a peer.
     pub fn list_private_endpoints(&self, peer: String) -> Result<Vec<PrivateEndpointOffer>> {
-        let endpoints = self.private_endpoints.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let endpoints = self
+            .private_endpoints
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
         let prefix = format!("{}:", peer);
         Ok(endpoints
             .iter()
@@ -447,15 +501,21 @@ impl ReceiptStore {
     /// Clear all stored data.
     pub fn clear(&self) -> Result<()> {
         {
-            let mut receipts = self.receipts.write().map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
-            })?;
+            let mut receipts = self
+                .receipts
+                .write()
+                .map_err(|_| PaykitMobileError::Internal {
+                    message: "Lock poisoned".to_string(),
+                })?;
             receipts.clear();
         }
         {
-            let mut endpoints = self.private_endpoints.write().map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
-            })?;
+            let mut endpoints =
+                self.private_endpoints
+                    .write()
+                    .map_err(|_| PaykitMobileError::Internal {
+                        message: "Lock poisoned".to_string(),
+                    })?;
             endpoints.clear();
         }
         Ok(())
@@ -463,10 +523,13 @@ impl ReceiptStore {
 
     /// Export all receipts as JSON.
     pub fn export_receipts_json(&self) -> Result<String> {
-        let receipts = self.receipts.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
-        
+        let receipts = self
+            .receipts
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
+
         let list: Vec<_> = receipts.values().map(|r| {
             serde_json::json!({
                 "receipt_id": r.receipt_id,
@@ -478,20 +541,26 @@ impl ReceiptStore {
                 "metadata": serde_json::from_str::<serde_json::Value>(&r.metadata_json).unwrap_or(serde_json::json!({}))
             })
         }).collect();
-        
-        serde_json::to_string(&list)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })
+
+        serde_json::to_string(&list).map_err(|e| PaykitMobileError::Serialization {
+            message: e.to_string(),
+        })
     }
 
     /// Import receipts from JSON.
     pub fn import_receipts_json(&self, json: String) -> Result<u32> {
-        let list: Vec<serde_json::Value> = serde_json::from_str(&json)
-            .map_err(|e| PaykitMobileError::Serialization { message: e.to_string() })?;
-        
-        let mut receipts = self.receipts.write().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
-        
+        let list: Vec<serde_json::Value> =
+            serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
+                message: e.to_string(),
+            })?;
+
+        let mut receipts = self
+            .receipts
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
+
         let mut count = 0;
         for value in list {
             if let Ok(receipt) = parse_receipt_from_value(&value) {
@@ -499,7 +568,7 @@ impl ReceiptStore {
                 count += 1;
             }
         }
-        
+
         Ok(count)
     }
 }
@@ -517,29 +586,36 @@ fn current_timestamp() -> i64 {
 
 fn parse_receipt_from_value(value: &serde_json::Value) -> Result<ReceiptRequest> {
     Ok(ReceiptRequest {
-        receipt_id: value.get("receipt_id")
+        receipt_id: value
+            .get("receipt_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string(),
-        payer: value.get("payer")
+        payer: value
+            .get("payer")
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string(),
-        payee: value.get("payee")
+        payee: value
+            .get("payee")
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string(),
-        method_id: value.get("method_id")
+        method_id: value
+            .get("method_id")
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string(),
-        amount: value.get("amount")
+        amount: value
+            .get("amount")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        currency: value.get("currency")
+        currency: value
+            .get("currency")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        metadata_json: value.get("metadata")
+        metadata_json: value
+            .get("metadata")
             .map(|v| v.to_string())
             .unwrap_or_else(|| "{}".to_string()),
     })
@@ -568,10 +644,10 @@ mod tests {
     #[test]
     fn test_create_endpoint_offer() {
         let builder = PaykitMessageBuilder::new();
-        
+
         let result = builder.create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string());
         assert!(result.is_ok());
-        
+
         let json = result.unwrap();
         assert!(json.contains("OfferPrivateEndpoint"));
         assert!(json.contains("lightning"));
@@ -581,7 +657,7 @@ mod tests {
     #[test]
     fn test_create_ack() {
         let builder = PaykitMessageBuilder::new();
-        
+
         let result = builder.create_ack();
         assert!(result.is_ok());
         assert!(result.unwrap().contains("Ack"));
@@ -590,10 +666,10 @@ mod tests {
     #[test]
     fn test_create_error() {
         let builder = PaykitMessageBuilder::new();
-        
+
         let result = builder.create_error("TEST_ERROR".to_string(), "Test message".to_string());
         assert!(result.is_ok());
-        
+
         let json = result.unwrap();
         assert!(json.contains("Error"));
         assert!(json.contains("TEST_ERROR"));
@@ -602,10 +678,12 @@ mod tests {
     #[test]
     fn test_parse_endpoint_offer() {
         let builder = PaykitMessageBuilder::new();
-        
-        let offer = builder.create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string()).unwrap();
+
+        let offer = builder
+            .create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string())
+            .unwrap();
         let parsed = builder.parse_message(offer).unwrap();
-        
+
         match parsed {
             ParsedMessage::OfferPrivateEndpoint { offer } => {
                 assert_eq!(offer.method_id, "lightning");
@@ -618,11 +696,13 @@ mod tests {
     #[test]
     fn test_get_message_type() {
         let builder = PaykitMessageBuilder::new();
-        
-        let offer = builder.create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string()).unwrap();
+
+        let offer = builder
+            .create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string())
+            .unwrap();
         let msg_type = builder.get_message_type(offer).unwrap();
         assert_eq!(msg_type, PaykitMessageType::OfferPrivateEndpoint);
-        
+
         let ack = builder.create_ack().unwrap();
         let msg_type = builder.get_message_type(ack).unwrap();
         assert_eq!(msg_type, PaykitMessageType::Ack);
@@ -631,7 +711,7 @@ mod tests {
     #[test]
     fn test_receipt_store() {
         let store = ReceiptStore::new();
-        
+
         let receipt = ReceiptRequest {
             receipt_id: "test_receipt_1".to_string(),
             payer: "payer_pubkey".to_string(),
@@ -641,19 +721,19 @@ mod tests {
             currency: Some("SAT".to_string()),
             metadata_json: "{}".to_string(),
         };
-        
+
         // Save
         store.save_receipt(receipt.clone()).unwrap();
-        
+
         // Get
         let retrieved = store.get_receipt("test_receipt_1".to_string()).unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().receipt_id, "test_receipt_1");
-        
+
         // List
         let all = store.list_receipts().unwrap();
         assert_eq!(all.len(), 1);
-        
+
         // Delete
         store.delete_receipt("test_receipt_1".to_string()).unwrap();
         let deleted = store.get_receipt("test_receipt_1".to_string()).unwrap();
@@ -663,20 +743,24 @@ mod tests {
     #[test]
     fn test_private_endpoint_store() {
         let store = ReceiptStore::new();
-        
+
         let offer = PrivateEndpointOffer {
             method_id: "lightning".to_string(),
             endpoint: "lnbc1...".to_string(),
         };
-        
+
         // Save
-        store.save_private_endpoint("peer1".to_string(), offer).unwrap();
-        
+        store
+            .save_private_endpoint("peer1".to_string(), offer)
+            .unwrap();
+
         // Get
-        let retrieved = store.get_private_endpoint("peer1".to_string(), "lightning".to_string()).unwrap();
+        let retrieved = store
+            .get_private_endpoint("peer1".to_string(), "lightning".to_string())
+            .unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().endpoint, "lnbc1...");
-        
+
         // List
         let all = store.list_private_endpoints("peer1".to_string()).unwrap();
         assert_eq!(all.len(), 1);
@@ -685,35 +769,39 @@ mod tests {
     #[test]
     fn test_export_import_receipts() {
         let store = ReceiptStore::new();
-        
+
         // Add some receipts
-        store.save_receipt(ReceiptRequest {
-            receipt_id: "r1".to_string(),
-            payer: "p1".to_string(),
-            payee: "p2".to_string(),
-            method_id: "lightning".to_string(),
-            amount: Some("1000".to_string()),
-            currency: Some("SAT".to_string()),
-            metadata_json: "{}".to_string(),
-        }).unwrap();
-        
-        store.save_receipt(ReceiptRequest {
-            receipt_id: "r2".to_string(),
-            payer: "p3".to_string(),
-            payee: "p4".to_string(),
-            method_id: "onchain".to_string(),
-            amount: Some("5000".to_string()),
-            currency: Some("SAT".to_string()),
-            metadata_json: "{}".to_string(),
-        }).unwrap();
-        
+        store
+            .save_receipt(ReceiptRequest {
+                receipt_id: "r1".to_string(),
+                payer: "p1".to_string(),
+                payee: "p2".to_string(),
+                method_id: "lightning".to_string(),
+                amount: Some("1000".to_string()),
+                currency: Some("SAT".to_string()),
+                metadata_json: "{}".to_string(),
+            })
+            .unwrap();
+
+        store
+            .save_receipt(ReceiptRequest {
+                receipt_id: "r2".to_string(),
+                payer: "p3".to_string(),
+                payee: "p4".to_string(),
+                method_id: "onchain".to_string(),
+                amount: Some("5000".to_string()),
+                currency: Some("SAT".to_string()),
+                metadata_json: "{}".to_string(),
+            })
+            .unwrap();
+
         // Export
         let json = store.export_receipts_json().unwrap();
-        
+
         // Clear and import
         store.clear().unwrap();
         assert_eq!(store.list_receipts().unwrap().len(), 0);
-        
+
         let count = store.import_receipts_json(json).unwrap();
         assert_eq!(count, 2);
         assert_eq!(store.list_receipts().unwrap().len(), 2);

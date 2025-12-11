@@ -11,9 +11,9 @@
 //! cargo run --example ecommerce
 //! ```
 
+use paykit_interactive::PaykitReceipt;
 use paykit_lib::{MethodId, PublicKey};
 use paykit_subscriptions::{Amount, PaymentRequest, PaymentRequestResponse};
-use paykit_interactive::PaykitReceipt;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -212,7 +212,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     println!("Payment Request:");
     println!("  ID: {}", payment_request.request_id);
-    println!("  Amount: {} {}", payment_request.amount, payment_request.currency);
+    println!(
+        "  Amount: {} {}",
+        payment_request.amount, payment_request.currency
+    );
     println!("  Method: {}", payment_request.method.0);
     if let Some(ref desc) = payment_request.description {
         println!("  Description: {}", desc);

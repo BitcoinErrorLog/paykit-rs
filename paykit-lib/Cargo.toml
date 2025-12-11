@@ -33,4 +33,5 @@ pubky-testnet = { version = "0.6.0-rc.6" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive" }
 tempfile = "3.10"
+tokio = { version = "1.48.0", features = ["rt", "macros", "time"] }
 

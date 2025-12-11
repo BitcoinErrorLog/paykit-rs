@@ -145,7 +145,10 @@ impl PaymentProof {
     }
 
     /// Create a Lightning preimage proof.
-    pub fn lightning_preimage(preimage: impl Into<String>, payment_hash: impl Into<String>) -> Self {
+    pub fn lightning_preimage(
+        preimage: impl Into<String>,
+        payment_hash: impl Into<String>,
+    ) -> Self {
         Self::LightningPreimage {
             preimage: preimage.into(),
             payment_hash: payment_hash.into(),
@@ -310,7 +313,9 @@ mod tests {
     fn test_payment_proof_creation() {
         let btc_proof = PaymentProof::bitcoin_txid("abc123", Some(700000));
         match btc_proof {
-            PaymentProof::BitcoinTxid { txid, block_height, .. } => {
+            PaymentProof::BitcoinTxid {
+                txid, block_height, ..
+            } => {
                 assert_eq!(txid, "abc123");
                 assert_eq!(block_height, Some(700000));
             }
@@ -319,7 +324,10 @@ mod tests {
 
         let ln_proof = PaymentProof::lightning_preimage("preimage123", "hash456");
         match ln_proof {
-            PaymentProof::LightningPreimage { preimage, payment_hash } => {
+            PaymentProof::LightningPreimage {
+                preimage,
+                payment_hash,
+            } => {
                 assert_eq!(preimage, "preimage123");
                 assert_eq!(payment_hash, "hash456");
             }

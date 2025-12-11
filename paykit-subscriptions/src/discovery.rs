@@ -64,12 +64,14 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
 ) -> crate::Result<()> {
     let published = PublishedRequest::new(request.clone());
     let json = serde_json::to_string(&published)?;
-    
+
     // Store in sender's requests directory
     let path = format!("{}{}", PAYKIT_REQUESTS_PATH, request.request_id);
-    transport.put(&path, &json).await
+    transport
+        .put(&path, &json)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to publish request: {}", e))?;
-    
+
     Ok(())
 }
 
@@ -95,17 +97,22 @@ pub async fn publish_request_notification<T: AuthenticatedTransport>(
         currency: request.currency.clone(),
         created_at: request.created_at,
     };
-    
+
     let json = serde_json::to_string(&notification)?;
-    
+
     // Store notification for recipient
     // Note: This requires write access to recipient's storage,
     // which may not be possible in all configurations.
     // The actual implementation may use a different mechanism.
-    let path = format!("pubky://{}{}{}", recipient, PAYKIT_NOTIFICATIONS_PATH, request.request_id);
-    transport.put(&path, &json).await
+    let path = format!(
+        "pubky://{}{}{}",
+        recipient, PAYKIT_NOTIFICATIONS_PATH, request.request_id
+    );
+    transport
+        .put(&path, &json)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to publish notification: {}", e))?;
-    
+
     Ok(())
 }
 
@@ -123,11 +130,13 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
     reader: &R,
     sender: &PublicKey,
 ) -> crate::Result<Vec<PublishedRequest>> {
-    let entries = reader.list_directory(sender, PAYKIT_REQUESTS_PATH).await
+    let entries = reader
+        .list_directory(sender, PAYKIT_REQUESTS_PATH)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to list requests: {}", e))?;
-    
+
     let mut requests = Vec::new();
-    
+
     for entry in entries {
         let path = format!("{}{}", PAYKIT_REQUESTS_PATH, entry);
         if let Ok(Some(content)) = reader.get(sender, &path).await {
@@ -138,7 +147,7 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
             }
         }
     }
-    
+
     Ok(requests)
 }
 
@@ -159,7 +168,7 @@ pub async fn discover_request<R: UnauthenticatedTransportRead>(
     request_id: &str,
 ) -> crate::Result<Option<PublishedRequest>> {
     let path = format!("{}{}", PAYKIT_REQUESTS_PATH, request_id);
-    
+
     match reader.get(sender, &path).await {
         Ok(Some(content)) => {
             let published: PublishedRequest = serde_json::from_str(&content)?;
@@ -183,17 +192,19 @@ pub async fn cancel_payment_request<T: AuthenticatedTransport>(
     request_id: &str,
 ) -> crate::Result<()> {
     let path = format!("{}{}", PAYKIT_REQUESTS_PATH, request_id);
-    
+
     // Get current request
     if let Ok(Some(content)) = transport.get(&path).await {
         if let Ok(mut published) = serde_json::from_str::<PublishedRequest>(&content) {
             published.deactivate();
             let json = serde_json::to_string(&published)?;
-            transport.put(&path, &json).await
+            transport
+                .put(&path, &json)
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to cancel request: {}", e))?;
         }
     }
-    
+
     Ok(())
 }
 
@@ -242,7 +253,7 @@ impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
     /// Returns a list of (sender, requests) tuples for peers with active requests.
     pub async fn poll(&mut self) -> crate::Result<Vec<(PublicKey, Vec<PublishedRequest>)>> {
         let mut results = Vec::new();
-        
+
         for peer in &self.known_peers {
             if let Ok(requests) = discover_requests(&self.reader, peer).await {
                 if !requests.is_empty() {
@@ -250,7 +261,7 @@ impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
                 }
             }
         }
-        
+
         self.last_poll = chrono::Utc::now().timestamp();
         Ok(results)
     }
@@ -258,9 +269,12 @@ impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
     /// Poll for new payment requests and filter by creation time.
     ///
     /// Only returns requests created after `after_timestamp`.
-    pub async fn poll_new(&mut self, after_timestamp: i64) -> crate::Result<Vec<(PublicKey, Vec<PublishedRequest>)>> {
+    pub async fn poll_new(
+        &mut self,
+        after_timestamp: i64,
+    ) -> crate::Result<Vec<(PublicKey, Vec<PublishedRequest>)>> {
         let all = self.poll().await?;
-        
+
         let filtered: Vec<(PublicKey, Vec<PublishedRequest>)> = all
             .into_iter()
             .map(|(peer, requests)| {
@@ -272,7 +286,7 @@ impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
             })
             .filter(|(_, requests)| !requests.is_empty())
             .collect();
-        
+
         Ok(filtered)
     }
 }
@@ -320,7 +334,7 @@ mod tests {
 
         let mut published = PublishedRequest::new(request);
         assert!(published.active);
-        
+
         published.deactivate();
         assert!(!published.active);
     }

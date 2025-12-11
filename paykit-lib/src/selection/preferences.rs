@@ -216,8 +216,7 @@ mod tests {
 
     #[test]
     fn test_exclude_method() {
-        let prefs = SelectionPreferences::balanced()
-            .exclude_method(MethodId("onchain".into()));
+        let prefs = SelectionPreferences::balanced().exclude_method(MethodId("onchain".into()));
         assert!(prefs.is_excluded(&MethodId("onchain".into())));
         assert!(!prefs.is_excluded(&MethodId("lightning".into())));
     }
@@ -225,20 +224,20 @@ mod tests {
     #[test]
     fn test_amount_thresholds() {
         let thresholds = AmountThresholds::default();
-        
+
         // Small amount - prefer Lightning
         assert!(thresholds.prefers_lightning(1000));
         assert!(!thresholds.prefers_onchain(1000));
-        
+
         // Large amount - prefer on-chain
         assert!(thresholds.prefers_onchain(2_000_000));
         assert!(!thresholds.prefers_lightning(2_000_000));
-        
+
         // Lightning viable range
         assert!(thresholds.lightning_viable(1));
         assert!(thresholds.lightning_viable(1_000_000));
         assert!(!thresholds.lightning_viable(5_000_000));
-        
+
         // On-chain viable range
         assert!(thresholds.onchain_viable(1000));
         assert!(!thresholds.onchain_viable(100));

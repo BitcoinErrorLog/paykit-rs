@@ -103,11 +103,7 @@ impl AsyncRuntime {
     /// Spawn an async task with callback.
     ///
     /// Returns a handle that can be used to cancel the operation.
-    pub fn spawn_with_callback<F, T, C>(
-        &self,
-        future: F,
-        callback: Arc<C>,
-    ) -> AsyncHandle
+    pub fn spawn_with_callback<F, T, C>(&self, future: F, callback: Arc<C>) -> AsyncHandle
     where
         F: std::future::Future<Output = Result<T, String>> + Send + 'static,
         T: Send + 'static,
@@ -301,8 +297,9 @@ impl DirectoryOperationsAsync {
     /// Create a new async directory operations manager.
     #[uniffi::constructor]
     pub fn new() -> Result<Arc<Self>, PaykitMobileError> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PaykitMobileError::Internal { message: format!("Failed to create runtime: {}", e) })?;
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
+            message: format!("Failed to create runtime: {}", e),
+        })?;
         Ok(Arc::new(Self { runtime }))
     }
 
@@ -372,9 +369,8 @@ impl DirectoryOperationsAsync {
         transport: Arc<AuthenticatedTransportFFI>,
         contact_pubkey: String,
     ) -> Result<(), PaykitMobileError> {
-        self.runtime.block_on(async {
-            crate::transport_ffi::add_contact(&transport, &contact_pubkey)
-        })
+        self.runtime
+            .block_on(async { crate::transport_ffi::add_contact(&transport, &contact_pubkey) })
     }
 
     /// Remove a contact asynchronously.
@@ -383,9 +379,8 @@ impl DirectoryOperationsAsync {
         transport: Arc<AuthenticatedTransportFFI>,
         contact_pubkey: String,
     ) -> Result<(), PaykitMobileError> {
-        self.runtime.block_on(async {
-            crate::transport_ffi::remove_contact(&transport, &contact_pubkey)
-        })
+        self.runtime
+            .block_on(async { crate::transport_ffi::remove_contact(&transport, &contact_pubkey) })
     }
 
     /// List all contacts asynchronously.
@@ -393,15 +388,15 @@ impl DirectoryOperationsAsync {
         &self,
         transport: Arc<AuthenticatedTransportFFI>,
     ) -> Result<Vec<String>, PaykitMobileError> {
-        self.runtime.block_on(async {
-            crate::transport_ffi::list_contacts(&transport)
-        })
+        self.runtime
+            .block_on(async { crate::transport_ffi::list_contacts(&transport) })
     }
 }
 
 /// Create a new async directory operations manager.
 #[uniffi::export]
-pub fn create_directory_operations_async() -> Result<Arc<DirectoryOperationsAsync>, PaykitMobileError> {
+pub fn create_directory_operations_async(
+) -> Result<Arc<DirectoryOperationsAsync>, PaykitMobileError> {
     DirectoryOperationsAsync::new()
 }
 
@@ -444,7 +439,7 @@ mod tests {
     fn test_async_handle_cancel() {
         let (tx, _rx) = oneshot::channel();
         let mut handle = AsyncHandle::new(tx);
-        
+
         assert!(!handle.is_cancelled());
         handle.cancel();
         assert!(handle.is_cancelled());
@@ -465,7 +460,8 @@ mod tests {
         let result: Result<i32, &str> = with_retry(&config, || {
             attempts.fetch_add(1, Ordering::SeqCst);
             async { Ok(42) }
-        }).await;
+        })
+        .await;
 
         assert_eq!(result, Ok(42));
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
@@ -491,7 +487,8 @@ mod tests {
                     Ok(42)
                 }
             }
-        }).await;
+        })
+        .await;
 
         assert_eq!(result, Ok(42));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);

@@ -285,9 +285,11 @@ pub struct Invoice {
 impl Invoice {
     /// Create a new invoice from items.
     pub fn new(invoice_number: impl Into<String>, items: Vec<InvoiceItem>) -> Self {
-        let subtotal = items.iter().fold(Amount::zero(), |acc, item| acc.add(&item.total));
+        let subtotal = items
+            .iter()
+            .fold(Amount::zero(), |acc, item| acc.add(&item.total));
         let now = chrono::Utc::now().timestamp();
-        
+
         Self {
             invoice_number: invoice_number.into(),
             items,
@@ -373,7 +375,11 @@ impl Invoice {
 
     /// Check if the invoice has shipping.
     pub fn has_shipping(&self) -> bool {
-        self.shipping.is_some() && !matches!(self.shipping.as_ref().unwrap().method, ShippingMethod::Digital)
+        self.shipping.is_some()
+            && !matches!(
+                self.shipping.as_ref().unwrap().method,
+                ShippingMethod::Digital
+            )
     }
 }
 
@@ -392,23 +398,20 @@ impl Invoice {
     /// Export the invoice in the specified format.
     pub fn export(&self, format: InvoiceFormat) -> String {
         match format {
-            InvoiceFormat::Json => {
-                serde_json::to_string_pretty(self).unwrap_or_default()
-            }
-            InvoiceFormat::PlainText => {
-                self.to_plain_text()
-            }
-            InvoiceFormat::Html => {
-                self.to_html()
-            }
+            InvoiceFormat::Json => serde_json::to_string_pretty(self).unwrap_or_default(),
+            InvoiceFormat::PlainText => self.to_plain_text(),
+            InvoiceFormat::Html => self.to_html(),
         }
     }
 
     fn to_plain_text(&self) -> String {
         let mut text = String::new();
         text.push_str(&format!("INVOICE #{}\n", self.invoice_number));
-        text.push_str(&format!("Date: {}\n\n", format_timestamp(self.invoice_date)));
-        
+        text.push_str(&format!(
+            "Date: {}\n\n",
+            format_timestamp(self.invoice_date)
+        ));
+
         text.push_str("ITEMS:\n");
         for item in &self.items {
             text.push_str(&format!(
@@ -416,27 +419,33 @@ impl Invoice {
                 item.quantity, item.description, item.unit_price, item.total
             ));
         }
-        
+
         text.push_str(&format!("\nSubtotal: {}\n", self.subtotal));
-        
+
         if let Some(ref tax) = self.tax {
-            text.push_str(&format!("{} ({}%): {}\n", tax.description, tax.rate, tax.amount));
+            text.push_str(&format!(
+                "{} ({}%): {}\n",
+                tax.description, tax.rate, tax.amount
+            ));
         }
-        
+
         if let Some(ref shipping) = self.shipping {
-            text.push_str(&format!("Shipping ({:?}): {}\n", shipping.method, shipping.cost));
+            text.push_str(&format!(
+                "Shipping ({:?}): {}\n",
+                shipping.method, shipping.cost
+            ));
         }
-        
+
         if let Some(ref discount) = self.discount {
             text.push_str(&format!("Discount: -{}\n", discount));
         }
-        
+
         text.push_str(&format!("\nTOTAL: {}\n", self.total));
-        
+
         if let Some(ref notes) = self.notes {
             text.push_str(&format!("\nNotes: {}\n", notes));
         }
-        
+
         text
     }
 
@@ -444,8 +453,11 @@ impl Invoice {
         let mut html = String::new();
         html.push_str("<div class=\"invoice\">\n");
         html.push_str(&format!("<h1>Invoice #{}</h1>\n", self.invoice_number));
-        html.push_str(&format!("<p>Date: {}</p>\n", format_timestamp(self.invoice_date)));
-        
+        html.push_str(&format!(
+            "<p>Date: {}</p>\n",
+            format_timestamp(self.invoice_date)
+        ));
+
         html.push_str("<table>\n<thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>\n<tbody>\n");
         for item in &self.items {
             html.push_str(&format!(
@@ -454,24 +466,30 @@ impl Invoice {
             ));
         }
         html.push_str("</tbody>\n</table>\n");
-        
+
         html.push_str(&format!("<p>Subtotal: {}</p>\n", self.subtotal));
-        
+
         if let Some(ref tax) = self.tax {
-            html.push_str(&format!("<p>{} ({}%): {}</p>\n", tax.description, tax.rate, tax.amount));
+            html.push_str(&format!(
+                "<p>{} ({}%): {}</p>\n",
+                tax.description, tax.rate, tax.amount
+            ));
         }
-        
+
         if let Some(ref shipping) = self.shipping {
             html.push_str(&format!("<p>Shipping: {}</p>\n", shipping.cost));
         }
-        
+
         if let Some(ref discount) = self.discount {
             html.push_str(&format!("<p>Discount: -{}</p>\n", discount));
         }
-        
-        html.push_str(&format!("<p class=\"total\"><strong>Total: {}</strong></p>\n", self.total));
+
+        html.push_str(&format!(
+            "<p class=\"total\"><strong>Total: {}</strong></p>\n",
+            self.total
+        ));
         html.push_str("</div>\n");
-        
+
         html
     }
 }
@@ -507,7 +525,7 @@ mod tests {
     fn test_shipping_address() {
         let addr = ShippingAddress::new("John Doe", "123 Main St", "Anytown", "12345", "US")
             .with_state("CA");
-        
+
         assert_eq!(addr.name, "John Doe");
         assert_eq!(addr.state, Some("CA".to_string()));
     }
@@ -518,9 +536,9 @@ mod tests {
             InvoiceItem::new("Widget A", 2, Amount::from_sats(1000)),
             InvoiceItem::new("Widget B", 1, Amount::from_sats(5000)),
         ];
-        
+
         let invoice = Invoice::new("INV-001", items);
-        
+
         assert_eq!(invoice.invoice_number, "INV-001");
         assert_eq!(invoice.item_count(), 2);
         assert_eq!(invoice.subtotal, Amount::from_sats(7000)); // 2000 + 5000
@@ -529,45 +547,38 @@ mod tests {
 
     #[test]
     fn test_invoice_with_tax_and_shipping() {
-        let items = vec![
-            InvoiceItem::new("Product", 1, Amount::from_sats(10000)),
-        ];
-        
+        let items = vec![InvoiceItem::new("Product", 1, Amount::from_sats(10000))];
+
         let tax = TaxInfo::from_subtotal("Tax", 10.0, &Amount::from_sats(10000));
         let shipping = ShippingInfo::new(
             ShippingAddress::new("Customer", "123 St", "City", "00000", "US"),
             ShippingMethod::Standard,
             Amount::from_sats(500),
         );
-        
+
         let invoice = Invoice::new("INV-002", items)
             .with_tax(tax)
             .with_shipping(shipping);
-        
+
         // 10000 + 1000 (tax) + 500 (shipping) = 11500
         assert_eq!(invoice.total, Amount::from_sats(11500));
     }
 
     #[test]
     fn test_invoice_with_discount() {
-        let items = vec![
-            InvoiceItem::new("Product", 1, Amount::from_sats(10000)),
-        ];
-        
-        let invoice = Invoice::new("INV-003", items)
-            .with_discount(Amount::from_sats(1000));
-        
+        let items = vec![InvoiceItem::new("Product", 1, Amount::from_sats(10000))];
+
+        let invoice = Invoice::new("INV-003", items).with_discount(Amount::from_sats(1000));
+
         // 10000 - 1000 = 9000
         assert_eq!(invoice.total, Amount::from_sats(9000));
     }
 
     #[test]
     fn test_invoice_export_json() {
-        let items = vec![
-            InvoiceItem::new("Widget", 1, Amount::from_sats(1000)),
-        ];
+        let items = vec![InvoiceItem::new("Widget", 1, Amount::from_sats(1000))];
         let invoice = Invoice::new("INV-JSON", items);
-        
+
         let json = invoice.export(InvoiceFormat::Json);
         assert!(json.contains("INV-JSON"));
         assert!(json.contains("Widget"));
@@ -575,11 +586,9 @@ mod tests {
 
     #[test]
     fn test_invoice_export_plain_text() {
-        let items = vec![
-            InvoiceItem::new("Widget", 1, Amount::from_sats(1000)),
-        ];
+        let items = vec![InvoiceItem::new("Widget", 1, Amount::from_sats(1000))];
         let invoice = Invoice::new("INV-TXT", items);
-        
+
         let text = invoice.export(InvoiceFormat::PlainText);
         assert!(text.contains("INVOICE #INV-TXT"));
         assert!(text.contains("Widget"));

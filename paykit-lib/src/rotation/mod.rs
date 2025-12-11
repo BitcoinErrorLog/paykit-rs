@@ -39,8 +39,8 @@
 //! - Lightning: Rotate invoices for each payment (typically automatic)
 //! - Private endpoints: Use unique endpoints per peer
 
-mod policies;
 mod manager;
+mod policies;
 
-pub use policies::{EndpointTracker, RotationPolicy};
 pub use manager::{EndpointRotationManager, RotationCallback, RotationConfig};
+pub use policies::{EndpointTracker, RotationPolicy};

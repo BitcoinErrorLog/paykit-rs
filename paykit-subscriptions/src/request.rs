@@ -139,27 +139,29 @@ impl PaymentRequest {
 
     /// Convert this request to a full Invoice for export/display.
     pub fn to_invoice(&self) -> Invoice {
-        let invoice_number = self.invoice_number.clone()
+        let invoice_number = self
+            .invoice_number
+            .clone()
             .unwrap_or_else(|| self.request_id.clone());
-        
+
         let mut invoice = Invoice::new(invoice_number, self.items.clone());
-        
+
         if let Some(ref tax) = self.tax {
             invoice = invoice.with_tax(tax.clone());
         }
-        
+
         if let Some(ref shipping) = self.shipping {
             invoice = invoice.with_shipping(shipping.clone());
         }
-        
+
         if let Some(ref notes) = self.notes {
             invoice = invoice.with_notes(notes.clone());
         }
-        
+
         if let Some(due_date) = self.due_date {
             invoice = invoice.with_due_date(due_date);
         }
-        
+
         invoice
     }
 }

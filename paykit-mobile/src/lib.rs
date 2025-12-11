@@ -27,8 +27,8 @@ pub use transport_ffi::{AuthenticatedTransportFFI, UnauthenticatedTransportFFI};
 
 // Re-export interactive types for easier access
 pub use interactive_ffi::{
-    PaykitMessageBuilder, ReceiptStore, PaykitMessageType, ParsedMessage,
-    ReceiptRequest, PrivateEndpointOffer, ErrorMessage,
+    ErrorMessage, ParsedMessage, PaykitMessageBuilder, PaykitMessageType, PrivateEndpointOffer,
+    ReceiptRequest, ReceiptStore,
 };
 
 use std::sync::Arc;
@@ -46,43 +46,43 @@ pub enum PaykitMobileError {
     /// Transport layer error (network, I/O).
     #[error("Transport error: {message}")]
     Transport { message: String },
-    
+
     /// Validation error (invalid input, format).
     #[error("Validation error: {message}")]
     Validation { message: String },
-    
+
     /// Resource not found.
     #[error("Not found: {message}")]
     NotFound { message: String },
-    
+
     /// Serialization/deserialization error.
     #[error("Serialization error: {message}")]
     Serialization { message: String },
-    
+
     /// Internal error (unexpected state).
     #[error("Internal error: {message}")]
     Internal { message: String },
-    
+
     /// Network timeout error.
     #[error("Network timeout: {message}")]
     NetworkTimeout { message: String },
-    
+
     /// Connection refused or failed.
     #[error("Connection error: {message}")]
     ConnectionError { message: String },
-    
+
     /// Authentication failed.
     #[error("Authentication error: {message}")]
     AuthenticationError { message: String },
-    
+
     /// Session expired or invalid.
     #[error("Session error: {message}")]
     SessionError { message: String },
-    
+
     /// Rate limit exceeded.
     #[error("Rate limit exceeded: {message}")]
     RateLimitError { message: String },
-    
+
     /// Permission denied.
     #[error("Permission denied: {message}")]
     PermissionDenied { message: String },
@@ -92,7 +92,9 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
     fn from(e: paykit_lib::PaykitError) -> Self {
         match e {
             paykit_lib::PaykitError::Transport(msg) => Self::Transport { message: msg },
-            paykit_lib::PaykitError::Unimplemented(msg) => Self::Internal { message: msg.to_string() },
+            paykit_lib::PaykitError::Unimplemented(msg) => Self::Internal {
+                message: msg.to_string(),
+            },
         }
     }
 }
@@ -330,12 +332,27 @@ pub struct Subscription {
 /// Modification type for subscriptions.
 #[derive(Clone, Debug, uniffi::Enum)]
 pub enum ModificationType {
-    Upgrade { new_amount_sats: i64, effective_date: i64 },
-    Downgrade { new_amount_sats: i64, effective_date: i64 },
-    ChangeMethod { new_method_id: String },
-    ChangeBillingDate { new_day: u8 },
-    Cancel { effective_date: i64, reason: Option<String> },
-    Pause { resume_date: i64 },
+    Upgrade {
+        new_amount_sats: i64,
+        effective_date: i64,
+    },
+    Downgrade {
+        new_amount_sats: i64,
+        effective_date: i64,
+    },
+    ChangeMethod {
+        new_method_id: String,
+    },
+    ChangeBillingDate {
+        new_day: u8,
+    },
+    Cancel {
+        effective_date: i64,
+        reason: Option<String>,
+    },
+    Pause {
+        resume_date: i64,
+    },
     Resume,
 }
 
@@ -429,9 +446,10 @@ impl PaykitClient {
     /// Create a new Paykit client.
     #[uniffi::constructor]
     pub fn new() -> Result<Arc<Self>> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PaykitMobileError::Internal { message: e.to_string() })?;
-        
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
+            message: e.to_string(),
+        })?;
+
         Ok(Arc::new(Self {
             registry: paykit_lib::methods::default_registry(),
             health_monitor: Arc::new(paykit_lib::health::HealthMonitor::with_defaults()),
@@ -442,18 +460,25 @@ impl PaykitClient {
 
     /// Get the list of registered payment methods.
     pub fn list_methods(&self) -> Vec<String> {
-        self.registry.list_methods().into_iter().map(|m| m.0).collect()
+        self.registry
+            .list_methods()
+            .into_iter()
+            .map(|m| m.0)
+            .collect()
     }
 
     /// Validate an endpoint for a specific method.
     pub fn validate_endpoint(&self, method_id: String, endpoint: String) -> Result<bool> {
         let method = paykit_lib::MethodId(method_id);
         let data = paykit_lib::EndpointData(endpoint);
-        
-        let plugin = self.registry.get(&method).ok_or(PaykitMobileError::NotFound {
-            message: format!("Method not found: {}", method.0),
-        })?;
-        
+
+        let plugin = self
+            .registry
+            .get(&method)
+            .ok_or(PaykitMobileError::NotFound {
+                message: format!("Method not found: {}", method.0),
+            })?;
+
         let result = plugin.validate_endpoint(&data);
         Ok(result.valid)
     }
@@ -466,7 +491,7 @@ impl PaykitClient {
         preferences: Option<SelectionPreferences>,
     ) -> Result<SelectionResult> {
         use paykit_lib::selection::{PaymentMethodSelector, SelectionPreferences as LibPrefs};
-        
+
         // Convert to internal types
         let mut entries = std::collections::HashMap::new();
         for method in supported_methods {
@@ -476,36 +501,41 @@ impl PaykitClient {
             );
         }
         let supported = paykit_lib::SupportedPayments { entries };
-        
+
         let amount = paykit_lib::methods::Amount::sats(amount_sats);
-        
-        let prefs = preferences.map(|p| {
-            let mut lib_prefs = match p.strategy {
-                SelectionStrategy::Balanced => LibPrefs::balanced(),
-                SelectionStrategy::CostOptimized => LibPrefs::cost_optimized(),
-                SelectionStrategy::SpeedOptimized => LibPrefs::speed_optimized(),
-                SelectionStrategy::PrivacyOptimized => LibPrefs::privacy_optimized(),
-            };
-            
-            for excluded in p.excluded_methods {
-                lib_prefs = lib_prefs.exclude_method(paykit_lib::MethodId(excluded));
-            }
-            
-            if let Some(max_fee) = p.max_fee_sats {
-                lib_prefs = lib_prefs.with_max_fee(max_fee);
-            }
-            
-            if let Some(max_time) = p.max_confirmation_time_secs {
-                lib_prefs = lib_prefs.with_max_confirmation_time(max_time);
-            }
-            
-            lib_prefs
-        }).unwrap_or_default();
-        
+
+        let prefs = preferences
+            .map(|p| {
+                let mut lib_prefs = match p.strategy {
+                    SelectionStrategy::Balanced => LibPrefs::balanced(),
+                    SelectionStrategy::CostOptimized => LibPrefs::cost_optimized(),
+                    SelectionStrategy::SpeedOptimized => LibPrefs::speed_optimized(),
+                    SelectionStrategy::PrivacyOptimized => LibPrefs::privacy_optimized(),
+                };
+
+                for excluded in p.excluded_methods {
+                    lib_prefs = lib_prefs.exclude_method(paykit_lib::MethodId(excluded));
+                }
+
+                if let Some(max_fee) = p.max_fee_sats {
+                    lib_prefs = lib_prefs.with_max_fee(max_fee);
+                }
+
+                if let Some(max_time) = p.max_confirmation_time_secs {
+                    lib_prefs = lib_prefs.with_max_confirmation_time(max_time);
+                }
+
+                lib_prefs
+            })
+            .unwrap_or_default();
+
         let selector = PaymentMethodSelector::new(self.registry.clone());
-        let result = selector.select(&supported, &amount, &prefs)
-            .map_err(|e| PaykitMobileError::Validation { message: e.to_string() })?;
-        
+        let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
+            PaykitMobileError::Validation {
+                message: e.to_string(),
+            }
+        })?;
+
         Ok(SelectionResult {
             primary_method: result.primary.0,
             fallback_methods: result.fallbacks.into_iter().map(|m| m.0).collect(),
@@ -517,24 +547,28 @@ impl PaykitClient {
     pub fn check_health(&self) -> Vec<HealthCheckResult> {
         self.runtime.block_on(async {
             let results = self.health_monitor.check_all().await;
-            results.into_iter().map(|r| HealthCheckResult {
-                method_id: r.method_id.0,
-                status: match r.status {
-                    paykit_lib::health::HealthStatus::Healthy => HealthStatus::Healthy,
-                    paykit_lib::health::HealthStatus::Degraded => HealthStatus::Degraded,
-                    paykit_lib::health::HealthStatus::Unavailable => HealthStatus::Unavailable,
-                    paykit_lib::health::HealthStatus::Unknown => HealthStatus::Unknown,
-                },
-                checked_at: r.checked_at,
-                latency_ms: r.latency_ms,
-                error: r.error,
-            }).collect()
+            results
+                .into_iter()
+                .map(|r| HealthCheckResult {
+                    method_id: r.method_id.0,
+                    status: match r.status {
+                        paykit_lib::health::HealthStatus::Healthy => HealthStatus::Healthy,
+                        paykit_lib::health::HealthStatus::Degraded => HealthStatus::Degraded,
+                        paykit_lib::health::HealthStatus::Unavailable => HealthStatus::Unavailable,
+                        paykit_lib::health::HealthStatus::Unknown => HealthStatus::Unknown,
+                    },
+                    checked_at: r.checked_at,
+                    latency_ms: r.latency_ms,
+                    error: r.error,
+                })
+                .collect()
         })
     }
 
     /// Get health status of a specific method.
     pub fn get_health_status(&self, method_id: String) -> Option<HealthStatus> {
-        self.health_monitor.get_status(&paykit_lib::MethodId(method_id))
+        self.health_monitor
+            .get_status(&paykit_lib::MethodId(method_id))
             .map(|s| match s {
                 paykit_lib::health::HealthStatus::Healthy => HealthStatus::Healthy,
                 paykit_lib::health::HealthStatus::Degraded => HealthStatus::Degraded,
@@ -545,33 +579,37 @@ impl PaykitClient {
 
     /// Check if a method is usable (healthy or degraded).
     pub fn is_method_usable(&self, method_id: String) -> bool {
-        self.health_monitor.is_usable(&paykit_lib::MethodId(method_id))
+        self.health_monitor
+            .is_usable(&paykit_lib::MethodId(method_id))
     }
 
     /// Get payment status for a receipt.
     pub fn get_payment_status(&self, receipt_id: String) -> Option<PaymentStatusInfo> {
-        self.status_tracker.get(&receipt_id).map(|info| PaymentStatusInfo {
-            status: match info.status {
-                paykit_interactive::PaymentStatus::Pending => PaymentStatus::Pending,
-                paykit_interactive::PaymentStatus::Processing => PaymentStatus::Processing,
-                paykit_interactive::PaymentStatus::Confirmed => PaymentStatus::Confirmed,
-                paykit_interactive::PaymentStatus::Finalized => PaymentStatus::Finalized,
-                paykit_interactive::PaymentStatus::Failed => PaymentStatus::Failed,
-                paykit_interactive::PaymentStatus::Cancelled => PaymentStatus::Cancelled,
-                paykit_interactive::PaymentStatus::Expired => PaymentStatus::Expired,
-            },
-            receipt_id: info.receipt_id,
-            method_id: info.method_id.0,
-            updated_at: info.updated_at,
-            confirmations: info.confirmations,
-            required_confirmations: info.required_confirmations,
-            error: info.error,
-        })
+        self.status_tracker
+            .get(&receipt_id)
+            .map(|info| PaymentStatusInfo {
+                status: match info.status {
+                    paykit_interactive::PaymentStatus::Pending => PaymentStatus::Pending,
+                    paykit_interactive::PaymentStatus::Processing => PaymentStatus::Processing,
+                    paykit_interactive::PaymentStatus::Confirmed => PaymentStatus::Confirmed,
+                    paykit_interactive::PaymentStatus::Finalized => PaymentStatus::Finalized,
+                    paykit_interactive::PaymentStatus::Failed => PaymentStatus::Failed,
+                    paykit_interactive::PaymentStatus::Cancelled => PaymentStatus::Cancelled,
+                    paykit_interactive::PaymentStatus::Expired => PaymentStatus::Expired,
+                },
+                receipt_id: info.receipt_id,
+                method_id: info.method_id.0,
+                updated_at: info.updated_at,
+                confirmations: info.confirmations,
+                required_confirmations: info.required_confirmations,
+                error: info.error,
+            })
     }
 
     /// Get all in-progress payments.
     pub fn get_in_progress_payments(&self) -> Vec<PaymentStatusInfo> {
-        self.status_tracker.get_in_progress()
+        self.status_tracker
+            .get_in_progress()
             .into_iter()
             .map(|info| PaymentStatusInfo {
                 status: match info.status {
@@ -605,31 +643,40 @@ impl PaykitClient {
         terms: SubscriptionTerms,
     ) -> Result<Subscription> {
         use std::str::FromStr;
-        
-        let subscriber_key = paykit_lib::PublicKey::from_str(&subscriber)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid subscriber key: {}", e) 
-            })?;
-        let provider_key = paykit_lib::PublicKey::from_str(&provider)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid provider key: {}", e) 
-            })?;
-        
+
+        let subscriber_key = paykit_lib::PublicKey::from_str(&subscriber).map_err(|e| {
+            PaykitMobileError::Validation {
+                message: format!("Invalid subscriber key: {}", e),
+            }
+        })?;
+        let provider_key = paykit_lib::PublicKey::from_str(&provider).map_err(|e| {
+            PaykitMobileError::Validation {
+                message: format!("Invalid provider key: {}", e),
+            }
+        })?;
+
         // Convert frequency first to avoid partial move
         let lib_frequency = match &terms.frequency {
             PaymentFrequency::Daily => paykit_subscriptions::PaymentFrequency::Daily,
             PaymentFrequency::Weekly => paykit_subscriptions::PaymentFrequency::Weekly,
             PaymentFrequency::Monthly { day_of_month } => {
-                paykit_subscriptions::PaymentFrequency::Monthly { day_of_month: *day_of_month }
+                paykit_subscriptions::PaymentFrequency::Monthly {
+                    day_of_month: *day_of_month,
+                }
             }
             PaymentFrequency::Yearly { month, day } => {
-                paykit_subscriptions::PaymentFrequency::Yearly { month: *month, day: *day }
+                paykit_subscriptions::PaymentFrequency::Yearly {
+                    month: *month,
+                    day: *day,
+                }
             }
             PaymentFrequency::Custom { interval_seconds } => {
-                paykit_subscriptions::PaymentFrequency::Custom { interval_seconds: *interval_seconds }
+                paykit_subscriptions::PaymentFrequency::Custom {
+                    interval_seconds: *interval_seconds,
+                }
             }
         };
-        
+
         let lib_terms = paykit_subscriptions::SubscriptionTerms::new(
             paykit_subscriptions::Amount::from_sats(terms.amount_sats),
             terms.currency.clone(),
@@ -637,9 +684,9 @@ impl PaykitClient {
             paykit_lib::MethodId(terms.method_id.clone()),
             terms.description.clone(),
         );
-        
+
         let sub = paykit_subscriptions::Subscription::new(subscriber_key, provider_key, lib_terms);
-        
+
         Ok(Subscription {
             subscription_id: sub.subscription_id.clone(),
             subscriber,
@@ -662,18 +709,20 @@ impl PaykitClient {
         change_date: i64,
     ) -> Result<ProrationResult> {
         let calculator = paykit_subscriptions::ProrationCalculator::new();
-        
-        let result = calculator.calculate(
-            &paykit_subscriptions::Amount::from_sats(current_amount_sats),
-            &paykit_subscriptions::Amount::from_sats(new_amount_sats),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).map_err(|e| PaykitMobileError::Validation { 
-            message: e.to_string() 
-        })?;
-        
+
+        let result = calculator
+            .calculate(
+                &paykit_subscriptions::Amount::from_sats(current_amount_sats),
+                &paykit_subscriptions::Amount::from_sats(new_amount_sats),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .map_err(|e| PaykitMobileError::Validation {
+                message: e.to_string(),
+            })?;
+
         Ok(ProrationResult {
             credit_sats: result.credit.as_sats(),
             charge_sats: result.charge.as_sats(),
@@ -683,15 +732,12 @@ impl PaykitClient {
     }
 
     /// Get days remaining in current billing period.
-    pub fn days_remaining_in_period(
-        &self,
-        period_end: i64,
-    ) -> u32 {
+    pub fn days_remaining_in_period(&self, period_end: i64) -> u32 {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        
+
         let remaining_seconds = period_end - now;
         if remaining_seconds <= 0 {
             return 0;
@@ -715,31 +761,34 @@ impl PaykitClient {
         expires_in_secs: Option<u64>,
     ) -> Result<PaymentRequest> {
         use std::str::FromStr;
-        
-        let from_key = paykit_lib::PublicKey::from_str(&from_pubkey)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid from key: {}", e) 
-            })?;
-        let to_key = paykit_lib::PublicKey::from_str(&to_pubkey)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid to key: {}", e) 
-            })?;
-        
+
+        let from_key = paykit_lib::PublicKey::from_str(&from_pubkey).map_err(|e| {
+            PaykitMobileError::Validation {
+                message: format!("Invalid from key: {}", e),
+            }
+        })?;
+        let to_key = paykit_lib::PublicKey::from_str(&to_pubkey).map_err(|e| {
+            PaykitMobileError::Validation {
+                message: format!("Invalid to key: {}", e),
+            }
+        })?;
+
         let request = paykit_subscriptions::PaymentRequest::new(
             from_key,
             to_key,
             paykit_subscriptions::Amount::from_sats(amount_sats),
             currency.clone(),
             paykit_lib::MethodId(method_id.clone()),
-        ).with_description(description.clone());
-        
+        )
+        .with_description(description.clone());
+
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        
+
         let expires_at = expires_in_secs.map(|secs| now + secs as i64);
-        
+
         Ok(PaymentRequest {
             request_id: request.request_id.clone(),
             from_pubkey,
@@ -767,23 +816,23 @@ impl PaykitClient {
         currency: Option<String>,
     ) -> Result<Receipt> {
         use std::str::FromStr;
-        
-        let payer_key = paykit_lib::PublicKey::from_str(&payer)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid payer key: {}", e) 
+
+        let payer_key =
+            paykit_lib::PublicKey::from_str(&payer).map_err(|e| PaykitMobileError::Validation {
+                message: format!("Invalid payer key: {}", e),
             })?;
-        let payee_key = paykit_lib::PublicKey::from_str(&payee)
-            .map_err(|e| PaykitMobileError::Validation { 
-                message: format!("Invalid payee key: {}", e) 
+        let payee_key =
+            paykit_lib::PublicKey::from_str(&payee).map_err(|e| PaykitMobileError::Validation {
+                message: format!("Invalid payee key: {}", e),
             })?;
-        
+
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        
+
         let receipt_id = format!("rcpt_{}_{}", now, rand_suffix());
-        
+
         let receipt = paykit_interactive::PaykitReceipt::new(
             receipt_id.clone(),
             payer_key,
@@ -793,7 +842,7 @@ impl PaykitClient {
             currency.clone(),
             serde_json::json!({}),
         );
-        
+
         Ok(Receipt {
             receipt_id,
             payer,
@@ -809,10 +858,11 @@ impl PaykitClient {
     /// Parse receipt metadata as JSON.
     pub fn parse_receipt_metadata(&self, metadata_json: String) -> Result<String> {
         // Validate JSON
-        serde_json::from_str::<serde_json::Value>(&metadata_json)
-            .map_err(|e| PaykitMobileError::Serialization { 
-                message: e.to_string() 
-            })?;
+        serde_json::from_str::<serde_json::Value>(&metadata_json).map_err(|e| {
+            PaykitMobileError::Serialization {
+                message: e.to_string(),
+            }
+        })?;
         Ok(metadata_json)
     }
 
@@ -989,10 +1039,7 @@ impl PaykitClient {
     /// # Returns
     ///
     /// List of contact public keys.
-    pub fn list_contacts(
-        &self,
-        transport: Arc<AuthenticatedTransportFFI>,
-    ) -> Result<Vec<String>> {
+    pub fn list_contacts(&self, transport: Arc<AuthenticatedTransportFFI>) -> Result<Vec<String>> {
         transport_ffi::list_contacts(&transport)
     }
 }
@@ -1044,7 +1091,7 @@ mod tests {
     #[test]
     fn test_validate_endpoint() {
         let client = PaykitClient::new().unwrap();
-        
+
         // Valid Bitcoin address
         let result = client.validate_endpoint(
             "onchain".to_string(),
@@ -1057,7 +1104,7 @@ mod tests {
     #[test]
     fn test_select_method() {
         let client = PaykitClient::new().unwrap();
-        
+
         let methods = vec![
             PaymentMethod {
                 method_id: "lightning".to_string(),
@@ -1068,10 +1115,10 @@ mod tests {
                 endpoint: "bc1q...".to_string(),
             },
         ];
-        
+
         let result = client.select_method(methods, 10000, None);
         assert!(result.is_ok());
-        
+
         let selection = result.unwrap();
         assert_eq!(selection.primary_method, "lightning");
     }
@@ -1086,20 +1133,20 @@ mod tests {
     #[test]
     fn test_calculate_proration() {
         let client = PaykitClient::new().unwrap();
-        
+
         // 30-day period, upgrade on day 10
         let period_start = 0;
         let period_end = 30 * 86400;
         let change_date = 10 * 86400;
-        
+
         let result = client.calculate_proration(
-            3000,  // current
-            6000,  // new
+            3000, // current
+            6000, // new
             period_start,
             period_end,
             change_date,
         );
-        
+
         assert!(result.is_ok());
         let proration = result.unwrap();
         assert!(proration.net_sats > 0); // Should be a charge
@@ -1109,14 +1156,14 @@ mod tests {
     #[test]
     fn test_days_remaining() {
         let client = PaykitClient::new().unwrap();
-        
+
         // Period ends in 10 days
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
         let period_end = now + (10 * 86400);
-        
+
         let remaining = client.days_remaining_in_period(period_end);
         assert!(remaining >= 9 && remaining <= 10);
     }
@@ -1125,7 +1172,7 @@ mod tests {
     fn test_payment_frequency_conversion() {
         let monthly = PaymentFrequency::Monthly { day_of_month: 15 };
         let lib_freq: paykit_subscriptions::PaymentFrequency = monthly.into();
-        
+
         match lib_freq {
             paykit_subscriptions::PaymentFrequency::Monthly { day_of_month } => {
                 assert_eq!(day_of_month, 15);
@@ -1143,21 +1190,25 @@ mod tests {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish endpoint
-        client.publish_payment_endpoint(
-            auth.clone(),
-            "lightning".to_string(),
-            "lnbc1...".to_string(),
-        ).unwrap();
-        
+        client
+            .publish_payment_endpoint(
+                auth.clone(),
+                "lightning".to_string(),
+                "lnbc1...".to_string(),
+            )
+            .unwrap();
+
         // Fetch endpoint
-        let result = client.fetch_payment_endpoint(
-            unauth.clone(),
-            "test_owner".to_string(),
-            "lightning".to_string(),
-        ).unwrap();
-        
+        let result = client
+            .fetch_payment_endpoint(
+                unauth.clone(),
+                "test_owner".to_string(),
+                "lightning".to_string(),
+            )
+            .unwrap();
+
         assert_eq!(result, Some("lnbc1...".to_string()));
     }
 
@@ -1166,25 +1217,24 @@ mod tests {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish multiple endpoints
-        client.publish_payment_endpoint(
-            auth.clone(),
-            "lightning".to_string(),
-            "lnbc1...".to_string(),
-        ).unwrap();
-        client.publish_payment_endpoint(
-            auth.clone(),
-            "onchain".to_string(),
-            "bc1q...".to_string(),
-        ).unwrap();
-        
+        client
+            .publish_payment_endpoint(
+                auth.clone(),
+                "lightning".to_string(),
+                "lnbc1...".to_string(),
+            )
+            .unwrap();
+        client
+            .publish_payment_endpoint(auth.clone(), "onchain".to_string(), "bc1q...".to_string())
+            .unwrap();
+
         // Fetch all
-        let methods = client.fetch_supported_payments(
-            unauth,
-            "test_owner".to_string(),
-        ).unwrap();
-        
+        let methods = client
+            .fetch_supported_payments(unauth, "test_owner".to_string())
+            .unwrap();
+
         assert_eq!(methods.len(), 2);
         assert!(methods.iter().any(|m| m.method_id == "lightning"));
         assert!(methods.iter().any(|m| m.method_id == "onchain"));
@@ -1195,25 +1245,24 @@ mod tests {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish and remove
-        client.publish_payment_endpoint(
-            auth.clone(),
-            "lightning".to_string(),
-            "lnbc1...".to_string(),
-        ).unwrap();
-        client.remove_payment_endpoint_from_directory(
-            auth.clone(),
-            "lightning".to_string(),
-        ).unwrap();
-        
+        client
+            .publish_payment_endpoint(
+                auth.clone(),
+                "lightning".to_string(),
+                "lnbc1...".to_string(),
+            )
+            .unwrap();
+        client
+            .remove_payment_endpoint_from_directory(auth.clone(), "lightning".to_string())
+            .unwrap();
+
         // Verify removed
-        let result = client.fetch_payment_endpoint(
-            unauth,
-            "test_owner".to_string(),
-            "lightning".to_string(),
-        ).unwrap();
-        
+        let result = client
+            .fetch_payment_endpoint(unauth, "test_owner".to_string(), "lightning".to_string())
+            .unwrap();
+
         assert!(result.is_none());
     }
 
@@ -1222,17 +1271,20 @@ mod tests {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Add contacts
-        client.add_contact(auth.clone(), "contact1".to_string()).unwrap();
-        client.add_contact(auth.clone(), "contact2".to_string()).unwrap();
-        
+        client
+            .add_contact(auth.clone(), "contact1".to_string())
+            .unwrap();
+        client
+            .add_contact(auth.clone(), "contact2".to_string())
+            .unwrap();
+
         // Fetch via unauthenticated transport
-        let contacts = client.fetch_known_contacts(
-            unauth,
-            "test_owner".to_string(),
-        ).unwrap();
-        
+        let contacts = client
+            .fetch_known_contacts(unauth, "test_owner".to_string())
+            .unwrap();
+
         assert_eq!(contacts.len(), 2);
         assert!(contacts.contains(&"contact1".to_string()));
         assert!(contacts.contains(&"contact2".to_string()));
@@ -1242,17 +1294,23 @@ mod tests {
     fn test_contact_management() {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        
+
         // Add contacts
-        client.add_contact(auth.clone(), "contact1".to_string()).unwrap();
-        client.add_contact(auth.clone(), "contact2".to_string()).unwrap();
-        
+        client
+            .add_contact(auth.clone(), "contact1".to_string())
+            .unwrap();
+        client
+            .add_contact(auth.clone(), "contact2".to_string())
+            .unwrap();
+
         // List contacts
         let contacts = client.list_contacts(auth.clone()).unwrap();
         assert_eq!(contacts.len(), 2);
-        
+
         // Remove contact
-        client.remove_contact(auth.clone(), "contact1".to_string()).unwrap();
+        client
+            .remove_contact(auth.clone(), "contact1".to_string())
+            .unwrap();
         let contacts = client.list_contacts(auth.clone()).unwrap();
         assert_eq!(contacts.len(), 1);
         assert!(contacts.contains(&"contact2".to_string()));

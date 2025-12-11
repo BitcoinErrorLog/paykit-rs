@@ -98,10 +98,12 @@ impl EndpointRotationManager {
     pub fn set_endpoint(&self, method_id: &MethodId, endpoint: EndpointData) {
         let mut endpoints = self.endpoints.write().expect("lock poisoned");
         endpoints.insert(method_id.0.clone(), endpoint);
-        
+
         // Initialize tracker if needed
         let mut trackers = self.trackers.write().expect("lock poisoned");
-        trackers.entry(method_id.0.clone()).or_insert_with(EndpointTracker::new);
+        trackers
+            .entry(method_id.0.clone())
+            .or_insert_with(EndpointTracker::new);
     }
 
     /// Get the current endpoint for a method.
@@ -125,7 +127,7 @@ impl EndpointRotationManager {
     pub fn needs_rotation(&self, method_id: &MethodId) -> bool {
         let policy = self.config.policy_for(method_id);
         let trackers = self.trackers.read().expect("lock poisoned");
-        
+
         if let Some(tracker) = trackers.get(&method_id.0) {
             tracker.needs_rotation(policy)
         } else {
@@ -258,7 +260,10 @@ mod tests {
             .set_policy(MethodId("onchain".into()), RotationPolicy::after_uses(5));
 
         let onchain_policy = config.policy_for(&MethodId("onchain".into()));
-        assert_eq!(*onchain_policy, RotationPolicy::RotateOnThreshold { threshold: 5 });
+        assert_eq!(
+            *onchain_policy,
+            RotationPolicy::RotateOnThreshold { threshold: 5 }
+        );
 
         let lightning_policy = config.policy_for(&MethodId("lightning".into()));
         assert_eq!(*lightning_policy, RotationPolicy::RotateOnUse);
@@ -283,7 +288,7 @@ mod tests {
         let endpoint = EndpointData("bc1q...".into());
 
         manager.set_endpoint(&method, endpoint);
-        
+
         let tracker = manager.get_tracker(&method).unwrap();
         assert_eq!(tracker.use_count, 0);
 
@@ -296,7 +301,7 @@ mod tests {
     fn test_manager_needs_rotation() {
         let config = RotationConfig::default()
             .set_policy(MethodId("onchain".into()), RotationPolicy::after_uses(2));
-        
+
         let manager = EndpointRotationManager::new(config, crate::methods::default_registry());
         let method = MethodId("onchain".into());
         let endpoint = EndpointData("bc1q...".into());

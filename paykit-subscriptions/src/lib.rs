@@ -38,7 +38,9 @@ pub mod monitor;
 // pub mod storage_wasm;
 
 pub use amount::Amount;
-pub use invoice::{Invoice, InvoiceFormat, InvoiceItem, ShippingAddress, ShippingInfo, ShippingMethod, TaxInfo};
+pub use invoice::{
+    Invoice, InvoiceFormat, InvoiceItem, ShippingAddress, ShippingInfo, ShippingMethod, TaxInfo,
+};
 pub use nonce_store::NonceStore;
 pub use request::{PaymentRequest, PaymentRequestResponse, RequestNotification, RequestStatus};
 pub use storage::{Direction, RequestFilter, ReservationToken, SubscriptionStorage};
@@ -52,7 +54,10 @@ pub use storage::FileSubscriptionStorage;
 pub use autopay::{AutoPayRule, PeerSpendingLimit};
 pub use fallback::{FallbackHandler, FallbackRecord, FallbackStatus, SubscriptionFallbackPolicy};
 pub use manager::SubscriptionManager;
-pub use modifications::{ModificationHistory, ModificationRequest, ModificationRecord, ModificationType, RequestedBy, SubscriptionVersion};
+pub use modifications::{
+    ModificationHistory, ModificationRecord, ModificationRequest, ModificationType, RequestedBy,
+    SubscriptionVersion,
+};
 pub use proration::{ProratedAmount, ProrationCalculator, ProrationDetails, RoundingMode};
 pub use signing::{sign_subscription_ed25519, verify_signature_ed25519, Signature};
 pub use subscription::{PaymentFrequency, SignedSubscription, Subscription, SubscriptionTerms};

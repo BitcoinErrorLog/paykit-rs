@@ -36,6 +36,7 @@ pub use pubky::PublicKey;
 pub struct PublicKey(pub String);
 
 pub mod errors;
+pub mod executors;
 pub mod health;
 pub mod methods;
 pub mod private_endpoints;

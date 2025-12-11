@@ -10,21 +10,21 @@ pub enum RotationPolicy {
     /// Rotate immediately after each use.
     /// Best for privacy (no address reuse).
     RotateOnUse,
-    
+
     /// Rotate after a specified number of uses.
     /// Balance between privacy and stability.
     RotateOnThreshold {
         /// Number of uses before rotation.
         threshold: u32,
     },
-    
+
     /// Rotate on a time interval.
     /// Good for scheduled maintenance.
     RotatePeriodic {
         /// Interval in seconds.
         interval_secs: u64,
     },
-    
+
     /// Never rotate automatically.
     /// Manual rotation only.
     Manual,
@@ -115,7 +115,7 @@ impl EndpointTracker {
         }
 
         let now = current_timestamp();
-        
+
         policy.should_rotate_on_use(self.use_count)
             || policy.should_rotate_on_time(self.created_at, now)
     }
@@ -175,16 +175,16 @@ mod tests {
     fn test_rotate_periodic() {
         let policy = RotationPolicy::every_hours(1);
         let now = current_timestamp();
-        
+
         // Just created - no rotation
         assert!(!policy.should_rotate_on_time(now, now));
-        
+
         // 30 minutes later - no rotation
         assert!(!policy.should_rotate_on_time(now, now + 1800));
-        
+
         // 1 hour later - should rotate
         assert!(policy.should_rotate_on_time(now, now + 3600));
-        
+
         // 2 hours later - should rotate
         assert!(policy.should_rotate_on_time(now, now + 7200));
     }
@@ -194,11 +194,11 @@ mod tests {
         let mut tracker = EndpointTracker::new();
         assert_eq!(tracker.use_count, 0);
         assert!(tracker.last_used_at.is_none());
-        
+
         tracker.record_use();
         assert_eq!(tracker.use_count, 1);
         assert!(tracker.last_used_at.is_some());
-        
+
         tracker.record_use();
         assert_eq!(tracker.use_count, 2);
     }
@@ -206,23 +206,23 @@ mod tests {
     #[test]
     fn test_tracker_needs_rotation() {
         let mut tracker = EndpointTracker::new();
-        
+
         // With RotateOnUse - needs rotation after any use
         let policy = RotationPolicy::RotateOnUse;
         assert!(tracker.needs_rotation(&policy)); // Even 0 uses triggers
-        
+
         tracker.record_use();
         assert!(tracker.needs_rotation(&policy));
-        
+
         // With threshold policy
         let policy = RotationPolicy::after_uses(3);
         tracker.reset();
         assert!(!tracker.needs_rotation(&policy));
-        
+
         tracker.record_use();
         tracker.record_use();
         assert!(!tracker.needs_rotation(&policy));
-        
+
         tracker.record_use();
         assert!(tracker.needs_rotation(&policy));
     }
@@ -233,10 +233,10 @@ mod tests {
         tracker.record_use();
         tracker.record_use();
         tracker.mark_pending();
-        
+
         assert_eq!(tracker.use_count, 2);
         assert!(tracker.rotation_pending);
-        
+
         tracker.reset();
         assert_eq!(tracker.use_count, 0);
         assert!(!tracker.rotation_pending);

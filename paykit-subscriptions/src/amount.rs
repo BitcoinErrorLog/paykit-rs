@@ -281,7 +281,9 @@ impl Amount {
         self.value
             .checked_mul(Decimal::from(quantity))
             .map(|value| Self { value })
-            .unwrap_or_else(|| Self { value: Decimal::MAX })
+            .unwrap_or_else(|| Self {
+                value: Decimal::MAX,
+            })
     }
 
     /// Calculate a percentage of this amount.
@@ -299,11 +301,12 @@ impl Amount {
     /// assert_eq!(tax.as_sats(), 1000);
     /// ```
     pub fn percentage(&self, rate: f64) -> Self {
-        let rate_decimal = Decimal::from_f64_retain(rate / 100.0)
-            .unwrap_or(Decimal::ZERO);
+        let rate_decimal = Decimal::from_f64_retain(rate / 100.0).unwrap_or(Decimal::ZERO);
         self.value
             .checked_mul(rate_decimal)
-            .map(|value| Self { value: value.round_dp(0) })
+            .map(|value| Self {
+                value: value.round_dp(0),
+            })
             .unwrap_or_else(Self::zero)
     }
 
@@ -325,7 +328,9 @@ impl Amount {
         }
         self.value
             .checked_div(Decimal::from(divisor))
-            .map(|value| Self { value: value.round_dp(0) })
+            .map(|value| Self {
+                value: value.round_dp(0),
+            })
     }
 }
 

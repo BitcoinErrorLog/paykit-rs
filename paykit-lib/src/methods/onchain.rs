@@ -21,7 +21,9 @@
 //! ```
 
 use super::executor::{BitcoinExecutor, MockBitcoinExecutor};
-use super::traits::{Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult};
+use super::traits::{
+    Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult,
+};
 use crate::{EndpointData, MethodId, PaykitError, Result};
 use async_trait::async_trait;
 use serde_json::Value;
@@ -125,7 +127,7 @@ impl OnchainPlugin {
     /// Validates a Bitcoin address.
     fn validate_address(&self, address: &str) -> ValidationResult {
         let address = address.trim();
-        
+
         if address.is_empty() {
             return ValidationResult::invalid(vec!["Address is empty".to_string()]);
         }
@@ -143,34 +145,38 @@ impl OnchainPlugin {
         let valid = address.starts_with("1")  // Legacy P2PKH
             || address.starts_with("3")        // P2SH (includes P2SH-P2WPKH)
             || address.starts_with("bc1q")     // Bech32 P2WPKH
-            || address.starts_with("bc1p");    // Bech32m P2TR (Taproot)
+            || address.starts_with("bc1p"); // Bech32m P2TR (Taproot)
 
         if !valid {
-            return ValidationResult::invalid(vec![
-                format!("Invalid mainnet address format: {}", address)
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "Invalid mainnet address format: {}",
+                address
+            )]);
         }
 
         // Basic length checks
         let mut result = ValidationResult::valid();
-        
+
         if address.starts_with("1") || address.starts_with("3") {
             if address.len() < 26 || address.len() > 35 {
-                return ValidationResult::invalid(vec![
-                    format!("Invalid address length: {} (expected 26-35)", address.len())
-                ]);
+                return ValidationResult::invalid(vec![format!(
+                    "Invalid address length: {} (expected 26-35)",
+                    address.len()
+                )]);
             }
         } else if address.starts_with("bc1q") {
             if address.len() != 42 && address.len() != 62 {
-                return ValidationResult::invalid(vec![
-                    format!("Invalid bech32 address length: {} (expected 42 or 62)", address.len())
-                ]);
+                return ValidationResult::invalid(vec![format!(
+                    "Invalid bech32 address length: {} (expected 42 or 62)",
+                    address.len()
+                )]);
             }
         } else if address.starts_with("bc1p") {
             if address.len() != 62 {
-                return ValidationResult::invalid(vec![
-                    format!("Invalid taproot address length: {} (expected 62)", address.len())
-                ]);
+                return ValidationResult::invalid(vec![format!(
+                    "Invalid taproot address length: {} (expected 62)",
+                    address.len()
+                )]);
             }
         }
 
@@ -188,12 +194,13 @@ impl OnchainPlugin {
             || address.starts_with("n")         // Legacy P2PKH testnet
             || address.starts_with("2")         // P2SH testnet
             || address.starts_with("tb1q")      // Bech32 testnet
-            || address.starts_with("tb1p");     // Bech32m testnet (Taproot)
+            || address.starts_with("tb1p"); // Bech32m testnet (Taproot)
 
         if !valid {
-            return ValidationResult::invalid(vec![
-                format!("Invalid testnet address format: {}", address)
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "Invalid testnet address format: {}",
+                address
+            )]);
         }
 
         ValidationResult::valid()
@@ -208,9 +215,10 @@ impl OnchainPlugin {
             || address.starts_with("bcrt1p");
 
         if !valid {
-            return ValidationResult::invalid(vec![
-                format!("Invalid regtest address format: {}", address)
-            ]);
+            return ValidationResult::invalid(vec![format!(
+                "Invalid regtest address format: {}",
+                address
+            )]);
         }
 
         ValidationResult::valid()
@@ -219,24 +227,24 @@ impl OnchainPlugin {
     /// Extracts the address from endpoint data.
     fn extract_address(&self, data: &EndpointData) -> Result<String> {
         let data_str = data.0.trim();
-        
+
         // Try parsing as JSON first
         if data_str.starts_with('{') {
             let json: serde_json::Value = serde_json::from_str(data_str)
                 .map_err(|e| PaykitError::Transport(format!("Invalid JSON: {}", e)))?;
-            
+
             // Look for common address field names
             for key in ["address", "p2wpkh", "p2tr", "p2sh", "p2pkh"] {
                 if let Some(addr) = json.get(key).and_then(|v| v.as_str()) {
                     return Ok(addr.to_string());
                 }
             }
-            
+
             return Err(PaykitError::Transport(
-                "No address field found in JSON endpoint".to_string()
+                "No address field found in JSON endpoint".to_string(),
             ));
         }
-        
+
         // Otherwise, treat as raw address
         Ok(data_str.to_string())
     }
@@ -277,7 +285,9 @@ pub async fn verify_bitcoin_proof(
 
             // If we have an executor, verify against the blockchain
             if let Some(exec) = executor {
-                return exec.verify_transaction(txid, expected_address, expected_amount).await;
+                return exec
+                    .verify_transaction(txid, expected_address, expected_amount)
+                    .await;
             }
 
             // Without executor, we can only check that txid looks valid
@@ -321,15 +331,13 @@ impl PaymentMethodPlugin for OnchainPlugin {
         let address = self.extract_address(endpoint)?;
         let validation = self.validate_address(&address);
         if !validation.valid {
-            return Err(PaykitError::Transport(
-                validation.errors.join(", ")
-            ));
+            return Err(PaykitError::Transport(validation.errors.join(", ")));
         }
 
         // Parse amount in satoshis
-        let amount_sats = amount.as_u64().ok_or_else(|| {
-            PaykitError::Transport(format!("Invalid amount: {}", amount.value))
-        })?;
+        let amount_sats = amount
+            .as_u64()
+            .ok_or_else(|| PaykitError::Transport(format!("Invalid amount: {}", amount.value)))?;
 
         // Check dust limit
         if !self.supports_amount(amount) {
@@ -341,11 +349,12 @@ impl PaymentMethodPlugin for OnchainPlugin {
 
         // Execute payment via executor if available
         if let Some(executor) = &self.executor {
-            let fee_rate = metadata
-                .get("fee_rate")
-                .and_then(|v| v.as_f64());
+            let fee_rate = metadata.get("fee_rate").and_then(|v| v.as_f64());
 
-            match executor.send_to_address(&address, amount_sats, fee_rate).await {
+            match executor
+                .send_to_address(&address, amount_sats, fee_rate)
+                .await
+            {
                 Ok(tx_result) => {
                     return Ok(PaymentExecution {
                         method_id: self.method_id(),
@@ -403,7 +412,10 @@ impl PaymentMethodPlugin for OnchainPlugin {
         // Check if execution was successful
         if !execution.success {
             return Err(PaykitError::Transport(
-                execution.error.clone().unwrap_or_else(|| "Payment failed".to_string())
+                execution
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Payment failed".to_string()),
             ));
         }
 
@@ -449,7 +461,7 @@ impl PaymentMethodPlugin for OnchainPlugin {
             .get("address")
             .cloned()
             .unwrap_or(Value::Null);
-        
+
         let txid = execution
             .execution_data
             .get("txid")
@@ -547,8 +559,9 @@ mod tests {
     #[test]
     fn test_validate_endpoint_json() {
         let plugin = OnchainPlugin::new();
-        
-        let data = EndpointData(r#"{"address":"bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"}"#.to_string());
+
+        let data =
+            EndpointData(r#"{"address":"bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"}"#.to_string());
         let result = plugin.validate_endpoint(&data);
         assert!(result.valid);
     }
@@ -556,7 +569,7 @@ mod tests {
     #[test]
     fn test_validate_endpoint_raw() {
         let plugin = OnchainPlugin::new();
-        
+
         let data = EndpointData("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string());
         let result = plugin.validate_endpoint(&data);
         assert!(result.valid);
@@ -568,10 +581,10 @@ mod tests {
 
         // Above dust limit
         assert!(plugin.supports_amount(&Amount::sats(1000)));
-        
+
         // Below dust limit
         assert!(!plugin.supports_amount(&Amount::sats(100)));
-        
+
         // At dust limit
         assert!(plugin.supports_amount(&Amount::sats(546)));
     }
@@ -585,13 +598,16 @@ mod tests {
     #[tokio::test]
     async fn test_execute_payment_with_mock_executor() {
         let plugin = OnchainPlugin::with_mock_executor();
-        
+
         let endpoint = EndpointData("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string());
         let amount = Amount::sats(10000);
         let metadata = serde_json::json!({});
-        
-        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
-        
+
+        let result = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
+
         assert!(result.success);
         assert!(result.execution_data.get("txid").is_some());
         assert!(result.execution_data.get("fee_sats").is_some());
@@ -600,41 +616,50 @@ mod tests {
     #[tokio::test]
     async fn test_execute_payment_without_executor() {
         let plugin = OnchainPlugin::new();
-        
+
         let endpoint = EndpointData("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string());
         let amount = Amount::sats(10000);
         let metadata = serde_json::json!({});
-        
-        let result = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
-        
+
+        let result = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
+
         assert!(result.success);
-        assert_eq!(result.execution_data.get("mock").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(
+            result.execution_data.get("mock").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 
     #[tokio::test]
     async fn test_execute_payment_dust_rejected() {
         let plugin = OnchainPlugin::with_mock_executor();
-        
+
         let endpoint = EndpointData("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string());
         let amount = Amount::sats(100); // Below dust limit
         let metadata = serde_json::json!({});
-        
+
         let result = plugin.execute_payment(&endpoint, &amount, &metadata).await;
-        
+
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_generate_proof() {
         let plugin = OnchainPlugin::with_mock_executor();
-        
+
         let endpoint = EndpointData("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".to_string());
         let amount = Amount::sats(10000);
         let metadata = serde_json::json!({});
-        
-        let execution = plugin.execute_payment(&endpoint, &amount, &metadata).await.unwrap();
+
+        let execution = plugin
+            .execute_payment(&endpoint, &amount, &metadata)
+            .await
+            .unwrap();
         let proof = plugin.generate_proof(&execution).unwrap();
-        
+
         match proof {
             PaymentProof::BitcoinTxid { txid, .. } => {
                 assert!(!txid.is_empty());
@@ -647,10 +672,10 @@ mod tests {
     #[tokio::test]
     async fn test_estimate_fee() {
         let plugin = OnchainPlugin::with_mock_executor();
-        
+
         let amount = Amount::sats(10000);
         let fee = plugin.estimate_fee(&amount).await;
-        
+
         assert!(fee.is_some());
         assert!(fee.unwrap().as_u64().unwrap() > 0);
     }
@@ -664,13 +689,10 @@ mod tests {
         };
 
         // Without executor, just validates txid format
-        let result = verify_bitcoin_proof(
-            &proof,
-            "bc1qtest",
-            10000,
-            None,
-        ).await.unwrap();
-        
+        let result = verify_bitcoin_proof(&proof, "bc1qtest", 10000, None)
+            .await
+            .unwrap();
+
         assert!(result);
 
         // Pending txid should fail
@@ -679,8 +701,10 @@ mod tests {
             block_height: None,
             confirmations: None,
         };
-        
-        let result = verify_bitcoin_proof(&pending_proof, "bc1qtest", 10000, None).await.unwrap();
+
+        let result = verify_bitcoin_proof(&pending_proof, "bc1qtest", 10000, None)
+            .await
+            .unwrap();
         assert!(!result);
     }
 }

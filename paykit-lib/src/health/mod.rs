@@ -140,12 +140,11 @@ impl HealthChecker for OnchainHealthChecker {
         // 1. Connect to a Bitcoin node
         // 2. Check block height is recent
         // 3. Check fee estimation is working
-        
+
         // For now, always return healthy
-        HealthCheckResult::healthy(self.method_id())
-            .with_details(serde_json::json!({
-                "note": "Placeholder check - production should verify node connectivity"
-            }))
+        HealthCheckResult::healthy(self.method_id()).with_details(serde_json::json!({
+            "note": "Placeholder check - production should verify node connectivity"
+        }))
     }
 }
 
@@ -174,12 +173,11 @@ impl HealthChecker for LightningHealthChecker {
         // 1. Connect to Lightning node
         // 2. Check channel status
         // 3. Check liquidity
-        
+
         // For now, always return healthy
-        HealthCheckResult::healthy(self.method_id())
-            .with_details(serde_json::json!({
-                "note": "Placeholder check - production should verify node connectivity"
-            }))
+        HealthCheckResult::healthy(self.method_id()).with_details(serde_json::json!({
+            "note": "Placeholder check - production should verify node connectivity"
+        }))
     }
 }
 
@@ -244,7 +242,10 @@ impl HealthMonitor {
     /// Check health of a specific method.
     pub async fn check(&self, method_id: &MethodId) -> Option<HealthCheckResult> {
         // Find the checker
-        let checker = self.checkers.iter().find(|c| c.method_id().0 == method_id.0)?;
+        let checker = self
+            .checkers
+            .iter()
+            .find(|c| c.method_id().0 == method_id.0)?;
 
         // Perform check
         let result = checker.check().await;
@@ -264,7 +265,7 @@ impl HealthMonitor {
 
         for checker in &self.checkers {
             let result = checker.check().await;
-            
+
             // Update cache
             {
                 let mut cache = self.cache.write().expect("lock poisoned");
@@ -343,9 +344,7 @@ impl HealthAwareSelector {
     pub fn get_statuses(&self, methods: &[MethodId]) -> HashMap<MethodId, HealthStatus> {
         methods
             .iter()
-            .filter_map(|m| {
-                self.monitor.get_status(m).map(|s| (m.clone(), s))
-            })
+            .filter_map(|m| self.monitor.get_status(m).map(|s| (m.clone(), s)))
             .collect()
     }
 }
@@ -366,30 +365,26 @@ mod tests {
     fn test_health_status() {
         assert!(HealthStatus::Healthy.is_usable());
         assert!(HealthStatus::Healthy.is_healthy());
-        
+
         assert!(HealthStatus::Degraded.is_usable());
         assert!(!HealthStatus::Degraded.is_healthy());
-        
+
         assert!(!HealthStatus::Unavailable.is_usable());
         assert!(!HealthStatus::Unknown.is_usable());
     }
 
     #[test]
     fn test_health_check_result() {
-        let result = HealthCheckResult::healthy(MethodId("lightning".into()))
-            .with_latency(50);
-        
+        let result = HealthCheckResult::healthy(MethodId("lightning".into())).with_latency(50);
+
         assert_eq!(result.status, HealthStatus::Healthy);
         assert_eq!(result.latency_ms, Some(50));
     }
 
     #[test]
     fn test_unhealthy_result() {
-        let result = HealthCheckResult::unhealthy(
-            MethodId("onchain".into()),
-            "Node not reachable"
-        );
-        
+        let result = HealthCheckResult::unhealthy(MethodId("onchain".into()), "Node not reachable");
+
         assert_eq!(result.status, HealthStatus::Unavailable);
         assert!(result.error.is_some());
     }
@@ -397,11 +392,11 @@ mod tests {
     #[tokio::test]
     async fn test_health_monitor() {
         let monitor = HealthMonitor::with_defaults();
-        
+
         // Check all methods
         let results = monitor.check_all().await;
         assert_eq!(results.len(), 2);
-        
+
         // All should be healthy (placeholder implementation)
         for result in &results {
             assert!(result.status.is_healthy());
@@ -412,7 +407,7 @@ mod tests {
     async fn test_get_status() {
         let monitor = HealthMonitor::with_defaults();
         monitor.check_all().await;
-        
+
         let status = monitor.get_status(&MethodId("lightning".into()));
         assert_eq!(status, Some(HealthStatus::Healthy));
     }
@@ -421,7 +416,7 @@ mod tests {
     async fn test_get_usable_methods() {
         let monitor = HealthMonitor::with_defaults();
         monitor.check_all().await;
-        
+
         let usable = monitor.get_usable_methods();
         assert_eq!(usable.len(), 2);
     }
@@ -431,12 +426,9 @@ mod tests {
         let monitor = Arc::new(HealthMonitor::with_defaults());
         let registry = crate::methods::default_registry();
         let selector = HealthAwareSelector::new(monitor, registry);
-        
-        let methods = vec![
-            MethodId("lightning".into()),
-            MethodId("onchain".into()),
-        ];
-        
+
+        let methods = vec![MethodId("lightning".into()), MethodId("onchain".into())];
+
         // Without cache, all should be considered usable
         let usable = selector.filter_usable(&methods);
         assert_eq!(usable.len(), 2);

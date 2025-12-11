@@ -104,12 +104,16 @@ pub mod storage;
 pub mod transport;
 
 pub use manager::{PaykitInteractiveManager, ReceiptGenerator};
-pub use metadata::{MetadataItem, MetadataValidator, OrderMetadata, PaymentMetadata, ShippingMetadata, TaxMetadata};
-pub use proof::{PaymentProof, ProofType, ProofVerifier, ProofVerifierRegistry, VerificationResult};
+pub use metadata::{
+    MetadataItem, MetadataValidator, OrderMetadata, PaymentMetadata, ShippingMetadata, TaxMetadata,
+};
+pub use proof::{
+    PaymentProof, ProofType, ProofVerifier, ProofVerifierRegistry, VerificationResult,
+};
 pub use status::{PaymentStatus, PaymentStatusInfo, PaymentStatusTracker};
 pub use storage::{
-    CheckoutResult, PaykitStorage, StorageAdapter,
-    smart_checkout, smart_checkout_all_methods, smart_checkout_detailed,
+    smart_checkout, smart_checkout_all_methods, smart_checkout_detailed, CheckoutResult,
+    PaykitStorage, StorageAdapter,
 };
 
 /// Result type for interactive operations.

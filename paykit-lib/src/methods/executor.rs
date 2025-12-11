@@ -201,12 +201,8 @@ pub trait BitcoinExecutor: Send + Sync {
     /// # Returns
     ///
     /// True if the transaction matches.
-    async fn verify_transaction(
-        &self,
-        txid: &str,
-        address: &str,
-        amount_sats: u64,
-    ) -> Result<bool>;
+    async fn verify_transaction(&self, txid: &str, address: &str, amount_sats: u64)
+        -> Result<bool>;
 }
 
 /// Executor trait for Lightning Network payments.
@@ -282,16 +278,16 @@ pub trait LightningExecutor: Send + Sync {
             Ok(bytes) => bytes,
             Err(_) => return false,
         };
-        
+
         // Compute SHA256 hash
         let computed_hash = sha256(&preimage_bytes);
-        
+
         // Compare with expected hash
         let expected_hash = match hex_decode(payment_hash) {
             Ok(bytes) => bytes,
             Err(_) => return false,
         };
-        
+
         computed_hash == expected_hash
     }
 }
@@ -367,7 +363,12 @@ impl BitcoinExecutor for MockBitcoinExecutor {
             // Generate a mock txid based on inputs
             format!(
                 "{:064x}",
-                simple_hash(&format!("{}:{}:{}", address, amount_sats, current_timestamp()))
+                simple_hash(&format!(
+                    "{}:{}:{}",
+                    address,
+                    amount_sats,
+                    current_timestamp()
+                ))
             )
         });
 
@@ -460,9 +461,10 @@ impl LightningExecutor for MockLightningExecutor {
             return Err(PaykitError::Transport("Simulated failure".to_string()));
         }
 
-        let preimage = self.mock_preimage.clone().unwrap_or_else(|| {
-            format!("{:064x}", simple_hash(&format!("preimage:{}", invoice)))
-        });
+        let preimage = self
+            .mock_preimage
+            .clone()
+            .unwrap_or_else(|| format!("{:064x}", simple_hash(&format!("preimage:{}", invoice))));
 
         let payment_hash = format!("{:064x}", simple_hash(&preimage));
         let amount = amount_msat.unwrap_or(1000);
@@ -496,7 +498,10 @@ impl LightningExecutor for MockLightningExecutor {
 
     async fn get_payment(&self, payment_hash: &str) -> Result<Option<LightningPaymentResult>> {
         let preimage = self.mock_preimage.clone().unwrap_or_else(|| {
-            format!("{:064x}", simple_hash(&format!("preimage_for:{}", payment_hash)))
+            format!(
+                "{:064x}",
+                simple_hash(&format!("preimage_for:{}", payment_hash))
+            )
         });
 
         Ok(Some(LightningPaymentResult::success(
@@ -531,13 +536,10 @@ fn hex_decode(hex: &str) -> std::result::Result<Vec<u8>, &'static str> {
     if hex.len() % 2 != 0 {
         return Err("Invalid hex length");
     }
-    
+
     (0..hex.len())
         .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&hex[i..i + 2], 16)
-                .map_err(|_| "Invalid hex character")
-        })
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| "Invalid hex character"))
         .collect()
 }
 
@@ -547,7 +549,7 @@ fn sha256(data: &[u8]) -> Vec<u8> {
     // This is a placeholder. In a real implementation, use:
     // use sha2::{Sha256, Digest};
     // Sha256::digest(data).to_vec()
-    
+
     // For now, return a mock hash based on data
     let mut hash = [0u8; 32];
     for (i, byte) in data.iter().enumerate() {
@@ -563,12 +565,12 @@ mod tests {
     #[tokio::test]
     async fn test_mock_bitcoin_executor() {
         let executor = MockBitcoinExecutor::new();
-        
+
         let result = executor
             .send_to_address("bc1qtest...", 10000, None)
             .await
             .unwrap();
-        
+
         assert!(!result.txid.is_empty());
         assert_eq!(result.vout, 0);
         assert!(result.fee_sats > 0);
@@ -577,33 +579,30 @@ mod tests {
     #[tokio::test]
     async fn test_mock_bitcoin_executor_with_txid() {
         let executor = MockBitcoinExecutor::with_txid("abc123");
-        
+
         let result = executor
             .send_to_address("bc1qtest...", 10000, None)
             .await
             .unwrap();
-        
+
         assert_eq!(result.txid, "abc123");
     }
 
     #[tokio::test]
     async fn test_mock_bitcoin_executor_failure() {
         let executor = MockBitcoinExecutor::failing();
-        
+
         let result = executor.send_to_address("bc1qtest...", 10000, None).await;
-        
+
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_mock_lightning_executor() {
         let executor = MockLightningExecutor::new();
-        
-        let result = executor
-            .pay_invoice("lnbc1...", None, None)
-            .await
-            .unwrap();
-        
+
+        let result = executor.pay_invoice("lnbc1...", None, None).await.unwrap();
+
         assert!(!result.preimage.is_empty());
         assert!(!result.payment_hash.is_empty());
         assert_eq!(result.status, LightningPaymentStatus::Succeeded);
@@ -612,9 +611,9 @@ mod tests {
     #[tokio::test]
     async fn test_mock_lightning_decode_invoice() {
         let executor = MockLightningExecutor::new();
-        
+
         let decoded = executor.decode_invoice("lnbc1...").await.unwrap();
-        
+
         assert!(!decoded.payment_hash.is_empty());
         assert!(decoded.amount_msat.is_some());
         assert!(!decoded.expired);
@@ -623,7 +622,7 @@ mod tests {
     #[test]
     fn test_bitcoin_tx_result() {
         let result = BitcoinTxResult::new("abc123", 0, 210, 1.5);
-        
+
         assert_eq!(result.txid, "abc123");
         assert!(!result.is_confirmed());
     }
@@ -631,7 +630,7 @@ mod tests {
     #[test]
     fn test_lightning_payment_result() {
         let result = LightningPaymentResult::success("preimage", "hash", 1000, 10);
-        
+
         assert_eq!(result.status, LightningPaymentStatus::Succeeded);
         assert_eq!(result.amount_msat, 1000);
     }

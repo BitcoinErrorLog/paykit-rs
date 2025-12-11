@@ -99,7 +99,10 @@ impl PaymentProof {
     }
 
     /// Create a Lightning preimage proof.
-    pub fn lightning_preimage(preimage: impl Into<String>, payment_hash: impl Into<String>) -> Self {
+    pub fn lightning_preimage(
+        preimage: impl Into<String>,
+        payment_hash: impl Into<String>,
+    ) -> Self {
         Self {
             proof_type: ProofType::LightningPreimage {
                 preimage: preimage.into(),
@@ -211,9 +214,10 @@ impl ProofVerifier for BitcoinProofVerifier {
             ProofType::BitcoinTxid { txid, .. } => {
                 // Basic validation
                 if txid.len() != 64 {
-                    return VerificationResult::invalid(vec![
-                        format!("Invalid txid length: {} (expected 64)", txid.len())
-                    ]);
+                    return VerificationResult::invalid(vec![format!(
+                        "Invalid txid length: {} (expected 64)",
+                        txid.len()
+                    )]);
                 }
 
                 // Check for valid hex
@@ -232,7 +236,9 @@ impl ProofVerifier for BitcoinProofVerifier {
                     "note": "Basic validation only. Production should query Bitcoin node."
                 }))
             }
-            _ => VerificationResult::invalid(vec!["Wrong proof type for Bitcoin verifier".to_string()]),
+            _ => VerificationResult::invalid(vec![
+                "Wrong proof type for Bitcoin verifier".to_string()
+            ]),
         }
     }
 }
@@ -250,19 +256,24 @@ impl ProofVerifier for LightningProofVerifier {
 
     async fn verify(&self, proof: &PaymentProof) -> VerificationResult {
         match &proof.proof_type {
-            ProofType::LightningPreimage { preimage, payment_hash } => {
+            ProofType::LightningPreimage {
+                preimage,
+                payment_hash,
+            } => {
                 // Preimage should be 64 hex chars (32 bytes)
                 if preimage.len() != 64 {
-                    return VerificationResult::invalid(vec![
-                        format!("Invalid preimage length: {} (expected 64)", preimage.len())
-                    ]);
+                    return VerificationResult::invalid(vec![format!(
+                        "Invalid preimage length: {} (expected 64)",
+                        preimage.len()
+                    )]);
                 }
 
                 // Payment hash should also be 64 hex chars
                 if payment_hash.len() != 64 {
-                    return VerificationResult::invalid(vec![
-                        format!("Invalid payment_hash length: {} (expected 64)", payment_hash.len())
-                    ]);
+                    return VerificationResult::invalid(vec![format!(
+                        "Invalid payment_hash length: {} (expected 64)",
+                        payment_hash.len()
+                    )]);
                 }
 
                 // In production, would verify that SHA256(preimage) == payment_hash
@@ -272,7 +283,9 @@ impl ProofVerifier for LightningProofVerifier {
                     "note": "Format validation only. Production should verify SHA256(preimage) == payment_hash."
                 }))
             }
-            _ => VerificationResult::invalid(vec!["Wrong proof type for Lightning verifier".to_string()]),
+            _ => VerificationResult::invalid(vec![
+                "Wrong proof type for Lightning verifier".to_string()
+            ]),
         }
     }
 }
@@ -300,19 +313,21 @@ impl ProofVerifierRegistry {
 
     /// Register a verifier.
     pub fn register(&mut self, verifier: Box<dyn ProofVerifier>) {
-        self.verifiers.insert(verifier.method_id().0.clone(), verifier);
+        self.verifiers
+            .insert(verifier.method_id().0.clone(), verifier);
     }
 
     /// Verify a proof using the appropriate verifier.
     pub async fn verify(&self, proof: &PaymentProof) -> VerificationResult {
         let method_id = proof.method_id();
-        
+
         if let Some(verifier) = self.verifiers.get(&method_id.0) {
             verifier.verify(proof).await
         } else {
-            VerificationResult::invalid(vec![
-                format!("No verifier registered for method: {}", method_id.0)
-            ])
+            VerificationResult::invalid(vec![format!(
+                "No verifier registered for method: {}",
+                method_id.0
+            )])
         }
     }
 }
@@ -337,7 +352,9 @@ mod tests {
 
     #[test]
     fn test_bitcoin_proof_creation() {
-        let proof = PaymentProof::bitcoin_txid("abc123def456abc123def456abc123def456abc123def456abc123def456abc1");
+        let proof = PaymentProof::bitcoin_txid(
+            "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+        );
         assert!(!proof.is_verified());
         assert_eq!(proof.method_id().0, "onchain");
     }
@@ -346,7 +363,7 @@ mod tests {
     fn test_lightning_proof_creation() {
         let proof = PaymentProof::lightning_preimage(
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         );
         assert!(!proof.is_verified());
         assert_eq!(proof.method_id().0, "lightning");
@@ -356,16 +373,18 @@ mod tests {
     fn test_custom_proof_creation() {
         let proof = PaymentProof::custom(
             MethodId("my_method".to_string()),
-            serde_json::json!({"custom_field": "value"})
+            serde_json::json!({"custom_field": "value"}),
         );
         assert_eq!(proof.method_id().0, "my_method");
     }
 
     #[test]
     fn test_mark_verified() {
-        let mut proof = PaymentProof::bitcoin_txid("abc123def456abc123def456abc123def456abc123def456abc123def456abc1");
+        let mut proof = PaymentProof::bitcoin_txid(
+            "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
+        );
         assert!(!proof.is_verified());
-        
+
         proof.mark_verified();
         assert!(proof.is_verified());
         assert!(proof.verified_at.is_some());
@@ -374,12 +393,14 @@ mod tests {
     #[tokio::test]
     async fn test_bitcoin_verifier() {
         let verifier = BitcoinProofVerifier;
-        
+
         // Valid txid format
-        let proof = PaymentProof::bitcoin_txid("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        let proof = PaymentProof::bitcoin_txid(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        );
         let result = verifier.verify(&proof).await;
         assert!(result.valid);
-        
+
         // Invalid txid (wrong length)
         let proof = PaymentProof::bitcoin_txid("abc123");
         let result = verifier.verify(&proof).await;
@@ -389,11 +410,11 @@ mod tests {
     #[tokio::test]
     async fn test_lightning_verifier() {
         let verifier = LightningProofVerifier;
-        
+
         // Valid format
         let proof = PaymentProof::lightning_preimage(
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         );
         let result = verifier.verify(&proof).await;
         assert!(result.valid);
@@ -402,14 +423,16 @@ mod tests {
     #[tokio::test]
     async fn test_registry() {
         let registry = ProofVerifierRegistry::with_defaults();
-        
-        let btc_proof = PaymentProof::bitcoin_txid("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+
+        let btc_proof = PaymentProof::bitcoin_txid(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        );
         let result = registry.verify(&btc_proof).await;
         assert!(result.valid);
-        
+
         let ln_proof = PaymentProof::lightning_preimage(
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+            "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         );
         let result = registry.verify(&ln_proof).await;
         assert!(result.valid);

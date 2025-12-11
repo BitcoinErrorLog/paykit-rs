@@ -27,8 +27,8 @@
 //! println!("Credit: {}, Charge: {}, Net: {}", result.credit, result.charge, result.net_amount);
 //! ```
 
-use crate::{Amount, Result, Subscription, SubscriptionError};
 use crate::modifications::{ModificationRequest, ModificationType};
+use crate::{Amount, Result, Subscription, SubscriptionError};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -151,7 +151,14 @@ impl ProrationCalculator {
         change_date: i64,
         currency: &str,
     ) -> Result<ProratedAmount> {
-        self.calculate(old_amount, new_amount, period_start, period_end, change_date, currency)
+        self.calculate(
+            old_amount,
+            new_amount,
+            period_start,
+            period_end,
+            change_date,
+            currency,
+        )
     }
 
     /// Calculate proration for a downgrade.
@@ -164,7 +171,14 @@ impl ProrationCalculator {
         change_date: i64,
         currency: &str,
     ) -> Result<ProratedAmount> {
-        self.calculate(old_amount, new_amount, period_start, period_end, change_date, currency)
+        self.calculate(
+            old_amount,
+            new_amount,
+            period_start,
+            period_end,
+            change_date,
+            currency,
+        )
     }
 
     /// Calculate proration for any amount change.
@@ -222,7 +236,8 @@ impl ProrationCalculator {
         let net = charge - credit;
 
         // Apply rounding
-        let (credit_rounded, charge_rounded, net_rounded) = self.apply_rounding(credit, charge, net);
+        let (credit_rounded, charge_rounded, net_rounded) =
+            self.apply_rounding(credit, charge, net);
 
         Ok(ProratedAmount {
             credit: Amount::new(credit_rounded, currency.to_string()),
@@ -251,26 +266,28 @@ impl ProrationCalculator {
         period_end: i64,
     ) -> Result<Option<ProratedAmount>> {
         match &request.modification_type {
-            ModificationType::Upgrade { new_amount, effective_date } => {
-                Ok(Some(self.calculate(
-                    &subscription.terms.amount,
-                    new_amount,
-                    period_start,
-                    period_end,
-                    *effective_date,
-                    &subscription.terms.currency,
-                )?))
-            }
-            ModificationType::Downgrade { new_amount, effective_date } => {
-                Ok(Some(self.calculate(
-                    &subscription.terms.amount,
-                    new_amount,
-                    period_start,
-                    period_end,
-                    *effective_date,
-                    &subscription.terms.currency,
-                )?))
-            }
+            ModificationType::Upgrade {
+                new_amount,
+                effective_date,
+            } => Ok(Some(self.calculate(
+                &subscription.terms.amount,
+                new_amount,
+                period_start,
+                period_end,
+                *effective_date,
+                &subscription.terms.currency,
+            )?)),
+            ModificationType::Downgrade {
+                new_amount,
+                effective_date,
+            } => Ok(Some(self.calculate(
+                &subscription.terms.amount,
+                new_amount,
+                period_start,
+                period_end,
+                *effective_date,
+                &subscription.terms.currency,
+            )?)),
             // Other modification types don't require proration
             _ => Ok(None),
         }
@@ -359,20 +376,22 @@ mod tests {
     #[test]
     fn test_upgrade_proration() {
         let calc = ProrationCalculator::new();
-        
+
         // 30-day month, upgrade on day 10
         let period_start = 0;
         let period_end = 30 * 86400;
         let change_date = 10 * 86400;
 
-        let result = calc.calculate_upgrade(
-            &Amount::from_sats(3000),
-            &Amount::from_sats(6000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
+        let result = calc
+            .calculate_upgrade(
+                &Amount::from_sats(3000),
+                &Amount::from_sats(6000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
 
         // 20 days remaining
         // Credit: 3000/30 * 20 = 2000
@@ -387,20 +406,22 @@ mod tests {
     #[test]
     fn test_downgrade_proration() {
         let calc = ProrationCalculator::new();
-        
+
         // 30-day month, downgrade on day 15
         let period_start = 0;
         let period_end = 30 * 86400;
         let change_date = 15 * 86400;
 
-        let result = calc.calculate_downgrade(
-            &Amount::from_sats(6000),
-            &Amount::from_sats(3000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
+        let result = calc
+            .calculate_downgrade(
+                &Amount::from_sats(6000),
+                &Amount::from_sats(3000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
 
         // 15 days remaining
         // Credit: 6000/30 * 15 = 3000
@@ -413,19 +434,21 @@ mod tests {
     #[test]
     fn test_proration_at_period_start() {
         let calc = ProrationCalculator::new();
-        
+
         let period_start = 0;
         let period_end = 30 * 86400;
         let change_date = 0; // Start of period
 
-        let result = calc.calculate(
-            &Amount::from_sats(3000),
-            &Amount::from_sats(6000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
+        let result = calc
+            .calculate(
+                &Amount::from_sats(3000),
+                &Amount::from_sats(6000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
 
         // Full period at new rate
         // Credit: 3000/30 * 30 = 3000
@@ -439,19 +462,21 @@ mod tests {
     #[test]
     fn test_proration_at_period_end() {
         let calc = ProrationCalculator::new();
-        
+
         let period_start = 0;
         let period_end = 30 * 86400;
         let change_date = 30 * 86400; // End of period
 
-        let result = calc.calculate(
-            &Amount::from_sats(3000),
-            &Amount::from_sats(6000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
+        let result = calc
+            .calculate(
+                &Amount::from_sats(3000),
+                &Amount::from_sats(6000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
 
         // Full period at old rate
         assert_eq!(result.details.days_at_old_rate, 30);
@@ -463,7 +488,7 @@ mod tests {
     #[test]
     fn test_invalid_dates() {
         let calc = ProrationCalculator::new();
-        
+
         // Change date before period
         let result = calc.calculate(
             &Amount::from_sats(3000),
@@ -501,24 +526,28 @@ mod tests {
         // 4 days at new rate
         // New: 2000/7 * 4 = 1142.857...
         // Old: 1000/7 * 4 = 571.428...
-        
-        let result_up = calc_up.calculate(
-            &Amount::from_sats(1000),
-            &Amount::from_sats(2000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
 
-        let result_down = calc_down.calculate(
-            &Amount::from_sats(1000),
-            &Amount::from_sats(2000),
-            period_start,
-            period_end,
-            change_date,
-            "SAT",
-        ).unwrap();
+        let result_up = calc_up
+            .calculate(
+                &Amount::from_sats(1000),
+                &Amount::from_sats(2000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
+
+        let result_down = calc_down
+            .calculate(
+                &Amount::from_sats(1000),
+                &Amount::from_sats(2000),
+                period_start,
+                period_end,
+                change_date,
+                "SAT",
+            )
+            .unwrap();
 
         // Up should round charges up
         // Down should round charges down
@@ -529,23 +558,16 @@ mod tests {
     fn test_calculate_from_modification() {
         let calc = ProrationCalculator::new();
         let subscription = test_subscription();
-        
+
         let now = chrono::Utc::now().timestamp();
         let period_start = now - (15 * 86400); // Started 15 days ago
         let period_end = period_start + (30 * 86400);
 
-        let request = ModificationRequest::upgrade(
-            &subscription,
-            Amount::from_sats(6000),
-            now,
-        );
+        let request = ModificationRequest::upgrade(&subscription, Amount::from_sats(6000), now);
 
-        let result = calc.calculate_from_modification(
-            &subscription,
-            &request,
-            period_start,
-            period_end,
-        ).unwrap();
+        let result = calc
+            .calculate_from_modification(&subscription, &request, period_start, period_end)
+            .unwrap();
 
         assert!(result.is_some());
         let proration = result.unwrap();
@@ -556,7 +578,7 @@ mod tests {
     fn test_no_proration_for_method_change() {
         let calc = ProrationCalculator::new();
         let subscription = test_subscription();
-        
+
         let now = chrono::Utc::now().timestamp();
         let period_start = now - (15 * 86400);
         let period_end = period_start + (30 * 86400);
@@ -566,12 +588,9 @@ mod tests {
             paykit_lib::MethodId("onchain".to_string()),
         );
 
-        let result = calc.calculate_from_modification(
-            &subscription,
-            &request,
-            period_start,
-            period_end,
-        ).unwrap();
+        let result = calc
+            .calculate_from_modification(&subscription, &request, period_start, period_end)
+            .unwrap();
 
         // Method changes don't require proration
         assert!(result.is_none());
@@ -581,7 +600,7 @@ mod tests {
     fn test_current_billing_period() {
         let mut subscription = test_subscription();
         subscription.starts_at = chrono::Utc::now().timestamp() - (45 * 86400); // 45 days ago
-        // With monthly frequency (~30 days), we should be in the second period
+                                                                                // With monthly frequency (~30 days), we should be in the second period
 
         let (start, end) = current_billing_period(&subscription);
         assert!(start < end);

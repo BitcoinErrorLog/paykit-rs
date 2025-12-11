@@ -77,10 +77,11 @@ impl AuthenticatedTransportFFI {
     #[uniffi::constructor]
     pub fn from_session_json(session_json: String, owner_pubkey: String) -> Result<Arc<Self>> {
         // Validate JSON
-        serde_json::from_str::<serde_json::Value>(&session_json)
-            .map_err(|e| PaykitMobileError::Serialization {
+        serde_json::from_str::<serde_json::Value>(&session_json).map_err(|e| {
+            PaykitMobileError::Serialization {
                 message: format!("Invalid session JSON: {}", e),
-            })?;
+            }
+        })?;
 
         // For now, create a mock transport
         // TODO: Deserialize PubkySession and create PubkyAuthenticatedTransport
@@ -97,43 +98,47 @@ impl AuthenticatedTransportFFI {
 
     /// Put (create or update) a file at the given path.
     pub fn put(&self, path: String, content: String) -> Result<()> {
-        let mut storage = self.mock_storage.write().map_err(|_| {
-            PaykitMobileError::Internal {
+        let mut storage = self
+            .mock_storage
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         storage.data.insert(path, content);
         Ok(())
     }
 
     /// Get a file at the given path.
     pub fn get(&self, path: String) -> Result<Option<String>> {
-        let storage = self.mock_storage.read().map_err(|_| {
-            PaykitMobileError::Internal {
+        let storage = self
+            .mock_storage
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         Ok(storage.data.get(&path).cloned())
     }
 
     /// Delete a file at the given path.
     pub fn delete(&self, path: String) -> Result<()> {
-        let mut storage = self.mock_storage.write().map_err(|_| {
-            PaykitMobileError::Internal {
+        let mut storage = self
+            .mock_storage
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         storage.data.remove(&path);
         Ok(())
     }
 
     /// List files with a given prefix.
     pub fn list(&self, prefix: String) -> Result<Vec<String>> {
-        let storage = self.mock_storage.read().map_err(|_| {
-            PaykitMobileError::Internal {
+        let storage = self
+            .mock_storage
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         Ok(storage
             .data
             .keys()
@@ -180,10 +185,11 @@ impl UnauthenticatedTransportFFI {
     #[uniffi::constructor]
     pub fn from_config_json(config_json: String) -> Result<Arc<Self>> {
         // Validate JSON
-        serde_json::from_str::<serde_json::Value>(&config_json)
-            .map_err(|e| PaykitMobileError::Serialization {
+        serde_json::from_str::<serde_json::Value>(&config_json).map_err(|e| {
+            PaykitMobileError::Serialization {
                 message: format!("Invalid config JSON: {}", e),
-            })?;
+            }
+        })?;
 
         // For now, create a mock transport
         // TODO: Initialize Pubky SDK and create PubkyUnauthenticatedTransport
@@ -204,11 +210,12 @@ impl UnauthenticatedTransportFFI {
 
     /// Get a file at the given path from a public key's storage.
     pub fn get(&self, owner_pubkey: String, path: String) -> Result<Option<String>> {
-        let storage = self.mock_storage.read().map_err(|_| {
-            PaykitMobileError::Internal {
+        let storage = self
+            .mock_storage
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         // In mock mode, we ignore owner_pubkey since all data is in one storage
         // In production, this would query the owner's homeserver
         let _ = owner_pubkey;
@@ -217,11 +224,12 @@ impl UnauthenticatedTransportFFI {
 
     /// List files with a given prefix from a public key's storage.
     pub fn list(&self, owner_pubkey: String, prefix: String) -> Result<Vec<String>> {
-        let storage = self.mock_storage.read().map_err(|_| {
-            PaykitMobileError::Internal {
+        let storage = self
+            .mock_storage
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
                 message: "Lock poisoned".to_string(),
-            }
-        })?;
+            })?;
         // In mock mode, we ignore owner_pubkey
         let _ = owner_pubkey;
         Ok(storage
@@ -288,7 +296,7 @@ pub fn fetch_supported_payments(
     owner_pubkey: &str,
 ) -> Result<Vec<PaymentMethod>> {
     let paths = transport.list(owner_pubkey.to_string(), PAYKIT_PATH_PREFIX.to_string())?;
-    
+
     let mut methods = Vec::new();
     for path in paths {
         if let Some(method_id) = path.strip_prefix(PAYKIT_PATH_PREFIX) {
@@ -300,7 +308,7 @@ pub fn fetch_supported_payments(
             }
         }
     }
-    
+
     Ok(methods)
 }
 
@@ -339,12 +347,12 @@ pub fn fetch_known_contacts(
     owner_pubkey: &str,
 ) -> Result<Vec<String>> {
     let paths = transport.list(owner_pubkey.to_string(), PUBKY_FOLLOWS_PATH.to_string())?;
-    
+
     let contacts: Vec<String> = paths
         .iter()
         .filter_map(|path| path.strip_prefix(PUBKY_FOLLOWS_PATH).map(String::from))
         .collect();
-    
+
     Ok(contacts)
 }
 
@@ -354,10 +362,7 @@ pub fn fetch_known_contacts(
 ///
 /// * `transport` - Authenticated transport for the owner
 /// * `contact_pubkey` - The contact's public key to add
-pub fn add_contact(
-    transport: &AuthenticatedTransportFFI,
-    contact_pubkey: &str,
-) -> Result<()> {
+pub fn add_contact(transport: &AuthenticatedTransportFFI, contact_pubkey: &str) -> Result<()> {
     let path = format!("{}{}", PUBKY_FOLLOWS_PATH, contact_pubkey);
     transport.put(path, String::new())
 }
@@ -368,10 +373,7 @@ pub fn add_contact(
 ///
 /// * `transport` - Authenticated transport for the owner
 /// * `contact_pubkey` - The contact's public key to remove
-pub fn remove_contact(
-    transport: &AuthenticatedTransportFFI,
-    contact_pubkey: &str,
-) -> Result<()> {
+pub fn remove_contact(transport: &AuthenticatedTransportFFI, contact_pubkey: &str) -> Result<()> {
     let path = format!("{}{}", PUBKY_FOLLOWS_PATH, contact_pubkey);
     transport.delete(path)
 }
@@ -387,12 +389,12 @@ pub fn remove_contact(
 /// List of contact public keys.
 pub fn list_contacts(transport: &AuthenticatedTransportFFI) -> Result<Vec<String>> {
     let paths = transport.list(PUBKY_FOLLOWS_PATH.to_string())?;
-    
+
     let contacts: Vec<String> = paths
         .iter()
         .filter_map(|path| path.strip_prefix(PUBKY_FOLLOWS_PATH).map(String::from))
         .collect();
-    
+
     Ok(contacts)
 }
 
@@ -407,34 +409,44 @@ mod tests {
     #[test]
     fn test_mock_transport_put_get() {
         let transport = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        
-        transport.put("/test/path".to_string(), "test_value".to_string()).unwrap();
+
+        transport
+            .put("/test/path".to_string(), "test_value".to_string())
+            .unwrap();
         let result = transport.get("/test/path".to_string()).unwrap();
-        
+
         assert_eq!(result, Some("test_value".to_string()));
     }
 
     #[test]
     fn test_mock_transport_delete() {
         let transport = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        
-        transport.put("/test/path".to_string(), "test_value".to_string()).unwrap();
+
+        transport
+            .put("/test/path".to_string(), "test_value".to_string())
+            .unwrap();
         transport.delete("/test/path".to_string()).unwrap();
         let result = transport.get("/test/path".to_string()).unwrap();
-        
+
         assert!(result.is_none());
     }
 
     #[test]
     fn test_mock_transport_list() {
         let transport = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        
-        transport.put("/pub/test/a".to_string(), "1".to_string()).unwrap();
-        transport.put("/pub/test/b".to_string(), "2".to_string()).unwrap();
-        transport.put("/other/c".to_string(), "3".to_string()).unwrap();
-        
+
+        transport
+            .put("/pub/test/a".to_string(), "1".to_string())
+            .unwrap();
+        transport
+            .put("/pub/test/b".to_string(), "2".to_string())
+            .unwrap();
+        transport
+            .put("/other/c".to_string(), "3".to_string())
+            .unwrap();
+
         let result = transport.list("/pub/test/".to_string()).unwrap();
-        
+
         assert_eq!(result.len(), 2);
         assert!(result.contains(&"/pub/test/a".to_string()));
         assert!(result.contains(&"/pub/test/b".to_string()));
@@ -443,11 +455,14 @@ mod tests {
     #[test]
     fn test_unauthenticated_from_authenticated() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        auth.put("/test/path".to_string(), "shared_value".to_string()).unwrap();
-        
+        auth.put("/test/path".to_string(), "shared_value".to_string())
+            .unwrap();
+
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth);
-        let result = unauth.get("test_owner".to_string(), "/test/path".to_string()).unwrap();
-        
+        let result = unauth
+            .get("test_owner".to_string(), "/test/path".to_string())
+            .unwrap();
+
         assert_eq!(result, Some("shared_value".to_string()));
     }
 
@@ -455,10 +470,10 @@ mod tests {
     fn test_publish_and_fetch_payment_endpoint() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish endpoint
         publish_payment_endpoint(&auth, "lightning", "lnbc1...").unwrap();
-        
+
         // Fetch endpoint
         let result = fetch_payment_endpoint(&unauth, "test_owner", "lightning").unwrap();
         assert_eq!(result, Some("lnbc1...".to_string()));
@@ -468,11 +483,11 @@ mod tests {
     fn test_fetch_supported_payments() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish multiple endpoints
         publish_payment_endpoint(&auth, "lightning", "lnbc1...").unwrap();
         publish_payment_endpoint(&auth, "onchain", "bc1q...").unwrap();
-        
+
         // Fetch all
         let methods = fetch_supported_payments(&unauth, "test_owner").unwrap();
         assert_eq!(methods.len(), 2);
@@ -482,11 +497,11 @@ mod tests {
     fn test_remove_payment_endpoint() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Publish and remove
         publish_payment_endpoint(&auth, "lightning", "lnbc1...").unwrap();
         remove_payment_endpoint(&auth, "lightning").unwrap();
-        
+
         // Verify removed
         let result = fetch_payment_endpoint(&unauth, "test_owner", "lightning").unwrap();
         assert!(result.is_none());
@@ -495,17 +510,17 @@ mod tests {
     #[test]
     fn test_contact_management() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        
+
         // Add contacts
         add_contact(&auth, "contact1").unwrap();
         add_contact(&auth, "contact2").unwrap();
-        
+
         // List contacts
         let contacts = list_contacts(&auth).unwrap();
         assert_eq!(contacts.len(), 2);
         assert!(contacts.contains(&"contact1".to_string()));
         assert!(contacts.contains(&"contact2".to_string()));
-        
+
         // Remove contact
         remove_contact(&auth, "contact1").unwrap();
         let contacts = list_contacts(&auth).unwrap();
@@ -517,11 +532,11 @@ mod tests {
     fn test_fetch_known_contacts() {
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
         let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
-        
+
         // Add contacts
         add_contact(&auth, "contact1").unwrap();
         add_contact(&auth, "contact2").unwrap();
-        
+
         // Fetch via unauthenticated transport
         let contacts = fetch_known_contacts(&unauth, "test_owner").unwrap();
         assert_eq!(contacts.len(), 2);

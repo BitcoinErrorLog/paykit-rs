@@ -81,38 +81,26 @@
 //! }
 //! ```
 
-mod traits;
-mod registry;
-mod onchain;
-mod lightning;
 mod executor;
+mod lightning;
+mod onchain;
+mod registry;
+mod traits;
 
 // Re-export core traits and types
-pub use traits::{
-    Amount,
-    PaymentExecution,
-    PaymentMethodPlugin,
-    PaymentProof,
-    ValidationResult,
-};
+pub use traits::{Amount, PaymentExecution, PaymentMethodPlugin, PaymentProof, ValidationResult};
 
 // Re-export registry
-pub use registry::{PaymentMethodRegistry, global};
+pub use registry::{global, PaymentMethodRegistry};
 
 // Re-export built-in plugins
-pub use onchain::{OnchainPlugin, BitcoinNetwork, verify_bitcoin_proof};
-pub use lightning::{LightningPlugin, LightningNetwork, verify_lightning_proof};
+pub use lightning::{verify_lightning_proof, LightningNetwork, LightningPlugin};
+pub use onchain::{verify_bitcoin_proof, BitcoinNetwork, OnchainPlugin};
 
 // Re-export executor traits and types
 pub use executor::{
-    BitcoinExecutor,
-    BitcoinTxResult,
-    LightningExecutor,
-    LightningPaymentResult,
-    LightningPaymentStatus,
-    DecodedInvoice,
-    MockBitcoinExecutor,
-    MockLightningExecutor,
+    BitcoinExecutor, BitcoinTxResult, DecodedInvoice, LightningExecutor, LightningPaymentResult,
+    LightningPaymentStatus, MockBitcoinExecutor, MockLightningExecutor,
 };
 
 /// Convenience function to create a registry with all built-in plugins.
@@ -126,16 +114,24 @@ pub fn default_registry() -> PaymentMethodRegistry {
 /// Convenience function to create a registry for testnet.
 pub fn testnet_registry() -> PaymentMethodRegistry {
     let registry = PaymentMethodRegistry::new();
-    registry.register(Box::new(OnchainPlugin::with_network(BitcoinNetwork::Testnet)));
-    registry.register(Box::new(LightningPlugin::with_network(LightningNetwork::Testnet)));
+    registry.register(Box::new(OnchainPlugin::with_network(
+        BitcoinNetwork::Testnet,
+    )));
+    registry.register(Box::new(LightningPlugin::with_network(
+        LightningNetwork::Testnet,
+    )));
     registry
 }
 
 /// Convenience function to create a registry for regtest.
 pub fn regtest_registry() -> PaymentMethodRegistry {
     let registry = PaymentMethodRegistry::new();
-    registry.register(Box::new(OnchainPlugin::with_network(BitcoinNetwork::Regtest)));
-    registry.register(Box::new(LightningPlugin::with_network(LightningNetwork::Regtest)));
+    registry.register(Box::new(OnchainPlugin::with_network(
+        BitcoinNetwork::Regtest,
+    )));
+    registry.register(Box::new(LightningPlugin::with_network(
+        LightningNetwork::Regtest,
+    )));
     registry
 }
 
@@ -147,7 +143,7 @@ mod tests {
     #[test]
     fn test_default_registry() {
         let registry = default_registry();
-        
+
         assert!(registry.has_method(&MethodId("onchain".into())));
         assert!(registry.has_method(&MethodId("lightning".into())));
         assert_eq!(registry.len(), 2);
@@ -156,10 +152,10 @@ mod tests {
     #[test]
     fn test_testnet_registry() {
         let registry = testnet_registry();
-        
+
         assert!(registry.has_method(&MethodId("onchain".into())));
         assert!(registry.has_method(&MethodId("lightning".into())));
-        
+
         // Verify network configuration
         let onchain = registry.get(&MethodId("onchain".into())).unwrap();
         assert_eq!(onchain.method_id().0, "onchain");
@@ -168,14 +164,14 @@ mod tests {
     #[test]
     fn test_plugin_validation() {
         let registry = default_registry();
-        
+
         // Test onchain validation
         let onchain = registry.get(&MethodId("onchain".into())).unwrap();
         let result = onchain.validate_endpoint(&crate::EndpointData(
-            "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".into()
+            "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq".into(),
         ));
         assert!(result.valid);
-        
+
         // Test lightning validation
         let lightning = registry.get(&MethodId("lightning".into())).unwrap();
         let result = lightning.validate_endpoint(&crate::EndpointData(
@@ -187,15 +183,15 @@ mod tests {
     #[test]
     fn test_plugin_amount_support() {
         let registry = default_registry();
-        
+
         let onchain = registry.get(&MethodId("onchain".into())).unwrap();
         let lightning = registry.get(&MethodId("lightning".into())).unwrap();
-        
+
         // Both support 10000 sats
         let amount = Amount::sats(10000);
         assert!(onchain.supports_amount(&amount));
         assert!(lightning.supports_amount(&amount));
-        
+
         // Onchain doesn't support dust
         let dust = Amount::sats(100);
         assert!(!onchain.supports_amount(&dust));
@@ -205,12 +201,14 @@ mod tests {
     #[test]
     fn test_confirmation_times() {
         let registry = default_registry();
-        
+
         let onchain = registry.get(&MethodId("onchain".into())).unwrap();
         let lightning = registry.get(&MethodId("lightning".into())).unwrap();
-        
+
         // On-chain is slow, lightning is fast
-        assert!(onchain.estimated_confirmation_time().unwrap() > 
-                lightning.estimated_confirmation_time().unwrap());
+        assert!(
+            onchain.estimated_confirmation_time().unwrap()
+                > lightning.estimated_confirmation_time().unwrap()
+        );
     }
 }

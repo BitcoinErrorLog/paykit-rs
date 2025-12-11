@@ -13,14 +13,14 @@
 //! cargo run --example subscription-service
 //! ```
 
-use paykit_subscriptions::{
-    Amount, PaymentFrequency, SignedSubscription, Subscription, SubscriptionManager,
-    SubscriptionTerms,
-};
 use paykit_lib::{MethodId, PublicKey};
 use paykit_subscriptions::fallback::{FallbackHandler, SubscriptionFallbackPolicy};
 use paykit_subscriptions::modifications::ModificationRequest;
 use paykit_subscriptions::proration::ProrationCalculator;
+use paykit_subscriptions::{
+    Amount, PaymentFrequency, SignedSubscription, Subscription, SubscriptionManager,
+    SubscriptionTerms,
+};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -50,41 +50,42 @@ impl SubscriptionProvider {
         // For this example, we'll just store the unsigned subscription
         // and demonstrate the modification flow
 
-        self.subscriptions
-            .insert(subscription.subscription_id.clone(), 
-                SignedSubscription::new(
-                    subscription.clone(),
-                    // Placeholder signatures - in real usage, these would be generated
-                    paykit_subscriptions::Signature {
-                        signature: vec![0; 64],
-                        public_key: [0; 32],
-                        nonce: [0; 32],
-                        timestamp: chrono::Utc::now().timestamp(),
-                        expires_at: chrono::Utc::now().timestamp() + 86400,
-                    },
-                    paykit_subscriptions::Signature {
-                        signature: vec![0; 64],
-                        public_key: [0; 32],
-                        nonce: [0; 32],
-                        timestamp: chrono::Utc::now().timestamp(),
-                        expires_at: chrono::Utc::now().timestamp() + 86400,
-                    },
-                ));
+        self.subscriptions.insert(
+            subscription.subscription_id.clone(),
+            SignedSubscription::new(
+                subscription.clone(),
+                // Placeholder signatures - in real usage, these would be generated
+                paykit_subscriptions::Signature {
+                    signature: vec![0; 64],
+                    public_key: [0; 32],
+                    nonce: [0; 32],
+                    timestamp: chrono::Utc::now().timestamp(),
+                    expires_at: chrono::Utc::now().timestamp() + 86400,
+                },
+                paykit_subscriptions::Signature {
+                    signature: vec![0; 64],
+                    public_key: [0; 32],
+                    nonce: [0; 32],
+                    timestamp: chrono::Utc::now().timestamp(),
+                    expires_at: chrono::Utc::now().timestamp() + 86400,
+                },
+            ),
+        );
         Ok(subscription)
     }
 
     /// Execute a billing cycle.
-    async fn execute_billing_cycle(
-        &self,
-        subscription_id: &str,
-    ) -> Result<(), String> {
+    async fn execute_billing_cycle(&self, subscription_id: &str) -> Result<(), String> {
         let signed_sub = self
             .subscriptions
             .get(subscription_id)
             .ok_or_else(|| "Subscription not found".to_string())?;
 
         println!("Executing billing for subscription: {}", subscription_id);
-        println!("  Amount: {} {}", signed_sub.subscription.terms.amount, signed_sub.subscription.terms.currency);
+        println!(
+            "  Amount: {} {}",
+            signed_sub.subscription.terms.amount, signed_sub.subscription.terms.currency
+        );
         println!("  Method: {}", signed_sub.subscription.terms.method.0);
 
         // In a real implementation, this would:
@@ -105,7 +106,8 @@ impl SubscriptionProvider {
             .get(&request.subscription_id)
             .ok_or_else(|| "Subscription not found".to_string())?;
 
-        let modified = request.apply(&signed_sub.subscription.clone())
+        let modified = request
+            .apply(&signed_sub.subscription.clone())
             .map_err(|e| e.to_string())?;
 
         // Update stored subscription
@@ -142,7 +144,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let subscription = provider.enroll_subscriber(subscriber_key.clone(), terms)?;
     println!("  Subscription ID: {}", subscription.subscription_id);
-    println!("  Amount: {} {}", subscription.terms.amount, subscription.terms.currency);
+    println!(
+        "  Amount: {} {}",
+        subscription.terms.amount, subscription.terms.currency
+    );
     println!("  Frequency: {:?}", subscription.terms.frequency);
     println!();
 
@@ -169,7 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Amount::from_sats(2000),
         chrono::Utc::now().timestamp(),
     );
-    
+
     // Calculate proration
     let calculator = ProrationCalculator::new();
     let period_start = chrono::Utc::now().timestamp() - (15 * 86400);
@@ -188,7 +193,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    Net: {} SAT", proration.net_amount);
 
     let modified = provider.process_modification(upgrade_request)?;
-    println!("  Upgraded subscription amount: {} SAT", modified.terms.amount);
+    println!(
+        "  Upgraded subscription amount: {} SAT",
+        modified.terms.amount
+    );
     println!();
 
     println!("=== Example Complete ===");

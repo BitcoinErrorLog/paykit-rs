@@ -12,11 +12,11 @@
 //! ```
 
 use paykit_interactive::{
-    PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt,
-    PaykitStorage, ReceiptGenerator,
+    PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt, PaykitStorage,
+    ReceiptGenerator,
 };
-use paykit_lib::{MethodId, PublicKey};
 use paykit_lib::private_endpoints::{InMemoryStore, PrivateEndpoint, PrivateEndpointManager};
+use paykit_lib::{MethodId, PublicKey};
 use std::sync::Arc;
 
 // Mock implementations
@@ -31,10 +31,7 @@ impl PaykitStorage for MockStorage {
     async fn save_receipt(&self, _receipt: &PaykitReceipt) -> paykit_interactive::Result<()> {
         Ok(())
     }
-    async fn get_receipt(
-        &self,
-        _id: &str,
-    ) -> paykit_interactive::Result<Option<PaykitReceipt>> {
+    async fn get_receipt(&self, _id: &str) -> paykit_interactive::Result<Option<PaykitReceipt>> {
         Ok(None)
     }
     async fn save_private_endpoint(
@@ -161,7 +158,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Receipt ID: {}", receipt.receipt_id);
     println!("  Payer: {:?}", receipt.payer);
     println!("  Payee: {:?}", receipt.payee);
-    println!("  Amount: {} {}", receipt.amount.unwrap(), receipt.currency.unwrap());
+    println!(
+        "  Amount: {} {}",
+        receipt.amount.unwrap(),
+        receipt.currency.unwrap()
+    );
 
     println!("\n=== Example Complete ===");
     Ok(())

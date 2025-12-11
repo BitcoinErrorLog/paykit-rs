@@ -58,8 +58,7 @@ mod autopay_rule_tests {
 
     #[test]
     fn test_rule_with_max_payment_amount() {
-        let rule = create_test_rule("sub_max")
-            .with_max_payment_amount(Amount::from_sats(5000));
+        let rule = create_test_rule("sub_max").with_max_payment_amount(Amount::from_sats(5000));
 
         assert_eq!(rule.max_amount_per_payment, Some(Amount::from_sats(5000)));
     }
@@ -78,16 +77,14 @@ mod autopay_rule_tests {
 
     #[test]
     fn test_rule_with_confirmation() {
-        let rule = create_test_rule("sub_confirm")
-            .with_confirmation(true);
+        let rule = create_test_rule("sub_confirm").with_confirmation(true);
 
         assert!(rule.require_confirmation);
     }
 
     #[test]
     fn test_rule_with_notification() {
-        let rule = create_test_rule("sub_notify")
-            .with_notification(7200); // 2 hours
+        let rule = create_test_rule("sub_notify").with_notification(7200); // 2 hours
 
         assert_eq!(rule.notify_before, Some(7200));
     }
@@ -111,7 +108,7 @@ mod autopay_rule_tests {
     #[test]
     fn test_rule_amount_within_limit_no_limit_set() {
         let rule = create_test_rule("sub_no_limit");
-        
+
         // Any amount should be within limit when no limit is set
         assert!(rule.is_amount_within_limit(&Amount::from_sats(1)));
         assert!(rule.is_amount_within_limit(&Amount::from_sats(1_000_000)));
@@ -120,8 +117,8 @@ mod autopay_rule_tests {
 
     #[test]
     fn test_rule_amount_within_limit_with_limit() {
-        let rule = create_test_rule("sub_with_limit")
-            .with_max_payment_amount(Amount::from_sats(1000));
+        let rule =
+            create_test_rule("sub_with_limit").with_max_payment_amount(Amount::from_sats(1000));
 
         assert!(rule.is_amount_within_limit(&Amount::from_sats(500)));
         assert!(rule.is_amount_within_limit(&Amount::from_sats(1000)));
@@ -131,8 +128,7 @@ mod autopay_rule_tests {
 
     #[test]
     fn test_rule_amount_boundary_check() {
-        let rule = create_test_rule("sub_boundary")
-            .with_max_payment_amount(Amount::from_sats(100));
+        let rule = create_test_rule("sub_boundary").with_max_payment_amount(Amount::from_sats(100));
 
         // Exactly at limit
         assert!(rule.is_amount_within_limit(&Amount::from_sats(100)));
@@ -144,8 +140,7 @@ mod autopay_rule_tests {
 
     #[test]
     fn test_rule_zero_amount() {
-        let rule = create_test_rule("sub_zero")
-            .with_max_payment_amount(Amount::from_sats(1000));
+        let rule = create_test_rule("sub_zero").with_max_payment_amount(Amount::from_sats(1000));
 
         assert!(rule.is_amount_within_limit(&Amount::from_sats(0)));
     }
@@ -437,7 +432,7 @@ mod integration_tests {
     fn test_autopay_with_spending_limit_workflow() {
         // Setup: Create a rule and a spending limit for the same peer
         let peer = random_pubkey();
-        
+
         let rule = AutoPayRule::new(
             "sub_integration".to_string(),
             peer.clone(),
@@ -445,11 +440,7 @@ mod integration_tests {
         )
         .with_max_payment_amount(Amount::from_sats(500));
 
-        let mut limit = PeerSpendingLimit::new(
-            peer,
-            Amount::from_sats(2000),
-            "daily".to_string(),
-        );
+        let mut limit = PeerSpendingLimit::new(peer, Amount::from_sats(2000), "daily".to_string());
 
         // Scenario: Process multiple payments
 
@@ -505,23 +496,14 @@ mod integration_tests {
         let peer2 = random_pubkey();
         let peer3 = random_pubkey();
 
-        let mut limit1 = PeerSpendingLimit::new(
-            peer1,
-            Amount::from_sats(10000),
-            "daily".to_string(),
-        );
+        let mut limit1 =
+            PeerSpendingLimit::new(peer1, Amount::from_sats(10000), "daily".to_string());
 
-        let mut limit2 = PeerSpendingLimit::new(
-            peer2,
-            Amount::from_sats(50000),
-            "weekly".to_string(),
-        );
+        let mut limit2 =
+            PeerSpendingLimit::new(peer2, Amount::from_sats(50000), "weekly".to_string());
 
-        let mut limit3 = PeerSpendingLimit::new(
-            peer3,
-            Amount::from_sats(100000),
-            "monthly".to_string(),
-        );
+        let mut limit3 =
+            PeerSpendingLimit::new(peer3, Amount::from_sats(100000), "monthly".to_string());
 
         // Each limit is independent
         limit1.add_spent(&Amount::from_sats(5000)).unwrap();
@@ -540,8 +522,8 @@ mod integration_tests {
 
     #[test]
     fn test_rule_disabled_behavior() {
-        let mut rule = create_test_rule("sub_disabled")
-            .with_max_payment_amount(Amount::from_sats(100));
+        let mut rule =
+            create_test_rule("sub_disabled").with_max_payment_amount(Amount::from_sats(100));
 
         // Rule is enabled by default
         assert!(rule.enabled);
@@ -574,10 +556,10 @@ mod edge_case_tests {
     #[test]
     fn test_one_satoshi_operations() {
         let mut limit = create_test_limit(1, "daily");
-        
+
         assert!(!limit.would_exceed_limit(&Amount::from_sats(1)));
         limit.add_spent(&Amount::from_sats(1)).unwrap();
-        
+
         // Now at limit
         assert!(limit.would_exceed_limit(&Amount::from_sats(1)));
         assert_eq!(limit.remaining_limit(), Amount::from_sats(0));
@@ -611,7 +593,7 @@ mod edge_case_tests {
     #[test]
     fn test_special_characters_in_period() {
         let limit = create_test_limit(10000, "daily/weekly");
-        
+
         // Unknown period - should never auto-reset
         assert!(!limit.should_reset());
     }

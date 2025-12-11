@@ -870,21 +870,22 @@ pub async fn show_peer_limits(storage_dir: &Path, peer: Option<String>) -> Resul
     } else {
         // List all peer limits from files
         let limits = list_peer_limits_from_files(storage_dir)?;
-        
+
         if limits.is_empty() {
             ui::info("No spending limits configured.");
             ui::info("Use 'paykit-demo subscriptions set-limit' to add one.");
             return Ok(());
         }
-        
+
         for limit in limits {
             let peer_short = &limit.peer.to_z32()[..20.min(limit.peer.to_z32().len())];
             let percentage = if limit.total_amount_limit.as_sats() > 0 {
-                (limit.current_spent.as_sats() as f64 / limit.total_amount_limit.as_sats() as f64 * 100.0) as u32
+                (limit.current_spent.as_sats() as f64 / limit.total_amount_limit.as_sats() as f64
+                    * 100.0) as u32
             } else {
                 0
             };
-            
+
             ui::key_value("Peer", &format!("{}...", peer_short));
             ui::key_value(
                 "Limit",
@@ -905,27 +906,31 @@ pub async fn show_peer_limits(storage_dir: &Path, peer: Option<String>) -> Resul
 }
 
 /// Helper: list all peer limits from files
-fn list_peer_limits_from_files(storage_dir: &Path) -> Result<Vec<paykit_subscriptions::PeerSpendingLimit>> {
+fn list_peer_limits_from_files(
+    storage_dir: &Path,
+) -> Result<Vec<paykit_subscriptions::PeerSpendingLimit>> {
     let limits_dir = storage_dir.join("subscriptions").join("peer_limits");
     let mut limits = Vec::new();
-    
+
     if !limits_dir.exists() {
         return Ok(limits);
     }
-    
+
     for entry in std::fs::read_dir(limits_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
             if let Ok(json) = std::fs::read_to_string(&path) {
-                if let Ok(limit) = serde_json::from_str::<paykit_subscriptions::PeerSpendingLimit>(&json) {
+                if let Ok(limit) =
+                    serde_json::from_str::<paykit_subscriptions::PeerSpendingLimit>(&json)
+                {
                     limits.push(limit);
                 }
             }
         }
     }
-    
+
     Ok(limits)
 }
 
@@ -939,7 +944,10 @@ pub async fn delete_peer_limit(storage_dir: &Path, peer: &str) -> Result<()> {
     if storage.get_peer_limit(&peer_pk).await?.is_some() {
         // Delete the file directly
         let peer_str = format!("{:?}", peer_pk);
-        let path = storage_dir.join("subscriptions").join("peer_limits").join(format!("{}.json", peer_str));
+        let path = storage_dir
+            .join("subscriptions")
+            .join("peer_limits")
+            .join(format!("{}.json", peer_str));
         if path.exists() {
             std::fs::remove_file(path)?;
         }
@@ -963,7 +971,7 @@ pub async fn reset_peer_limit(storage_dir: &Path, peer: &str) -> Result<()> {
         // Reset the limit using the reset method
         limit.reset();
         storage.save_peer_limit(&limit).await?;
-        
+
         ui::success(&format!("Spending limit reset for peer {}", peer));
         ui::key_value("Previous Usage", &old_spent.to_string());
         ui::key_value("Current Usage", "0 sats");
@@ -990,22 +998,26 @@ pub async fn list_autopay_rules(storage_dir: &Path) -> Result<()> {
     for rule in &rules {
         let sub_id_short = &rule.subscription_id[..12.min(rule.subscription_id.len())];
         let peer_short = &rule.peer.to_z32()[..16.min(rule.peer.to_z32().len())];
-        
-        let status = if rule.enabled { "✓ ENABLED" } else { "○ DISABLED" };
-        
+
+        let status = if rule.enabled {
+            "✓ ENABLED"
+        } else {
+            "○ DISABLED"
+        };
+
         ui::key_value("Subscription", &format!("{}...", sub_id_short));
         ui::key_value("Peer", &format!("{}...", peer_short));
         ui::key_value("Method", &rule.method_id.0);
         ui::key_value("Status", status);
-        
+
         if let Some(ref max) = rule.max_amount_per_payment {
             ui::key_value("Max Per Payment", &format!("{} sats", max.as_sats()));
         }
-        
+
         if rule.require_confirmation {
             ui::key_value("Confirmation", "Required");
         }
-        
+
         ui::separator();
     }
 
@@ -1015,18 +1027,20 @@ pub async fn list_autopay_rules(storage_dir: &Path) -> Result<()> {
 }
 
 /// Helper: list all auto-pay rules from files
-fn list_autopay_rules_from_files(storage_dir: &Path) -> Result<Vec<paykit_subscriptions::AutoPayRule>> {
+fn list_autopay_rules_from_files(
+    storage_dir: &Path,
+) -> Result<Vec<paykit_subscriptions::AutoPayRule>> {
     let rules_dir = storage_dir.join("subscriptions").join("autopay_rules");
     let mut rules = Vec::new();
-    
+
     if !rules_dir.exists() {
         return Ok(rules);
     }
-    
+
     for entry in std::fs::read_dir(rules_dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
             if let Ok(json) = std::fs::read_to_string(&path) {
                 if let Ok(rule) = serde_json::from_str::<paykit_subscriptions::AutoPayRule>(&json) {
@@ -1035,7 +1049,7 @@ fn list_autopay_rules_from_files(storage_dir: &Path) -> Result<Vec<paykit_subscr
             }
         }
     }
-    
+
     Ok(rules)
 }
 
@@ -1047,13 +1061,22 @@ pub async fn delete_autopay_rule(storage_dir: &Path, subscription_id: &str) -> R
 
     if storage.get_autopay_rule(subscription_id).await?.is_some() {
         // Delete the file directly
-        let path = storage_dir.join("subscriptions").join("autopay_rules").join(format!("{}.json", subscription_id));
+        let path = storage_dir
+            .join("subscriptions")
+            .join("autopay_rules")
+            .join(format!("{}.json", subscription_id));
         if path.exists() {
             std::fs::remove_file(path)?;
         }
-        ui::success(&format!("Auto-pay rule deleted for subscription {}", subscription_id));
+        ui::success(&format!(
+            "Auto-pay rule deleted for subscription {}",
+            subscription_id
+        ));
     } else {
-        ui::warning(&format!("No auto-pay rule found for subscription {}", subscription_id));
+        ui::warning(&format!(
+            "No auto-pay rule found for subscription {}",
+            subscription_id
+        ));
     }
 
     Ok(())
@@ -1118,22 +1141,29 @@ pub async fn show_global_settings(storage_dir: &Path) -> Result<()> {
 
     let settings = load_global_settings(storage_dir);
 
-    let status = if settings.enabled { "✓ ENABLED" } else { "○ DISABLED" };
+    let status = if settings.enabled {
+        "✓ ENABLED"
+    } else {
+        "○ DISABLED"
+    };
     ui::key_value("Global Auto-Pay", status);
-    
-    ui::key_value("Daily Limit", &format!("{} sats", settings.daily_limit_sats));
+
+    ui::key_value(
+        "Daily Limit",
+        &format!("{} sats", settings.daily_limit_sats),
+    );
     ui::key_value("Used Today", &format!("{} sats", settings.used_today_sats));
-    
+
     let remaining = std::cmp::max(0, settings.daily_limit_sats - settings.used_today_sats);
     ui::key_value("Remaining", &format!("{} sats", remaining));
-    
+
     let percentage = if settings.daily_limit_sats > 0 {
         (settings.used_today_sats as f64 / settings.daily_limit_sats as f64 * 100.0) as u32
     } else {
         0
     };
     ui::key_value("Usage", &format!("{}%", percentage));
-    
+
     ui::key_value("Last Reset", &settings.last_reset_date);
 
     ui::separator();
@@ -1174,11 +1204,11 @@ pub async fn configure_global_settings(
         let limit_sats: i64 = limit
             .parse()
             .map_err(|_| anyhow!("Invalid daily limit: {}", limit))?;
-        
+
         if limit_sats <= 0 {
             return Err(anyhow!("Daily limit must be positive"));
         }
-        
+
         settings.daily_limit_sats = limit_sats;
         ui::success(&format!("Daily limit set to {} sats", limit_sats));
         changed = true;
@@ -1218,7 +1248,7 @@ pub async fn show_recent_autopayments(storage_dir: &Path, count: usize) -> Resul
     ui::header("Recent Auto-Payments");
 
     let path = recent_autopayments_path(storage_dir);
-    
+
     if !path.exists() {
         ui::info("No auto-payments recorded yet.");
         return Ok(());
@@ -1226,7 +1256,7 @@ pub async fn show_recent_autopayments(storage_dir: &Path, count: usize) -> Resul
 
     let data = std::fs::read_to_string(&path)?;
     let mut records: Vec<AutoPaymentRecord> = serde_json::from_str(&data)?;
-    
+
     if records.is_empty() {
         ui::info("No auto-payments recorded yet.");
         return Ok(());
@@ -1237,29 +1267,30 @@ pub async fn show_recent_autopayments(storage_dir: &Path, count: usize) -> Resul
 
     // Show up to 'count' records
     for record in records.iter().take(count) {
-        let dt = chrono::DateTime::from_timestamp(record.timestamp, 0)
-            .unwrap_or_else(chrono::Utc::now);
-        
+        let dt =
+            chrono::DateTime::from_timestamp(record.timestamp, 0).unwrap_or_else(chrono::Utc::now);
+
         let peer_short = &record.peer[..16.min(record.peer.len())];
-        
+
         ui::key_value("Date", &dt.format("%Y-%m-%d %H:%M:%S").to_string());
         ui::key_value("Peer", &format!("{}...", peer_short));
         ui::key_value("Amount", &format!("{} sats", record.amount_sats));
-        
+
         if let Some(ref sub_id) = record.subscription_id {
             let sub_short = &sub_id[..12.min(sub_id.len())];
             ui::key_value("Subscription", &format!("{}...", sub_short));
         }
-        
+
         if let Some(ref desc) = record.description {
             ui::key_value("Description", desc);
         }
-        
+
         ui::separator();
     }
 
-    ui::info(&format!("Showing {} of {} total auto-payments", 
-        std::cmp::min(count, records.len()), 
+    ui::info(&format!(
+        "Showing {} of {} total auto-payments",
+        std::cmp::min(count, records.len()),
         records.len()
     ));
 

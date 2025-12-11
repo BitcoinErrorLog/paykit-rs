@@ -97,7 +97,7 @@ impl RoutingInfo {
         if method_id.0 == self.primary_method.0 {
             return Some(self.primary_endpoint.clone());
         }
-        
+
         self.routing_hints
             .iter()
             .find(|h| h.method.0 == method_id.0)
@@ -137,9 +137,9 @@ impl RoutingHintGenerator {
                 // Calculate priority based on method characteristics
                 let est_time = plugin.estimated_confirmation_time();
                 let priority = match est_time {
-                    Some(t) if t <= 10 => 1,    // Fast (Lightning)
-                    Some(t) if t <= 600 => 2,   // Medium
-                    _ => 3,                      // Slow (on-chain)
+                    Some(t) if t <= 10 => 1,  // Fast (Lightning)
+                    Some(t) if t <= 600 => 2, // Medium
+                    _ => 3,                   // Slow (on-chain)
                 };
 
                 hints.push((method_id.clone(), endpoint.clone(), priority, est_time));
@@ -148,7 +148,7 @@ impl RoutingHintGenerator {
 
         if hints.is_empty() {
             return Err(PaykitError::Transport(
-                "No compatible payment methods available".to_string()
+                "No compatible payment methods available".to_string(),
             ));
         }
 
@@ -157,7 +157,7 @@ impl RoutingHintGenerator {
 
         // Build routing info
         let (primary_method, primary_endpoint, _, _) = hints.remove(0);
-        
+
         let routing_hints: Vec<RoutingHint> = hints
             .into_iter()
             .map(|(method, endpoint, priority, est_time)| {
@@ -169,9 +169,8 @@ impl RoutingHintGenerator {
             })
             .collect();
 
-        let fallback_chain: Vec<MethodId> = routing_hints.iter()
-            .map(|h| h.method.clone())
-            .collect();
+        let fallback_chain: Vec<MethodId> =
+            routing_hints.iter().map(|h| h.method.clone()).collect();
 
         Ok(RoutingInfo {
             primary_method,
@@ -318,14 +317,8 @@ mod tests {
 
     fn create_test_supported() -> SupportedPayments {
         let mut entries = std::collections::HashMap::new();
-        entries.insert(
-            MethodId("onchain".into()),
-            EndpointData("bc1q...".into()),
-        );
-        entries.insert(
-            MethodId("lightning".into()),
-            EndpointData("lnbc...".into()),
-        );
+        entries.insert(MethodId("onchain".into()), EndpointData("bc1q...".into()));
+        entries.insert(MethodId("lightning".into()), EndpointData("lnbc...".into()));
         SupportedPayments { entries }
     }
 
@@ -346,10 +339,8 @@ mod tests {
 
     #[test]
     fn test_routing_info_single() {
-        let info = RoutingInfo::single(
-            MethodId("lightning".into()),
-            EndpointData("lnbc...".into()),
-        );
+        let info =
+            RoutingInfo::single(MethodId("lightning".into()), EndpointData("lnbc...".into()));
 
         assert_eq!(info.primary_method.0, "lightning");
         assert!(info.fallback_chain.is_empty());
@@ -357,15 +348,13 @@ mod tests {
 
     #[test]
     fn test_routing_info_with_hints() {
-        let info = RoutingInfo::single(
-            MethodId("lightning".into()),
-            EndpointData("lnbc...".into()),
-        )
-        .add_hint(RoutingHint::new(
-            MethodId("onchain".into()),
-            EndpointData("bc1q...".into()),
-            2,
-        ));
+        let info =
+            RoutingInfo::single(MethodId("lightning".into()), EndpointData("lnbc...".into()))
+                .add_hint(RoutingHint::new(
+                    MethodId("onchain".into()),
+                    EndpointData("bc1q...".into()),
+                    2,
+                ));
 
         assert_eq!(info.all_methods().len(), 2);
         assert!(info.get_endpoint(&MethodId("onchain".into())).is_some());

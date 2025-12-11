@@ -17,8 +17,19 @@
 //! Async operations use the Tokio runtime.
 
 pub mod async_bridge;
+pub mod interactive_ffi;
 pub mod scanner;
 pub mod storage;
+pub mod transport_ffi;
+
+// Re-export transport types for easier access
+pub use transport_ffi::{AuthenticatedTransportFFI, UnauthenticatedTransportFFI};
+
+// Re-export interactive types for easier access
+pub use interactive_ffi::{
+    PaykitMessageBuilder, ReceiptStore, PaykitMessageType, ParsedMessage,
+    ReceiptRequest, PrivateEndpointOffer, ErrorMessage,
+};
 
 use std::sync::Arc;
 
@@ -32,20 +43,49 @@ uniffi::setup_scaffolding!();
 /// Mobile-friendly error type.
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum PaykitMobileError {
+    /// Transport layer error (network, I/O).
     #[error("Transport error: {message}")]
     Transport { message: String },
     
+    /// Validation error (invalid input, format).
     #[error("Validation error: {message}")]
     Validation { message: String },
     
+    /// Resource not found.
     #[error("Not found: {message}")]
     NotFound { message: String },
     
+    /// Serialization/deserialization error.
     #[error("Serialization error: {message}")]
     Serialization { message: String },
     
+    /// Internal error (unexpected state).
     #[error("Internal error: {message}")]
     Internal { message: String },
+    
+    /// Network timeout error.
+    #[error("Network timeout: {message}")]
+    NetworkTimeout { message: String },
+    
+    /// Connection refused or failed.
+    #[error("Connection error: {message}")]
+    ConnectionError { message: String },
+    
+    /// Authentication failed.
+    #[error("Authentication error: {message}")]
+    AuthenticationError { message: String },
+    
+    /// Session expired or invalid.
+    #[error("Session error: {message}")]
+    SessionError { message: String },
+    
+    /// Rate limit exceeded.
+    #[error("Rate limit exceeded: {message}")]
+    RateLimitError { message: String },
+    
+    /// Permission denied.
+    #[error("Permission denied: {message}")]
+    PermissionDenied { message: String },
 }
 
 impl From<paykit_lib::PaykitError> for PaykitMobileError {
@@ -800,6 +840,161 @@ impl PaykitClient {
     pub fn extract_method_from_qr(&self, scanned_data: String) -> Option<String> {
         scanner::extract_payment_method(scanned_data)
     }
+
+    // ========================================================================
+    // Directory Operations
+    // ========================================================================
+
+    /// Publish a payment endpoint to the directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the owner
+    /// * `method_id` - Payment method identifier (e.g., "lightning", "onchain")
+    /// * `endpoint_data` - The endpoint data to publish
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let transport = AuthenticatedTransportFFI::from_session_json(session, pubkey)?;
+    /// client.publish_payment_endpoint(transport, "lightning", "lnbc1...")?;
+    /// ```
+    pub fn publish_payment_endpoint(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        method_id: String,
+        endpoint_data: String,
+    ) -> Result<()> {
+        transport_ffi::publish_payment_endpoint(&transport, &method_id, &endpoint_data)
+    }
+
+    /// Remove a payment endpoint from the directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the owner
+    /// * `method_id` - Payment method identifier to remove
+    pub fn remove_payment_endpoint_from_directory(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        method_id: String,
+    ) -> Result<()> {
+        transport_ffi::remove_payment_endpoint(&transport, &method_id)
+    }
+
+    /// Fetch all supported payment methods for a public key.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Unauthenticated transport for reading
+    /// * `owner_pubkey` - The public key to query (z-base32 encoded)
+    ///
+    /// # Returns
+    ///
+    /// List of payment methods with their endpoints.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let transport = UnauthenticatedTransportFFI::new_mock();
+    /// let methods = client.fetch_supported_payments(transport, "8pinxxgqs41...")?;
+    /// for method in methods {
+    ///     println!("{}: {}", method.method_id, method.endpoint);
+    /// }
+    /// ```
+    pub fn fetch_supported_payments(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+    ) -> Result<Vec<PaymentMethod>> {
+        transport_ffi::fetch_supported_payments(&transport, &owner_pubkey)
+    }
+
+    /// Fetch a specific payment endpoint for a public key.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Unauthenticated transport for reading
+    /// * `owner_pubkey` - The public key to query
+    /// * `method_id` - The payment method to fetch
+    ///
+    /// # Returns
+    ///
+    /// The endpoint data if found, None otherwise.
+    pub fn fetch_payment_endpoint(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+        method_id: String,
+    ) -> Result<Option<String>> {
+        transport_ffi::fetch_payment_endpoint(&transport, &owner_pubkey, &method_id)
+    }
+
+    /// Fetch known contacts for a public key.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Unauthenticated transport for reading
+    /// * `owner_pubkey` - The public key to query
+    ///
+    /// # Returns
+    ///
+    /// List of contact public keys.
+    pub fn fetch_known_contacts(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        owner_pubkey: String,
+    ) -> Result<Vec<String>> {
+        transport_ffi::fetch_known_contacts(&transport, &owner_pubkey)
+    }
+
+    // ========================================================================
+    // Contact Management
+    // ========================================================================
+
+    /// Add a contact to the follows list.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the owner
+    /// * `contact_pubkey` - The contact's public key to add
+    pub fn add_contact(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        contact_pubkey: String,
+    ) -> Result<()> {
+        transport_ffi::add_contact(&transport, &contact_pubkey)
+    }
+
+    /// Remove a contact from the follows list.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the owner
+    /// * `contact_pubkey` - The contact's public key to remove
+    pub fn remove_contact(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        contact_pubkey: String,
+    ) -> Result<()> {
+        transport_ffi::remove_contact(&transport, &contact_pubkey)
+    }
+
+    /// List all contacts.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the owner
+    ///
+    /// # Returns
+    ///
+    /// List of contact public keys.
+    pub fn list_contacts(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+    ) -> Result<Vec<String>> {
+        transport_ffi::list_contacts(&transport)
+    }
 }
 
 // ============================================================================
@@ -937,5 +1132,129 @@ mod tests {
             }
             _ => panic!("Expected Monthly frequency"),
         }
+    }
+
+    // ========================================================================
+    // Directory Operation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_publish_and_fetch_payment_endpoint() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        
+        // Publish endpoint
+        client.publish_payment_endpoint(
+            auth.clone(),
+            "lightning".to_string(),
+            "lnbc1...".to_string(),
+        ).unwrap();
+        
+        // Fetch endpoint
+        let result = client.fetch_payment_endpoint(
+            unauth.clone(),
+            "test_owner".to_string(),
+            "lightning".to_string(),
+        ).unwrap();
+        
+        assert_eq!(result, Some("lnbc1...".to_string()));
+    }
+
+    #[test]
+    fn test_fetch_supported_payments() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        
+        // Publish multiple endpoints
+        client.publish_payment_endpoint(
+            auth.clone(),
+            "lightning".to_string(),
+            "lnbc1...".to_string(),
+        ).unwrap();
+        client.publish_payment_endpoint(
+            auth.clone(),
+            "onchain".to_string(),
+            "bc1q...".to_string(),
+        ).unwrap();
+        
+        // Fetch all
+        let methods = client.fetch_supported_payments(
+            unauth,
+            "test_owner".to_string(),
+        ).unwrap();
+        
+        assert_eq!(methods.len(), 2);
+        assert!(methods.iter().any(|m| m.method_id == "lightning"));
+        assert!(methods.iter().any(|m| m.method_id == "onchain"));
+    }
+
+    #[test]
+    fn test_remove_payment_endpoint_from_directory() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        
+        // Publish and remove
+        client.publish_payment_endpoint(
+            auth.clone(),
+            "lightning".to_string(),
+            "lnbc1...".to_string(),
+        ).unwrap();
+        client.remove_payment_endpoint_from_directory(
+            auth.clone(),
+            "lightning".to_string(),
+        ).unwrap();
+        
+        // Verify removed
+        let result = client.fetch_payment_endpoint(
+            unauth,
+            "test_owner".to_string(),
+            "lightning".to_string(),
+        ).unwrap();
+        
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_fetch_known_contacts() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        
+        // Add contacts
+        client.add_contact(auth.clone(), "contact1".to_string()).unwrap();
+        client.add_contact(auth.clone(), "contact2".to_string()).unwrap();
+        
+        // Fetch via unauthenticated transport
+        let contacts = client.fetch_known_contacts(
+            unauth,
+            "test_owner".to_string(),
+        ).unwrap();
+        
+        assert_eq!(contacts.len(), 2);
+        assert!(contacts.contains(&"contact1".to_string()));
+        assert!(contacts.contains(&"contact2".to_string()));
+    }
+
+    #[test]
+    fn test_contact_management() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        
+        // Add contacts
+        client.add_contact(auth.clone(), "contact1".to_string()).unwrap();
+        client.add_contact(auth.clone(), "contact2".to_string()).unwrap();
+        
+        // List contacts
+        let contacts = client.list_contacts(auth.clone()).unwrap();
+        assert_eq!(contacts.len(), 2);
+        
+        // Remove contact
+        client.remove_contact(auth.clone(), "contact1".to_string()).unwrap();
+        let contacts = client.list_contacts(auth.clone()).unwrap();
+        assert_eq!(contacts.len(), 1);
+        assert!(contacts.contains(&"contact2".to_string()));
     }
 }

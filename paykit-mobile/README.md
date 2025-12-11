@@ -6,12 +6,13 @@ Mobile FFI bindings for Paykit, enabling integration with iOS (Swift) and Androi
 
 This crate provides UniFFI-based bindings that expose Paykit functionality to mobile platforms:
 
+- **Directory Operations**: Publish and discover payment endpoints
 - **Payment Method Selection**: Automatic selection of optimal payment methods
 - **Subscription Management**: Create, modify, and manage subscriptions
-- **Payment Requests**: Create and track payment requests
-- **Receipts**: Generate and manage payment receipts
+- **Contact Management**: Add, remove, and sync contacts
+- **Interactive Protocol**: Message building and receipt storage for Noise channels
 - **Health Monitoring**: Check payment method availability
-- **Proration**: Calculate prorated billing for subscription changes
+- **QR Code Scanning**: Parse Paykit URIs from scanned QR codes
 
 ## Building
 
@@ -38,243 +39,341 @@ cargo build --release -p paykit-mobile
 # Install uniffi-bindgen CLI (if not installed)
 cargo install uniffi-bindgen-cli@0.25
 
+# Generate bindings
+./paykit-mobile/generate-bindings.sh
+
+# Or manually:
 # Generate Swift bindings
-uniffi-bindgen generate --library target/release/libpaykit_mobile.dylib -l swift -o swift
+uniffi-bindgen generate --library target/release/libpaykit_mobile.dylib -l swift -o paykit-mobile/swift
 
 # Generate Kotlin bindings
-uniffi-bindgen generate --library target/release/libpaykit_mobile.dylib -l kotlin -o kotlin
+uniffi-bindgen generate --library target/release/libpaykit_mobile.dylib -l kotlin -o paykit-mobile/kotlin
 ```
 
-## iOS Integration
-
-### 1. Add the Generated Files
-
-Copy the generated files to your Xcode project:
-- `swift/paykit_mobile.swift` - Swift bindings
-- Copy the compiled library (`.a` or `.dylib`)
-
-### 2. Configure Build Settings
-
-In Xcode, add the library to your target's "Link Binary with Libraries" phase.
-
-### 3. Usage Example
-
-```swift
-import Foundation
-
-// Create the client
-let client = try! PaykitClient()
-
-// List available payment methods
-let methods = client.listMethods()
-print("Available methods: \(methods)")
-
-// Validate an endpoint
-let isValid = try! client.validateEndpoint(
-    methodId: "onchain",
-    endpoint: "bc1q..."
-)
-
-// Select optimal method
-let selection = try! client.selectMethod(
-    supportedMethods: [
-        PaymentMethod(methodId: "lightning", endpoint: "lnbc..."),
-        PaymentMethod(methodId: "onchain", endpoint: "bc1q...")
-    ],
-    amountSats: 10000,
-    preferences: nil
-)
-print("Selected: \(selection.primaryMethod)")
-
-// Calculate proration for upgrade
-let proration = try! client.calculateProration(
-    currentAmountSats: 1000,
-    newAmountSats: 2000,
-    periodStart: Int64(Date().timeIntervalSince1970) - 86400 * 15,
-    periodEnd: Int64(Date().timeIntervalSince1970) + 86400 * 15,
-    changeDate: Int64(Date().timeIntervalSince1970)
-)
-print("Net charge: \(proration.netSats) sats")
-```
-
-## Android Integration
-
-### 1. Add Dependencies
-
-Add to your `build.gradle`:
-
-```kotlin
-dependencies {
-    // AndroidX Security for EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    
-    // Kotlin coroutines (if using async extensions)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-}
-```
-
-### 2. Add the Generated Files
-
-Copy the generated files to your Android project:
-- `kotlin/uniffi/paykit_mobile/paykit_mobile.kt` - Kotlin bindings
-- `kotlin/EncryptedPreferencesStorage.kt` - Secure storage implementation
-- Copy the compiled library (`.so` for your target architecture)
-
-### 3. Configure build.gradle
-
-```kotlin
-android {
-    // ... existing config ...
-    
-    sourceSets {
-        main {
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
-    }
-}
-```
-
-### 4. Secure Storage Setup
-
-```kotlin
-import com.paykit.storage.EncryptedPreferencesStorage
-import com.paykit.storage.asPaykitStorage
-
-// Create secure storage (in Application.onCreate or similar)
-val storage = EncryptedPreferencesStorage.create(
-    context = applicationContext,
-    fileName = "paykit_secure_prefs"
-)
-
-// For high-security apps, use biometric protection
-val biometricStorage = EncryptedPreferencesStorage.createWithBiometrics(
-    context = applicationContext,
-    fileName = "paykit_biometric_prefs"
-)
-
-// Use with Paykit
-val paykitStorage = storage.asPaykitStorage()
-```
-
-### 5. Usage Example
-
-```kotlin
-import uniffi.paykit_mobile.*
-import com.paykit.storage.EncryptedPreferencesStorage
-import com.paykit.storage.asPaykitStorage
-
-// Create secure storage
-val storage = EncryptedPreferencesStorage.create(context)
-val paykitStorage = storage.asPaykitStorage()
-
-// Create the client with secure storage
-val client = PaykitClient(storage = paykitStorage)
-
-// List available payment methods
-val methods = client.listMethods()
-println("Available methods: $methods")
-
-// Validate an endpoint
-val isValid = client.validateEndpoint(
-    methodId = "onchain",
-    endpoint = "bc1q..."
-)
-
-// Select optimal method
-val selection = client.selectMethod(
-    supportedMethods = listOf(
-        PaymentMethod("lightning", "lnbc..."),
-        PaymentMethod("onchain", "bc1q...")
-    ),
-    amountSats = 10000u,
-    preferences = null
-)
-println("Selected: ${selection.primaryMethod}")
-
-// Create a subscription
-val subscription = client.createSubscription(
-    subscriber = "pubky://subscriber...",
-    provider = "pubky://provider...",
-    terms = SubscriptionTerms(
-        amountSats = 1000,
-        currency = "SAT",
-        frequency = PaymentFrequency.Monthly(dayOfMonth = 1u),
-        methodId = "lightning",
-        description = "Monthly subscription"
-    )
-)
-println("Created subscription: ${subscription.subscriptionId}")
-
-// Using coroutine extensions for async operations
-lifecycleScope.launch {
-    storage.storeAsync("private_key", keyBytes)
-    val key = storage.retrieveAsync("private_key")
-}
-```
-
-### Android Security Features
-
-The `EncryptedPreferencesStorage` provides:
-
-- **AES-256-GCM** encryption for values
-- **AES-256-SIV** encryption for keys
-- **Hardware-backed keystore** when available
-- **StrongBox** support on compatible devices
-- **Biometric authentication** option for sensitive data
-- **Coroutine extensions** for async operations
-
-## API Reference
+## Core APIs
 
 ### PaykitClient
 
-The main entry point for all Paykit operations.
-
-#### Methods
-
-| Method | Description |
-|--------|-------------|
-| `listMethods()` | Get all registered payment methods |
-| `validateEndpoint(methodId, endpoint)` | Validate an endpoint for a method |
-| `selectMethod(methods, amount, prefs)` | Select optimal payment method |
-| `checkHealth()` | Check health of all methods |
-| `getHealthStatus(methodId)` | Get health of specific method |
-| `isMethodUsable(methodId)` | Check if method is usable |
-| `getPaymentStatus(receiptId)` | Get payment status |
-| `getInProgressPayments()` | Get all pending payments |
-| `createSubscription(...)` | Create a new subscription |
-| `calculateProration(...)` | Calculate prorated billing |
-| `daysRemainingInPeriod(periodEnd)` | Get days until period ends |
-| `createPaymentRequest(...)` | Create a payment request |
-| `createReceipt(...)` | Create a receipt |
-
-### Types
-
-- `PaymentMethod` - A method ID and endpoint pair
-- `Amount` - Value and currency
-- `SelectionPreferences` - Strategy and constraints
-- `SubscriptionTerms` - Subscription configuration
-- `PaymentFrequency` - Daily, Weekly, Monthly, Yearly, Custom
-- `ProrationResult` - Credit, charge, and net amounts
-
-## Async Operations
-
-For long-running operations, use the async bridge module:
+The main entry point for Paykit operations.
 
 ```swift
-// Swift example with completion handler
-client.fetchEndpointsAsync(pubkey: "...") { result in
-    switch result {
-    case .success(let endpoints):
-        // Handle endpoints
-    case .failure(let error):
-        // Handle error
+// Swift
+let client = try! PaykitClient()
+
+// List payment methods
+let methods = client.listMethods()
+
+// Validate endpoint
+let isValid = try! client.validateEndpoint(methodId: "onchain", endpoint: "bc1q...")
+
+// Select optimal method
+let selection = try! client.selectMethod(
+    supportedMethods: methods,
+    amountSats: 10000,
+    preferences: nil
+)
+```
+
+```kotlin
+// Kotlin
+val client = PaykitClient()
+
+// List payment methods
+val methods = client.listMethods()
+
+// Validate endpoint
+val isValid = client.validateEndpoint(methodId = "onchain", endpoint = "bc1q...")
+
+// Select optimal method
+val selection = client.selectMethod(
+    supportedMethods = methods,
+    amountSats = 10000u,
+    preferences = null
+)
+```
+
+### Directory Operations
+
+Publish and discover payment endpoints using transport wrappers.
+
+```swift
+// Swift
+// Create transports
+let authTransport = AuthenticatedTransportFFI.newMock(ownerPubkey: myPubkey)
+let unauthTransport = UnauthenticatedTransportFFI.fromAuthenticated(auth: authTransport)
+
+// Publish payment endpoint
+try! client.publishPaymentEndpoint(
+    transport: authTransport,
+    methodId: "lightning",
+    endpointData: "lnbc1..."
+)
+
+// Discover payment methods
+let methods = try! client.fetchSupportedPayments(
+    transport: unauthTransport,
+    ownerPubkey: peerPubkey
+)
+
+// Fetch specific endpoint
+let endpoint = try! client.fetchPaymentEndpoint(
+    transport: unauthTransport,
+    ownerPubkey: peerPubkey,
+    methodId: "lightning"
+)
+
+// Remove endpoint
+try! client.removePaymentEndpointFromDirectory(
+    transport: authTransport,
+    methodId: "lightning"
+)
+```
+
+```kotlin
+// Kotlin
+// Create transports
+val authTransport = AuthenticatedTransportFFI.newMock(myPubkey)
+val unauthTransport = UnauthenticatedTransportFFI.fromAuthenticated(authTransport)
+
+// Publish payment endpoint
+client.publishPaymentEndpoint(
+    transport = authTransport,
+    methodId = "lightning",
+    endpointData = "lnbc1..."
+)
+
+// Discover payment methods
+val methods = client.fetchSupportedPayments(
+    transport = unauthTransport,
+    ownerPubkey = peerPubkey
+)
+```
+
+### Contact Management
+
+Manage contacts locally and sync with remote storage.
+
+```swift
+// Swift
+// Add contacts
+try! client.addContact(transport: authTransport, contactPubkey: "peer1")
+try! client.addContact(transport: authTransport, contactPubkey: "peer2")
+
+// List contacts
+let contacts = try! client.listContacts(transport: authTransport)
+
+// Remove contact
+try! client.removeContact(transport: authTransport, contactPubkey: "peer1")
+
+// Local contact cache
+let cache = ContactCacheFFI()
+cache.add(pubkey: "peer1")
+cache.addWithName(pubkey: "peer2", name: "Alice")
+
+// Sync with remote
+let result = cache.sync(remotePubkeys: remoteContacts)
+print("Added: \(result.added), Total: \(result.total)")
+```
+
+### Interactive Protocol
+
+Build messages for Noise channel communication.
+
+```swift
+// Swift
+let builder = PaykitMessageBuilder()
+
+// Create endpoint offer
+let offerJson = try! builder.createEndpointOffer(
+    methodId: "lightning",
+    endpoint: "lnbc1..."
+)
+// Send offerJson over Noise channel
+
+// Parse received message
+let parsed = try! builder.parseMessage(messageJson: receivedJson)
+switch parsed {
+case .offerPrivateEndpoint(let offer):
+    print("Received offer: \(offer.methodId) -> \(offer.endpoint)")
+case .requestReceipt(let request):
+    print("Receipt requested: \(request.receiptId)")
+case .ack:
+    print("Acknowledged")
+case .error(let error):
+    print("Error: \(error.code) - \(error.message)")
+}
+
+// Store receipts
+let store = ReceiptStore()
+store.saveReceipt(receipt)
+let receipts = store.listReceipts()
+```
+
+### Subscription Management
+
+```swift
+// Swift
+let subscription = try! client.createSubscription(
+    subscriber: subscriberPubkey,
+    provider: providerPubkey,
+    terms: SubscriptionTerms(
+        amountSats: 1000,
+        currency: "SAT",
+        frequency: .monthly(dayOfMonth: 1),
+        methodId: "lightning",
+        description: "Monthly subscription"
+    )
+)
+
+// Calculate proration
+let proration = try! client.calculateProration(
+    currentAmountSats: 1000,
+    newAmountSats: 2000,
+    periodStart: periodStart,
+    periodEnd: periodEnd,
+    changeDate: changeDate
+)
+```
+
+### QR Code Scanning
+
+```swift
+// Swift
+// Check if scanned data is a Paykit URI
+if client.isPaykitQr(scannedData: qrCode) {
+    let result = try! client.parseScannedQr(scannedData: qrCode)
+    switch result.uriType {
+    case .pubky:
+        let pubkey = result.publicKey!
+        // Start payment flow
+    case .invoice:
+        let method = result.methodId!
+        let data = result.data!
+        // Process invoice
+    case .paymentRequest:
+        let requestId = result.requestId!
+        // Handle payment request
     }
 }
 ```
+
+## Type Reference
+
+### Core Types
+
+| Type | Description |
+|------|-------------|
+| `PaykitClient` | Main client for all Paykit operations |
+| `AuthenticatedTransportFFI` | Write access for publishing endpoints |
+| `UnauthenticatedTransportFFI` | Read access for discovering endpoints |
+| `PaymentMethod` | Method ID and endpoint pair |
+| `Amount` | Value and currency |
+
+### Directory Types
+
+| Type | Description |
+|------|-------------|
+| `DirectoryOperationsAsync` | Async directory operations manager |
+| `ContactCacheFFI` | Local contact cache with sync |
+| `CachedContactFFI` | Cached contact with metadata |
+| `SyncResultFFI` | Result of contact sync operation |
+
+### Interactive Types
+
+| Type | Description |
+|------|-------------|
+| `PaykitMessageBuilder` | Create protocol messages |
+| `ReceiptStore` | Store receipts and private endpoints |
+| `ReceiptRequest` | Receipt request details |
+| `PrivateEndpointOffer` | Private endpoint offer |
+| `ParsedMessage` | Parsed protocol message |
+| `PaykitMessageType` | Message type enum |
+
+### Selection Types
+
+| Type | Description |
+|------|-------------|
+| `SelectionStrategy` | Balanced, CostOptimized, SpeedOptimized, PrivacyOptimized |
+| `SelectionPreferences` | Strategy and constraints |
+| `SelectionResult` | Primary and fallback methods |
+
+### Subscription Types
+
+| Type | Description |
+|------|-------------|
+| `SubscriptionTerms` | Subscription configuration |
+| `PaymentFrequency` | Daily, Weekly, Monthly, Yearly, Custom |
+| `ProrationResult` | Credit, charge, and net amounts |
+
+### Error Types
+
+| Error | Description |
+|-------|-------------|
+| `Transport` | Network/I/O errors |
+| `Validation` | Invalid input/format |
+| `NotFound` | Resource not found |
+| `Serialization` | JSON errors |
+| `NetworkTimeout` | Connection timeout |
+| `AuthenticationError` | Auth failed |
+| `SessionError` | Session expired/invalid |
+| `RateLimitError` | Rate limit exceeded |
+| `PermissionDenied` | Access denied |
 
 ## Thread Safety
 
 All types are thread-safe. The `PaykitClient` manages its own Tokio runtime internally and can be used from any thread.
+
+## Secure Storage
+
+### iOS (Keychain)
+
+Use the provided `KeychainStorage.swift` adapter:
+
+```swift
+let keychain = KeychainStorage(serviceIdentifier: Bundle.main.bundleIdentifier!)
+keychain.store(key: "private_key", value: keyData)
+```
+
+### Android (EncryptedSharedPreferences)
+
+Use the provided `EncryptedPreferencesStorage.kt` adapter:
+
+```kotlin
+val storage = EncryptedPreferencesStorage.create(context)
+storage.store("private_key", keyBytes)
+```
+
+## Integration with pubky-noise
+
+For encrypted channel communication, use the `pubky-noise` FFI bindings:
+
+```swift
+// 1. Establish Noise connection using pubky-noise
+let noiseManager = FfiNoiseManager.newClient(config: config, seed: seed, kid: kid, deviceId: deviceId)
+let result = noiseManager.initiateConnection(serverPk: peerPubkey, hint: nil)
+
+// 2. Complete handshake
+let sessionId = noiseManager.completeConnection(sessionId: result.sessionId, serverResponse: response)
+
+// 3. Use PaykitMessageBuilder to create messages
+let builder = PaykitMessageBuilder()
+let offerJson = builder.createEndpointOffer(methodId: "lightning", endpoint: invoice)
+
+// 4. Encrypt and send via Noise channel
+let encrypted = noiseManager.encrypt(sessionId: sessionId, plaintext: offerJson.data(using: .utf8)!)
+// Send encrypted data...
+
+// 5. Receive and decrypt
+let decrypted = noiseManager.decrypt(sessionId: sessionId, ciphertext: receivedData)
+let parsed = builder.parseMessage(messageJson: String(data: decrypted, encoding: .utf8)!)
+```
+
+## Demo Apps
+
+Complete demo applications are available:
+
+- **iOS Demo**: `ios-demo/` - SwiftUI app with full Paykit features
+- **Android Demo**: `android-demo/` - Jetpack Compose app with Material 3
 
 ## License
 

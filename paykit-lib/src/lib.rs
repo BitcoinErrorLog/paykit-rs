@@ -41,6 +41,7 @@ pub mod methods;
 pub mod private_endpoints;
 pub mod rotation;
 pub mod routing;
+pub mod secure_storage;
 pub mod selection;
 mod transport;
 pub mod uri;

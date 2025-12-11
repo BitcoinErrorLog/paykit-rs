@@ -2882,7 +2882,7 @@ dependencies = [
 
 [[package]]
 name = "paykit-lib"
-version = "0.0.1"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -3420,7 +3420,7 @@ dependencies = [
 
 [[package]]
 name = "pubky-noise"
-version = "0.7.0"
+version = "1.0.0"
 dependencies = [
  "blake2",
  "cfg-if",

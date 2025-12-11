@@ -2,14 +2,52 @@
 
 All notable changes to the Paykit project are documented in this file.
 
-## [Unreleased]
+## [1.0.0] - 2025-12-11
+
+### Production Readiness Release
+
+This release marks the first stable production-ready version of paykit-lib.
 
 ### Added
-- Comprehensive documentation cleanup and consolidation
-- Component relationship documentation
-- Cross-component consistency improvements
 
-## [1.0.0] - 2024
+#### Error Handling
+- **PaykitError**: Comprehensive error enum with 21 variants
+- **PaykitErrorCode**: Numeric codes for FFI compatibility
+- `is_retryable()` and `retry_after_ms()` helpers
+- Specific errors: `InsufficientFunds`, `InvoiceExpired`, `PaymentRejected`
+
+#### Secure Storage
+- **SecureKeyStorage Trait**: Platform-agnostic secure key storage
+- **InMemoryKeyStorage**: Testing implementation
+- Platform stubs: iOS Keychain, Android Keystore, WebCrypto, Desktop
+- FFI bridge signatures and integration examples
+
+#### Payment Executors
+- **LndExecutor**: Lightning payments via LND REST API
+- **EsploraExecutor**: On-chain verification via Esplora API
+- **BitcoinNetwork**: Mainnet, Testnet, Signet, Regtest support
+- Configuration structs: `LndConfig`, `EsploraConfig`, `ElectrumConfig`
+
+#### Testing Infrastructure
+- **TestNetwork**: Simulated payment network for E2E testing
+- **TestWallet**: Mock wallet with LightningExecutor and BitcoinExecutor
+- Test fixtures: addresses, amounts, keypairs, invoices
+- Assertion helpers and PaymentAssertionBuilder
+
+#### API Improvements
+- **Prelude Module**: Convenient imports via `use paykit_lib::prelude::*`
+- **MethodId**: `new()`, `as_str()`, `onchain()`, `lightning()` helpers
+- **EndpointData**: `new()`, `as_str()`, `is_empty()`, `len()` helpers
+- Well-known constants: `MethodId::ONCHAIN`, `MethodId::LIGHTNING`
+
+#### Documentation
+- **Integration Guide**: Complete usage documentation
+- **Production Deployment Guide**: Configuration, security, monitoring
+
+### Changed
+- Improved fee estimate tie-breaking (prefer lower block counts)
+
+## [0.9.0] - 2024
 
 ### Core Components
 

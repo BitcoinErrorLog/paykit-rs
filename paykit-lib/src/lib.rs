@@ -39,6 +39,7 @@ pub mod errors;
 pub mod executors;
 pub mod health;
 pub mod methods;
+pub mod prelude;
 pub mod private_endpoints;
 pub mod rotation;
 pub mod routing;
@@ -67,15 +68,143 @@ pub type Result<T> = std::result::Result<T, PaykitError>;
 /// Identifier for a payment method specification.
 ///
 /// Typically based filename component stored under `/pub/paykit.app/v0/…`.
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::MethodId;
+///
+/// // Create from &str
+/// let method: MethodId = "lightning".into();
+///
+/// // Or explicitly
+/// let method = MethodId::new("onchain");
+///
+/// // Access the inner value
+/// assert!(method.as_str().starts_with("on"));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct MethodId(pub String);
+
+impl MethodId {
+    /// Create a new MethodId from a string.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
+    }
+
+    /// Get the method ID as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Well-known method ID for on-chain Bitcoin payments.
+    pub const ONCHAIN: &'static str = "onchain";
+
+    /// Well-known method ID for Lightning payments.
+    pub const LIGHTNING: &'static str = "lightning";
+
+    /// Create the on-chain method ID.
+    pub fn onchain() -> Self {
+        Self::new(Self::ONCHAIN)
+    }
+
+    /// Create the lightning method ID.
+    pub fn lightning() -> Self {
+        Self::new(Self::LIGHTNING)
+    }
+}
+
+impl From<&str> for MethodId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<String> for MethodId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl AsRef<str> for MethodId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for MethodId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Serialized payload served by a payment endpoint (UTF-8 text such as JSON, lnurl, etc.).
 ///
 /// If you need to transmit binary payloads, encode them (e.g., base64) before wrapping
 /// in `EndpointData`.
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::EndpointData;
+///
+/// // Create from &str
+/// let data: EndpointData = "bc1qtest...".into();
+///
+/// // Or explicitly
+/// let data = EndpointData::new("lnurl1...");
+///
+/// // Access the inner value
+/// assert!(data.as_str().starts_with("lnurl"));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EndpointData(pub String);
+
+impl EndpointData {
+    /// Create new endpoint data from a string.
+    pub fn new(data: impl Into<String>) -> Self {
+        Self(data.into())
+    }
+
+    /// Get the endpoint data as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Check if the endpoint data is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get the length of the endpoint data.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl From<&str> for EndpointData {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl From<String> for EndpointData {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl AsRef<str> for EndpointData {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for EndpointData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Collection of supported payment entries keyed by method identifiers.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

@@ -16,6 +16,12 @@ This directory contains additional documentation for the Paykit project.
 ### Architecture & Design
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and component relationships
 
+### Production & Security
+- **[PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md)** - Production deployment guide
+- **[SECURITY_HARDENING.md](./SECURITY_HARDENING.md)** - Security hardening recommendations
+- **[DEMO_VS_PRODUCTION.md](./DEMO_VS_PRODUCTION.md)** - Demo vs production code boundaries
+- **[CONCURRENCY.md](./CONCURRENCY.md)** - Lock poisoning policy and thread safety
+
 ### Feature Guides
 - **[autopay-guide.md](./autopay-guide.md)** - Auto-pay rules and spending limits
 - **[mobile-integration.md](./mobile-integration.md)** - iOS and Android integration guide
@@ -27,6 +33,7 @@ This directory contains additional documentation for the Paykit project.
 - **[paykit-lib/README.md](../paykit-lib/README.md)** - Core library API reference
 - **[paykit-interactive/README.md](../paykit-interactive/README.md)** - Interactive payment protocol
 - **[paykit-subscriptions/README.md](../paykit-subscriptions/README.md)** - Subscription management
+- **[paykit-subscriptions/docs/NONCE_CLEANUP_GUIDE.md](../paykit-subscriptions/docs/NONCE_CLEANUP_GUIDE.md)** - Nonce cleanup automation
 
 #### Demo Applications
 - **[paykit-demo-core/README.md](../paykit-demo-core/README.md)** - Shared demo logic

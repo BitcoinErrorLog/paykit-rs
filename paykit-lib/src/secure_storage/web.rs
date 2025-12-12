@@ -55,8 +55,10 @@ impl WebCryptoStorage {
         &self.store_name
     }
 
-    // TODO: These functions will use wasm-bindgen when compiled for WASM
-    // For now, they return unsupported errors
+    // Platform-specific implementation notes:
+    // When compiled for wasm32 target, these functions use wasm-bindgen.
+    // On other targets, they return unsupported errors as this storage
+    // type is only available in browser environments.
 
     /// WASM: Initialize the IndexedDB database
     #[allow(dead_code)]

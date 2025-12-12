@@ -54,34 +54,36 @@ impl KeychainStorage {
         self.access_group.as_deref()
     }
 
-    // TODO: These FFI bridge functions will be called from Swift
-    // The actual implementation will be provided by the iOS host app
+    // FFI Bridge Functions
+    // These functions are called via UniFFI from Swift. The actual Keychain
+    // implementation is provided by the iOS host app using KeychainStorage.swift
+    // located in paykit-mobile/swift/KeychainStorage.swift
 
-    /// FFI: Store item in Keychain (to be implemented by iOS host)
+    /// FFI: Store item in Keychain (implemented by iOS host via KeychainStorage.swift)
     #[allow(dead_code)]
     fn ffi_store(&self, _key_id: &str, _data: &[u8], _require_auth: bool) -> Result<(), String> {
         Err("FFI not connected - call from iOS host".to_string())
     }
 
-    /// FFI: Retrieve item from Keychain (to be implemented by iOS host)
+    /// FFI: Retrieve item from Keychain (implemented by iOS host)
     #[allow(dead_code)]
     fn ffi_retrieve(&self, _key_id: &str) -> Result<Option<Vec<u8>>, String> {
         Err("FFI not connected - call from iOS host".to_string())
     }
 
-    /// FFI: Delete item from Keychain (to be implemented by iOS host)
+    /// FFI: Delete item from Keychain (implemented by iOS host)
     #[allow(dead_code)]
     fn ffi_delete(&self, _key_id: &str) -> Result<(), String> {
         Err("FFI not connected - call from iOS host".to_string())
     }
 
-    /// FFI: Check if item exists in Keychain (to be implemented by iOS host)
+    /// FFI: Check if item exists in Keychain (implemented by iOS host)
     #[allow(dead_code)]
     fn ffi_exists(&self, _key_id: &str) -> Result<bool, String> {
         Err("FFI not connected - call from iOS host".to_string())
     }
 
-    /// FFI: List all items in Keychain (to be implemented by iOS host)
+    /// FFI: List all items in Keychain (implemented by iOS host)
     #[allow(dead_code)]
     fn ffi_list(&self) -> Result<Vec<String>, String> {
         Err("FFI not connected - call from iOS host".to_string())

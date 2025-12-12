@@ -775,9 +775,19 @@ impl PaykitInteractiveManagerFFI {
     /// # Arguments
     ///
     /// * `generator` - Callback for generating receipts (implement in Swift/Kotlin)
-    pub fn set_generator(&self, generator: Box<dyn ReceiptGeneratorCallback>) {
-        let mut guard = self.generator.write().unwrap();
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the internal lock is poisoned.
+    pub fn set_generator(&self, generator: Box<dyn ReceiptGeneratorCallback>) -> Result<()> {
+        let mut guard = self
+            .generator
+            .write()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Generator lock poisoned".to_string(),
+            })?;
         *guard = Some(generator);
+        Ok(())
     }
 
     /// Handle an incoming message from a peer.
@@ -833,11 +843,12 @@ impl PaykitInteractiveManagerFFI {
                 }
 
                 // Get the generator
-                let generator_guard = self.generator.read().map_err(|_| {
-                    PaykitMobileError::Internal {
-                        message: "Lock poisoned".to_string(),
-                    }
-                })?;
+                let generator_guard =
+                    self.generator
+                        .read()
+                        .map_err(|_| PaykitMobileError::Internal {
+                            message: "Lock poisoned".to_string(),
+                        })?;
 
                 let generator = match generator_guard.as_ref() {
                     Some(g) => g,
@@ -857,7 +868,9 @@ impl PaykitInteractiveManagerFFI {
                         // Save locally
                         self.store.save_receipt(confirmed_receipt.clone())?;
                         // Respond with confirmation
-                        let response = self.message_builder.create_receipt_confirm(confirmed_receipt)?;
+                        let response = self
+                            .message_builder
+                            .create_receipt_confirm(confirmed_receipt)?;
                         Ok(Some(response))
                     } else {
                         let response = self.message_builder.create_error(
@@ -868,10 +881,9 @@ impl PaykitInteractiveManagerFFI {
                     }
                 } else {
                     let err_msg = result.error.unwrap_or_else(|| "Unknown error".to_string());
-                    let response = self.message_builder.create_error(
-                        "GENERATION_FAILED".to_string(),
-                        err_msg,
-                    )?;
+                    let response = self
+                        .message_builder
+                        .create_error("GENERATION_FAILED".to_string(), err_msg)?;
                     Ok(Some(response))
                 }
             }
@@ -888,7 +900,11 @@ impl PaykitInteractiveManagerFFI {
             ParsedMessage::Error { error } => {
                 // Log error, no response needed
                 #[cfg(feature = "tracing")]
-                tracing::warn!("Received error from peer: {} - {}", error.code, error.message);
+                tracing::warn!(
+                    "Received error from peer: {} - {}",
+                    error.code,
+                    error.message
+                );
                 let _ = error; // Suppress unused warning
                 Ok(None)
             }
@@ -974,11 +990,9 @@ impl PaykitInteractiveManagerFFI {
                 self.store.save_receipt(receipt.clone())?;
                 Ok(receipt)
             }
-            ParsedMessage::Error { error } => {
-                Err(PaykitMobileError::Transport {
-                    message: format!("Payment rejected: {} - {}", error.code, error.message),
-                })
-            }
+            ParsedMessage::Error { error } => Err(PaykitMobileError::Transport {
+                message: format!("Payment rejected: {} - {}", error.code, error.message),
+            }),
             _ => Err(PaykitMobileError::Validation {
                 message: "Unexpected response type".to_string(),
             }),
@@ -997,12 +1011,9 @@ impl PaykitInteractiveManagerFFI {
     /// # Returns
     ///
     /// JSON message to send over Noise channel.
-    pub fn create_endpoint_offer(
-        &self,
-        method_id: String,
-        endpoint: String,
-    ) -> Result<String> {
-        self.message_builder.create_endpoint_offer(method_id, endpoint)
+    pub fn create_endpoint_offer(&self, method_id: String, endpoint: String) -> Result<String> {
+        self.message_builder
+            .create_endpoint_offer(method_id, endpoint)
     }
 
     /// Get the receipt store.
@@ -1258,10 +1269,12 @@ mod tests {
     }
 
     /// Helper to create manager with generator for tests
-    fn create_test_manager(generator: Box<dyn ReceiptGeneratorCallback>) -> Arc<PaykitInteractiveManagerFFI> {
+    fn create_test_manager(
+        generator: Box<dyn ReceiptGeneratorCallback>,
+    ) -> Arc<PaykitInteractiveManagerFFI> {
         let store = ReceiptStore::new();
         let manager = PaykitInteractiveManagerFFI::new(store);
-        manager.set_generator(generator);
+        manager.set_generator(generator).unwrap();
         manager
     }
 
@@ -1270,14 +1283,18 @@ mod tests {
         let manager = create_test_manager(Box::new(EchoReceiptGenerator));
 
         // Create an endpoint offer message
-        let offer_msg = manager.create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string()).unwrap();
+        let offer_msg = manager
+            .create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string())
+            .unwrap();
 
         // Handle it (simulating receiving this message)
-        let response = manager.handle_message(
-            offer_msg,
-            "peer_pubkey".to_string(),
-            "my_pubkey".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(
+                offer_msg,
+                "peer_pubkey".to_string(),
+                "my_pubkey".to_string(),
+            )
+            .unwrap();
 
         // Should respond with Ack
         assert!(response.is_some());
@@ -1285,7 +1302,9 @@ mod tests {
         assert!(response_json.contains("Ack"));
 
         // Endpoint should be saved
-        let endpoint = manager.get_private_endpoint("peer_pubkey".to_string(), "lightning".to_string()).unwrap();
+        let endpoint = manager
+            .get_private_endpoint("peer_pubkey".to_string(), "lightning".to_string())
+            .unwrap();
         assert!(endpoint.is_some());
         assert_eq!(endpoint.unwrap().endpoint, "lnbc1...");
     }
@@ -1308,11 +1327,13 @@ mod tests {
         let request_msg = builder.create_receipt_request(request).unwrap();
 
         // Handle the request
-        let response = manager.handle_message(
-            request_msg,
-            "payer_pubkey".to_string(),
-            "my_pubkey".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(
+                request_msg,
+                "payer_pubkey".to_string(),
+                "my_pubkey".to_string(),
+            )
+            .unwrap();
 
         // Should respond with ConfirmReceipt
         assert!(response.is_some());
@@ -1343,11 +1364,13 @@ mod tests {
         let request_msg = builder.create_receipt_request(request).unwrap();
 
         // Handle the request
-        let response = manager.handle_message(
-            request_msg,
-            "payer_pubkey".to_string(),
-            "my_pubkey".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(
+                request_msg,
+                "payer_pubkey".to_string(),
+                "my_pubkey".to_string(),
+            )
+            .unwrap();
 
         // Should respond with Error
         assert!(response.is_some());
@@ -1374,11 +1397,13 @@ mod tests {
         let request_msg = builder.create_receipt_request(request).unwrap();
 
         // Handle the request
-        let response = manager.handle_message(
-            request_msg,
-            "payer_pubkey".to_string(),
-            "my_pubkey".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(
+                request_msg,
+                "payer_pubkey".to_string(),
+                "my_pubkey".to_string(),
+            )
+            .unwrap();
 
         // Should respond with Error
         assert!(response.is_some());
@@ -1407,11 +1432,13 @@ mod tests {
         let request_msg = builder.create_receipt_request(request).unwrap();
 
         // Handle the request - should return error because no generator
-        let response = manager.handle_message(
-            request_msg,
-            "payer_pubkey".to_string(),
-            "my_pubkey".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(
+                request_msg,
+                "payer_pubkey".to_string(),
+                "my_pubkey".to_string(),
+            )
+            .unwrap();
 
         assert!(response.is_some());
         let response_json = response.unwrap();
@@ -1424,14 +1451,16 @@ mod tests {
         let manager = create_test_manager(Box::new(EchoReceiptGenerator));
 
         // Create a payment request
-        let request_msg = manager.create_payment_request(
-            "my_pubkey".to_string(),
-            "payee_pubkey".to_string(),
-            "lightning".to_string(),
-            Some("1000".to_string()),
-            Some("SAT".to_string()),
-            None,
-        ).unwrap();
+        let request_msg = manager
+            .create_payment_request(
+                "my_pubkey".to_string(),
+                "payee_pubkey".to_string(),
+                "lightning".to_string(),
+                Some("1000".to_string()),
+                Some("SAT".to_string()),
+                None,
+            )
+            .unwrap();
 
         // Should be a valid RequestReceipt message
         assert!(request_msg.contains("RequestReceipt"));
@@ -1460,7 +1489,8 @@ mod tests {
         let confirm_msg = builder.create_receipt_confirm(receipt).unwrap();
 
         // Handle response with matching ID
-        let result = manager.handle_payment_response(confirm_msg.clone(), "expected_id".to_string());
+        let result =
+            manager.handle_payment_response(confirm_msg.clone(), "expected_id".to_string());
         assert!(result.is_ok());
         let confirmed = result.unwrap();
         assert_eq!(confirmed.receipt_id, "expected_id");
@@ -1477,11 +1507,9 @@ mod tests {
         let builder = PaykitMessageBuilder::new();
         let ack_msg = builder.create_ack().unwrap();
 
-        let response = manager.handle_message(
-            ack_msg,
-            "peer".to_string(),
-            "me".to_string(),
-        ).unwrap();
+        let response = manager
+            .handle_message(ack_msg, "peer".to_string(), "me".to_string())
+            .unwrap();
 
         // Ack should not produce a response
         assert!(response.is_none());

@@ -345,16 +345,27 @@ impl AuthenticatedTransportFFI {
     }
 
     /// Check if this transport uses a real callback (production) or mock storage.
-    pub fn is_mock(&self) -> bool {
-        let backend = self.backend.read().unwrap();
-        matches!(*backend, StorageBackend::Mock(_))
+    ///
+    /// Returns `true` for mock transport, `false` for callback-based transport.
+    /// Returns an error if the internal lock is poisoned.
+    pub fn is_mock(&self) -> Result<bool> {
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Transport lock poisoned".to_string(),
+            })?;
+        Ok(matches!(*backend, StorageBackend::Mock(_)))
     }
 
     /// Put (create or update) a file at the given path.
     pub fn put(&self, path: String, content: String) -> Result<()> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
@@ -379,9 +390,12 @@ impl AuthenticatedTransportFFI {
 
     /// Get a file at the given path.
     pub fn get(&self, path: String) -> Result<Option<String>> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
@@ -405,9 +419,12 @@ impl AuthenticatedTransportFFI {
 
     /// Delete a file at the given path.
     pub fn delete(&self, path: String) -> Result<()> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
@@ -432,9 +449,12 @@ impl AuthenticatedTransportFFI {
 
     /// List files with a given prefix.
     pub fn list(&self, prefix: String) -> Result<Vec<String>> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
@@ -579,9 +599,12 @@ impl UnauthenticatedTransportFFI {
     /// the underlying Pubky client.
     #[uniffi::constructor]
     pub fn from_authenticated(auth: Arc<AuthenticatedTransportFFI>) -> Result<Arc<Self>> {
-        let backend = auth.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = auth
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => Ok(Arc::new(Self {
@@ -594,16 +617,27 @@ impl UnauthenticatedTransportFFI {
     }
 
     /// Check if this transport uses a real callback (production) or mock storage.
-    pub fn is_mock(&self) -> bool {
-        let backend = self.backend.read().unwrap();
-        matches!(*backend, UnauthenticatedStorageBackend::Mock(_))
+    ///
+    /// Returns `true` for mock transport, `false` for callback-based transport.
+    /// Returns an error if the internal lock is poisoned.
+    pub fn is_mock(&self) -> Result<bool> {
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Transport lock poisoned".to_string(),
+            })?;
+        Ok(matches!(*backend, UnauthenticatedStorageBackend::Mock(_)))
     }
 
     /// Get a file at the given path from a public key's storage.
     pub fn get(&self, owner_pubkey: String, path: String) -> Result<Option<String>> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             UnauthenticatedStorageBackend::Mock(storage) => {
@@ -629,9 +663,12 @@ impl UnauthenticatedTransportFFI {
 
     /// List files with a given prefix from a public key's storage.
     pub fn list(&self, owner_pubkey: String, prefix: String) -> Result<Vec<String>> {
-        let backend = self.backend.read().map_err(|_| PaykitMobileError::Internal {
-            message: "Lock poisoned".to_string(),
-        })?;
+        let backend = self
+            .backend
+            .read()
+            .map_err(|_| PaykitMobileError::Internal {
+                message: "Lock poisoned".to_string(),
+            })?;
 
         match &*backend {
             UnauthenticatedStorageBackend::Mock(storage) => {
@@ -998,7 +1035,7 @@ mod tests {
             "test_owner".to_string(),
         );
 
-        assert!(!transport.is_mock());
+        assert!(!transport.is_mock().unwrap());
 
         // Test get
         let result = transport.get("/test/exists".to_string()).unwrap();
@@ -1032,13 +1069,17 @@ mod tests {
 
         let transport = UnauthenticatedTransportFFI::from_callback(Box::new(TestCallback));
 
-        assert!(!transport.is_mock());
+        assert!(!transport.is_mock().unwrap());
 
         // Test get
-        let result = transport.get("user1".to_string(), "/test/data".to_string()).unwrap();
+        let result = transport
+            .get("user1".to_string(), "/test/data".to_string())
+            .unwrap();
         assert_eq!(result, Some("user1_data".to_string()));
 
-        let result = transport.get("user2".to_string(), "/test/data".to_string()).unwrap();
+        let result = transport
+            .get("user2".to_string(), "/test/data".to_string())
+            .unwrap();
         assert!(result.is_none());
     }
 }

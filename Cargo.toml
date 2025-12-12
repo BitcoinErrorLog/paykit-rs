@@ -1,3 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["paykit-lib", "paykit-interactive", "paykit-subscriptions", "paykit-mobile", "paykit-demo-core", "paykit-demo-cli", "paykit-demo-web"]
+
+# Workspace-level dependencies for sharing across crates
+[workspace.dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.8"
+chacha20poly1305 = "0.10"

@@ -227,7 +227,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Simulate payment response
     let response = PaymentRequestResponse::Accepted {
         request_id: payment_request.request_id.clone(),
-        receipt: PaykitReceipt::new(
+        receipt: Box::new(PaykitReceipt::new(
             "receipt_123".to_string(),
             customer_key.clone(),
             merchant_key.clone(),
@@ -235,7 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some("50000".to_string()),
             Some("SAT".to_string()),
             serde_json::json!({}),
-        ),
+        )),
     };
     server.process_payment_response(response)?;
 

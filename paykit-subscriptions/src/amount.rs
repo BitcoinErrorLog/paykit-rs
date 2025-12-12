@@ -138,7 +138,7 @@ impl Amount {
     /// assert_eq!(sum.as_sats(), 150);
     /// ```
     pub fn saturating_add(&self, other: &Self) -> Self {
-        self.checked_add(other).unwrap_or_else(|| Self {
+        self.checked_add(other).unwrap_or(Self {
             value: Decimal::MAX,
         })
     }
@@ -286,28 +286,62 @@ impl Amount {
             })
     }
 
-    /// Calculate a percentage of this amount.
+    /// Calculate a percentage of this amount using precise Decimal arithmetic.
     ///
     /// # Arguments
     ///
-    /// * `rate` - The percentage rate (e.g., 8.25 for 8.25%)
+    /// * `rate` - The percentage rate as a Decimal (e.g., Decimal::from(10) for 10%)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use paykit_subscriptions::Amount;
+    /// use rust_decimal::Decimal;
+    ///
+    /// let amount = Amount::from_sats(10000);
+    /// let tax = amount.percentage(Decimal::from(10)); // 10%
+    /// assert_eq!(tax.as_sats(), 1000);
+    ///
+    /// // For fractional percentages, use from_str or prelude
+    /// use rust_decimal_macros::dec;
+    /// let precise_tax = amount.percentage(dec!(8.25)); // 8.25%
+    /// assert_eq!(precise_tax.as_sats(), 825);
+    /// ```
+    pub fn percentage(&self, rate: Decimal) -> Self {
+        let rate_fraction = rate
+            .checked_div(Decimal::from(100))
+            .unwrap_or(Decimal::ZERO);
+        self.value
+            .checked_mul(rate_fraction)
+            .map(|value| Self {
+                value: value.round_dp(0),
+            })
+            .unwrap_or_else(Self::zero)
+    }
+
+    /// Calculate a percentage using an f64 rate (convenience method).
+    ///
+    /// # Note
+    ///
+    /// This method converts f64 to Decimal which may introduce minor precision loss.
+    /// For financial calculations requiring exact precision, prefer [`Self::percentage`]
+    /// with a Decimal parameter.
+    ///
+    /// # Arguments
+    ///
+    /// * `rate` - The percentage rate as f64 (e.g., 10.0 for 10%)
     ///
     /// # Examples
     ///
     /// ```rust
     /// use paykit_subscriptions::Amount;
     /// let amount = Amount::from_sats(10000);
-    /// let tax = amount.percentage(10.0); // 10%
+    /// let tax = amount.percentage_f64(10.0); // 10%
     /// assert_eq!(tax.as_sats(), 1000);
     /// ```
-    pub fn percentage(&self, rate: f64) -> Self {
-        let rate_decimal = Decimal::from_f64_retain(rate / 100.0).unwrap_or(Decimal::ZERO);
-        self.value
-            .checked_mul(rate_decimal)
-            .map(|value| Self {
-                value: value.round_dp(0),
-            })
-            .unwrap_or_else(Self::zero)
+    pub fn percentage_f64(&self, rate: f64) -> Self {
+        let rate_decimal = Decimal::from_f64_retain(rate).unwrap_or(Decimal::ZERO);
+        self.percentage(rate_decimal)
     }
 
     /// Divide by a divisor.

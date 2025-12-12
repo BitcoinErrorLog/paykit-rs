@@ -172,7 +172,7 @@ impl PaymentRequest {
 pub enum PaymentRequestResponse {
     Accepted {
         request_id: String,
-        receipt: paykit_interactive::PaykitReceipt,
+        receipt: Box<paykit_interactive::PaykitReceipt>,
     },
     Declined {
         request_id: String,

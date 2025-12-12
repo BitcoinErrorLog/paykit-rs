@@ -414,32 +414,28 @@ impl MetadataValidator {
     pub fn validate(&self, metadata: &PaymentMetadata) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
-        if self.require_order_id {
-            if metadata
+        if self.require_order_id
+            && metadata
                 .order
                 .as_ref()
                 .and_then(|o| o.order_id.as_ref())
                 .is_none()
-            {
-                errors.push("Order ID is required".to_string());
-            }
+        {
+            errors.push("Order ID is required".to_string());
         }
 
-        if self.require_shipping {
-            if metadata
+        if self.require_shipping
+            && metadata
                 .shipping
                 .as_ref()
                 .and_then(|s| s.address.as_ref())
                 .is_none()
-            {
-                errors.push("Shipping address is required".to_string());
-            }
+        {
+            errors.push("Shipping address is required".to_string());
         }
 
-        if self.require_tax {
-            if metadata.tax.is_none() {
-                errors.push("Tax information is required".to_string());
-            }
+        if self.require_tax && metadata.tax.is_none() {
+            errors.push("Tax information is required".to_string());
         }
 
         if errors.is_empty() {

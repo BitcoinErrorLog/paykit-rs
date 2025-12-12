@@ -14,6 +14,12 @@ pub struct MockStorage {
     endpoints: Arc<Mutex<HashMap<(String, String), String>>>,
 }
 
+impl Default for MockStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockStorage {
     pub fn new() -> Self {
         Self {
@@ -109,6 +115,12 @@ impl PaykitStorage for MockStorage {
 pub struct MockReceiptGenerator {
     /// If true, will add invoice metadata to receipts
     pub add_invoice: bool,
+}
+
+impl Default for MockReceiptGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockReceiptGenerator {

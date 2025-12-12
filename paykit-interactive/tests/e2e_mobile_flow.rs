@@ -15,7 +15,7 @@ use serde_json::json;
 use std::sync::Arc;
 
 /// Helper to create test public keys
-fn test_pubkey(name: &str) -> PublicKey {
+fn test_pubkey(_name: &str) -> PublicKey {
     let keypair = pubky::Keypair::random();
     keypair.public_key()
 }

@@ -1,10 +1,16 @@
 //! Endpoint Rotation Manager
 //!
 //! This module provides the manager for automatic endpoint rotation.
+//!
+//! # Thread Safety
+//!
+//! This manager uses `RwLock` for thread-safe access. Lock poisoning
+//! is handled gracefully by returning errors or default values rather
+//! than panicking.
 
 use super::policies::{EndpointTracker, RotationPolicy};
 use crate::methods::PaymentMethodRegistry;
-use crate::{AuthenticatedTransport, EndpointData, MethodId, Result};
+use crate::{AuthenticatedTransport, EndpointData, MethodId, PaykitError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -48,6 +54,11 @@ impl RotationConfig {
 /// Callback type for rotation events.
 pub type RotationCallback = Arc<dyn Fn(&MethodId, &EndpointData) + Send + Sync>;
 
+/// Helper function to create a lock poisoning error.
+fn lock_error(context: &str) -> PaykitError {
+    PaykitError::Internal(format!("EndpointRotationManager: lock poisoned during {}", context))
+}
+
 /// Manager for endpoint rotation.
 ///
 /// The rotation manager:
@@ -89,53 +100,77 @@ impl EndpointRotationManager {
     }
 
     /// Register a callback for rotation events.
+    ///
+    /// If the lock is poisoned, the callback is silently ignored.
     pub fn on_rotation(&self, callback: RotationCallback) {
-        let mut callbacks = self.callbacks.write().expect("lock poisoned");
-        callbacks.push(callback);
+        if let Ok(mut callbacks) = self.callbacks.write() {
+            callbacks.push(callback);
+        }
     }
 
     /// Set the current endpoint for a method.
+    ///
+    /// If the lock is poisoned, the operation is silently ignored.
     pub fn set_endpoint(&self, method_id: &MethodId, endpoint: EndpointData) {
-        let mut endpoints = self.endpoints.write().expect("lock poisoned");
-        endpoints.insert(method_id.0.clone(), endpoint);
+        if let Ok(mut endpoints) = self.endpoints.write() {
+            endpoints.insert(method_id.0.clone(), endpoint);
+        }
 
         // Initialize tracker if needed
-        let mut trackers = self.trackers.write().expect("lock poisoned");
-        trackers.entry(method_id.0.clone()).or_default();
+        if let Ok(mut trackers) = self.trackers.write() {
+            trackers.entry(method_id.0.clone()).or_default();
+        }
     }
 
     /// Get the current endpoint for a method.
+    ///
+    /// Returns `None` if the lock is poisoned or endpoint not found.
     pub fn get_endpoint(&self, method_id: &MethodId) -> Option<EndpointData> {
-        let endpoints = self.endpoints.read().expect("lock poisoned");
-        endpoints.get(&method_id.0).cloned()
+        self.endpoints
+            .read()
+            .ok()
+            .and_then(|endpoints| endpoints.get(&method_id.0).cloned())
     }
 
     /// Record that an endpoint was used.
     ///
     /// This updates the usage counter and may trigger rotation
-    /// if the policy requires it.
+    /// if the policy requires it. If the lock is poisoned, the operation
+    /// is silently ignored.
     pub fn record_use(&self, method_id: &MethodId) {
-        let mut trackers = self.trackers.write().expect("lock poisoned");
-        if let Some(tracker) = trackers.get_mut(&method_id.0) {
-            tracker.record_use();
+        if let Ok(mut trackers) = self.trackers.write() {
+            if let Some(tracker) = trackers.get_mut(&method_id.0) {
+                tracker.record_use();
+            }
         }
     }
 
     /// Check if rotation is needed for a method.
+    ///
+    /// Returns `false` if the lock is poisoned.
     pub fn needs_rotation(&self, method_id: &MethodId) -> bool {
         let policy = self.config.policy_for(method_id);
-        let trackers = self.trackers.read().expect("lock poisoned");
 
-        if let Some(tracker) = trackers.get(&method_id.0) {
-            tracker.needs_rotation(policy)
-        } else {
-            false
-        }
+        self.trackers
+            .read()
+            .ok()
+            .and_then(|trackers| {
+                trackers
+                    .get(&method_id.0)
+                    .map(|tracker| tracker.needs_rotation(policy))
+            })
+            .unwrap_or(false)
     }
 
     /// Get all methods that need rotation.
+    ///
+    /// Returns an empty vector if the lock is poisoned.
     pub fn methods_needing_rotation(&self) -> Vec<MethodId> {
-        let trackers = self.trackers.read().expect("lock poisoned");
+        let trackers = match self.trackers.read() {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+
         let mut needs_rotation = Vec::new();
 
         for (method_id_str, tracker) in trackers.iter() {
@@ -162,21 +197,20 @@ impl EndpointRotationManager {
 
         // Update stored endpoint
         {
-            let mut endpoints = self.endpoints.write().expect("lock poisoned");
+            let mut endpoints = self.endpoints.write().map_err(|_| lock_error("rotate/endpoints"))?;
             endpoints.insert(method_id.0.clone(), new_endpoint.clone());
         }
 
         // Reset tracker
         {
-            let mut trackers = self.trackers.write().expect("lock poisoned");
+            let mut trackers = self.trackers.write().map_err(|_| lock_error("rotate/trackers"))?;
             if let Some(tracker) = trackers.get_mut(&method_id.0) {
                 tracker.reset();
             }
         }
 
-        // Notify callbacks
-        {
-            let callbacks = self.callbacks.read().expect("lock poisoned");
+        // Notify callbacks (silently ignore lock errors here - not critical)
+        if let Ok(callbacks) = self.callbacks.read() {
             for callback in callbacks.iter() {
                 callback(method_id, &new_endpoint);
             }
@@ -227,9 +261,13 @@ impl EndpointRotationManager {
     }
 
     /// Get the tracker for a method.
+    ///
+    /// Returns `None` if the lock is poisoned or tracker not found.
     pub fn get_tracker(&self, method_id: &MethodId) -> Option<EndpointTracker> {
-        let trackers = self.trackers.read().expect("lock poisoned");
-        trackers.get(&method_id.0).cloned()
+        self.trackers
+            .read()
+            .ok()
+            .and_then(|trackers| trackers.get(&method_id.0).cloned())
     }
 
     /// Get the configuration.

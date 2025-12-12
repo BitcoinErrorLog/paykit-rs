@@ -245,8 +245,8 @@ impl ProrationCalculator {
             net_amount: Amount::new(net_rounded, currency.to_string()),
             currency: currency.to_string(),
             details: ProrationDetails {
-                old_amount: old_amount.clone(),
-                new_amount: new_amount.clone(),
+                old_amount: *old_amount,
+                new_amount: *new_amount,
                 total_days,
                 days_at_old_rate,
                 days_at_new_rate,

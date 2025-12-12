@@ -139,11 +139,10 @@ impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
             if let Some(pk_str) = name {
                 match pk_str.parse::<PublicKey>() {
                     Ok(pk) => contacts.push(pk),
-                    Err(err) => {
+                    Err(_err) => {
                         #[cfg(feature = "tracing")]
-                        tracing::warn!("invalid contact entry '{pk_str}': {err}");
-                        #[cfg(not(feature = "tracing"))]
-                        eprintln!("invalid contact entry '{pk_str}': {err}");
+                        tracing::warn!("invalid contact entry '{pk_str}': {_err}");
+                        // Silently skip invalid entries - callers receive valid contacts only
                         continue;
                     }
                 }

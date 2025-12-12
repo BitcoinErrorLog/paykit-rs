@@ -364,8 +364,17 @@ fn map_transport_error(label: &'static str, err: PaykitError) -> PaykitError {
     }
 }
 
-/// Tests
-#[cfg(all(test, feature = "pubky"))]
+/// Integration tests that require network access.
+///
+/// These tests are gated behind the `integration-tests` feature and are ignored
+/// by default. To run them:
+///
+/// ```bash
+/// cargo test --features integration-tests -- --ignored
+/// ```
+///
+/// Note: These tests require network access to connect to the Pubky testnet.
+#[cfg(all(test, feature = "integration-tests"))]
 mod tests {
     use std::collections::HashMap;
 
@@ -382,32 +391,52 @@ mod tests {
         public_key: PublicKey,
     }
 
+    /// Error type for test setup failures.
+    #[derive(Debug)]
+    struct TestSetupError(String);
+
+    impl std::fmt::Display for TestSetupError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "TestSetup error: {}", self.0)
+        }
+    }
+
+    impl std::error::Error for TestSetupError {}
+
     impl TestSetup {
-        async fn new() -> Self {
-            let testnet = EphemeralTestnet::start().await.unwrap();
+        async fn new() -> std::result::Result<Self, TestSetupError> {
+            let testnet = EphemeralTestnet::start()
+                .await
+                .map_err(|e| TestSetupError(format!("Failed to start testnet: {}", e)))?;
             let homeserver = testnet.homeserver();
-            let sdk = testnet.sdk().unwrap();
+            let sdk = testnet
+                .sdk()
+                .map_err(|e| TestSetupError(format!("Failed to get SDK: {}", e)))?;
 
             let pair = Keypair::random();
             let signer = sdk.signer(pair.clone());
-            let session = signer.signup(&homeserver.public_key(), None).await.unwrap();
+            let session = signer
+                .signup(&homeserver.public_key(), None)
+                .await
+                .map_err(|e| TestSetupError(format!("Failed to signup: {}", e)))?;
 
             let session_transport = PubkyAuthenticatedTransport::new(session.clone());
             let reader_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
-            Self {
+            Ok(Self {
                 _testnet: testnet,
                 session_transport,
                 reader_transport,
                 raw_session: session,
                 public_key: pair.public_key(),
-            }
+            })
         }
     }
 
     #[tokio::test]
+    #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn endpoint_round_trip_and_update() {
-        let setup = TestSetup::new().await;
+        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
 
         let method = MethodId("onchain".into());
         let endpoint = EndpointData("{\"address\":\"bc1...\"}".into());
@@ -451,8 +480,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn missing_endpoint_returns_none() {
-        let setup = TestSetup::new().await;
+        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
         let method = MethodId("bolt11".into());
 
         let missing = get_payment_endpoint(&setup.reader_transport, &setup.public_key, &method)
@@ -464,8 +494,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn list_reflects_additions_and_removals() {
-        let setup = TestSetup::new().await;
+        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
 
         let onchain = MethodId("onchain".into());
         let lightning = MethodId("lightning".into());
@@ -520,8 +551,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn removing_missing_endpoint_is_error() {
-        let setup = TestSetup::new().await;
+        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
         let method = MethodId("unused".into());
 
         remove_payment_endpoint(&setup.session_transport, method)
@@ -532,8 +564,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn lists_known_contacts() {
-        let setup = TestSetup::new().await;
+        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
 
         let contacts = get_known_contacts(&setup.reader_transport, &setup.public_key)
             .await

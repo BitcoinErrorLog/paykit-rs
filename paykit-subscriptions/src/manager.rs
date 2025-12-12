@@ -101,7 +101,7 @@ impl SubscriptionManager {
         let notification = RequestNotification {
             request_id: request.request_id.clone(),
             from: request.from.clone(),
-            amount: request.amount.clone(),
+            amount: request.amount,
             currency: request.currency.clone(),
             created_at: request.created_at,
         };

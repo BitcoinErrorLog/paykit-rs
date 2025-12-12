@@ -121,8 +121,7 @@ pub fn parse_uri(uri: &str) -> Result<PaykitUri> {
     }
 
     // Check for lightning: or lnbc prefix (Lightning invoice)
-    if uri.starts_with("lightning:") {
-        let invoice = uri.strip_prefix("lightning:").unwrap();
+    if let Some(invoice) = uri.strip_prefix("lightning:") {
         return Ok(PaykitUri::Invoice {
             method: MethodId("lightning".to_string()),
             data: invoice.to_string(),
@@ -158,10 +157,10 @@ pub fn parse_uri(uri: &str) -> Result<PaykitUri> {
         return parse_paykit_uri(stripped);
     }
 
-    Err(PaykitError::Transport(format!(
-        "Unrecognized URI format: {}",
-        uri
-    )))
+    Err(PaykitError::InvalidData {
+        field: "uri".to_string(),
+        reason: format!("Unrecognized URI format: {}", uri),
+    })
 }
 
 /// Parse a pubky:// URI.

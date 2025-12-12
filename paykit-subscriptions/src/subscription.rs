@@ -52,13 +52,13 @@ impl Subscription {
     /// Check if subscription is currently active
     pub fn is_active(&self) -> bool {
         let now = chrono::Utc::now().timestamp();
-        now >= self.starts_at && self.ends_at.map_or(true, |end| now < end)
+        now >= self.starts_at && self.ends_at.is_none_or(|end| now < end)
     }
 
     /// Check if subscription has expired
     pub fn is_expired(&self) -> bool {
         self.ends_at
-            .map_or(false, |end| chrono::Utc::now().timestamp() >= end)
+            .is_some_and(|end| chrono::Utc::now().timestamp() >= end)
     }
 
     /// Validate subscription data

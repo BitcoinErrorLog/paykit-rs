@@ -36,11 +36,13 @@ impl SubscriptionMonitor {
     }
 
     /// Start monitoring loop
+    ///
+    /// Errors during payment checks are silently ignored and retried on the next interval.
+    /// Callers should use `check_due_payments()` directly if error visibility is needed.
     pub async fn start(&self) -> Result<()> {
         loop {
-            if let Err(e) = self.check_due_payments().await {
-                eprintln!("Error checking due payments: {}", e);
-            }
+            // Silently continue on errors - check_due_payments returns errors for callers who need them
+            let _ = self.check_due_payments().await;
 
             sleep(self.check_interval).await;
         }
@@ -127,7 +129,7 @@ impl SubscriptionMonitor {
         let request = PaymentRequest::new(
             sub.provider.clone(),
             sub.subscriber.clone(),
-            terms.amount.clone(),
+            terms.amount,
             terms.currency.clone(),
             terms.method.clone(),
         )

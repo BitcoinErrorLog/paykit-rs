@@ -5,6 +5,11 @@ edition = "2021"
 description = "Mobile FFI bindings for Paykit (iOS/Android)"
 license = "MIT"
 
+[features]
+default = []
+# Enable tracing/logging support
+tracing = ["paykit-lib/tracing", "dep:tracing"]
+
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 name = "paykit_mobile"
@@ -27,6 +32,9 @@ serde_json = "1.0"
 
 # Error handling
 thiserror = "1.0"
+
+# Optional tracing support
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }

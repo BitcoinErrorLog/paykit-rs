@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use pubky::PubkySession;
+use pubky::{errors::RequestError, Error as PubkyError, PubkySession, StatusCode};
 
 use super::PAYKIT_PATH_PREFIX;
 use crate::transport::traits::AuthenticatedTransport;
@@ -27,6 +27,15 @@ impl From<PubkySession> for PubkyAuthenticatedTransport {
     fn from(session: PubkySession) -> Self {
         Self { session }
     }
+}
+
+/// Check if an error represents a "not found" (404 or 410 GONE) response.
+fn is_not_found(err: &PubkyError) -> bool {
+    matches!(
+        err,
+        PubkyError::Request(RequestError::Server { status, .. })
+            if *status == StatusCode::NOT_FOUND || *status == StatusCode::GONE
+    )
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -76,14 +85,8 @@ impl AuthenticatedTransport for PubkyAuthenticatedTransport {
                 let content = String::from_utf8_lossy(&bytes).to_string();
                 Ok(Some(content))
             }
-            Err(e) => {
-                let err_str = e.to_string();
-                if err_str.contains("404") || err_str.contains("not found") {
-                    Ok(None)
-                } else {
-                    Err(PaykitError::Transport(format!("get: {e}")))
-                }
-            }
+            Err(err) if is_not_found(&err) => Ok(None),
+            Err(err) => Err(PaykitError::Transport(format!("get: {err}"))),
         }
     }
 

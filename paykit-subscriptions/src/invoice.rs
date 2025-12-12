@@ -87,8 +87,11 @@ impl TaxInfo {
     }
 
     /// Calculate tax from a subtotal.
+    ///
+    /// Note: Uses f64 for rate, which may have minor precision loss.
+    /// For exact precision, construct the tax amount manually with Decimal.
     pub fn from_subtotal(description: impl Into<String>, rate: f64, subtotal: &Amount) -> Self {
-        let tax_amount = subtotal.percentage(rate);
+        let tax_amount = subtotal.percentage_f64(rate);
         Self::new(description, rate, tax_amount)
     }
 

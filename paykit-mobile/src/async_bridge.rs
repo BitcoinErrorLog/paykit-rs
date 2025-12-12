@@ -92,7 +92,46 @@ impl AsyncRuntime {
             .map_err(|e| format!("Failed to create runtime: {}", e))
     }
 
-    /// Run a future to completion (blocking).
+    /// Run a future to completion, blocking the current thread until complete.
+    ///
+    /// # Safety and Usage Restrictions
+    ///
+    /// **CRITICAL**: This function MUST NOT be called from within an existing Tokio
+    /// runtime context. Doing so will cause a panic or deadlock.
+    ///
+    /// ## Correct Usage
+    ///
+    /// Call from mobile platform threads that are NOT managed by Tokio:
+    /// - iOS: Main thread, Grand Central Dispatch queues
+    /// - Android: Main thread, background threads from ExecutorService
+    /// - FFI callbacks from Swift/Kotlin
+    ///
+    /// ## Incorrect Usage (Will Deadlock/Panic)
+    ///
+    /// - Inside `async fn` or `async` blocks
+    /// - Inside Tokio tasks spawned with `spawn()` or `spawn_blocking()`
+    /// - Inside any code that's already running on a Tokio worker thread
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // CORRECT: Called from Swift/Kotlin synchronous context
+    /// let runtime = AsyncRuntime::new().unwrap();
+    /// let result = runtime.block_on(async {
+    ///     fetch_payment_methods().await
+    /// });
+    ///
+    /// // INCORRECT: Called from async Rust code - WILL DEADLOCK!
+    /// async fn bad_example() {
+    ///     let runtime = AsyncRuntime::new().unwrap();
+    ///     // This will deadlock because we're already in an async context
+    ///     runtime.block_on(async { /* ... */ });
+    /// }
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from within a Tokio runtime context.
     pub fn block_on<F, T>(&self, future: F) -> T
     where
         F: std::future::Future<Output = T>,

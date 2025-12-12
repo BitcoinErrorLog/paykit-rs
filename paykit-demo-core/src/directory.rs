@@ -80,10 +80,48 @@ impl DirectoryClient {
 
     /// Create a Pubky session for authenticated operations
     ///
-    /// Note: This is a simplified implementation for demo purposes.
-    /// In production, you would use Pubky::new() and configure it properly.
+    /// This creates a session using the Pubky SDK with the provided keypair.
+    /// The homeserver URL from this DirectoryClient is used for the session.
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder implementation. In production, you should:
+    /// 1. Use `pubky::Pubky::new()` to create a Pubky instance
+    /// 2. Get a signer from the SDK: `sdk.signer(keypair)`
+    /// 3. Call `signer.signup(&homeserver_public_key, None).await`
+    ///
+    /// For testing, use `pubky_testnet::EphemeralTestnet` to create sessions.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use paykit_demo_core::directory::DirectoryClient;
+    /// use pubky::Keypair;
+    ///
+    /// # async fn example() -> anyhow::Result<()> {
+    /// let client = DirectoryClient::new("https://homeserver.example.com");
+    /// let keypair = Keypair::random();
+    /// // In production, create session using Pubky SDK directly
+    /// // For now, this method is a placeholder
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create_session(&self, _keypair: &pubky::Keypair) -> Result<PubkySession> {
-        // TODO: Implement proper session creation using Pubky SDK
-        anyhow::bail!("Session creation not yet implemented - use existing session")
+        // TODO: Implement proper session creation using Pubky SDK 0.6.0-rc.6+ API
+        // This requires:
+        // 1. Creating a Pubky instance with homeserver URL
+        // 2. Getting a signer: sdk.signer(keypair)
+        // 3. Calling signup: signer.signup(&homeserver_pk, None).await
+        //
+        // For now, return an error with guidance
+        anyhow::bail!(
+            "Session creation not yet implemented. \
+             To create a session, use Pubky SDK directly:\n\
+             1. Create Pubky instance with homeserver: {}\n\
+             2. Get signer: sdk.signer(keypair)\n\
+             3. Signup: signer.signup(&homeserver_pk, None).await\n\
+             See paykit-lib/src/lib.rs tests for example implementation.",
+            self.homeserver
+        )
     }
 }

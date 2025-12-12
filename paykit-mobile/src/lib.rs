@@ -23,11 +23,16 @@ pub mod storage;
 pub mod transport_ffi;
 
 // Re-export transport types for easier access
-pub use transport_ffi::{AuthenticatedTransportFFI, UnauthenticatedTransportFFI};
+pub use transport_ffi::{
+    AuthenticatedTransportFFI, PubkyAuthenticatedStorageCallback,
+    PubkyUnauthenticatedStorageCallback, StorageGetResult, StorageListResult,
+    StorageOperationResult, UnauthenticatedTransportFFI,
+};
 
 // Re-export interactive types for easier access
 pub use interactive_ffi::{
-    ErrorMessage, ParsedMessage, PaykitMessageBuilder, PaykitMessageType, PrivateEndpointOffer,
+    ErrorMessage, ParsedMessage, PaykitInteractiveManagerFFI, PaykitMessageBuilder,
+    PaykitMessageType, PrivateEndpointOffer, ReceiptGenerationResult, ReceiptGeneratorCallback,
     ReceiptRequest, ReceiptStore,
 };
 
@@ -95,6 +100,75 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
             paykit_lib::PaykitError::Unimplemented(msg) => Self::Internal {
                 message: msg.to_string(),
             },
+            paykit_lib::PaykitError::ConnectionFailed { target, reason } => {
+                Self::ConnectionError {
+                    message: format!("Connection to {} failed: {}", target, reason),
+                }
+            }
+            paykit_lib::PaykitError::ConnectionTimeout {
+                operation,
+                timeout_ms,
+            } => Self::NetworkTimeout {
+                message: format!("{} timed out after {}ms", operation, timeout_ms),
+            },
+            paykit_lib::PaykitError::Auth(msg) => Self::AuthenticationError { message: msg },
+            paykit_lib::PaykitError::SessionExpired => Self::SessionError {
+                message: "Session expired".to_string(),
+            },
+            paykit_lib::PaykitError::InvalidCredentials(msg) => {
+                Self::AuthenticationError { message: msg }
+            }
+            paykit_lib::PaykitError::NotFound {
+                resource_type,
+                identifier,
+            } => Self::NotFound {
+                message: format!("{} not found: {}", resource_type, identifier),
+            },
+            paykit_lib::PaykitError::MethodNotSupported(method) => Self::Validation {
+                message: format!("Payment method not supported: {}", method),
+            },
+            paykit_lib::PaykitError::InvalidData { field, reason } => Self::Validation {
+                message: format!("Invalid {}: {}", field, reason),
+            },
+            paykit_lib::PaykitError::ValidationFailed(msg) => Self::Validation { message: msg },
+            paykit_lib::PaykitError::Serialization(msg) => Self::Serialization { message: msg },
+            paykit_lib::PaykitError::Payment { payment_id, reason } => Self::Transport {
+                message: format!(
+                    "Payment {} failed: {}",
+                    payment_id.unwrap_or_default(),
+                    reason
+                ),
+            },
+            paykit_lib::PaykitError::InsufficientFunds {
+                required,
+                available,
+                currency,
+            } => Self::Transport {
+                message: format!(
+                    "Insufficient funds: need {} {}, have {} {}",
+                    required, currency, available, currency
+                ),
+            },
+            paykit_lib::PaykitError::InvoiceExpired {
+                invoice_id,
+                expired_at,
+            } => Self::Transport {
+                message: format!("Invoice {} expired at {}", invoice_id, expired_at),
+            },
+            paykit_lib::PaykitError::PaymentRejected { payment_id, reason } => Self::Transport {
+                message: format!("Payment {} rejected: {}", payment_id, reason),
+            },
+            paykit_lib::PaykitError::PaymentAlreadyCompleted { payment_id } => Self::Transport {
+                message: format!("Payment {} already completed", payment_id),
+            },
+            paykit_lib::PaykitError::Storage(msg) => Self::Internal { message: msg },
+            paykit_lib::PaykitError::QuotaExceeded { used, limit } => Self::Internal {
+                message: format!("Quota exceeded: {} of {} used", used, limit),
+            },
+            paykit_lib::PaykitError::RateLimited { retry_after_ms } => Self::RateLimitError {
+                message: format!("Rate limited, retry after {}ms", retry_after_ms),
+            },
+            paykit_lib::PaykitError::Internal(msg) => Self::Internal { message: msg },
         }
     }
 }
@@ -1189,7 +1263,7 @@ mod tests {
     fn test_publish_and_fetch_payment_endpoint() {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
 
         // Publish endpoint
         client
@@ -1216,7 +1290,7 @@ mod tests {
     fn test_fetch_supported_payments() {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
 
         // Publish multiple endpoints
         client
@@ -1244,7 +1318,7 @@ mod tests {
     fn test_remove_payment_endpoint_from_directory() {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
 
         // Publish and remove
         client
@@ -1270,7 +1344,7 @@ mod tests {
     fn test_fetch_known_contacts() {
         let client = PaykitClient::new().unwrap();
         let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
-        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
 
         // Add contacts
         client

@@ -10,7 +10,7 @@ edition = "2021"
 default = ["pubky"]
 pubky = ["dep:pubky"]
 tracing = ["dep:tracing"]
-file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:sha2", "dep:rand"]
+file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:sha2", "dep:rand", "dep:zeroize", "dep:argon2"]
 # Enable test utilities for integration testing
 test-utils = []
 
@@ -29,6 +29,10 @@ aes-gcm = { version = "0.10", optional = true }
 hkdf = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
 rand = { version = "0.8", optional = true }
+# Secure memory zeroization
+zeroize = { version = "1", features = ["derive"], optional = true }
+# Argon2 password-based KDF (memory-hard, resistant to brute-force attacks)
+argon2 = { version = "0.5", optional = true }
 
 [dev-dependencies]
 pubky-testnet = { version = "0.6.0-rc.6" }

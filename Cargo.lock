@@ -2885,6 +2885,7 @@ name = "paykit-lib"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
+ "argon2",
  "async-trait",
  "chrono",
  "hkdf",
@@ -2901,6 +2902,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]

@@ -12,12 +12,30 @@
 //!
 //! # Design
 //!
-//! Rather than wrapping the full async trait-based protocol, this module provides:
-//! - Message serialization/deserialization helpers
-//! - Receipt management
-//! - Payment status tracking
+//! This module provides:
+//! - `PaykitInteractiveManagerFFI` - High-level manager for payment flows
+//! - `PaykitMessageBuilder` - Message serialization/deserialization helpers
+//! - `ReceiptStore` - Receipt management
+//! - `ReceiptGeneratorCallback` - Callback interface for mobile receipt generation
 //!
 //! Mobile apps handle the actual Noise channel communication using pubky-noise-main bindings.
+//! The manager processes messages and produces responses to send back.
+//!
+//! # Example Flow
+//!
+//! ```ignore
+//! // 1. Create manager with receipt generator callback
+//! let generator = MyReceiptGenerator() // Implements ReceiptGeneratorCallback
+//! let manager = PaykitInteractiveManagerFFI::new(store, generator)
+//!
+//! // 2. When receiving a message from Noise channel:
+//! let response = manager.handleMessage(messageJson, peerPubkey, myPubkey)
+//!
+//! // 3. Send response back over Noise channel (if not null)
+//! if let Some(responseJson) = response {
+//!     noiseChannel.send(responseJson)
+//! }
+//! ```
 
 use std::sync::Arc;
 
@@ -634,6 +652,413 @@ pub fn create_receipt_store() -> Arc<ReceiptStore> {
 }
 
 // ============================================================================
+// Receipt Generator Callback
+// ============================================================================
+
+/// Result type for receipt generation.
+///
+/// Used to communicate success/failure from mobile callbacks.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct ReceiptGenerationResult {
+    /// Whether generation succeeded
+    pub success: bool,
+    /// The generated receipt (if successful)
+    pub receipt: Option<ReceiptRequest>,
+    /// Error message (if failed)
+    pub error: Option<String>,
+}
+
+impl ReceiptGenerationResult {
+    /// Create a successful result.
+    pub fn ok(receipt: ReceiptRequest) -> Self {
+        Self {
+            success: true,
+            receipt: Some(receipt),
+            error: None,
+        }
+    }
+
+    /// Create a failed result.
+    pub fn err(message: String) -> Self {
+        Self {
+            success: false,
+            receipt: None,
+            error: Some(message),
+        }
+    }
+}
+
+/// Callback interface for mobile receipt generation.
+///
+/// Mobile apps implement this to generate receipts (e.g., create Lightning invoices).
+/// When a payment request is received, this callback is invoked to produce
+/// the final receipt with payment endpoint.
+///
+/// # Example (Swift)
+///
+/// ```swift
+/// class MyReceiptGenerator: ReceiptGeneratorCallback {
+///     func generateReceipt(request: ReceiptRequest) -> ReceiptGenerationResult {
+///         // Create Lightning invoice
+///         let invoice = createInvoice(amount: request.amount)
+///         
+///         // Update receipt with invoice in metadata
+///         var receipt = request
+///         receipt.metadataJson = "{\"invoice\":\"\(invoice)\"}"
+///         
+///         return ReceiptGenerationResult.ok(receipt: receipt)
+///     }
+/// }
+/// ```
+#[uniffi::export(callback_interface)]
+pub trait ReceiptGeneratorCallback: Send + Sync {
+    /// Generate a receipt for a payment request.
+    ///
+    /// # Arguments
+    ///
+    /// * `request` - The provisional receipt request from the payer
+    ///
+    /// # Returns
+    ///
+    /// A `ReceiptGenerationResult` with either the finalized receipt or an error.
+    fn generate_receipt(&self, request: ReceiptRequest) -> ReceiptGenerationResult;
+}
+
+// ============================================================================
+// Interactive Manager FFI
+// ============================================================================
+
+/// FFI wrapper for PaykitInteractiveManager.
+///
+/// This provides a high-level interface for managing interactive payment flows
+/// over Noise channels. Mobile apps use this to:
+///
+/// 1. Process incoming messages and generate responses
+/// 2. Initiate payment flows
+/// 3. Manage receipts and private endpoints
+///
+/// # Thread Safety
+///
+/// This type is thread-safe and can be used from multiple threads.
+#[derive(uniffi::Object)]
+pub struct PaykitInteractiveManagerFFI {
+    /// Receipt storage
+    store: Arc<ReceiptStore>,
+    /// Receipt generator callback (provided by mobile app)
+    generator: std::sync::RwLock<Option<Box<dyn ReceiptGeneratorCallback>>>,
+    /// Message builder for serialization
+    message_builder: Arc<PaykitMessageBuilder>,
+}
+
+#[uniffi::export]
+impl PaykitInteractiveManagerFFI {
+    /// Create a new interactive manager without a generator.
+    ///
+    /// Use `set_generator` to set the receipt generator callback.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - Receipt store for persistence
+    #[uniffi::constructor]
+    pub fn new(store: Arc<ReceiptStore>) -> Arc<Self> {
+        Arc::new(Self {
+            store,
+            generator: std::sync::RwLock::new(None),
+            message_builder: PaykitMessageBuilder::new(),
+        })
+    }
+
+    /// Set the receipt generator callback.
+    ///
+    /// This must be called before handling receipt requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `generator` - Callback for generating receipts (implement in Swift/Kotlin)
+    pub fn set_generator(&self, generator: Box<dyn ReceiptGeneratorCallback>) {
+        let mut guard = self.generator.write().unwrap();
+        *guard = Some(generator);
+    }
+
+    /// Handle an incoming message from a peer.
+    ///
+    /// This processes a JSON message received over a Noise channel and returns
+    /// an optional response to send back.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_json` - The JSON-encoded message from the Noise channel
+    /// * `peer_pubkey` - The public key of the peer who sent the message
+    /// * `my_pubkey` - Your own public key
+    ///
+    /// # Returns
+    ///
+    /// Optional JSON response to send back over the Noise channel.
+    /// Returns `None` for messages that don't require a response (e.g., Ack).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // In Swift/Kotlin
+    /// let response = manager.handleMessage(messageJson, peerPubkey, myPubkey)
+    /// if let responseJson = response {
+    ///     noiseChannel.send(responseJson)
+    /// }
+    /// ```
+    pub fn handle_message(
+        &self,
+        message_json: String,
+        peer_pubkey: String,
+        my_pubkey: String,
+    ) -> Result<Option<String>> {
+        // Parse the message
+        let parsed = self.message_builder.parse_message(message_json)?;
+
+        match parsed {
+            ParsedMessage::OfferPrivateEndpoint { offer } => {
+                // Save the private endpoint offered by the peer
+                self.store.save_private_endpoint(peer_pubkey, offer)?;
+                // Respond with Ack
+                let response = self.message_builder.create_ack()?;
+                Ok(Some(response))
+            }
+            ParsedMessage::RequestReceipt { request } => {
+                // Validate request (is it for me?)
+                if request.payee != my_pubkey {
+                    let response = self.message_builder.create_error(
+                        "WRONG_PAYEE".to_string(),
+                        "I am not the intended payee".to_string(),
+                    )?;
+                    return Ok(Some(response));
+                }
+
+                // Get the generator
+                let generator_guard = self.generator.read().map_err(|_| {
+                    PaykitMobileError::Internal {
+                        message: "Lock poisoned".to_string(),
+                    }
+                })?;
+
+                let generator = match generator_guard.as_ref() {
+                    Some(g) => g,
+                    None => {
+                        let response = self.message_builder.create_error(
+                            "NO_GENERATOR".to_string(),
+                            "Receipt generator not configured".to_string(),
+                        )?;
+                        return Ok(Some(response));
+                    }
+                };
+
+                // Generate receipt using the callback
+                let result = generator.generate_receipt(request.clone());
+                if result.success {
+                    if let Some(confirmed_receipt) = result.receipt {
+                        // Save locally
+                        self.store.save_receipt(confirmed_receipt.clone())?;
+                        // Respond with confirmation
+                        let response = self.message_builder.create_receipt_confirm(confirmed_receipt)?;
+                        Ok(Some(response))
+                    } else {
+                        let response = self.message_builder.create_error(
+                            "GENERATION_FAILED".to_string(),
+                            "No receipt returned".to_string(),
+                        )?;
+                        Ok(Some(response))
+                    }
+                } else {
+                    let err_msg = result.error.unwrap_or_else(|| "Unknown error".to_string());
+                    let response = self.message_builder.create_error(
+                        "GENERATION_FAILED".to_string(),
+                        err_msg,
+                    )?;
+                    Ok(Some(response))
+                }
+            }
+            ParsedMessage::ConfirmReceipt { receipt } => {
+                // Handle confirmation (late arrival or unsolicited)
+                self.store.save_receipt(receipt)?;
+                let response = self.message_builder.create_ack()?;
+                Ok(Some(response))
+            }
+            ParsedMessage::Ack => {
+                // Nothing to do
+                Ok(None)
+            }
+            ParsedMessage::Error { error } => {
+                // Log error, no response needed
+                #[cfg(feature = "tracing")]
+                tracing::warn!("Received error from peer: {} - {}", error.code, error.message);
+                let _ = error; // Suppress unused warning
+                Ok(None)
+            }
+        }
+    }
+
+    /// Create a payment request message to initiate a payment flow.
+    ///
+    /// Use this to create the initial message for requesting payment from a peer.
+    ///
+    /// # Arguments
+    ///
+    /// * `payer` - Your public key (the one paying)
+    /// * `payee` - The recipient's public key
+    /// * `method_id` - Payment method (e.g., "lightning", "onchain")
+    /// * `amount` - Optional amount (as string, e.g., "1000")
+    /// * `currency` - Optional currency code (e.g., "SAT")
+    /// * `metadata_json` - Optional JSON metadata
+    ///
+    /// # Returns
+    ///
+    /// JSON message to send over Noise channel.
+    pub fn create_payment_request(
+        &self,
+        payer: String,
+        payee: String,
+        method_id: String,
+        amount: Option<String>,
+        currency: Option<String>,
+        metadata_json: Option<String>,
+    ) -> Result<String> {
+        let receipt_id = generate_receipt_id();
+        let request = ReceiptRequest {
+            receipt_id,
+            payer,
+            payee,
+            method_id,
+            amount,
+            currency,
+            metadata_json: metadata_json.unwrap_or_else(|| "{}".to_string()),
+        };
+
+        // Save provisional receipt
+        self.store.save_receipt(request.clone())?;
+
+        // Create message
+        self.message_builder.create_receipt_request(request)
+    }
+
+    /// Handle a payment confirmation response.
+    ///
+    /// Call this when you receive a response to your payment request.
+    /// It validates the response and saves the confirmed receipt.
+    ///
+    /// # Arguments
+    ///
+    /// * `response_json` - The JSON response from the Noise channel
+    /// * `original_receipt_id` - The receipt ID from your original request
+    ///
+    /// # Returns
+    ///
+    /// The confirmed receipt if successful, or an error.
+    pub fn handle_payment_response(
+        &self,
+        response_json: String,
+        original_receipt_id: String,
+    ) -> Result<ReceiptRequest> {
+        let parsed = self.message_builder.parse_message(response_json)?;
+
+        match parsed {
+            ParsedMessage::ConfirmReceipt { receipt } => {
+                // Validate receipt matches request ID
+                if receipt.receipt_id != original_receipt_id {
+                    return Err(PaykitMobileError::Validation {
+                        message: format!(
+                            "Receipt ID mismatch: expected {}, got {}",
+                            original_receipt_id, receipt.receipt_id
+                        ),
+                    });
+                }
+
+                // Save confirmed receipt
+                self.store.save_receipt(receipt.clone())?;
+                Ok(receipt)
+            }
+            ParsedMessage::Error { error } => {
+                Err(PaykitMobileError::Transport {
+                    message: format!("Payment rejected: {} - {}", error.code, error.message),
+                })
+            }
+            _ => Err(PaykitMobileError::Validation {
+                message: "Unexpected response type".to_string(),
+            }),
+        }
+    }
+
+    /// Create a private endpoint offer message.
+    ///
+    /// Use this to offer a private payment endpoint to a peer.
+    ///
+    /// # Arguments
+    ///
+    /// * `method_id` - Payment method (e.g., "lightning")
+    /// * `endpoint` - The endpoint to offer (e.g., Lightning invoice)
+    ///
+    /// # Returns
+    ///
+    /// JSON message to send over Noise channel.
+    pub fn create_endpoint_offer(
+        &self,
+        method_id: String,
+        endpoint: String,
+    ) -> Result<String> {
+        self.message_builder.create_endpoint_offer(method_id, endpoint)
+    }
+
+    /// Get the receipt store.
+    pub fn get_store(&self) -> Arc<ReceiptStore> {
+        self.store.clone()
+    }
+
+    /// Get a receipt by ID.
+    pub fn get_receipt(&self, receipt_id: String) -> Result<Option<ReceiptRequest>> {
+        self.store.get_receipt(receipt_id)
+    }
+
+    /// List all receipts.
+    pub fn list_receipts(&self) -> Result<Vec<ReceiptRequest>> {
+        self.store.list_receipts()
+    }
+
+    /// Get a private endpoint for a peer.
+    pub fn get_private_endpoint(
+        &self,
+        peer: String,
+        method_id: String,
+    ) -> Result<Option<PrivateEndpointOffer>> {
+        self.store.get_private_endpoint(peer, method_id)
+    }
+
+    /// List all private endpoints for a peer.
+    pub fn list_private_endpoints(&self, peer: String) -> Result<Vec<PrivateEndpointOffer>> {
+        self.store.list_private_endpoints(peer)
+    }
+}
+
+/// Generate a unique receipt ID.
+fn generate_receipt_id() -> String {
+    let timestamp = current_timestamp();
+    let random = rand_suffix();
+    format!("rcpt_{}_{}", timestamp, random)
+}
+
+/// Generate a random suffix for IDs.
+fn rand_suffix() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    format!("{:08x}", nanos)
+}
+
+/// Create a new interactive manager.
+#[uniffi::export]
+pub fn create_interactive_manager(store: Arc<ReceiptStore>) -> Arc<PaykitInteractiveManagerFFI> {
+    PaykitInteractiveManagerFFI::new(store)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -805,5 +1230,260 @@ mod tests {
         let count = store.import_receipts_json(json).unwrap();
         assert_eq!(count, 2);
         assert_eq!(store.list_receipts().unwrap().len(), 2);
+    }
+
+    // ========================================================================
+    // Interactive Manager Tests
+    // ========================================================================
+
+    /// Test receipt generator that just echoes back the request.
+    struct EchoReceiptGenerator;
+
+    impl ReceiptGeneratorCallback for EchoReceiptGenerator {
+        fn generate_receipt(&self, request: ReceiptRequest) -> ReceiptGenerationResult {
+            // Just return the request with metadata updated
+            let mut receipt = request;
+            receipt.metadata_json = r#"{"invoice":"lnbc1..."}"#.to_string();
+            ReceiptGenerationResult::ok(receipt)
+        }
+    }
+
+    /// Test receipt generator that fails.
+    struct FailingReceiptGenerator;
+
+    impl ReceiptGeneratorCallback for FailingReceiptGenerator {
+        fn generate_receipt(&self, _request: ReceiptRequest) -> ReceiptGenerationResult {
+            ReceiptGenerationResult::err("Invoice generation failed".to_string())
+        }
+    }
+
+    /// Helper to create manager with generator for tests
+    fn create_test_manager(generator: Box<dyn ReceiptGeneratorCallback>) -> Arc<PaykitInteractiveManagerFFI> {
+        let store = ReceiptStore::new();
+        let manager = PaykitInteractiveManagerFFI::new(store);
+        manager.set_generator(generator);
+        manager
+    }
+
+    #[test]
+    fn test_manager_handle_endpoint_offer() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        // Create an endpoint offer message
+        let offer_msg = manager.create_endpoint_offer("lightning".to_string(), "lnbc1...".to_string()).unwrap();
+
+        // Handle it (simulating receiving this message)
+        let response = manager.handle_message(
+            offer_msg,
+            "peer_pubkey".to_string(),
+            "my_pubkey".to_string(),
+        ).unwrap();
+
+        // Should respond with Ack
+        assert!(response.is_some());
+        let response_json = response.unwrap();
+        assert!(response_json.contains("Ack"));
+
+        // Endpoint should be saved
+        let endpoint = manager.get_private_endpoint("peer_pubkey".to_string(), "lightning".to_string()).unwrap();
+        assert!(endpoint.is_some());
+        assert_eq!(endpoint.unwrap().endpoint, "lnbc1...");
+    }
+
+    #[test]
+    fn test_manager_handle_receipt_request() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        // Create a receipt request (as if from another manager)
+        let builder = PaykitMessageBuilder::new();
+        let request = ReceiptRequest {
+            receipt_id: "test_receipt".to_string(),
+            payer: "payer_pubkey".to_string(),
+            payee: "my_pubkey".to_string(),
+            method_id: "lightning".to_string(),
+            amount: Some("1000".to_string()),
+            currency: Some("SAT".to_string()),
+            metadata_json: "{}".to_string(),
+        };
+        let request_msg = builder.create_receipt_request(request).unwrap();
+
+        // Handle the request
+        let response = manager.handle_message(
+            request_msg,
+            "payer_pubkey".to_string(),
+            "my_pubkey".to_string(),
+        ).unwrap();
+
+        // Should respond with ConfirmReceipt
+        assert!(response.is_some());
+        let response_json = response.unwrap();
+        assert!(response_json.contains("ConfirmReceipt"));
+        assert!(response_json.contains("lnbc1...")); // From generator
+
+        // Receipt should be saved
+        let saved = manager.get_receipt("test_receipt".to_string()).unwrap();
+        assert!(saved.is_some());
+    }
+
+    #[test]
+    fn test_manager_handle_wrong_payee() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        // Create a receipt request for someone else
+        let builder = PaykitMessageBuilder::new();
+        let request = ReceiptRequest {
+            receipt_id: "test_receipt".to_string(),
+            payer: "payer_pubkey".to_string(),
+            payee: "someone_else".to_string(), // Not me!
+            method_id: "lightning".to_string(),
+            amount: Some("1000".to_string()),
+            currency: Some("SAT".to_string()),
+            metadata_json: "{}".to_string(),
+        };
+        let request_msg = builder.create_receipt_request(request).unwrap();
+
+        // Handle the request
+        let response = manager.handle_message(
+            request_msg,
+            "payer_pubkey".to_string(),
+            "my_pubkey".to_string(),
+        ).unwrap();
+
+        // Should respond with Error
+        assert!(response.is_some());
+        let response_json = response.unwrap();
+        assert!(response_json.contains("Error"));
+        assert!(response_json.contains("WRONG_PAYEE"));
+    }
+
+    #[test]
+    fn test_manager_generator_failure() {
+        let manager = create_test_manager(Box::new(FailingReceiptGenerator));
+
+        // Create a receipt request
+        let builder = PaykitMessageBuilder::new();
+        let request = ReceiptRequest {
+            receipt_id: "test_receipt".to_string(),
+            payer: "payer_pubkey".to_string(),
+            payee: "my_pubkey".to_string(),
+            method_id: "lightning".to_string(),
+            amount: Some("1000".to_string()),
+            currency: Some("SAT".to_string()),
+            metadata_json: "{}".to_string(),
+        };
+        let request_msg = builder.create_receipt_request(request).unwrap();
+
+        // Handle the request
+        let response = manager.handle_message(
+            request_msg,
+            "payer_pubkey".to_string(),
+            "my_pubkey".to_string(),
+        ).unwrap();
+
+        // Should respond with Error
+        assert!(response.is_some());
+        let response_json = response.unwrap();
+        assert!(response_json.contains("Error"));
+        assert!(response_json.contains("GENERATION_FAILED"));
+    }
+
+    #[test]
+    fn test_manager_no_generator() {
+        let store = ReceiptStore::new();
+        let manager = PaykitInteractiveManagerFFI::new(store);
+        // Don't set generator
+
+        // Create a receipt request
+        let builder = PaykitMessageBuilder::new();
+        let request = ReceiptRequest {
+            receipt_id: "test_receipt".to_string(),
+            payer: "payer_pubkey".to_string(),
+            payee: "my_pubkey".to_string(),
+            method_id: "lightning".to_string(),
+            amount: Some("1000".to_string()),
+            currency: Some("SAT".to_string()),
+            metadata_json: "{}".to_string(),
+        };
+        let request_msg = builder.create_receipt_request(request).unwrap();
+
+        // Handle the request - should return error because no generator
+        let response = manager.handle_message(
+            request_msg,
+            "payer_pubkey".to_string(),
+            "my_pubkey".to_string(),
+        ).unwrap();
+
+        assert!(response.is_some());
+        let response_json = response.unwrap();
+        assert!(response_json.contains("Error"));
+        assert!(response_json.contains("NO_GENERATOR"));
+    }
+
+    #[test]
+    fn test_manager_create_payment_request() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        // Create a payment request
+        let request_msg = manager.create_payment_request(
+            "my_pubkey".to_string(),
+            "payee_pubkey".to_string(),
+            "lightning".to_string(),
+            Some("1000".to_string()),
+            Some("SAT".to_string()),
+            None,
+        ).unwrap();
+
+        // Should be a valid RequestReceipt message
+        assert!(request_msg.contains("RequestReceipt"));
+        assert!(request_msg.contains("rcpt_")); // Receipt ID prefix
+
+        // Provisional receipt should be saved
+        let receipts = manager.list_receipts().unwrap();
+        assert_eq!(receipts.len(), 1);
+    }
+
+    #[test]
+    fn test_manager_handle_payment_response() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        // Create a confirmation response
+        let builder = PaykitMessageBuilder::new();
+        let receipt = ReceiptRequest {
+            receipt_id: "expected_id".to_string(),
+            payer: "payer".to_string(),
+            payee: "payee".to_string(),
+            method_id: "lightning".to_string(),
+            amount: Some("1000".to_string()),
+            currency: Some("SAT".to_string()),
+            metadata_json: r#"{"invoice":"lnbc1..."}"#.to_string(),
+        };
+        let confirm_msg = builder.create_receipt_confirm(receipt).unwrap();
+
+        // Handle response with matching ID
+        let result = manager.handle_payment_response(confirm_msg.clone(), "expected_id".to_string());
+        assert!(result.is_ok());
+        let confirmed = result.unwrap();
+        assert_eq!(confirmed.receipt_id, "expected_id");
+
+        // Handle response with wrong ID should fail
+        let result = manager.handle_payment_response(confirm_msg, "wrong_id".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_manager_handle_ack() {
+        let manager = create_test_manager(Box::new(EchoReceiptGenerator));
+
+        let builder = PaykitMessageBuilder::new();
+        let ack_msg = builder.create_ack().unwrap();
+
+        let response = manager.handle_message(
+            ack_msg,
+            "peer".to_string(),
+            "me".to_string(),
+        ).unwrap();
+
+        // Ack should not produce a response
+        assert!(response.is_none());
     }
 }

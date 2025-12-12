@@ -2,6 +2,44 @@
 
 All notable changes to the Paykit project are documented in this file.
 
+## [1.0.1] - 2025-12-12
+
+### Production Audit Remediation
+
+Comprehensive production readiness improvements based on security audit.
+
+#### Critical Fixes
+- **paykit-lib**: Fixed `Box<PaykitReceipt>` type mismatch in ecommerce example
+
+#### Security Improvements
+- **paykit-subscriptions**: Changed `Amount::percentage()` to accept `Decimal` instead of `f64` for exact financial arithmetic
+- **paykit-subscriptions**: Added `percentage_f64()` convenience method with precision warning
+- **paykit-mobile**: Added comprehensive `block_on()` documentation for FFI safety
+- **paykit-subscriptions**: Added RFC 8032 Ed25519 test vectors (3 official vectors)
+
+#### Rate Limiting
+- **paykit-interactive**: Added optional global rate limit (`global_max_attempts`)
+- **paykit-interactive**: Added `RateLimitConfig::with_global_limit()` constructor
+- **paykit-interactive**: Added `RateLimitConfig::strict_with_global()` preset
+- **paykit-interactive**: Added `global_count()` for monitoring
+
+#### Documentation
+- **docs/SECURITY_HARDENING.md**: Comprehensive security hardening guide
+- **docs/DEMO_VS_PRODUCTION.md**: Demo vs production code boundaries
+- **docs/CONCURRENCY.md**: Lock poisoning policy and thread safety
+- **paykit-subscriptions/docs/NONCE_CLEANUP_GUIDE.md**: Nonce cleanup automation
+- **paykit-interactive/examples/rate_limited_server.rs**: Rate limiter integration example
+- Updated `docs/README.md` with new documentation links
+
+#### Testing
+- **paykit-demo-cli/tests/smoke_test.rs**: Basic CLI smoke tests
+- Added unit tests for core types (MethodId, EndpointData, Amount)
+
+#### Code Quality
+- Fixed unused imports in `integration_noise.rs`
+- Fixed unused variables in `e2e_payment_flows.rs`
+- Removed unused `Duration` import
+
 ## [1.0.0] - 2025-12-11
 
 ### Production Readiness Release

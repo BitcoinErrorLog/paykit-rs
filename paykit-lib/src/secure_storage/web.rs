@@ -2,6 +2,15 @@
 //!
 //! This implementation uses the Web Crypto API (SubtleCrypto)
 //! combined with IndexedDB for secure key storage in browsers.
+//!
+//! # Platform Status
+//!
+//! **STUB IMPLEMENTATION**: This module provides the interface for Web Crypto/IndexedDB
+//! integration but requires wasm-bindgen FFI implementation before it can be used
+//! in production WASM builds.
+//!
+//! The FFI functions currently return errors and must be connected to JavaScript
+//! implementations via wasm-bindgen.
 
 use super::traits::{
     KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageResult, StoreOptions,

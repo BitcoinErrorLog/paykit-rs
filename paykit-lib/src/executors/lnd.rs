@@ -42,6 +42,10 @@ impl LndExecutor {
     }
 
     /// Build the full URL for an API endpoint.
+    ///
+    /// Note: Currently unused as full HTTP client implementation is pending.
+    /// Will be used when REST API integration is complete.
+    #[allow(dead_code)]
     fn url(&self, path: &str) -> String {
         format!("{}/v1/{}", self.config.rest_url.trim_end_matches('/'), path)
     }
@@ -270,7 +274,10 @@ struct LndRoute {
     hops: Vec<LndHop>,
 }
 
+/// LND hop information from route.
+/// Fields match the LND REST API response schema.
 #[derive(Deserialize)]
+#[allow(dead_code)] // Fields required for serde deserialization from LND API
 struct LndHop {
     #[serde(default)]
     chan_id: String,

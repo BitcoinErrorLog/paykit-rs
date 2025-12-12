@@ -50,20 +50,15 @@ pub struct OnchainPlugin {
 }
 
 /// Bitcoin network types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BitcoinNetwork {
     /// Bitcoin mainnet.
+    #[default]
     Mainnet,
     /// Bitcoin testnet.
     Testnet,
     /// Bitcoin regtest (local development).
     Regtest,
-}
-
-impl Default for BitcoinNetwork {
-    fn default() -> Self {
-        Self::Mainnet
-    }
 }
 
 impl OnchainPlugin {

@@ -2,6 +2,15 @@
 //!
 //! This implementation uses the Android Keystore system
 //! for secure key storage with biometric protection.
+//!
+//! # Platform Status
+//!
+//! **STUB IMPLEMENTATION**: This module provides the interface for Android Keystore
+//! integration but requires the Kotlin/JNI FFI bridge to be implemented by the Android
+//! host application before it can be used in production.
+//!
+//! The FFI functions (`ffi_store`, `ffi_retrieve`, etc.) currently return errors
+//! and must be connected to Kotlin implementations via UniFFI callbacks.
 
 use super::traits::{
     KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageResult, StoreOptions,

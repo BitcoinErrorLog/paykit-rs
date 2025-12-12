@@ -2,6 +2,12 @@
 //!
 //! This module provides a simple rate limiter to protect against DoS attacks
 //! targeting the Noise handshake process.
+//!
+//! # Thread Safety
+//!
+//! The rate limiter uses `Mutex` for thread-safe access. Public methods
+//! will panic if the internal lock is poisoned (which only happens if a thread
+//! panics while holding the lock).
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -116,7 +122,10 @@ impl HandshakeRateLimiter {
     /// Returns `true` if allowed, `false` if rate limited.
     /// Also records the attempt for future checks.
     pub fn check_and_record(&self, ip: IpAddr) -> bool {
-        let mut records = self.records.lock().unwrap();
+        let mut records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during check_and_record");
         let now = Instant::now();
 
         // Clean up old entries if we're over capacity
@@ -154,7 +163,10 @@ impl HandshakeRateLimiter {
 
     /// Check without recording (peek at current state).
     pub fn is_rate_limited(&self, ip: IpAddr) -> bool {
-        let records = self.records.lock().unwrap();
+        let records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during is_rate_limited");
         let now = Instant::now();
 
         if let Some(record) = records.get(&ip) {
@@ -167,7 +179,10 @@ impl HandshakeRateLimiter {
 
     /// Get remaining attempts for an IP.
     pub fn remaining_attempts(&self, ip: IpAddr) -> u32 {
-        let records = self.records.lock().unwrap();
+        let records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during remaining_attempts");
         let now = Instant::now();
 
         if let Some(record) = records.get(&ip) {
@@ -180,19 +195,28 @@ impl HandshakeRateLimiter {
 
     /// Manually reset limits for an IP (e.g., after successful authentication).
     pub fn reset(&self, ip: IpAddr) {
-        let mut records = self.records.lock().unwrap();
+        let mut records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during reset");
         records.remove(&ip);
     }
 
     /// Clear all tracked records.
     pub fn clear(&self) {
-        let mut records = self.records.lock().unwrap();
+        let mut records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during clear");
         records.clear();
     }
 
     /// Get current number of tracked IPs.
     pub fn tracked_count(&self) -> usize {
-        let records = self.records.lock().unwrap();
+        let records = self
+            .records
+            .lock()
+            .expect("HandshakeRateLimiter: lock poisoned during tracked_count");
         records.len()
     }
 

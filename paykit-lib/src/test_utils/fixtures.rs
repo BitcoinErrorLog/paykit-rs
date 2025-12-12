@@ -129,6 +129,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::const_is_empty)] // Intentional: validates fixture arrays have test data
     fn test_fixtures_addresses() {
         assert!(!TestFixtures::MAINNET_ADDRESSES.is_empty());
         assert!(!TestFixtures::TESTNET_ADDRESSES.is_empty());

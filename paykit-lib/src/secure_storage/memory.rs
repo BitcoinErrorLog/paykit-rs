@@ -2,6 +2,12 @@
 //!
 //! This implementation is for testing and development only.
 //! In production, use platform-specific implementations.
+//!
+//! # Thread Safety
+//!
+//! This storage uses `RwLock` for thread-safe access. Public methods
+//! will panic if the internal lock is poisoned (which only happens if a thread
+//! panics while holding the lock).
 
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -38,12 +44,18 @@ impl InMemoryKeyStorage {
 
     /// Get the number of stored keys.
     pub fn len(&self) -> usize {
-        self.keys.read().unwrap().len()
+        self.keys
+            .read()
+            .expect("InMemoryKeyStorage: lock poisoned during len")
+            .len()
     }
 
     /// Check if storage is empty.
     pub fn is_empty(&self) -> bool {
-        self.keys.read().unwrap().is_empty()
+        self.keys
+            .read()
+            .expect("InMemoryKeyStorage: lock poisoned during is_empty")
+            .is_empty()
     }
 }
 
@@ -60,7 +72,10 @@ impl SecureKeyStorage for InMemoryKeyStorage {
         key_data: &[u8],
         options: StoreOptions,
     ) -> SecureStorageResult<()> {
-        let mut keys = self.keys.write().unwrap();
+        let mut keys = self
+            .keys
+            .write()
+            .expect("InMemoryKeyStorage: lock poisoned during store");
 
         if keys.contains_key(key_id) && !options.overwrite {
             return Err(SecureStorageError::already_exists(key_id));
@@ -80,7 +95,10 @@ impl SecureKeyStorage for InMemoryKeyStorage {
     }
 
     async fn retrieve(&self, key_id: &str) -> SecureStorageResult<Option<Vec<u8>>> {
-        let mut keys = self.keys.write().unwrap();
+        let mut keys = self
+            .keys
+            .write()
+            .expect("InMemoryKeyStorage: lock poisoned during retrieve");
 
         if let Some(entry) = keys.get_mut(key_id) {
             // Update last accessed time
@@ -97,7 +115,10 @@ impl SecureKeyStorage for InMemoryKeyStorage {
     }
 
     async fn delete(&self, key_id: &str) -> SecureStorageResult<()> {
-        let mut keys = self.keys.write().unwrap();
+        let mut keys = self
+            .keys
+            .write()
+            .expect("InMemoryKeyStorage: lock poisoned during delete");
 
         if keys.remove(key_id).is_some() {
             Ok(())
@@ -107,21 +128,34 @@ impl SecureKeyStorage for InMemoryKeyStorage {
     }
 
     async fn exists(&self, key_id: &str) -> SecureStorageResult<bool> {
-        Ok(self.keys.read().unwrap().contains_key(key_id))
+        Ok(self
+            .keys
+            .read()
+            .expect("InMemoryKeyStorage: lock poisoned during exists")
+            .contains_key(key_id))
     }
 
     async fn get_metadata(&self, key_id: &str) -> SecureStorageResult<Option<KeyMetadata>> {
-        let keys = self.keys.read().unwrap();
+        let keys = self
+            .keys
+            .read()
+            .expect("InMemoryKeyStorage: lock poisoned during get_metadata");
         Ok(keys.get(key_id).map(|e| e.metadata.clone()))
     }
 
     async fn list_keys(&self) -> SecureStorageResult<Vec<String>> {
-        let keys = self.keys.read().unwrap();
+        let keys = self
+            .keys
+            .read()
+            .expect("InMemoryKeyStorage: lock poisoned during list_keys");
         Ok(keys.keys().cloned().collect())
     }
 
     async fn clear_all(&self) -> SecureStorageResult<()> {
-        self.keys.write().unwrap().clear();
+        self.keys
+            .write()
+            .expect("InMemoryKeyStorage: lock poisoned during clear_all")
+            .clear();
         Ok(())
     }
 }

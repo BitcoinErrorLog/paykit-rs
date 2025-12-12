@@ -2,6 +2,12 @@
 //!
 //! This module provides health monitoring for payment methods,
 //! enabling automatic failover and status-based selection.
+//!
+//! # Thread Safety
+//!
+//! The health monitor uses `RwLock` for thread-safe cache access. Public methods
+//! will panic if the internal lock is poisoned (which only happens if a thread
+//! panics while holding the lock).
 
 use crate::methods::PaymentMethodRegistry;
 use crate::MethodId;
@@ -222,13 +228,19 @@ impl HealthMonitor {
 
     /// Get cached status for a method.
     pub fn get_status(&self, method_id: &MethodId) -> Option<HealthStatus> {
-        let cache = self.cache.read().expect("lock poisoned");
+        let cache = self
+            .cache
+            .read()
+            .expect("HealthMonitor: lock poisoned during get_status");
         cache.get(&method_id.0).map(|r| r.status)
     }
 
     /// Get cached result for a method.
     pub fn get_result(&self, method_id: &MethodId) -> Option<HealthCheckResult> {
-        let cache = self.cache.read().expect("lock poisoned");
+        let cache = self
+            .cache
+            .read()
+            .expect("HealthMonitor: lock poisoned during get_result");
         cache.get(&method_id.0).cloned()
     }
 
@@ -252,7 +264,10 @@ impl HealthMonitor {
 
         // Update cache
         {
-            let mut cache = self.cache.write().expect("lock poisoned");
+            let mut cache = self
+                .cache
+                .write()
+                .expect("HealthMonitor: lock poisoned during check");
             cache.insert(method_id.0.clone(), result.clone());
         }
 
@@ -268,7 +283,10 @@ impl HealthMonitor {
 
             // Update cache
             {
-                let mut cache = self.cache.write().expect("lock poisoned");
+                let mut cache = self
+                    .cache
+                    .write()
+                    .expect("HealthMonitor: lock poisoned during check_all");
                 cache.insert(result.method_id.0.clone(), result.clone());
             }
 
@@ -280,7 +298,10 @@ impl HealthMonitor {
 
     /// Get all healthy methods.
     pub fn get_healthy_methods(&self) -> Vec<MethodId> {
-        let cache = self.cache.read().expect("lock poisoned");
+        let cache = self
+            .cache
+            .read()
+            .expect("HealthMonitor: lock poisoned during get_healthy_methods");
         cache
             .iter()
             .filter(|(_, r)| r.status.is_healthy())
@@ -290,7 +311,10 @@ impl HealthMonitor {
 
     /// Get all usable methods.
     pub fn get_usable_methods(&self) -> Vec<MethodId> {
-        let cache = self.cache.read().expect("lock poisoned");
+        let cache = self
+            .cache
+            .read()
+            .expect("HealthMonitor: lock poisoned during get_usable_methods");
         cache
             .iter()
             .filter(|(_, r)| r.status.is_usable())
@@ -300,7 +324,10 @@ impl HealthMonitor {
 
     /// Check if cache is stale for a method.
     pub fn is_stale(&self, method_id: &MethodId) -> bool {
-        let cache = self.cache.read().expect("lock poisoned");
+        let cache = self
+            .cache
+            .read()
+            .expect("HealthMonitor: lock poisoned during is_stale");
         if let Some(result) = cache.get(&method_id.0) {
             let now = current_timestamp();
             (now - result.checked_at) > self.cache_ttl_secs

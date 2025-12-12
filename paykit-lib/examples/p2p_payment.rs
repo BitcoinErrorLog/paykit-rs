@@ -15,7 +15,7 @@ use paykit_interactive::{
     PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt, PaykitStorage,
     ReceiptGenerator,
 };
-use paykit_lib::private_endpoints::{InMemoryStore, PrivateEndpoint, PrivateEndpointManager};
+use paykit_lib::private_endpoints::{InMemoryStore, PrivateEndpointManager};
 use paykit_lib::{MethodId, PublicKey};
 use std::sync::Arc;
 
@@ -106,15 +106,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize managers
     let alice_storage = Arc::new(Box::new(MockStorage) as Box<dyn PaykitStorage>);
     let alice_generator = Arc::new(Box::new(MockGenerator) as Box<dyn ReceiptGenerator>);
-    let alice_manager = PaykitInteractiveManager::new(alice_storage, alice_generator);
+    let _alice_manager = PaykitInteractiveManager::new(alice_storage, alice_generator);
 
     let bob_storage = Arc::new(Box::new(MockStorage) as Box<dyn PaykitStorage>);
     let bob_generator = Arc::new(Box::new(MockGenerator) as Box<dyn ReceiptGenerator>);
-    let bob_manager = PaykitInteractiveManager::new(bob_storage, bob_generator);
+    let _bob_manager = PaykitInteractiveManager::new(bob_storage, bob_generator);
 
     // Setup private endpoint storage
     let alice_endpoint_store = InMemoryStore::new();
-    let alice_endpoint_manager = PrivateEndpointManager::new(alice_endpoint_store);
+    let _alice_endpoint_manager = PrivateEndpointManager::new(alice_endpoint_store);
 
     let bob_endpoint_store = InMemoryStore::new();
     let bob_endpoint_manager = PrivateEndpointManager::new(bob_endpoint_store);
@@ -135,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Bob initiates payment to Alice
     println!("Step 2: Bob initiates payment to Alice");
-    let mut bob_channel = MockChannel {
+    let _bob_channel = MockChannel {
         messages: Vec::new(),
     };
 

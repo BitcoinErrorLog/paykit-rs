@@ -126,8 +126,12 @@ impl SubscriptionManager {
         // 3. Deserialize and check against local storage
         // 4. Return new requests
 
-        // TODO: Implement full Pubky directory listing and fetching
-        // This requires understanding Pubky's actual list/get API patterns
+        // TODO(paykit-sdk-migration): Implement full Pubky directory listing and fetching
+        // Currently returns empty results. Blocked on Pubky SDK directory API stabilization.
+        // This requires:
+        // 1. Pubky SDK 0.6.x+ with stable list/get APIs
+        // 2. Understanding of the final discovery path format
+        // See: paykit-lib/tests/pubky_sdk_compliance.rs for API migration needs
 
         Ok(Vec::new())
     }

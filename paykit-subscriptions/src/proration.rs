@@ -349,6 +349,7 @@ pub fn days_remaining_in_period(subscription: &Subscription) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PaymentFrequency;
     use std::str::FromStr;
 
     fn test_pubkey() -> paykit_lib::PublicKey {

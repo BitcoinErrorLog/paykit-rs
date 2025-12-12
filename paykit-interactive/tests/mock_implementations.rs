@@ -69,6 +69,40 @@ impl PaykitStorage for MockStorage {
         let key = (format!("{:?}", peer), method.0.clone());
         Ok(endpoints.get(&key).cloned())
     }
+
+    async fn list_receipts(&self) -> Result<Vec<PaykitReceipt>> {
+        let receipts = self
+            .receipts
+            .lock()
+            .map_err(|e| InteractiveError::Transport(format!("Mutex poisoned: {}", e)))?;
+        Ok(receipts.values().cloned().collect())
+    }
+
+    async fn list_private_endpoints_for_peer(
+        &self,
+        peer: &PublicKey,
+    ) -> Result<Vec<(MethodId, String)>> {
+        let endpoints = self
+            .endpoints
+            .lock()
+            .map_err(|e| InteractiveError::Transport(format!("Mutex poisoned: {}", e)))?;
+        let peer_str = format!("{:?}", peer);
+        Ok(endpoints
+            .iter()
+            .filter(|((p, _), _)| p == &peer_str)
+            .map(|((_, m), e)| (MethodId(m.clone()), e.clone()))
+            .collect())
+    }
+
+    async fn remove_private_endpoint(&self, peer: &PublicKey, method: &MethodId) -> Result<()> {
+        let mut endpoints = self
+            .endpoints
+            .lock()
+            .map_err(|e| InteractiveError::Transport(format!("Mutex poisoned: {}", e)))?;
+        let key = (format!("{:?}", peer), method.0.clone());
+        endpoints.remove(&key);
+        Ok(())
+    }
 }
 
 /// Mock receipt generator for testing

@@ -2,6 +2,12 @@
 //!
 //! This implementation provides secure key storage for desktop platforms
 //! (macOS, Windows, Linux) using OS-specific secure storage APIs.
+//!
+//! # Thread Safety
+//!
+//! This storage uses `RwLock` for thread-safe access. Public methods
+//! will panic if the internal lock is poisoned (which only happens if a thread
+//! panics while holding the lock).
 
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -65,25 +71,33 @@ impl DesktopKeyStorage {
     // Platform-specific implementations would go here
     // For now, we use the fallback storage
 
+    // Platform-specific native storage stubs - will be implemented when
+    // security-framework (macOS), windows (Windows), or secret-service (Linux)
+    // crate integrations are added.
+
     #[cfg(target_os = "macos")]
+    #[allow(dead_code)] // Stub for future macOS Keychain integration
     fn store_native(&self, _key_id: &str, _data: &[u8]) -> Result<(), String> {
         // Would use security-framework crate
         Err("macOS Keychain not implemented - use fallback".to_string())
     }
 
     #[cfg(target_os = "windows")]
+    #[allow(dead_code)] // Stub for future Windows Credential Manager integration
     fn store_native(&self, _key_id: &str, _data: &[u8]) -> Result<(), String> {
         // Would use windows crate
         Err("Windows Credential Manager not implemented - use fallback".to_string())
     }
 
     #[cfg(target_os = "linux")]
+    #[allow(dead_code)] // Stub for future Linux Secret Service integration
     fn store_native(&self, _key_id: &str, _data: &[u8]) -> Result<(), String> {
         // Would use secret-service crate
         Err("Linux Secret Service not implemented - use fallback".to_string())
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    #[allow(dead_code)] // Stub for unsupported platforms
     fn store_native(&self, _key_id: &str, _data: &[u8]) -> Result<(), String> {
         Err("No native secure storage available on this platform".to_string())
     }
@@ -95,7 +109,10 @@ impl DesktopKeyStorage {
         data: &[u8],
         options: &StoreOptions,
     ) -> SecureStorageResult<()> {
-        let mut storage = self.fallback_storage.write().unwrap();
+        let mut storage = self
+            .fallback_storage
+            .write()
+            .expect("DesktopKeyStorage: lock poisoned during store_fallback");
 
         if storage.contains_key(key_id) && !options.overwrite {
             return Err(SecureStorageError::already_exists(key_id));
@@ -116,13 +133,19 @@ impl DesktopKeyStorage {
 
     /// Retrieve using fallback storage.
     fn retrieve_fallback(&self, key_id: &str) -> SecureStorageResult<Option<Vec<u8>>> {
-        let storage = self.fallback_storage.read().unwrap();
+        let storage = self
+            .fallback_storage
+            .read()
+            .expect("DesktopKeyStorage: lock poisoned during retrieve_fallback");
         Ok(storage.get(key_id).map(|entry| entry.data.clone()))
     }
 
     /// Delete using fallback storage.
     fn delete_fallback(&self, key_id: &str) -> SecureStorageResult<()> {
-        let mut storage = self.fallback_storage.write().unwrap();
+        let mut storage = self
+            .fallback_storage
+            .write()
+            .expect("DesktopKeyStorage: lock poisoned during delete_fallback");
         if storage.remove(key_id).is_some() {
             Ok(())
         } else {
@@ -168,22 +191,34 @@ impl SecureKeyStorage for DesktopKeyStorage {
     }
 
     async fn exists(&self, key_id: &str) -> SecureStorageResult<bool> {
-        let storage = self.fallback_storage.read().unwrap();
+        let storage = self
+            .fallback_storage
+            .read()
+            .expect("DesktopKeyStorage: lock poisoned during exists");
         Ok(storage.contains_key(key_id))
     }
 
     async fn get_metadata(&self, key_id: &str) -> SecureStorageResult<Option<KeyMetadata>> {
-        let storage = self.fallback_storage.read().unwrap();
+        let storage = self
+            .fallback_storage
+            .read()
+            .expect("DesktopKeyStorage: lock poisoned during get_metadata");
         Ok(storage.get(key_id).map(|e| e.metadata.clone()))
     }
 
     async fn list_keys(&self) -> SecureStorageResult<Vec<String>> {
-        let storage = self.fallback_storage.read().unwrap();
+        let storage = self
+            .fallback_storage
+            .read()
+            .expect("DesktopKeyStorage: lock poisoned during list_keys");
         Ok(storage.keys().cloned().collect())
     }
 
     async fn clear_all(&self) -> SecureStorageResult<()> {
-        self.fallback_storage.write().unwrap().clear();
+        self.fallback_storage
+            .write()
+            .expect("DesktopKeyStorage: lock poisoned during clear_all")
+            .clear();
         Ok(())
     }
 }

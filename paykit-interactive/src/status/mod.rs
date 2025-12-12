@@ -2,6 +2,12 @@
 //!
 //! This module provides tracking and notification for payment status
 //! across all payment methods.
+//!
+//! # Thread Safety
+//!
+//! The status tracker uses `RwLock` for thread-safe access. Public methods
+//! will panic if the internal lock is poisoned (which only happens if a thread
+//! panics while holding the lock).
 
 use crate::PaykitReceipt;
 use paykit_lib::MethodId;
@@ -156,7 +162,10 @@ impl PaymentStatusTracker {
 
     /// Register a callback for status changes.
     pub fn on_status_change(&self, callback: StatusCallback) {
-        let mut callbacks = self.callbacks.write().expect("lock poisoned");
+        let mut callbacks = self
+            .callbacks
+            .write()
+            .expect("PaymentStatusTracker: lock poisoned during on_status_change");
         callbacks.push(callback);
     }
 
@@ -165,7 +174,10 @@ impl PaymentStatusTracker {
         let status = PaymentStatusInfo::pending(&receipt.receipt_id, receipt.method_id.clone());
 
         {
-            let mut statuses = self.statuses.write().expect("lock poisoned");
+            let mut statuses = self
+                .statuses
+                .write()
+                .expect("PaymentStatusTracker: lock poisoned during track");
             statuses.insert(receipt.receipt_id.clone(), status.clone());
         }
 
@@ -174,13 +186,19 @@ impl PaymentStatusTracker {
 
     /// Get status for a receipt.
     pub fn get(&self, receipt_id: &str) -> Option<PaymentStatusInfo> {
-        let statuses = self.statuses.read().expect("lock poisoned");
+        let statuses = self
+            .statuses
+            .read()
+            .expect("PaymentStatusTracker: lock poisoned during get");
         statuses.get(receipt_id).cloned()
     }
 
     /// Update status for a receipt.
     pub fn update(&self, receipt_id: &str, new_status: PaymentStatus) -> Option<PaymentStatusInfo> {
-        let mut statuses = self.statuses.write().expect("lock poisoned");
+        let mut statuses = self
+            .statuses
+            .write()
+            .expect("PaymentStatusTracker: lock poisoned during update");
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update(new_status);
@@ -200,7 +218,10 @@ impl PaymentStatusTracker {
         confirmations: u64,
         required: u64,
     ) -> Option<PaymentStatusInfo> {
-        let mut statuses = self.statuses.write().expect("lock poisoned");
+        let mut statuses = self
+            .statuses
+            .write()
+            .expect("PaymentStatusTracker: lock poisoned during update_confirmations");
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update_confirmations(confirmations, required);
@@ -219,7 +240,10 @@ impl PaymentStatusTracker {
         receipt_id: &str,
         error: impl Into<String>,
     ) -> Option<PaymentStatusInfo> {
-        let mut statuses = self.statuses.write().expect("lock poisoned");
+        let mut statuses = self
+            .statuses
+            .write()
+            .expect("PaymentStatusTracker: lock poisoned during mark_failed");
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.mark_failed(error);
@@ -234,7 +258,10 @@ impl PaymentStatusTracker {
 
     /// Get all pending/in-progress payments.
     pub fn get_in_progress(&self) -> Vec<PaymentStatusInfo> {
-        let statuses = self.statuses.read().expect("lock poisoned");
+        let statuses = self
+            .statuses
+            .read()
+            .expect("PaymentStatusTracker: lock poisoned during get_in_progress");
         statuses
             .values()
             .filter(|s| s.status.is_in_progress())
@@ -244,7 +271,10 @@ impl PaymentStatusTracker {
 
     /// Get all payments by status.
     pub fn get_by_status(&self, status: PaymentStatus) -> Vec<PaymentStatusInfo> {
-        let statuses = self.statuses.read().expect("lock poisoned");
+        let statuses = self
+            .statuses
+            .read()
+            .expect("PaymentStatusTracker: lock poisoned during get_by_status");
         statuses
             .values()
             .filter(|s| s.status == status)
@@ -254,7 +284,10 @@ impl PaymentStatusTracker {
 
     /// Remove completed/terminal statuses older than the given timestamp.
     pub fn cleanup_old(&self, before_timestamp: i64) -> usize {
-        let mut statuses = self.statuses.write().expect("lock poisoned");
+        let mut statuses = self
+            .statuses
+            .write()
+            .expect("PaymentStatusTracker: lock poisoned during cleanup_old");
         let count = statuses.len();
         statuses.retain(|_, status| {
             !status.status.is_terminal() || status.updated_at >= before_timestamp
@@ -263,7 +296,10 @@ impl PaymentStatusTracker {
     }
 
     fn notify(&self, status: &PaymentStatusInfo) {
-        let callbacks = self.callbacks.read().expect("lock poisoned");
+        let callbacks = self
+            .callbacks
+            .read()
+            .expect("PaymentStatusTracker: lock poisoned during notify");
         for callback in callbacks.iter() {
             callback(status);
         }

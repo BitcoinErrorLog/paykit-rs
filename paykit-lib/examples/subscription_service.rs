@@ -18,8 +18,7 @@ use paykit_subscriptions::fallback::{FallbackHandler, SubscriptionFallbackPolicy
 use paykit_subscriptions::modifications::ModificationRequest;
 use paykit_subscriptions::proration::ProrationCalculator;
 use paykit_subscriptions::{
-    Amount, PaymentFrequency, SignedSubscription, Subscription, SubscriptionManager,
-    SubscriptionTerms,
+    Amount, PaymentFrequency, SignedSubscription, Subscription, SubscriptionTerms,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -160,10 +159,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Setup fallback handler
     println!("Step 3: Setting up fallback handler");
-    let fallback_policy = SubscriptionFallbackPolicy::default()
+    let _fallback_policy = SubscriptionFallbackPolicy::default()
         .with_method(MethodId("lightning".to_string()), 1)
         .with_method(MethodId("onchain".to_string()), 2);
-    let fallback_handler = FallbackHandler::with_defaults();
+    let _fallback_handler = FallbackHandler::with_defaults();
     println!("  Fallback methods configured");
     println!();
 

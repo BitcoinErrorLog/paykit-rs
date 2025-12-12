@@ -180,6 +180,16 @@ impl IdentityManager {
         Ok(())
     }
 
+    /// Create a new identity (generate and save)
+    ///
+    /// This is a convenience method that generates a new identity and saves it.
+    /// Equivalent to calling `Identity::generate()` and then `save()`.
+    pub fn create(&mut self, name: &str) -> Result<Identity> {
+        let identity = Identity::generate();
+        self.save(&identity, name)?;
+        Ok(identity)
+    }
+
     fn identity_path(&self, name: &str) -> PathBuf {
         self.storage_dir.join(format!("{}.json", name))
     }

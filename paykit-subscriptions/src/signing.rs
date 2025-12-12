@@ -400,4 +400,107 @@ mod tests {
             "Different nonces should produce different signatures"
         );
     }
+
+    // ========================================================================
+    // RFC 8032 Ed25519 Test Vectors
+    // ========================================================================
+    // These tests verify our Ed25519 implementation against known test vectors
+    // from RFC 8032 Section 7.1.
+
+    /// RFC 8032 Test Vector 1: Empty message
+    #[test]
+    fn test_ed25519_rfc8032_vector1_empty_message() {
+        // Test vector from RFC 8032 Section 7.1
+        let secret_key_hex = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+        let public_key_hex = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+        let message = b"";
+        let expected_sig_hex = "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b";
+
+        // Decode test vectors
+        let secret_key_bytes = hex::decode(secret_key_hex).unwrap();
+        let public_key_bytes = hex::decode(public_key_hex).unwrap();
+        let expected_sig_bytes = hex::decode(expected_sig_hex).unwrap();
+
+        // Create signing key from secret
+        let mut secret_arr = [0u8; 32];
+        secret_arr.copy_from_slice(&secret_key_bytes);
+        let signing_key = SigningKey::from_bytes(&secret_arr);
+
+        // Verify public key derivation
+        let derived_public = signing_key.verifying_key();
+        assert_eq!(
+            derived_public.as_bytes(),
+            &public_key_bytes[..],
+            "Public key derivation must match RFC 8032"
+        );
+
+        // Sign and verify signature matches
+        let signature = signing_key.sign(message);
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            &expected_sig_bytes[..],
+            "Signature must match RFC 8032 test vector"
+        );
+
+        // Verify signature
+        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        assert!(
+            verifying_key.verify(message, &signature).is_ok(),
+            "Verification must succeed"
+        );
+    }
+
+    /// RFC 8032 Test Vector 2: Single byte message (0x72)
+    #[test]
+    fn test_ed25519_rfc8032_vector2_single_byte() {
+        let secret_key_hex = "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb";
+        let public_key_hex = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+        let message = &[0x72u8]; // Single byte: 'r' in ASCII
+        let expected_sig_hex = "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+
+        let secret_key_bytes = hex::decode(secret_key_hex).unwrap();
+        let public_key_bytes = hex::decode(public_key_hex).unwrap();
+        let expected_sig_bytes = hex::decode(expected_sig_hex).unwrap();
+
+        let mut secret_arr = [0u8; 32];
+        secret_arr.copy_from_slice(&secret_key_bytes);
+        let signing_key = SigningKey::from_bytes(&secret_arr);
+
+        let signature = signing_key.sign(message);
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            &expected_sig_bytes[..],
+            "Signature must match RFC 8032 test vector 2"
+        );
+
+        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        assert!(verifying_key.verify(message, &signature).is_ok());
+    }
+
+    /// RFC 8032 Test Vector 3: Two byte message
+    #[test]
+    fn test_ed25519_rfc8032_vector3_two_bytes() {
+        let secret_key_hex = "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7";
+        let public_key_hex = "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025";
+        let message = &[0xafu8, 0x82u8];
+        let expected_sig_hex = "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a";
+
+        let secret_key_bytes = hex::decode(secret_key_hex).unwrap();
+        let public_key_bytes = hex::decode(public_key_hex).unwrap();
+        let expected_sig_bytes = hex::decode(expected_sig_hex).unwrap();
+
+        let mut secret_arr = [0u8; 32];
+        secret_arr.copy_from_slice(&secret_key_bytes);
+        let signing_key = SigningKey::from_bytes(&secret_arr);
+
+        let signature = signing_key.sign(message);
+        assert_eq!(
+            signature.to_bytes().as_slice(),
+            &expected_sig_bytes[..],
+            "Signature must match RFC 8032 test vector 3"
+        );
+
+        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        assert!(verifying_key.verify(message, &signature).is_ok());
+    }
 }

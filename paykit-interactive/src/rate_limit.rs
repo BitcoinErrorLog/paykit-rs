@@ -5,9 +5,9 @@
 //!
 //! # Thread Safety
 //!
-//! The rate limiter uses `Mutex` for thread-safe access. Public methods
-//! will panic if the internal lock is poisoned (which only happens if a thread
-//! panics while holding the lock).
+//! The rate limiter uses `Mutex` for thread-safe access. Lock poisoning
+//! is handled gracefully by failing open (allowing requests) rather than
+//! panicking, to avoid blocking legitimate traffic.
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -23,6 +23,11 @@ pub struct RateLimitConfig {
     pub window: Duration,
     /// Maximum tracked IPs to prevent memory exhaustion.
     pub max_tracked_ips: usize,
+    /// Optional global rate limit across all IPs.
+    ///
+    /// When set, limits total requests across all IPs within the window.
+    /// Useful for protecting against distributed attacks from many IPs.
+    pub global_max_attempts: Option<u32>,
 }
 
 impl Default for RateLimitConfig {
@@ -31,6 +36,7 @@ impl Default for RateLimitConfig {
             max_attempts_per_ip: 10,
             window: Duration::from_secs(60),
             max_tracked_ips: 10_000,
+            global_max_attempts: None,
         }
     }
 }
@@ -42,6 +48,38 @@ impl RateLimitConfig {
             max_attempts_per_ip: max_attempts,
             window: Duration::from_secs(window_secs),
             max_tracked_ips: max_ips,
+            global_max_attempts: None,
+        }
+    }
+
+    /// Create a config with a global rate limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_per_ip` - Maximum attempts per IP within the window
+    /// * `global_max` - Maximum total attempts across all IPs within the window
+    /// * `window_secs` - Time window in seconds
+    /// * `max_ips` - Maximum tracked IPs
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use paykit_interactive::rate_limit::RateLimitConfig;
+    ///
+    /// // Allow 5 per IP, 100 total per minute
+    /// let config = RateLimitConfig::with_global_limit(5, 100, 60, 10_000);
+    /// ```
+    pub fn with_global_limit(
+        max_per_ip: u32,
+        global_max: u32,
+        window_secs: u64,
+        max_ips: usize,
+    ) -> Self {
+        Self {
+            max_attempts_per_ip: max_per_ip,
+            window: Duration::from_secs(window_secs),
+            max_tracked_ips: max_ips,
+            global_max_attempts: Some(global_max),
         }
     }
 
@@ -51,6 +89,19 @@ impl RateLimitConfig {
             max_attempts_per_ip: 3,
             window: Duration::from_secs(60),
             max_tracked_ips: 10_000,
+            global_max_attempts: None,
+        }
+    }
+
+    /// Strict rate limiting with global limit for high-security deployments.
+    ///
+    /// Limits each IP to 3 attempts AND total to 50 attempts per minute.
+    pub fn strict_with_global() -> Self {
+        Self {
+            max_attempts_per_ip: 3,
+            window: Duration::from_secs(60),
+            max_tracked_ips: 10_000,
+            global_max_attempts: Some(50),
         }
     }
 
@@ -60,6 +111,7 @@ impl RateLimitConfig {
             max_attempts_per_ip: 100,
             window: Duration::from_secs(60),
             max_tracked_ips: 1_000,
+            global_max_attempts: None,
         }
     }
 
@@ -69,6 +121,7 @@ impl RateLimitConfig {
             max_attempts_per_ip: u32::MAX,
             window: Duration::from_secs(1),
             max_tracked_ips: 1,
+            global_max_attempts: None,
         }
     }
 }
@@ -76,6 +129,13 @@ impl RateLimitConfig {
 /// Tracks handshake attempts per IP address.
 #[derive(Debug)]
 struct IpRecord {
+    count: u32,
+    window_start: Instant,
+}
+
+/// Global rate limit tracking across all IPs.
+#[derive(Debug)]
+struct GlobalRecord {
     count: u32,
     window_start: Instant,
 }
@@ -94,13 +154,14 @@ struct IpRecord {
 /// let ip: IpAddr = "192.168.1.1".parse().unwrap();
 /// if !limiter.check_and_record(ip) {
 ///     // Reject connection - rate limit exceeded
-///     eprintln!("Rate limit exceeded for {}", ip);
 /// }
 /// ```
 #[derive(Debug)]
 pub struct HandshakeRateLimiter {
     config: RateLimitConfig,
     records: Mutex<HashMap<IpAddr, IpRecord>>,
+    /// Global counter for total requests (optional)
+    global: Mutex<GlobalRecord>,
 }
 
 impl HandshakeRateLimiter {
@@ -109,6 +170,10 @@ impl HandshakeRateLimiter {
         Self {
             config,
             records: Mutex::new(HashMap::new()),
+            global: Mutex::new(GlobalRecord {
+                count: 0,
+                window_start: Instant::now(),
+            }),
         }
     }
 
@@ -121,12 +186,26 @@ impl HandshakeRateLimiter {
     ///
     /// Returns `true` if allowed, `false` if rate limited.
     /// Also records the attempt for future checks.
+    ///
+    /// Checks both per-IP and global limits (if configured).
+    ///
+    /// If the lock is poisoned, this fails open (returns `true`) to avoid
+    /// blocking legitimate traffic.
     pub fn check_and_record(&self, ip: IpAddr) -> bool {
-        let mut records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during check_and_record");
         let now = Instant::now();
+
+        // Check global limit first (if configured)
+        if let Some(global_max) = self.config.global_max_attempts {
+            if !self.check_global_limit(global_max, now) {
+                return false;
+            }
+        }
+
+        // Then check per-IP limit
+        let mut records = match self.records.lock() {
+            Ok(r) => r,
+            Err(_) => return true, // Fail open on lock poisoning
+        };
 
         // Clean up old entries if we're over capacity
         if records.len() >= self.config.max_tracked_ips {
@@ -161,12 +240,46 @@ impl HandshakeRateLimiter {
         }
     }
 
+    /// Check and record global rate limit.
+    ///
+    /// Returns `true` if under global limit, `false` if exceeded.
+    fn check_global_limit(&self, max: u32, now: Instant) -> bool {
+        let mut global = match self.global.lock() {
+            Ok(g) => g,
+            Err(_) => return true, // Fail open on lock poisoning
+        };
+
+        // Check if window has expired
+        if now.duration_since(global.window_start) > self.config.window {
+            // Reset window
+            global.count = 1;
+            global.window_start = now;
+            true
+        } else if global.count >= max {
+            // Global rate limit exceeded
+            false
+        } else {
+            // Allow and increment
+            global.count += 1;
+            true
+        }
+    }
+
+    /// Get the current global request count (for monitoring).
+    ///
+    /// Returns 0 if the lock is poisoned.
+    pub fn global_count(&self) -> u32 {
+        self.global.lock().map(|g| g.count).unwrap_or(0)
+    }
+
     /// Check without recording (peek at current state).
+    ///
+    /// Returns `false` (not rate limited) if the lock is poisoned.
     pub fn is_rate_limited(&self, ip: IpAddr) -> bool {
-        let records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during is_rate_limited");
+        let records = match self.records.lock() {
+            Ok(r) => r,
+            Err(_) => return false, // Fail open on lock poisoning
+        };
         let now = Instant::now();
 
         if let Some(record) = records.get(&ip) {
@@ -178,11 +291,13 @@ impl HandshakeRateLimiter {
     }
 
     /// Get remaining attempts for an IP.
+    ///
+    /// Returns max attempts if the lock is poisoned.
     pub fn remaining_attempts(&self, ip: IpAddr) -> u32 {
-        let records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during remaining_attempts");
+        let records = match self.records.lock() {
+            Ok(r) => r,
+            Err(_) => return self.config.max_attempts_per_ip, // Fail open
+        };
         let now = Instant::now();
 
         if let Some(record) = records.get(&ip) {
@@ -194,30 +309,28 @@ impl HandshakeRateLimiter {
     }
 
     /// Manually reset limits for an IP (e.g., after successful authentication).
+    ///
+    /// Silently ignored if the lock is poisoned.
     pub fn reset(&self, ip: IpAddr) {
-        let mut records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during reset");
-        records.remove(&ip);
+        if let Ok(mut records) = self.records.lock() {
+            records.remove(&ip);
+        }
     }
 
     /// Clear all tracked records.
+    ///
+    /// Silently ignored if the lock is poisoned.
     pub fn clear(&self) {
-        let mut records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during clear");
-        records.clear();
+        if let Ok(mut records) = self.records.lock() {
+            records.clear();
+        }
     }
 
     /// Get current number of tracked IPs.
+    ///
+    /// Returns 0 if the lock is poisoned.
     pub fn tracked_count(&self) -> usize {
-        let records = self
-            .records
-            .lock()
-            .expect("HandshakeRateLimiter: lock poisoned during tracked_count");
-        records.len()
+        self.records.lock().map(|r| r.len()).unwrap_or(0)
     }
 
     /// Remove expired entries (called automatically when over capacity).

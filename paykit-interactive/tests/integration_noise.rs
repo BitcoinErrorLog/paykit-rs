@@ -3,14 +3,12 @@
 //! These tests verify that pubky-noise integration works correctly with actual
 //! TCP connections and Noise_IK handshakes (not mocks).
 
-use ed25519_dalek::{Signer, SigningKey};
 use paykit_interactive::{
     transport::PubkyNoiseChannel, PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage,
     PaykitReceipt, PaykitStorage, ReceiptGenerator,
 };
 use paykit_lib::MethodId;
 use pubky_noise::{NoiseClient, NoiseServer, RingKeyProvider};
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

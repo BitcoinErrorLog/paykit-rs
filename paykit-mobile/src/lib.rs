@@ -100,11 +100,9 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
             paykit_lib::PaykitError::Unimplemented(msg) => Self::Internal {
                 message: msg.to_string(),
             },
-            paykit_lib::PaykitError::ConnectionFailed { target, reason } => {
-                Self::ConnectionError {
-                    message: format!("Connection to {} failed: {}", target, reason),
-                }
-            }
+            paykit_lib::PaykitError::ConnectionFailed { target, reason } => Self::ConnectionError {
+                message: format!("Connection to {} failed: {}", target, reason),
+            },
             paykit_lib::PaykitError::ConnectionTimeout {
                 operation,
                 timeout_ms,

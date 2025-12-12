@@ -3,7 +3,7 @@
 use crate::models::Receipt;
 use anyhow::{Context, Result};
 use paykit_interactive::{
-    PaykitInteractiveManager, PaykitNoiseChannel, PaykitReceipt, PaykitStorage, ReceiptGenerator,
+    PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt, PaykitStorage, ReceiptGenerator,
 };
 use paykit_lib::{MethodId, PublicKey};
 use std::sync::Arc;
@@ -93,13 +93,26 @@ impl PaymentCoordinator {
         // Send response if any
         if let Some(response_msg) = response {
             channel
-                .send(response_msg)
+                .send(response_msg.clone())
                 .await
                 .context("Failed to send response")?;
 
-            // TODO: Extract receipt from response
-            // For now, return None as we need to track state better
-            Ok(None)
+            // Extract receipt from ConfirmReceipt message
+            if let PaykitNoiseMessage::ConfirmReceipt { receipt } = response_msg {
+                // Convert PaykitReceipt to demo Receipt type
+                Ok(Some(Receipt {
+                    id: receipt.receipt_id,
+                    payer: receipt.payer,
+                    payee: receipt.payee,
+                    method: receipt.method_id.0,
+                    amount: receipt.amount,
+                    currency: receipt.currency,
+                    timestamp: receipt.created_at,
+                    metadata: receipt.metadata,
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }

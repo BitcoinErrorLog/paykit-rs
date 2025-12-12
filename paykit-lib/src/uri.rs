@@ -488,7 +488,7 @@ mod tests {
         {
             // Test with valid public key
             let pk = test_pubkey();
-            let pk_str = format!("pubky://{}", pk);
+            let _pk_str = format!("pubky://{}", pk);
             // Note: This will fail if PublicKey doesn't implement Display/Debug
             // For now, just test that invoice doesn't have a public key
             let invoice = parse_uri("lightning:lnbc1...").unwrap();

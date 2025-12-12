@@ -5,10 +5,12 @@
 use serde::{Deserialize, Serialize};
 
 /// Policy for endpoint rotation.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RotationPolicy {
     /// Rotate immediately after each use.
     /// Best for privacy (no address reuse).
+    /// This is the default policy.
+    #[default]
     RotateOnUse,
 
     /// Rotate after a specified number of uses.
@@ -28,13 +30,6 @@ pub enum RotationPolicy {
     /// Never rotate automatically.
     /// Manual rotation only.
     Manual,
-}
-
-impl Default for RotationPolicy {
-    fn default() -> Self {
-        // Default to rotating after each use for privacy
-        Self::RotateOnUse
-    }
 }
 
 impl RotationPolicy {

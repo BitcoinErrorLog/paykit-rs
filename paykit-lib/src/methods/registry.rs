@@ -2,6 +2,15 @@
 //!
 //! This module provides a registry for managing payment method plugins.
 //! Applications can register plugins at runtime and query them by method ID.
+//!
+//! # Thread Safety
+//!
+//! The registry uses `RwLock` for thread-safe access. All public methods will panic
+//! if the internal lock is poisoned (which only happens if a thread panics while
+//! holding the lock). In well-tested applications, this should never occur.
+//!
+//! If you need fallible access, use [`get_required`](PaymentMethodRegistry::get_required)
+//! which returns a `Result`.
 
 use super::traits::PaymentMethodPlugin;
 use crate::{MethodId, PaykitError, Result};
@@ -52,7 +61,10 @@ impl PaymentMethodRegistry {
     /// If a plugin with the same method ID already exists, it will be replaced.
     pub fn register(&self, plugin: Box<dyn PaymentMethodPlugin>) {
         let method_id = plugin.method_id().0.clone();
-        let mut plugins = self.plugins.write().expect("lock poisoned");
+        let mut plugins = self
+            .plugins
+            .write()
+            .expect("PaymentMethodRegistry: lock poisoned during register");
         plugins.insert(method_id, Arc::from(plugin));
     }
 
@@ -60,13 +72,19 @@ impl PaymentMethodRegistry {
     ///
     /// Returns the removed plugin if it existed.
     pub fn unregister(&self, method_id: &MethodId) -> Option<Arc<dyn PaymentMethodPlugin>> {
-        let mut plugins = self.plugins.write().expect("lock poisoned");
+        let mut plugins = self
+            .plugins
+            .write()
+            .expect("PaymentMethodRegistry: lock poisoned during unregister");
         plugins.remove(&method_id.0)
     }
 
     /// Gets a payment method plugin by its ID.
     pub fn get(&self, method_id: &MethodId) -> Option<Arc<dyn PaymentMethodPlugin>> {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during get");
         plugins.get(&method_id.0).cloned()
     }
 
@@ -79,13 +97,19 @@ impl PaymentMethodRegistry {
 
     /// Returns all registered method IDs.
     pub fn list_methods(&self) -> Vec<MethodId> {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during list_methods");
         plugins.keys().map(|k| MethodId(k.clone())).collect()
     }
 
     /// Returns the number of registered plugins.
     pub fn len(&self) -> usize {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during len");
         plugins.len()
     }
 
@@ -96,7 +120,10 @@ impl PaymentMethodRegistry {
 
     /// Checks if a method is registered.
     pub fn has_method(&self, method_id: &MethodId) -> bool {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during has_method");
         plugins.contains_key(&method_id.0)
     }
 
@@ -107,7 +134,10 @@ impl PaymentMethodRegistry {
         &self,
         method_ids: &[MethodId],
     ) -> Vec<(MethodId, Arc<dyn PaymentMethodPlugin>)> {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during get_multiple");
         method_ids
             .iter()
             .filter_map(|id| plugins.get(&id.0).map(|p| (id.clone(), p.clone())))
@@ -119,7 +149,10 @@ impl PaymentMethodRegistry {
     where
         F: Fn(&dyn PaymentMethodPlugin) -> bool,
     {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during filter");
         plugins
             .values()
             .filter(|p| predicate(p.as_ref()))
@@ -136,7 +169,10 @@ impl Default for PaymentMethodRegistry {
 
 impl Clone for PaymentMethodRegistry {
     fn clone(&self) -> Self {
-        let plugins = self.plugins.read().expect("lock poisoned");
+        let plugins = self
+            .plugins
+            .read()
+            .expect("PaymentMethodRegistry: lock poisoned during clone");
         Self {
             plugins: RwLock::new(plugins.clone()),
         }

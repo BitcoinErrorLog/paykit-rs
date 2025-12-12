@@ -50,20 +50,15 @@ pub struct LightningPlugin {
 }
 
 /// Lightning network types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LightningNetwork {
     /// Bitcoin mainnet Lightning.
+    #[default]
     Mainnet,
     /// Bitcoin testnet Lightning.
     Testnet,
     /// Bitcoin regtest Lightning.
     Regtest,
-}
-
-impl Default for LightningNetwork {
-    fn default() -> Self {
-        Self::Mainnet
-    }
 }
 
 impl LightningPlugin {
@@ -519,7 +514,7 @@ impl PaymentMethodPlugin for LightningPlugin {
         if amount.currency.to_uppercase() == "SAT" {
             if let Some(sats) = amount.as_u64() {
                 // Minimum 1 sat, max ~4,000,000 sats (0.04 BTC)
-                return sats >= 1 && sats <= 4_000_000;
+                return (1..=4_000_000).contains(&sats);
             }
         }
         true

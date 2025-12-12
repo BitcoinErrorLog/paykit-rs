@@ -112,6 +112,10 @@ pub fn assert_address_valid(address: &str, testnet: bool) {
 }
 
 /// Builder for complex payment assertions.
+///
+/// Part of the test utilities API for SDK consumers to write
+/// fluent payment result assertions in their tests.
+#[allow(dead_code)] // Public test utility for external consumers
 pub struct PaymentAssertionBuilder<'a> {
     result: &'a LightningPaymentResult,
     checks: Vec<(&'static str, bool)>,
@@ -167,6 +171,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     ///
     /// # Panics
     /// Panics if any assertion fails.
+    #[allow(dead_code)] // Public test utility API
     pub fn assert(self) {
         for (description, passed) in self.checks {
             assert!(passed, "Assertion failed: {}", description);

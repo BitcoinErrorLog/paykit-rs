@@ -29,6 +29,7 @@ struct Product {
 
 /// Order in the system.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Example demonstrating data model
 struct Order {
     order_id: String,
     customer: PublicKey,
@@ -39,6 +40,7 @@ struct Order {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)] // Example demonstrating status model
 enum OrderStatus {
     Pending,
     Paid,

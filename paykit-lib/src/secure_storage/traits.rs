@@ -305,6 +305,10 @@ pub trait SecureKeyStorage: Send + Sync {
 }
 
 /// Extension trait for convenience methods.
+///
+/// Provides common patterns like `store_simple` that don't require
+/// specifying all options. Part of the public API for SDK consumers.
+#[allow(dead_code)] // Public API for external consumers
 pub trait SecureKeyStorageExt: SecureKeyStorage {
     /// Store a key with default options (no overwrite, no auth required).
     fn store_simple(

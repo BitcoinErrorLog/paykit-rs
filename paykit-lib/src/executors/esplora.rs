@@ -59,6 +59,10 @@ impl EsploraExecutor {
     }
 
     /// Build the full URL for an API endpoint.
+    ///
+    /// Note: Currently unused as full HTTP client implementation is pending.
+    /// Will be used when reqwest integration is complete.
+    #[allow(dead_code)]
     fn url(&self, path: &str) -> String {
         format!("{}/{}", self.config.api_url.trim_end_matches('/'), path)
     }

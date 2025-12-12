@@ -101,9 +101,7 @@ impl EndpointRotationManager {
 
         // Initialize tracker if needed
         let mut trackers = self.trackers.write().expect("lock poisoned");
-        trackers
-            .entry(method_id.0.clone())
-            .or_insert_with(EndpointTracker::new);
+        trackers.entry(method_id.0.clone()).or_default();
     }
 
     /// Get the current endpoint for a method.
@@ -222,10 +220,7 @@ impl EndpointRotationManager {
         self.record_use(method_id);
 
         if self.config.auto_rotate_on_payment && self.needs_rotation(method_id) {
-            match self.rotate(method_id).await {
-                Ok(new_endpoint) => Some(new_endpoint),
-                Err(_) => None,
-            }
+            self.rotate(method_id).await.ok()
         } else {
             None
         }

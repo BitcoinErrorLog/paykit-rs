@@ -2,6 +2,15 @@
 //!
 //! This implementation uses the iOS Keychain Services API
 //! for secure key storage with biometric protection.
+//!
+//! # Platform Status
+//!
+//! **STUB IMPLEMENTATION**: This module provides the interface for iOS Keychain
+//! integration but requires the Swift FFI bridge to be implemented by the iOS
+//! host application before it can be used in production.
+//!
+//! The FFI functions (`ffi_store`, `ffi_retrieve`, etc.) currently return errors
+//! and must be connected to Swift implementations via UniFFI callbacks.
 
 use super::traits::{
     KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageResult, StoreOptions,

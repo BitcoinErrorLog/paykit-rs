@@ -107,13 +107,13 @@ impl DirectoryClient {
     /// # }
     /// ```
     pub async fn create_session(&self, _keypair: &pubky::Keypair) -> Result<PubkySession> {
-        // TODO: Implement proper session creation using Pubky SDK 0.6.0-rc.6+ API
-        // This requires:
-        // 1. Creating a Pubky instance with homeserver URL
-        // 2. Getting a signer: sdk.signer(keypair)
-        // 3. Calling signup: signer.signup(&homeserver_pk, None).await
+        // NOTE: Session creation requires Pubky SDK setup
+        // See MIGRATION.md for Pubky SDK 0.6.0-rc.6+ session creation pattern:
+        // 1. Create Pubky instance with homeserver URL
+        // 2. Get signer: sdk.signer(keypair)
+        // 3. Signup: signer.signup(&homeserver_pk, None).await
         //
-        // For now, return an error with guidance
+        // This demo function returns an error with guidance
         anyhow::bail!(
             "Session creation not yet implemented. \
              To create a session, use Pubky SDK directly:\n\

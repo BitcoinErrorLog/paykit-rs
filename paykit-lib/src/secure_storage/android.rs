@@ -67,36 +67,36 @@ impl KeystoreStorage {
         format!("{}_{}", self.alias_prefix, key_id)
     }
 
-    // FFI Bridge Functions
-    // These functions are called via UniFFI from Kotlin. The actual Keystore
-    // implementation is provided by the Android host app using EncryptedPreferencesStorage.kt
-    // located in paykit-mobile/kotlin/EncryptedPreferencesStorage.kt
+    // NOTE: FFI Bridge Functions
+    // These functions are called from Kotlin via UniFFI bindings.
+    // The actual Keystore implementation is provided by the Android host app.
+    // See paykit-mobile for UniFFI binding definitions.
 
-    /// FFI: Store item in Keystore (implemented by Android host via EncryptedPreferencesStorage.kt)
+    /// FFI: Store item in Keystore (to be implemented by Android host)
     #[allow(dead_code)]
     fn ffi_store(&self, _alias: &str, _data: &[u8], _require_auth: bool) -> Result<(), String> {
         Err("FFI not connected - call from Android host".to_string())
     }
 
-    /// FFI: Retrieve item from Keystore (implemented by Android host)
+    /// FFI: Retrieve item from Keystore (to be implemented by Android host)
     #[allow(dead_code)]
     fn ffi_retrieve(&self, _alias: &str) -> Result<Option<Vec<u8>>, String> {
         Err("FFI not connected - call from Android host".to_string())
     }
 
-    /// FFI: Delete item from Keystore (implemented by Android host)
+    /// FFI: Delete item from Keystore (to be implemented by Android host)
     #[allow(dead_code)]
     fn ffi_delete(&self, _alias: &str) -> Result<(), String> {
         Err("FFI not connected - call from Android host".to_string())
     }
 
-    /// FFI: Check if item exists in Keystore (implemented by Android host)
+    /// FFI: Check if item exists in Keystore (to be implemented by Android host)
     #[allow(dead_code)]
     fn ffi_exists(&self, _alias: &str) -> Result<bool, String> {
         Err("FFI not connected - call from Android host".to_string())
     }
 
-    /// FFI: List all items in Keystore (implemented by Android host)
+    /// FFI: List all items in Keystore (to be implemented by Android host)
     #[allow(dead_code)]
     fn ffi_list(&self) -> Result<Vec<String>, String> {
         Err("FFI not connected - call from Android host".to_string())

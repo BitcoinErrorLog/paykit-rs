@@ -123,6 +123,7 @@ pub struct PaymentAssertionBuilder<'a> {
 
 impl<'a> PaymentAssertionBuilder<'a> {
     /// Create a new assertion builder.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn new(result: &'a LightningPaymentResult) -> Self {
         Self {
             result,
@@ -131,6 +132,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Assert the payment succeeded.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn succeeded(mut self) -> Self {
         self.checks.push((
             "status is Succeeded",
@@ -140,6 +142,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Assert the preimage is not empty.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn has_preimage(mut self) -> Self {
         self.checks
             .push(("has preimage", !self.result.preimage.is_empty()));
@@ -147,6 +150,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Assert the amount matches.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn amount_msat(mut self, expected: u64) -> Self {
         self.checks
             .push(("amount matches", self.result.amount_msat == expected));
@@ -154,6 +158,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Assert the fee is within bounds.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn fee_within(mut self, max_fee_msat: u64) -> Self {
         self.checks
             .push(("fee within bounds", self.result.fee_msat <= max_fee_msat));
@@ -161,6 +166,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Assert the number of hops.
+    #[allow(dead_code)] // Public test utility API - used in tests
     pub fn hops(mut self, expected: u32) -> Self {
         self.checks
             .push(("hop count matches", self.result.hops == expected));

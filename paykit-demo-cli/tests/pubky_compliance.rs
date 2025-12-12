@@ -3,26 +3,17 @@
 //! These tests verify that paykit-demo-cli correctly uses pubky-SDK APIs
 //! for session creation, publishing, and discovery.
 //!
-//! # Status: DISABLED
+//! Pubky-SDK compliance tests
 //!
-//! These tests are currently disabled because the Pubky SDK API has changed significantly.
-//! The following breaking changes need to be addressed:
+//! These tests verify that paykit-demo-cli correctly uses pubky-SDK 0.6.0-rc.6+ APIs
+//! for session creation, publishing, and discovery.
 //!
-//! - `pubky::PubkyClient` no longer exists
-//! - `pubky::generate_keypair()` no longer exists
-//! - `pubky_testnet::PubkyTestnet` no longer exists
-//! - `PublicStorage::new()` signature changed (now takes 0 arguments)
-//! - `SupportedPayments.entries` is now a HashMap, not a Vec
+//! # Running these tests
 //!
-//! To re-enable these tests:
-//! 1. Update the imports to match the new Pubky SDK API
-//! 2. Remove the `#[cfg(feature = "pubky_compliance_tests")]` attribute below
-//!
-//! Tracking: Requires migration to Pubky SDK 0.6.x+ API
-
-// The entire test module is disabled until Pubky SDK API migration is complete.
-// Enable by adding `pubky_compliance_tests` feature to Cargo.toml and running:
-// cargo test --features pubky_compliance_tests
+//! These tests require network access and are feature-gated:
+//! ```bash
+//! cargo test --features pubky_compliance_tests --test pubky_compliance
+//! ```
 
 #[cfg(feature = "pubky_compliance_tests")]
 mod common;
@@ -33,28 +24,25 @@ mod pubky_tests {
         AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
         PubkyUnauthenticatedTransport, UnauthenticatedTransportRead,
     };
-    // NOTE: These imports need to be updated for new Pubky SDK API
-    use pubky::{PubkyClient, PublicStorage};
-    use pubky_testnet::PubkyTestnet;
+    use pubky::PublicStorage;
+    use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 
     #[tokio::test]
     async fn test_publish_and_discover_compliance() {
         // Start testnet homeserver
-        let testnet = PubkyTestnet::start()
+        let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver().to_string();
+        let homeserver = testnet.homeserver();
+        let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // 1. Create session
-        let keypair = pubky::generate_keypair();
+        let keypair = Keypair::random();
         let public_key = keypair.public_key();
 
-        let mut client = PubkyClient::new(&homeserver, None)
-            .await
-            .expect("Session creation must follow pubky-sdk spec");
-
-        let session = client
-            .signup(&keypair, &homeserver)
+        let signer = sdk.signer(keypair.clone());
+        let session = signer
+            .signup(&homeserver.public_key(), None)
             .await
             .expect("Signup must succeed");
 
@@ -70,9 +58,7 @@ mod pubky_tests {
             .expect("Publish must succeed");
 
         // 3. Query via UnauthenticatedTransport
-        let public_storage =
-            PublicStorage::new(&homeserver).expect("Public storage creation must succeed");
-        let unauth_transport = PubkyUnauthenticatedTransport::new(public_storage);
+        let unauth_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
         let methods = unauth_transport
             .fetch_supported_payments(&public_key)
@@ -86,29 +72,24 @@ mod pubky_tests {
         );
         assert!(methods.entries.contains_key(&method_id));
         assert_eq!(methods.entries.get(&method_id), Some(&endpoint));
-
-        // Cleanup
-        testnet.shutdown().await;
     }
 
     #[tokio::test]
     async fn test_endpoint_rotation_compliance() {
         // Test that multiple publishes to same method_id replace old values
         // per pubky-sdk spec
-        let testnet = PubkyTestnet::start()
+        let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver().to_string();
+        let homeserver = testnet.homeserver();
+        let sdk = testnet.sdk().expect("Failed to get SDK");
 
-        let keypair = pubky::generate_keypair();
+        let keypair = Keypair::random();
         let public_key = keypair.public_key();
 
-        let mut client = PubkyClient::new(&homeserver, None)
-            .await
-            .expect("Failed to create client");
-
-        let session = client
-            .signup(&keypair, &homeserver)
+        let signer = sdk.signer(keypair.clone());
+        let session = signer
+            .signup(&homeserver.public_key(), None)
             .await
             .expect("Failed to signup");
 
@@ -132,9 +113,7 @@ mod pubky_tests {
             .expect("Second publish must succeed");
 
         // Verify only the latest endpoint is returned
-        let public_storage =
-            PublicStorage::new(&homeserver).expect("Failed to create public storage");
-        let unauth_transport = PubkyUnauthenticatedTransport::new(public_storage);
+        let unauth_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
         let methods = unauth_transport
             .fetch_supported_payments(&public_key)
@@ -151,27 +130,23 @@ mod pubky_tests {
             Some(&endpoint2),
             "Should return the latest endpoint"
         );
-
-        testnet.shutdown().await;
     }
 
     #[tokio::test]
     async fn test_multiple_methods_compliance() {
         // Test publishing multiple payment methods
-        let testnet = PubkyTestnet::start()
+        let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver().to_string();
+        let homeserver = testnet.homeserver();
+        let sdk = testnet.sdk().expect("Failed to get SDK");
 
-        let keypair = pubky::generate_keypair();
+        let keypair = Keypair::random();
         let public_key = keypair.public_key();
 
-        let mut client = PubkyClient::new(&homeserver, None)
-            .await
-            .expect("Failed to create client");
-
-        let session = client
-            .signup(&keypair, &homeserver)
+        let signer = sdk.signer(keypair.clone());
+        let session = signer
+            .signup(&homeserver.public_key(), None)
             .await
             .expect("Failed to signup");
 
@@ -201,9 +176,7 @@ mod pubky_tests {
         }
 
         // Query all methods
-        let public_storage =
-            PublicStorage::new(&homeserver).expect("Failed to create public storage");
-        let unauth_transport = PubkyUnauthenticatedTransport::new(public_storage);
+        let unauth_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
         let methods = unauth_transport
             .fetch_supported_payments(&public_key)
@@ -220,7 +193,5 @@ mod pubky_tests {
                 method_id.0
             );
         }
-
-        testnet.shutdown().await;
     }
 }

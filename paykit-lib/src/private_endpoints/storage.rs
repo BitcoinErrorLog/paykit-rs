@@ -296,7 +296,8 @@ impl FileStore {
     ) -> Result<Self, StorageError> {
         let key = super::encryption::derive_key_from_passphrase(passphrase, salt)
             .map_err(|e| StorageError::Other(e.to_string()))?;
-        Self::new_encrypted(base_path, key).map_err(StorageError::from)
+        // Dereference the Zeroizing wrapper to get the raw key for encryption context
+        Self::new_encrypted(base_path, *key).map_err(StorageError::from)
     }
 
     /// Check if this store is using encryption.

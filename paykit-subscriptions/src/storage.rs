@@ -311,7 +311,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
             .values()
             .filter(|s| {
                 s.subscription.starts_at <= now
-                    && s.subscription.ends_at.map_or(true, |end| end > now)
+                    && s.subscription.ends_at.is_none_or(|end| end > now)
             })
             .cloned()
             .collect();
@@ -413,7 +413,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         limit.current_spent = limit
             .current_spent
             .checked_add(amount)
-            .ok_or_else(|| SubscriptionError::Overflow)?;
+            .ok_or(SubscriptionError::Overflow)?;
 
         // Save updated limit
         let json = serde_json::to_string_pretty(&limit)?;

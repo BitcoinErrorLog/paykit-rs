@@ -1193,6 +1193,12 @@ pub struct WasmAutoPayRuleStorage {
     storage_key: String,
 }
 
+impl Default for WasmAutoPayRuleStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl WasmAutoPayRuleStorage {
     /// Create new storage manager
@@ -1343,6 +1349,12 @@ impl WasmAutoPayRuleStorage {
 #[wasm_bindgen]
 pub struct WasmPeerSpendingLimitStorage {
     storage_key: String,
+}
+
+impl Default for WasmPeerSpendingLimitStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[wasm_bindgen]

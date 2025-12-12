@@ -181,7 +181,7 @@ enum SubscriptionAction {
         #[arg(short, long, default_value = "SAT")]
         currency: String,
 
-        /// Payment frequency (daily, weekly, monthly[:DAY], yearly:MONTH:DAY, custom:SECONDS)
+        /// Payment frequency: `daily`, `weekly`, `monthly[:DAY]`, `yearly:MONTH:DAY`, `custom:SECONDS`
         #[arg(short, long)]
         frequency: String,
 

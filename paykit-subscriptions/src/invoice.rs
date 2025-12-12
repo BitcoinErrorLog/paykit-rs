@@ -296,7 +296,7 @@ impl Invoice {
         Self {
             invoice_number: invoice_number.into(),
             items,
-            subtotal: subtotal.clone(),
+            subtotal,
             tax: None,
             shipping: None,
             discount: None,
@@ -349,7 +349,7 @@ impl Invoice {
 
     /// Recalculate the total based on subtotal, tax, shipping, and discount.
     fn recalculate_total(&mut self) {
-        let mut total = self.subtotal.clone();
+        let mut total = self.subtotal;
 
         if let Some(ref tax) = self.tax {
             total = total.add(&tax.amount);

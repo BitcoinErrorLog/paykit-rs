@@ -152,27 +152,23 @@ impl OnchainPlugin {
         // Basic length checks
         let mut result = ValidationResult::valid();
 
-        if address.starts_with("1") || address.starts_with("3") {
-            if address.len() < 26 || address.len() > 35 {
-                return ValidationResult::invalid(vec![format!(
-                    "Invalid address length: {} (expected 26-35)",
-                    address.len()
-                )]);
-            }
-        } else if address.starts_with("bc1q") {
-            if address.len() != 42 && address.len() != 62 {
-                return ValidationResult::invalid(vec![format!(
-                    "Invalid bech32 address length: {} (expected 42 or 62)",
-                    address.len()
-                )]);
-            }
-        } else if address.starts_with("bc1p") {
-            if address.len() != 62 {
-                return ValidationResult::invalid(vec![format!(
-                    "Invalid taproot address length: {} (expected 62)",
-                    address.len()
-                )]);
-            }
+        if (address.starts_with("1") || address.starts_with("3"))
+            && (address.len() < 26 || address.len() > 35)
+        {
+            return ValidationResult::invalid(vec![format!(
+                "Invalid address length: {} (expected 26-35)",
+                address.len()
+            )]);
+        } else if address.starts_with("bc1q") && address.len() != 42 && address.len() != 62 {
+            return ValidationResult::invalid(vec![format!(
+                "Invalid bech32 address length: {} (expected 42 or 62)",
+                address.len()
+            )]);
+        } else if address.starts_with("bc1p") && address.len() != 62 {
+            return ValidationResult::invalid(vec![format!(
+                "Invalid taproot address length: {} (expected 62)",
+                address.len()
+            )]);
         }
 
         // Add warning for legacy addresses (privacy)

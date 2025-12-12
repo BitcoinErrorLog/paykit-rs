@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Command-line demo application for Paykit"
 
+[features]
+default = []
+# Pubky SDK compliance tests (opt-in, requires network and pubky testnet)
+pubky_compliance_tests = []
+
 [[bin]]
 name = "paykit-demo"
 path = "src/main.rs"

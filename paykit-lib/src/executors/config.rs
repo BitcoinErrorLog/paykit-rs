@@ -152,7 +152,7 @@ impl ElectrumConfig {
 /// Configuration for Esplora block explorer API executor.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EsploraConfig {
-    /// API base URL (e.g., "https://blockstream.info/api").
+    /// API base URL (e.g., `https://blockstream.info/api`).
     pub api_url: String,
 
     /// Network the explorer is on.

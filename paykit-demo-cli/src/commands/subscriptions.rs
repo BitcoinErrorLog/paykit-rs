@@ -131,7 +131,7 @@ pub async fn list_requests(
         );
         ui::key_value(
             "Amount",
-            &format!("{} {}", req.amount.to_string(), req.currency),
+            &format!("{} {}", req.amount, req.currency),
         );
 
         let created_dt =
@@ -213,7 +213,7 @@ pub async fn respond_to_request(
         ui::info("To complete payment, use:");
         ui::info(&format!(
             "  paykit-demo pay {} --amount {} --currency {}",
-            request.from.to_string(),
+            request.from,
             request.amount.as_sats(),
             request.currency
         ));
@@ -238,7 +238,7 @@ pub async fn show_request(storage_dir: &Path, request_id: &str) -> Result<()> {
     ui::key_value("To", &request.to.to_string());
     ui::key_value(
         "Amount",
-        &format!("{} {}", request.amount.to_string(), request.currency),
+        &format!("{} {}", request.amount, request.currency),
     );
     ui::key_value("Method", &request.method.0);
 
@@ -415,7 +415,7 @@ pub async fn accept_subscription(storage_dir: &Path, subscription_id: &str) -> R
         "Amount",
         &format!(
             "{} {}",
-            subscription.terms.amount.to_string(),
+            subscription.terms.amount,
             subscription.terms.currency
         ),
     );
@@ -506,7 +506,7 @@ pub async fn list_subscriptions(
             "Amount",
             &format!(
                 "{} {}",
-                subscription.terms.amount.to_string(),
+                subscription.terms.amount,
                 subscription.terms.currency
             ),
         );

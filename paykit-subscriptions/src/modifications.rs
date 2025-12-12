@@ -291,7 +291,7 @@ impl ModificationRequest {
                 effective_date,
             } => {
                 if now >= *effective_date {
-                    modified.terms.amount = new_amount.clone();
+                    modified.terms.amount = *new_amount;
                 }
             }
             ModificationType::Downgrade {
@@ -299,7 +299,7 @@ impl ModificationRequest {
                 effective_date,
             } => {
                 if now >= *effective_date {
-                    modified.terms.amount = new_amount.clone();
+                    modified.terms.amount = *new_amount;
                 }
             }
             ModificationType::ChangeMethod { new_method } => {

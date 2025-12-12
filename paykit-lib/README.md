@@ -249,10 +249,32 @@ This crate is the foundation for other Paykit components:
 - **[paykit-demo-cli](../paykit-demo-cli/README.md)** - CLI demo using this library
 - **[paykit-demo-web](../paykit-demo-web/README.md)** - Web demo using this library
 
+## Testing
+
+### Unit Tests
+
+Run unit tests (no network required):
+
+```bash
+cargo test -p paykit-lib
+```
+
+### Integration Tests
+
+Integration tests require network access to connect to the Pubky testnet. They are gated behind the `integration-tests` feature and marked with `#[ignore]` by default.
+
+To run integration tests:
+
+```bash
+cargo test -p paykit-lib --features integration-tests -- --ignored
+```
+
+**Note**: These tests may fail if network is unavailable or the Pubky testnet is unreachable.
+
 ## Status
 
 - Public directory API and Pubky adapters in place.
-- Integration tests using `pubky-testnet::EphemeralTestnet`.
+- Integration tests using `pubky-testnet::EphemeralTestnet` (opt-in, requires network).
 - Planned future work:
   - UniFFI bindings for Bitkit native apps.
   - Higher-level Paykit receipt types in a separate crate.

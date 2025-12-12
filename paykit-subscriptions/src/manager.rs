@@ -12,10 +12,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
 pub enum SubscriptionMessage {
-    PaymentRequest(PaymentRequest),
-    PaymentRequestResponse(PaymentRequestResponse),
-    SubscriptionProposal(Subscription),
-    SubscriptionAcceptance(SignedSubscription),
+    PaymentRequest(Box<PaymentRequest>),
+    PaymentRequestResponse(Box<PaymentRequestResponse>),
+    SubscriptionProposal(Box<Subscription>),
+    SubscriptionAcceptance(Box<SignedSubscription>),
     SubscriptionCancellation {
         subscription_id: String,
         reason: Option<String>,
@@ -74,7 +74,7 @@ impl SubscriptionManager {
         // For now, we'll send as a special PaykitNoiseMessage
         // In a full implementation, we'd extend PaykitNoiseMessage enum
         let _msg_json =
-            serde_json::to_string(&SubscriptionMessage::PaymentRequest(request.clone()))?;
+            serde_json::to_string(&SubscriptionMessage::PaymentRequest(Box::new(request.clone())))?;
         channel
             .send(PaykitNoiseMessage::Ack) // Placeholder - would extend enum
             .await?;
@@ -117,23 +117,67 @@ impl SubscriptionManager {
     }
 
     /// Poll for new payment requests from Pubky storage
-    pub async fn poll_requests(&self, _peer: &PublicKey) -> Result<Vec<PaymentRequest>> {
-        // Pubky polling would require proper API integration
-        // For now, return empty vec - this is a placeholder for full implementation
-        // In production, would:
-        // 1. List directory entries
-        // 2. Fetch each notification
-        // 3. Deserialize and check against local storage
-        // 4. Return new requests
+    pub async fn poll_requests(&self, peer: &PublicKey) -> Result<Vec<PaymentRequest>> {
+        use paykit_lib::{PubkyUnauthenticatedTransport, UnauthenticatedTransportRead};
 
-        // TODO(paykit-sdk-migration): Implement full Pubky directory listing and fetching
-        // Currently returns empty results. Blocked on Pubky SDK directory API stabilization.
-        // This requires:
-        // 1. Pubky SDK 0.6.x+ with stable list/get APIs
-        // 2. Understanding of the final discovery path format
-        // See: paykit-lib/tests/pubky_sdk_compliance.rs for API migration needs
+        // If no Pubky session available, return empty (can't poll)
+        if self.pubky_session.is_none() {
+            return Ok(Vec::new());
+        }
 
-        Ok(Vec::new())
+        // Create unauthenticated transport for reading peer's storage
+        let public_storage = pubky::PublicStorage::new()
+            .map_err(|e| anyhow::anyhow!("Failed to create public storage: {}", e))?;
+        let unauth_transport = PubkyUnauthenticatedTransport::new(public_storage);
+
+        // List directory entries for this peer's payment requests
+        let path = format!("/pub/paykit.app/subscriptions/requests/{:?}", peer);
+        let entries = unauth_transport
+            .list_directory(peer, &path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to list directory: {}", e))?;
+
+        let mut requests = Vec::new();
+
+        // Fetch each notification and convert to PaymentRequest
+        for entry in entries {
+            let notification_path = format!("{}/{}", path, entry);
+            if let Some(notification_json) = unauth_transport.get(peer, &notification_path).await? {
+                match serde_json::from_str::<RequestNotification>(&notification_json) {
+                    Ok(notification) => {
+                        // Check if we've already seen this request
+                        if self
+                            .storage
+                            .get_request(&notification.request_id)
+                            .await?
+                            .is_none()
+                        {
+                        // Convert notification to PaymentRequest
+                        let request = PaymentRequest::new(
+                            notification.from,
+                            peer.clone(),
+                            notification.amount,
+                            notification.currency,
+                            paykit_lib::MethodId("lightning".to_string()), // Default, should be in notification
+                        );
+                        // Override request_id and created_at from notification
+                        let request = PaymentRequest {
+                            request_id: notification.request_id,
+                            created_at: notification.created_at,
+                            ..request
+                        };
+                            requests.push(request);
+                        }
+                    }
+                    Err(e) => {
+                        // Log but continue processing other entries
+                        eprintln!("Failed to parse notification {}: {}", entry, e);
+                    }
+                }
+            }
+        }
+
+        Ok(requests)
     }
 
     /// Handle incoming payment request

@@ -17,7 +17,6 @@ use paykit_interactive::{
 use paykit_lib::MethodId;
 use serde_json::json;
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Helper to create test public keys
 fn test_pubkey(_name: &str) -> paykit_lib::PublicKey {
@@ -64,8 +63,8 @@ async fn test_multiple_concurrent_payments() {
     let payer_pk = test_pubkey("payer");
     let payee_pk = test_pubkey("payee");
 
-    let (payer_manager, payer_storage, _) = create_manager();
-    let (payee_manager, payee_storage, _) = create_manager();
+    let (_payer_manager, _payer_storage, _) = create_manager();
+    let (payee_manager, _payee_storage, _) = create_manager();
     let payee_manager = Arc::new(payee_manager);
 
     // Create 5 concurrent payment flows
@@ -133,8 +132,8 @@ async fn test_payment_with_private_endpoint() {
     let merchant_pk = test_pubkey("merchant");
     let customer_pk = test_pubkey("customer");
 
-    let (merchant_manager, merchant_storage, _) = create_manager();
-    let (customer_manager, customer_storage, _) = create_manager();
+    let (merchant_manager, _merchant_storage, _) = create_manager();
+    let (customer_manager, _customer_storage, _) = create_manager();
 
     // Phase 1: Merchant offers private endpoint
     let (mut merchant_channel, mut customer_channel) = MockNoiseChannel::pair();
@@ -343,10 +342,10 @@ async fn test_error_recovery_malformed_response() {
 
 #[tokio::test]
 async fn test_multiple_payment_methods() {
-    let merchant_pk = test_pubkey("merchant");
-    let customer_pk = test_pubkey("customer");
+    let _merchant_pk = test_pubkey("merchant");
+    let _customer_pk = test_pubkey("customer");
 
-    let (merchant_manager, merchant_storage, _) = create_manager();
+    let (merchant_manager, _merchant_storage, _) = create_manager();
 
     // Merchant offers multiple payment methods
     let methods = vec![

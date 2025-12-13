@@ -372,6 +372,78 @@ if (client.isPaykitQr(scannedData)) {
 }
 ```
 
+### Contact Discovery
+
+Discover contacts from Pubky follows directory:
+
+**Swift:**
+```swift
+// Create directory service
+let directoryService = DirectoryService()
+
+// Fetch known contacts from a user's follows list
+let contacts = try await directoryService.fetchKnownContacts(ownerPubkey: "pk...")
+
+// For each contact, fetch supported payment methods
+for contactPubkey in contacts {
+    let supportedPayments = try await directoryService.fetchSupportedPayments(ownerPubkey: contactPubkey)
+    print("Contact \(contactPubkey) supports: \(supportedPayments)")
+}
+```
+
+**Kotlin:**
+```kotlin
+// Create directory service
+val directoryService = DirectoryService()
+
+// Fetch known contacts from a user's follows list
+val contacts = directoryService.fetchKnownContacts("pk...")
+
+// For each contact, fetch supported payment methods
+for (contactPubkey in contacts) {
+    val supportedPayments = directoryService.fetchSupportedPayments(contactPubkey)
+    println("Contact $contactPubkey supports: $supportedPayments")
+}
+```
+
+### Multiple Identities
+
+Manage multiple identities with identity-scoped storage:
+
+**Swift:**
+```swift
+let keyManager = KeyManager()
+
+// List all identities
+let identities = keyManager.listIdentities()
+
+// Create a new identity
+let newIdentity = keyManager.generateNewIdentity(name: "work", nickname: "Work Account")
+
+// Switch active identity
+keyManager.switchIdentity(name: "work")
+
+// All storage operations are now scoped to the active identity
+// Contacts, receipts, subscriptions, etc. are isolated per identity
+```
+
+**Kotlin:**
+```kotlin
+val keyManager = KeyManager(context)
+
+// List all identities
+val identities = keyManager.listIdentities()
+
+// Create a new identity
+val newIdentity = keyManager.generateNewIdentity("work", "Work Account")
+
+// Switch active identity
+keyManager.switchIdentity("work")
+
+// All storage operations are now scoped to the active identity
+// Contacts, receipts, subscriptions, etc. are isolated per identity
+```
+
 ## Troubleshooting
 
 ### iOS Issues

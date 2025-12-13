@@ -11,14 +11,17 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | Dashboard | **Real** | Overview with stats, recent activity, quick actions |
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, Keychain storage |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
-| Contacts | **Real** | Keychain-backed contact storage |
-| Receipts | **Real** | FFI-backed creation, Keychain storage, search/filtering |
+| Contacts | **Real** | Keychain-backed contact storage, identity-scoped |
+| Contact Discovery | **Real** | Discover contacts from Pubky follows directory |
+| Receipts | **Real** | FFI-backed creation, Keychain storage, search/filtering, identity-scoped |
 | Payment Methods | **Real** | Lists methods via PaykitClient FFI, validates endpoints |
 | Health Monitoring | **Real** | Real health checks via PaykitClient.checkHealth() |
 | Method Selection | **Real** | Smart method selection with strategy options |
-| Subscriptions | **Real** | Keychain-backed subscription storage |
-| Auto-Pay | **Real** | Keychain-backed settings, limits, and rules |
-| Payment Requests | **Real** | Keychain-backed storage with FFI integration |
+| Subscriptions | **Real** | Keychain-backed subscription storage, identity-scoped |
+| Auto-Pay | **Real** | Keychain-backed settings, limits, and rules, identity-scoped |
+| Payment Requests | **Real** | Keychain-backed storage with FFI integration, identity-scoped |
+| QR Scanner | **Real** | AVFoundation-based QR code scanning with Paykit URI parsing |
+| Multiple Identities | **Real** | Create, switch, and manage multiple identities |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
@@ -95,13 +98,18 @@ Auto-pay settings management with Keychain persistence:
 - Accept/decline incoming requests
 - Request history with status tracking
 
-### Contacts (NEW - Real Implementation)
+### Contacts (Real Implementation)
 - Add and manage payment recipients
-- Persistent storage using iOS Keychain
+- Persistent storage using iOS Keychain (identity-scoped)
 - Search contacts by name or public key
 - Copy public keys to clipboard
 - Payment history tracking per contact
 - Notes and metadata support
+- **Contact Discovery**: Discover contacts from Pubky follows directory
+  - Fetch known contacts from any public key's follows list
+  - View supported payment methods for discovered contacts
+  - Import selected contacts with one tap
+  - Automatically filters out contacts you already have
 
 ### Directory Operations (Configurable Transport)
 
@@ -137,12 +145,31 @@ class MyPubkyStorage: PubkyUnauthenticatedStorageCallback {
 }
 ```
 
+### QR Scanner (Real Implementation)
+
+- **Camera Integration**: AVFoundation-based QR code scanning
+- **Paykit URI Parsing**: Automatically detects and parses Paykit URIs
+- **Multiple URI Types**: Supports Pubky, Invoice, and Payment Request URIs
+- **Result Handling**: Shows parsed information and allows navigation to appropriate flows
+- **Permission Handling**: Requests camera permission at runtime
+- Accessible from Dashboard quick actions
+
+### Multiple Identities (Real Implementation)
+
+- **Identity Management**: Create, list, switch, and delete identities
+- **Identity-Scoped Storage**: All data (contacts, receipts, subscriptions, etc.) is isolated per identity
+- **Automatic Migration**: Existing single-identity users are automatically migrated
+- **Identity Switching**: Seamlessly switch between identities with automatic data reloading
+- **Identity List View**: Full UI for managing all identities
+- Accessible from Settings → Manage Identities
+
 ### Settings
 
 - Network selection (Mainnet/Testnet/Regtest)
 - Security settings (Face ID, background lock)
 - Notification preferences
 - **Key management** (real implementation)
+- **Identity management** (create, switch, delete identities)
 - Developer options for testing
 
 ## Project Structure
@@ -342,20 +369,24 @@ The following use sample data for UI demonstration:
 
 Completed improvements:
 - ✅ **Contacts**: Contact management with Keychain persistence
+- ✅ **Contact Discovery**: Discover contacts from Pubky follows directory
+- ✅ **QR Scanner**: AVFoundation-based QR code scanning with Paykit URI parsing
+- ✅ **Multiple Identities**: Full identity management with identity-scoped storage
 - ✅ **Dashboard**: Overview with statistics and recent activity
-- ✅ **Receipts**: Payment history with search and filtering
+- ✅ **Receipts**: Payment history with search and filtering (identity-scoped)
 - ✅ **Payment Methods**: Real FFI integration with PaykitClient
 - ✅ **Health Monitoring**: Real health checks via PaykitClient.checkHealth()
 - ✅ **Method Selection**: Smart method selection with strategy options
 - ✅ **Directory Transport**: Configurable mock/callback transport for Pubky integration
+- ✅ **Payment Request Persistence**: Store payment requests in Keychain with FFI integration (identity-scoped)
+- ✅ **Receipt Generation**: Create receipts via FFI with Keychain storage (identity-scoped)
+- ✅ **Subscription Storage**: Identity-scoped subscription management
+- ✅ **Auto-Pay Storage**: Identity-scoped auto-pay settings and rules
 
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
 2. **Noise Integration**: Real encrypted payments via Noise protocol
-
-Recently completed:
-- ✅ **Payment Request Persistence**: Store payment requests in Keychain with FFI integration
-- ✅ **Receipt Generation**: Create receipts via FFI with Keychain storage
+3. **QR Scanner Navigation**: Add navigation flows for scanned QR codes (payment flows, contact addition, etc.)
 
 ## Related Documentation
 

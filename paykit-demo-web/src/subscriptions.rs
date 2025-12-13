@@ -1527,12 +1527,274 @@ impl WasmPeerSpendingLimitStorage {
     }
 }
 
+// ============================================================
+// Phase 4: Proration Calculator WASM Bindings
+// ============================================================
+
+/// Proration calculation result
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct WasmProrationResult {
+    credit: i64,
+    charge: i64,
+    net_adjustment: i64,
+    days_at_old_rate: u32,
+    days_at_new_rate: u32,
+    days_remaining: u32,
+}
+
+#[wasm_bindgen]
+impl WasmProrationResult {
+    /// Credit for unused time on old plan (positive = refund owed to subscriber)
+    #[wasm_bindgen(getter)]
+    pub fn credit(&self) -> i64 {
+        self.credit
+    }
+
+    /// Charge for time on new plan
+    #[wasm_bindgen(getter)]
+    pub fn charge(&self) -> i64 {
+        self.charge
+    }
+
+    /// Net adjustment (positive = subscriber owes more, negative = refund)
+    #[wasm_bindgen(getter)]
+    pub fn net_adjustment(&self) -> i64 {
+        self.net_adjustment
+    }
+
+    /// Days at the old rate before change
+    #[wasm_bindgen(getter)]
+    pub fn days_at_old_rate(&self) -> u32 {
+        self.days_at_old_rate
+    }
+
+    /// Days at the new rate after change
+    #[wasm_bindgen(getter)]
+    pub fn days_at_new_rate(&self) -> u32 {
+        self.days_at_new_rate
+    }
+
+    /// Total days remaining in period from change date
+    #[wasm_bindgen(getter)]
+    pub fn days_remaining(&self) -> u32 {
+        self.days_remaining
+    }
+
+    /// Convert to JavaScript object
+    pub fn to_object(&self) -> JsValue {
+        let obj = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&obj, &"credit".into(), &self.credit.into());
+        let _ = js_sys::Reflect::set(&obj, &"charge".into(), &self.charge.into());
+        let _ = js_sys::Reflect::set(&obj, &"net_adjustment".into(), &self.net_adjustment.into());
+        let _ = js_sys::Reflect::set(
+            &obj,
+            &"days_at_old_rate".into(),
+            &self.days_at_old_rate.into(),
+        );
+        let _ = js_sys::Reflect::set(
+            &obj,
+            &"days_at_new_rate".into(),
+            &self.days_at_new_rate.into(),
+        );
+        let _ = js_sys::Reflect::set(&obj, &"days_remaining".into(), &self.days_remaining.into());
+        obj.into()
+    }
+}
+
+/// Calculate proration for a subscription plan change
+///
+/// # Arguments
+///
+/// * `current_amount` - Current plan amount in satoshis
+/// * `new_amount` - New plan amount in satoshis
+/// * `period_start` - Period start timestamp (Unix seconds)
+/// * `period_end` - Period end timestamp (Unix seconds)
+/// * `change_date` - Date of the plan change (Unix seconds)
+///
+/// # Returns
+///
+/// A proration result with credit, charge, and net adjustment
+///
+/// # Examples
+///
+/// ```javascript
+/// import { calculateProration } from 'paykit-demo-web';
+///
+/// // Upgrading from 3000 SAT/month to 6000 SAT/month mid-period
+/// const result = calculateProration(3000, 6000, 1700000000, 1702600000, 1701300000);
+/// console.log(`Credit: ${result.credit} SAT`);
+/// console.log(`Charge: ${result.charge} SAT`);
+/// console.log(`Net: ${result.net_adjustment} SAT`);
+/// ```
+#[wasm_bindgen(js_name = calculateProration)]
+pub fn calculate_proration(
+    current_amount: i64,
+    new_amount: i64,
+    period_start: i64,
+    period_end: i64,
+    change_date: i64,
+) -> Result<WasmProrationResult, JsValue> {
+    // Validate inputs
+    if period_end <= period_start {
+        return Err(JsValue::from_str("Period end must be after period start"));
+    }
+    if change_date < period_start || change_date > period_end {
+        return Err(JsValue::from_str("Change date must be within the period"));
+    }
+    if current_amount < 0 || new_amount < 0 {
+        return Err(JsValue::from_str("Amounts must be non-negative"));
+    }
+
+    // Calculate time proportions
+    let total_period_seconds = period_end - period_start;
+    let used_seconds = change_date - period_start;
+    let remaining_seconds = period_end - change_date;
+
+    // Calculate days (approximate, for display purposes)
+    let days_at_old_rate = (used_seconds / 86400) as u32;
+    let days_at_new_rate = (remaining_seconds / 86400) as u32;
+    let days_remaining = days_at_new_rate;
+
+    // Calculate prorated amounts
+    // Credit: unused portion of old plan
+    let credit = if total_period_seconds > 0 {
+        (current_amount * remaining_seconds) / total_period_seconds
+    } else {
+        0
+    };
+
+    // Charge: remaining portion at new rate
+    let charge = if total_period_seconds > 0 {
+        (new_amount * remaining_seconds) / total_period_seconds
+    } else {
+        0
+    };
+
+    // Net adjustment: charge - credit
+    // Positive = subscriber owes more (upgrade)
+    // Negative = subscriber gets refund (downgrade)
+    let net_adjustment = charge - credit;
+
+    Ok(WasmProrationResult {
+        credit,
+        charge,
+        net_adjustment,
+        days_at_old_rate,
+        days_at_new_rate,
+        days_remaining,
+    })
+}
+
+/// Calculate proration for upgrading a subscription
+///
+/// Convenience function that returns just the amount owed for an upgrade.
+///
+/// # Arguments
+///
+/// * `current_amount` - Current plan amount in satoshis
+/// * `new_amount` - New plan amount in satoshis (must be higher)
+/// * `period_start` - Period start timestamp (Unix seconds)
+/// * `period_end` - Period end timestamp (Unix seconds)
+/// * `change_date` - Date of the upgrade (Unix seconds)
+///
+/// # Returns
+///
+/// The additional amount owed for the upgrade
+#[wasm_bindgen(js_name = calculateUpgradeAmount)]
+pub fn calculate_upgrade_amount(
+    current_amount: i64,
+    new_amount: i64,
+    period_start: i64,
+    period_end: i64,
+    change_date: i64,
+) -> Result<i64, JsValue> {
+    if new_amount <= current_amount {
+        return Err(JsValue::from_str(
+            "New amount must be higher than current for upgrade",
+        ));
+    }
+
+    let result = calculate_proration(
+        current_amount,
+        new_amount,
+        period_start,
+        period_end,
+        change_date,
+    )?;
+    Ok(result.net_adjustment.max(0))
+}
+
+/// Calculate proration for downgrading a subscription
+///
+/// Convenience function that returns the refund amount for a downgrade.
+///
+/// # Arguments
+///
+/// * `current_amount` - Current plan amount in satoshis
+/// * `new_amount` - New plan amount in satoshis (must be lower)
+/// * `period_start` - Period start timestamp (Unix seconds)
+/// * `period_end` - Period end timestamp (Unix seconds)
+/// * `change_date` - Date of the downgrade (Unix seconds)
+///
+/// # Returns
+///
+/// The refund amount for the downgrade (as positive number)
+#[wasm_bindgen(js_name = calculateDowngradeRefund)]
+pub fn calculate_downgrade_refund(
+    current_amount: i64,
+    new_amount: i64,
+    period_start: i64,
+    period_end: i64,
+    change_date: i64,
+) -> Result<i64, JsValue> {
+    if new_amount >= current_amount {
+        return Err(JsValue::from_str(
+            "New amount must be lower than current for downgrade",
+        ));
+    }
+
+    let result = calculate_proration(
+        current_amount,
+        new_amount,
+        period_start,
+        period_end,
+        change_date,
+    )?;
+    Ok((-result.net_adjustment).max(0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn test_proration_upgrade() {
+        // Upgrading from 3000 to 6000 mid-period
+        let result = calculate_proration(3000, 6000, 0, 30 * 86400, 15 * 86400).unwrap();
+        // Should owe extra (roughly half of 3000 difference)
+        assert!(result.net_adjustment > 0);
+        assert_eq!(result.days_at_old_rate, 15);
+        assert_eq!(result.days_at_new_rate, 15);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_proration_downgrade() {
+        // Downgrading from 6000 to 3000 mid-period
+        let result = calculate_proration(6000, 3000, 0, 30 * 86400, 15 * 86400).unwrap();
+        // Should get refund (roughly half of 3000 difference)
+        assert!(result.net_adjustment < 0);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_proration_no_change() {
+        // Same amount = no adjustment
+        let result = calculate_proration(5000, 5000, 0, 30 * 86400, 15 * 86400).unwrap();
+        assert_eq!(result.net_adjustment, 0);
+    }
 
     #[wasm_bindgen_test]
     fn test_auto_pay_rule_creation() {

@@ -110,5 +110,75 @@ extension Receipt {
         case .refunded: return "purple"
         }
     }
+    
+    /// Create a local Receipt from an FFI Receipt
+    /// - Parameters:
+    ///   - ffiReceipt: The FFI Receipt from PaykitClient.createReceipt()
+    ///   - direction: Whether this is a sent or received payment
+    ///   - counterpartyName: Optional display name for the counterparty
+    /// - Returns: A local Receipt for storage
+    static func fromFFI(
+        _ ffiReceipt: PaykitMobile.Receipt,
+        direction: PaymentDirection,
+        counterpartyName: String? = nil
+    ) -> Receipt {
+        let counterpartyKey = direction == .sent ? ffiReceipt.payee : ffiReceipt.payer
+        let amountSats = UInt64(ffiReceipt.amount ?? "0") ?? 0
+        
+        var receipt = Receipt(
+            direction: direction,
+            counterpartyKey: counterpartyKey,
+            counterpartyName: counterpartyName,
+            amountSats: amountSats,
+            paymentMethod: ffiReceipt.methodId
+        )
+        
+        // Override the auto-generated ID with the FFI receipt ID
+        // We need to use a different initializer approach
+        return Receipt(
+            id: ffiReceipt.receiptId,
+            direction: direction,
+            counterpartyKey: counterpartyKey,
+            counterpartyName: counterpartyName,
+            amountSats: amountSats,
+            status: .pending,
+            paymentMethod: ffiReceipt.methodId,
+            createdAt: Date(timeIntervalSince1970: Double(ffiReceipt.createdAt)),
+            completedAt: nil,
+            memo: nil,
+            txId: nil
+        )
+    }
+}
+
+// MARK: - Full Initializer for FFI Integration
+
+extension Receipt {
+    /// Full initializer for creating receipts with all fields
+    init(
+        id: String,
+        direction: PaymentDirection,
+        counterpartyKey: String,
+        counterpartyName: String?,
+        amountSats: UInt64,
+        status: PaymentStatus,
+        paymentMethod: String,
+        createdAt: Date,
+        completedAt: Date?,
+        memo: String?,
+        txId: String?
+    ) {
+        self.id = id
+        self.direction = direction
+        self.counterpartyKey = counterpartyKey
+        self.counterpartyName = counterpartyName
+        self.amountSats = amountSats
+        self.status = status
+        self.paymentMethod = paymentMethod
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.memo = memo
+        self.txId = txId
+    }
 }
 

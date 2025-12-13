@@ -12,7 +12,7 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, EncryptedSharedPreferences |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
 | Contacts | **Real** | EncryptedSharedPreferences-backed contact storage |
-| Receipts | **Real** | Payment history with search and filtering |
+| Receipts | **Real** | FFI-backed creation, EncryptedSharedPrefs storage, search/filtering |
 | Payment Methods | **Real** | Lists methods via PaykitClient FFI, validates endpoints |
 | Health Monitoring | **Real** | Real health checks via PaykitClient.checkHealth() |
 | Method Selection | **Real** | Smart method selection with strategy options |
@@ -418,6 +418,7 @@ Planned improvements:
 
 Recently completed:
 - ✅ **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences with FFI integration
+- ✅ **Receipt Generation**: Create receipts via FFI with EncryptedSharedPreferences storage
 
 ## Troubleshooting
 

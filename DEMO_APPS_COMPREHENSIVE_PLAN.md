@@ -15,7 +15,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 - **Phase 2**: ✅ Complete - Android Payment Methods, Health Monitoring, and Method Selection now use real FFI
 - **Phase 3**: ✅ Complete - Mobile Directory Operations now support configurable mock/callback transport
 - **Phase 4**: ✅ Complete - Web Real Publishing with Mock/Direct/Proxy modes
-- **Phase 5**: ✅ Complete - Mobile Payment Requests with persistent storage
+- **Phase 5**: ✅ Complete - Mobile Payment Requests & Receipts with FFI integration
 - **Phase 6**: Pending - Documentation & Final Verification
 
 ### Key Findings
@@ -110,6 +110,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 2. ✅ `list_methods()`, `validate_endpoint()`, `select_method()`, `check_health()` now called
 3. ✅ Directory transport now configurable for real Pubky integration
 4. ✅ Payment requests now persisted to Keychain via `PaymentRequestStorage`
+5. ✅ Receipts now created via FFI `createReceipt()` with local storage
 4. Directory operations use mock transport instead of real Pubky integration
 5. Payment method UI shows static data instead of real FFI calls
 
@@ -141,6 +142,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 2. ✅ `listMethods()`, `validateEndpoint()`, `selectMethod()`, `checkHealth()` now called
 3. ✅ Directory transport now configurable for real Pubky integration
 4. ✅ Payment requests now persisted to EncryptedSharedPreferences via `PaymentRequestStorage`
+5. ✅ Receipts now created via FFI `createReceipt()` with local storage
 4. Directory operations use mock transport instead of real Pubky integration
 5. Payment method UI shows static data instead of real FFI calls
 

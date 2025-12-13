@@ -73,6 +73,36 @@ data class Receipt(
                 memo = memo
             )
         }
+        
+        /**
+         * Create a local Receipt from an FFI Receipt
+         * @param ffiReceipt The FFI Receipt from PaykitClient.createReceipt()
+         * @param direction Whether this is a sent or received payment
+         * @param counterpartyName Optional display name for the counterparty
+         * @return A local Receipt for storage
+         */
+        fun fromFFI(
+            ffiReceipt: com.paykit.mobile.Receipt,
+            direction: PaymentDirection,
+            counterpartyName: String? = null
+        ): Receipt {
+            val counterpartyKey = if (direction == PaymentDirection.SENT) {
+                ffiReceipt.payee
+            } else {
+                ffiReceipt.payer
+            }
+            val amountSats = ffiReceipt.amount?.toLongOrNull() ?: 0L
+            
+            return Receipt(
+                id = ffiReceipt.receiptId,
+                direction = direction,
+                counterpartyKey = counterpartyKey,
+                counterpartyName = counterpartyName,
+                amountSats = amountSats,
+                paymentMethod = ffiReceipt.methodId,
+                createdAt = ffiReceipt.createdAt * 1000 // Convert to milliseconds
+            )
+        }
     }
     
     /**

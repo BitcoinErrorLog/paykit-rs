@@ -103,9 +103,13 @@ enum Commands {
         #[arg(short, long)]
         currency: Option<String>,
 
-        /// Payment method (onchain, lightning)
-        #[arg(short, long, default_value = "lightning")]
+        /// Payment method (onchain, lightning, or auto)
+        #[arg(short, long, default_value = "auto")]
         method: String,
+
+        /// Selection strategy when using auto (balanced, cost, speed, privacy)
+        #[arg(long, default_value = "balanced")]
+        strategy: String,
 
         /// Dry run - show what would happen without executing
         #[arg(long)]
@@ -602,6 +606,7 @@ async fn main() -> Result<()> {
             amount,
             currency,
             method,
+            strategy,
             dry_run,
         } => {
             commands::pay::run(
@@ -610,6 +615,7 @@ async fn main() -> Result<()> {
                 amount,
                 currency,
                 &method,
+                &strategy,
                 dry_run,
                 cli.verbose,
             )

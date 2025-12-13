@@ -277,6 +277,107 @@ impl DirectoryClient {
         Ok(text)
     }
 
+    /// List contents of a directory path
+    ///
+    /// Returns an array of entry names in the directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - The public key to query
+    /// * `path` - The directory path (e.g., "/pub/pubky.app/follows/")
+    #[wasm_bindgen(js_name = listDirectory)]
+    pub async fn list_directory(
+        &self,
+        public_key: &str,
+        path: &str,
+    ) -> Result<Vec<JsValue>, JsValue> {
+        utils::log(&format!("Listing directory for {} at {}", public_key, path));
+
+        let url = format!("{}/pub/{}{}", self.homeserver, public_key, path);
+
+        let fetch_url = if let Some(ref proxy) = self.proxy_url {
+            format!("{}/{}", proxy, url)
+        } else {
+            url
+        };
+
+        let window = web_sys::window().ok_or_else(|| utils::js_error("No window object"))?;
+        let resp_value = JsFuture::from(window.fetch_with_str(&fetch_url))
+            .await
+            .map_err(|e| utils::js_error(&format!("Fetch failed: {:?}", e)))?;
+
+        let resp: Response = resp_value
+            .dyn_into()
+            .map_err(|_| utils::js_error("Failed to cast to Response"))?;
+
+        if !resp.ok() {
+            if resp.status() == 404 {
+                return Ok(Vec::new());
+            }
+            return Err(utils::js_error(&format!("HTTP error: {}", resp.status())));
+        }
+
+        // Try to parse as JSON array
+        let json = JsFuture::from(resp.json().map_err(|_| utils::js_error("No JSON method"))?)
+            .await
+            .map_err(|_| utils::js_error("Failed to parse JSON"))?;
+
+        // Convert JSON array to Vec<JsValue>
+        if js_sys::Array::is_array(&json) {
+            let arr: js_sys::Array = json.into();
+            Ok(arr.iter().collect())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Get payment methods list for a public key
+    ///
+    /// Returns an array of method entries with method_id and endpoint.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - The public key to query
+    /// * `auth_token` - Optional authentication token (not used for reads)
+    #[wasm_bindgen(js_name = getPaymentList)]
+    pub async fn get_payment_list(
+        &self,
+        public_key: &str,
+        _auth_token: Option<String>,
+    ) -> Result<Vec<JsValue>, JsValue> {
+        utils::log(&format!("Getting payment list for {}", public_key));
+
+        // Query the paykit directory
+        let methods = self.query_methods(public_key).await?;
+
+        // If it's an array, return it directly
+        if js_sys::Array::is_array(&methods) {
+            let arr: js_sys::Array = methods.into();
+            return Ok(arr.iter().collect());
+        }
+
+        // If it's an object, extract the entries
+        if methods.is_object() {
+            let mut result = Vec::new();
+            let obj = js_sys::Object::from(methods);
+            let entries = js_sys::Object::entries(&obj);
+
+            for i in 0..entries.length() {
+                if let Some(entry) = entries.get(i).dyn_ref::<js_sys::Array>() {
+                    if entry.length() >= 2 {
+                        let js_obj = js_sys::Object::new();
+                        let _ = js_sys::Reflect::set(&js_obj, &"method_id".into(), &entry.get(0));
+                        let _ = js_sys::Reflect::set(&js_obj, &"endpoint".into(), &entry.get(1));
+                        result.push(js_obj.into());
+                    }
+                }
+            }
+            return Ok(result);
+        }
+
+        Ok(Vec::new())
+    }
+
     /// Publish a payment endpoint to the directory
     ///
     /// # Arguments

@@ -46,6 +46,12 @@ enum Commands {
         name: String,
     },
 
+    /// Configure payment wallet (LND, Esplora)
+    Wallet {
+        #[command(subcommand)]
+        action: WalletAction,
+    },
+
     /// Publish payment methods to the public directory
     Publish {
         /// Bitcoin onchain address
@@ -100,6 +106,10 @@ enum Commands {
         /// Payment method (onchain, lightning)
         #[arg(short, long, default_value = "lightning")]
         method: String,
+
+        /// Dry run - show what would happen without executing
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Show payment receipts
@@ -309,6 +319,55 @@ enum SubscriptionAction {
 }
 
 #[derive(Subcommand)]
+enum WalletAction {
+    /// Show wallet configuration status
+    Status,
+
+    /// Configure LND for Lightning payments
+    ConfigureLnd {
+        /// LND REST API URL
+        #[arg(long)]
+        url: String,
+
+        /// Admin macaroon in hexadecimal format
+        #[arg(long)]
+        macaroon: String,
+
+        /// TLS certificate in PEM format (optional)
+        #[arg(long)]
+        tls_cert: Option<String>,
+
+        /// Network (mainnet, testnet, signet, regtest)
+        #[arg(long)]
+        network: Option<String>,
+    },
+
+    /// Configure Esplora for on-chain payments
+    ConfigureEsplora {
+        /// Esplora API URL
+        #[arg(long)]
+        url: String,
+
+        /// Network (mainnet, testnet, signet, regtest)
+        #[arg(long)]
+        network: Option<String>,
+    },
+
+    /// Apply a preset configuration
+    Preset {
+        /// Preset name (polar, testnet, signet, mutinynet)
+        name: String,
+
+        /// Macaroon for Polar preset
+        #[arg(long)]
+        macaroon: Option<String>,
+    },
+
+    /// Clear wallet configuration
+    Clear,
+}
+
+#[derive(Subcommand)]
 enum ContactAction {
     /// Add a new contact
     Add {
@@ -377,6 +436,48 @@ async fn main() -> Result<()> {
         Commands::Switch { name } => {
             commands::switch::run(&storage_dir, &name, cli.verbose).await?;
         }
+        Commands::Wallet { action } => match action {
+            WalletAction::Status => {
+                commands::wallet::status(&storage_dir, cli.verbose).await?;
+            }
+            WalletAction::ConfigureLnd {
+                url,
+                macaroon,
+                tls_cert,
+                network,
+            } => {
+                commands::wallet::configure_lnd(
+                    &storage_dir,
+                    &url,
+                    &macaroon,
+                    tls_cert.as_deref(),
+                    network.as_deref(),
+                    cli.verbose,
+                )
+                .await?;
+            }
+            WalletAction::ConfigureEsplora { url, network } => {
+                commands::wallet::configure_esplora(
+                    &storage_dir,
+                    &url,
+                    network.as_deref(),
+                    cli.verbose,
+                )
+                .await?;
+            }
+            WalletAction::Preset { name, macaroon } => {
+                commands::wallet::apply_preset(
+                    &storage_dir,
+                    &name,
+                    macaroon.as_deref(),
+                    cli.verbose,
+                )
+                .await?;
+            }
+            WalletAction::Clear => {
+                commands::wallet::clear(&storage_dir, cli.verbose).await?;
+            }
+        },
         Commands::Publish {
             onchain,
             lightning,
@@ -411,6 +512,7 @@ async fn main() -> Result<()> {
             amount,
             currency,
             method,
+            dry_run,
         } => {
             commands::pay::run(
                 &storage_dir,
@@ -418,6 +520,7 @@ async fn main() -> Result<()> {
                 amount,
                 currency,
                 &method,
+                dry_run,
                 cli.verbose,
             )
             .await?;

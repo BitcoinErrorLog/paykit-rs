@@ -10,6 +10,7 @@ pub mod receive;
 pub mod setup;
 pub mod subscriptions;
 pub mod switch;
+pub mod wallet;
 pub mod whoami;
 
 /// Get the path to the current identity marker file

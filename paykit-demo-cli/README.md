@@ -6,7 +6,7 @@ A feature-rich CLI application showcasing Paykit capabilities: public directory 
 
 ## Current Status
 
-> **Demo Application**: Core protocol features work but payment execution is simulated.
+> **Demo Application**: Core protocol features work with optional real payment execution.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -16,28 +16,33 @@ A feature-rich CLI application showcasing Paykit capabilities: public directory 
 | Directory Discover | **Real** | HTTP queries to homeservers |
 | Noise Handshake | **Real** | TCP-based encrypted channel |
 | Payment Coordination | **Real** | Request/receipt exchange |
-| Payment Execution | **Simulation** | Shows "simulation mode" message |
+| Wallet Configuration | **Real** | LND and Esplora setup |
+| Payment Execution | **Real (with wallet)** | Requires configured wallet |
 | Subscriptions | **Real** | Full P2P lifecycle |
 | Auto-Pay Rules | **Real** | Rules and limits with file persistence |
 | Spending Limits | **Real** | Per-peer limits with period tracking |
 | Receipts | **Real** | Stored and queryable |
 
-### Key Limitation
+### Payment Execution
 
-**Payment Execution**: The `pay` command establishes a real Noise-encrypted channel and exchanges payment coordination messages, but the actual payment (sending Bitcoin/Lightning) is simulated. The CLI shows:
+The `pay` command supports **real payment execution** when a wallet is configured:
 
+```bash
+# Configure LND for Lightning payments
+paykit-demo wallet configure-lnd --url https://localhost:8081 --macaroon <hex>
+
+# Or use a preset for local development (Polar)
+paykit-demo wallet preset polar --macaroon <hex>
+
+# Execute real payment
+paykit-demo pay lnbc1... --method lightning
 ```
-Payment flow simulation mode - actual payment execution pending
-```
 
-This is because:
-1. Actual payment requires wallet integration (LND, CLN, Bitcoin Core)
-2. Different payment methods require different implementations
-3. Demo focuses on the Paykit protocol, not wallet operations
+Without wallet configuration, the CLI shows simulation mode with setup instructions.
 
-For real payments, integrate with:
-- Lightning: LND/CLN RPC
-- On-chain: Bitcoin Core RPC or Electrum
+**Supported payment backends:**
+- **Lightning**: LND REST API (requires `--features http-executor`)
+- **On-chain**: Esplora API for fee estimates and verification
 
 ## Features
 
@@ -108,6 +113,24 @@ paykit-demo receipts
 | `list` | List all identities | `paykit-demo list` |
 | `switch` | Switch identity | `paykit-demo switch bob` |
 
+### Wallet Configuration
+
+Configure payment execution backends to enable real payments.
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `wallet status` | Show wallet status | `paykit-demo wallet status` |
+| `wallet configure-lnd` | Configure LND | `paykit-demo wallet configure-lnd --url https://localhost:8081 --macaroon <hex>` |
+| `wallet configure-esplora` | Configure Esplora | `paykit-demo wallet configure-esplora --url https://blockstream.info/testnet/api` |
+| `wallet preset` | Apply preset config | `paykit-demo wallet preset polar --macaroon <hex>` |
+| `wallet clear` | Clear wallet config | `paykit-demo wallet clear` |
+
+**Available presets:**
+- `polar` - Polar regtest (requires macaroon)
+- `testnet` - Bitcoin testnet3 (Blockstream Esplora)
+- `signet` - Bitcoin signet (mempool.space)
+- `mutinynet` - Mutinynet signet
+
 ### Directory Operations
 
 | Command | Description | Example |
@@ -129,8 +152,13 @@ paykit-demo receipts
 | Command | Description | Example |
 |---------|-------------|---------|
 | `pay` | Initiate payment | `paykit-demo pay bob --amount 1000` |
+| `pay --dry-run` | Test payment without executing | `paykit-demo pay bob --amount 1000 --dry-run` |
 | `receive` | Start receiver | `paykit-demo receive --port 9735` |
 | `receipts` | View receipts | `paykit-demo receipts` |
+
+**Payment methods:**
+- `lightning` (default) - Pay via Lightning Network (requires LND)
+- `onchain` - Pay via Bitcoin on-chain (uses Esplora for fee estimates)
 
 ### Subscriptions
 

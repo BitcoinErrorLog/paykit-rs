@@ -522,8 +522,7 @@ impl WasmPaymentMethodStorage {
     /// This function simulates publishing by saving a special marker to localStorage.
     /// It does NOT actually publish methods to a real Pubky homeserver.
     ///
-    /// For production use, integrate with Pubky's authenticated PUT operations
-    /// to publish methods to the directory.
+    /// For real publishing, use `publish_to_directory()` with a configured DirectoryClient.
     ///
     /// # Examples
     ///
@@ -563,8 +562,173 @@ impl WasmPaymentMethodStorage {
             .map_err(|e| JsValue::from_str(&format!("Failed to save publish status: {:?}", e)))?;
 
         Ok(format!(
-            "MOCK: {} public method(s) would be published. This is demo-only and does NOT publish to real homeserver.",
+            "MOCK: {} public method(s) would be published. This is demo-only and does NOT publish to real homeserver. \
+             For real publishing, use DirectoryClient with Direct or Proxy mode.",
             public_count
+        ))
+    }
+
+    /// Publish all public methods to a real Pubky homeserver
+    ///
+    /// This function publishes all methods marked as `is_public` to the Pubky directory
+    /// using the provided DirectoryClient.
+    ///
+    /// # Arguments
+    ///
+    /// * `directory_client` - A configured DirectoryClient (use Direct or Proxy mode)
+    /// * `public_key` - Your public key (z-base32 encoded)
+    /// * `auth_token` - Optional authentication token for the homeserver
+    ///
+    /// # Returns
+    ///
+    /// A summary of the publish operation including success/failure counts.
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmPaymentMethodStorage();
+    /// const client = DirectoryClient.withProxy(
+    ///     "https://homeserver.example.com",
+    ///     "https://cors-proxy.example.com"
+    /// );
+    ///
+    /// const result = await storage.publishToDirectory(client, myPublicKey, authToken);
+    /// console.log(result);
+    /// ```
+    #[wasm_bindgen(js_name = publishToDirectory)]
+    pub async fn publish_to_directory(
+        &self,
+        directory_client: &crate::directory::DirectoryClient,
+        public_key: &str,
+        auth_token: Option<String>,
+    ) -> Result<String, JsValue> {
+        // Get all public methods
+        let all_methods = self.list_methods().await?;
+        let public_methods: Vec<&JsValue> = all_methods
+            .iter()
+            .filter(|method_js| {
+                if let Ok(is_public) = js_sys::Reflect::get(method_js, &"is_public".into()) {
+                    return is_public.as_bool().unwrap_or(false);
+                }
+                false
+            })
+            .collect();
+
+        if public_methods.is_empty() {
+            return Ok("No public methods to publish.".to_string());
+        }
+
+        let mut success_count = 0;
+        let mut failure_count = 0;
+        let mut errors: Vec<String> = Vec::new();
+
+        for method_js in public_methods {
+            let method_id = js_sys::Reflect::get(method_js, &"method_id".into())
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_default();
+
+            let endpoint = js_sys::Reflect::get(method_js, &"endpoint".into())
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_default();
+
+            if method_id.is_empty() || endpoint.is_empty() {
+                continue;
+            }
+
+            match directory_client
+                .publish_endpoint(public_key, &method_id, &endpoint, auth_token.clone())
+                .await
+            {
+                Ok(result) if result.success() => {
+                    success_count += 1;
+                }
+                Ok(result) => {
+                    failure_count += 1;
+                    errors.push(format!("{}: {}", method_id, result.message()));
+                }
+                Err(e) => {
+                    failure_count += 1;
+                    errors.push(format!(
+                        "{}: {:?}",
+                        method_id,
+                        e.as_string().unwrap_or_default()
+                    ));
+                }
+            }
+        }
+
+        let mut result = format!(
+            "Published {} method(s) successfully, {} failed.",
+            success_count, failure_count
+        );
+
+        if !errors.is_empty() {
+            result.push_str(&format!("\nErrors: {}", errors.join("; ")));
+        }
+
+        Ok(result)
+    }
+
+    /// Remove all published methods from the directory
+    ///
+    /// # Arguments
+    ///
+    /// * `directory_client` - A configured DirectoryClient
+    /// * `public_key` - Your public key (z-base32 encoded)
+    /// * `auth_token` - Optional authentication token for the homeserver
+    #[wasm_bindgen(js_name = unpublishFromDirectory)]
+    pub async fn unpublish_from_directory(
+        &self,
+        directory_client: &crate::directory::DirectoryClient,
+        public_key: &str,
+        auth_token: Option<String>,
+    ) -> Result<String, JsValue> {
+        let all_methods = self.list_methods().await?;
+        let public_methods: Vec<&JsValue> = all_methods
+            .iter()
+            .filter(|method_js| {
+                if let Ok(is_public) = js_sys::Reflect::get(method_js, &"is_public".into()) {
+                    return is_public.as_bool().unwrap_or(false);
+                }
+                false
+            })
+            .collect();
+
+        if public_methods.is_empty() {
+            return Ok("No public methods to unpublish.".to_string());
+        }
+
+        let mut success_count = 0;
+        let mut failure_count = 0;
+
+        for method_js in public_methods {
+            let method_id = js_sys::Reflect::get(method_js, &"method_id".into())
+                .ok()
+                .and_then(|v| v.as_string())
+                .unwrap_or_default();
+
+            if method_id.is_empty() {
+                continue;
+            }
+
+            match directory_client
+                .remove_endpoint(public_key, &method_id, auth_token.clone())
+                .await
+            {
+                Ok(result) if result.success() => {
+                    success_count += 1;
+                }
+                Ok(_) | Err(_) => {
+                    failure_count += 1;
+                }
+            }
+        }
+
+        Ok(format!(
+            "Removed {} method(s) successfully, {} failed.",
+            success_count, failure_count
         ))
     }
 }

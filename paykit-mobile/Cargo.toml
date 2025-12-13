@@ -36,6 +36,17 @@ serde_json = "1.0"
 # Error handling
 thiserror = "1.0"
 
+# Cryptography for key management
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+curve25519-dalek = "4.1"
+rand = "0.8"
+hex = "0.4"
+hkdf = "0.12"
+sha2 = "0.10"
+zeroize = { version = "1.7", features = ["derive"] }
+aes-gcm = "0.10"
+argon2 = "0.5"
+
 # Optional tracing support
 tracing = { version = "0.1", optional = true }
 

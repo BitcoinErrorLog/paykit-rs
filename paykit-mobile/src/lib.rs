@@ -18,6 +18,7 @@
 
 pub mod async_bridge;
 pub mod interactive_ffi;
+pub mod keys;
 pub mod scanner;
 pub mod storage;
 pub mod transport_ffi;
@@ -35,6 +36,9 @@ pub use interactive_ffi::{
     PaykitMessageType, PrivateEndpointOffer, ReceiptGenerationResult, ReceiptGeneratorCallback,
     ReceiptRequest, ReceiptStore,
 };
+
+// Re-export key management types for easier access
+pub use keys::{Ed25519Keypair, KeyBackup, X25519Keypair};
 
 use std::sync::Arc;
 

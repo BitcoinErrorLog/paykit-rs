@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -248,9 +249,35 @@ fun SettingsScreen() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyManagementScreen(onBack: () -> Unit) {
-    var publicKey by remember { mutableStateOf("pk1abc123def456ghi789jkl012mno345") }
+    val context = LocalContext.current
+    val keyManager = remember { com.paykit.mobile.KeyManager(context) }
+    
+    val hasIdentity by keyManager.hasIdentity.collectAsState()
+    val publicKeyZ32 by keyManager.publicKeyZ32.collectAsState()
+    val publicKeyHex by keyManager.publicKeyHex.collectAsState()
+    
     var showGenerateDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var showExportResult by remember { mutableStateOf(false) }
+    var exportPassword by remember { mutableStateOf("") }
+    var importPassword by remember { mutableStateOf("") }
+    var importBackupText by remember { mutableStateOf("") }
+    var exportedBackup by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    
     val clipboardManager = LocalClipboardManager.current
+
+    // Auto-create identity if none exists
+    LaunchedEffect(hasIdentity) {
+        if (!hasIdentity) {
+            try {
+                keyManager.getOrCreateIdentity()
+            } catch (e: Exception) {
+                errorMessage = "Failed to create identity: ${e.message}"
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -269,47 +296,144 @@ fun KeyManagementScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            item { SettingsSectionHeader("Your Keys") }
+            item { SettingsSectionHeader("Your Identity") }
 
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Public Key", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = publicKey.take(16) + "...",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (hasIdentity) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            "pkarr Identity (z-base32)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = publicKeyZ32,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 2
+                        )
+                    }
+                }
+
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            "Hex Format",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = publicKeyHex.take(32) + "...",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Device ID", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = keyManager.getDeviceId().take(12) + "...",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                item {
+                    SettingsItem(
+                        title = "Copy Public Key",
+                        subtitle = null,
+                        onClick = {
+                            val keyToCopy = if (publicKeyZ32.isNotEmpty()) publicKeyZ32 else publicKeyHex
+                            clipboardManager.setText(AnnotatedString(keyToCopy))
+                        }
                     )
+                }
+
+                item { HorizontalDivider() }
+
+                item { SettingsSectionHeader("Backup") }
+
+                item {
+                    SettingsItem(
+                        title = "Export Encrypted Backup",
+                        subtitle = "Save your keys with password protection",
+                        onClick = { showExportDialog = true }
+                    )
+                }
+            } else {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.Key,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = Color(0xFFF7931A)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("No Identity", style = MaterialTheme.typography.headlineSmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Generate a new keypair or import from backup",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                try {
+                                    keyManager.getOrCreateIdentity()
+                                } catch (e: Exception) {
+                                    errorMessage = "Failed to create identity: ${e.message}"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF7931A))
+                        ) {
+                            Text("Create Identity")
+                        }
+                    }
                 }
             }
 
-            item {
-                SettingsItem(
-                    title = "Copy Public Key",
-                    subtitle = null,
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(publicKey))
-                    }
-                )
-            }
+            item { HorizontalDivider() }
+
+            item { SettingsSectionHeader("Restore") }
 
             item {
                 SettingsItem(
-                    title = "Export Keys",
-                    subtitle = null,
-                    onClick = { /* Show export options */ }
+                    title = "Import from Backup",
+                    subtitle = "Restore keys from encrypted backup",
+                    onClick = { showImportDialog = true }
                 )
             }
 
             item { HorizontalDivider() }
 
-            item { SettingsSectionHeader("Key Management") }
+            item { SettingsSectionHeader("Advanced") }
 
             item {
                 SettingsItem(
@@ -321,24 +445,29 @@ fun KeyManagementScreen(onBack: () -> Unit) {
             }
 
             item {
-                SettingsItem(
-                    title = "Import from Backup",
-                    subtitle = null,
-                    onClick = { /* Show import dialog */ }
-                )
-            }
-
-            item {
                 Text(
-                    text = "Warning: Generating a new keypair will change your identity",
+                    text = "⚠️ Generating a new keypair will replace your current identity. Make sure you have a backup first!",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
+
+            // Error display
+            errorMessage?.let { error ->
+                item {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Red,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
         }
     }
 
+    // Generate confirmation dialog
     if (showGenerateDialog) {
         AlertDialog(
             onDismissRequest = { showGenerateDialog = false },
@@ -347,7 +476,12 @@ fun KeyManagementScreen(onBack: () -> Unit) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        publicKey = "pk1new${UUID.randomUUID().toString().take(20)}"
+                        try {
+                            keyManager.generateNewIdentity()
+                            errorMessage = null
+                        } catch (e: Exception) {
+                            errorMessage = "Failed to generate keypair: ${e.message}"
+                        }
                         showGenerateDialog = false
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
@@ -357,6 +491,151 @@ fun KeyManagementScreen(onBack: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showGenerateDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Export dialog
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false; exportPassword = "" },
+            title = { Text("Export Backup") },
+            text = {
+                Column {
+                    Text("Enter a password to encrypt your backup:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = exportPassword,
+                        onValueChange = { exportPassword = it },
+                        label = { Text("Password") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (exportPassword.isNotEmpty()) {
+                            try {
+                                val backup = keyManager.exportBackup(exportPassword)
+                                exportedBackup = keyManager.backupToString(backup)
+                                showExportDialog = false
+                                showExportResult = true
+                                exportPassword = ""
+                                errorMessage = null
+                            } catch (e: Exception) {
+                                errorMessage = "Export failed: ${e.message}"
+                            }
+                        }
+                    }
+                ) {
+                    Text("Export")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false; exportPassword = "" }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Export result dialog
+    if (showExportResult) {
+        AlertDialog(
+            onDismissRequest = { showExportResult = false },
+            title = { Text("Backup Created!") },
+            text = {
+                Column {
+                    Text("Copy this encrypted backup and store it safely:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = exportedBackup,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(exportedBackup))
+                        showExportResult = false
+                    }
+                ) {
+                    Text("Copy & Close")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportResult = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Import dialog
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showImportDialog = false
+                importPassword = ""
+                importBackupText = ""
+            },
+            title = { Text("Import Backup") },
+            text = {
+                Column {
+                    Text("Paste your backup JSON:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = importBackupText,
+                        onValueChange = { importBackupText = it },
+                        label = { Text("Backup JSON") },
+                        maxLines = 5
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = importPassword,
+                        onValueChange = { importPassword = it },
+                        label = { Text("Password") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (importBackupText.isNotEmpty() && importPassword.isNotEmpty()) {
+                            try {
+                                val backup = keyManager.backupFromString(importBackupText)
+                                keyManager.importBackup(backup, importPassword)
+                                showImportDialog = false
+                                importBackupText = ""
+                                importPassword = ""
+                                errorMessage = null
+                            } catch (e: Exception) {
+                                errorMessage = "Import failed: ${e.message}"
+                            }
+                        }
+                    }
+                ) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showImportDialog = false
+                    importBackupText = ""
+                    importPassword = ""
+                }) {
                     Text("Cancel")
                 }
             }

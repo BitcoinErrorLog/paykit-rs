@@ -627,8 +627,28 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_receipt_store(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_paykit_mobile_fn_func_derive_x25519_keypair(`ed25519SecretHex`: RustBuffer.ByValue,`deviceId`: RustBuffer.ByValue,`epoch`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(`secretKeyHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_export_keypair_to_backup(`secretKeyHex`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_format_public_key_z32(`publicKeyHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_generate_device_id(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_generate_ed25519_keypair(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_get_version(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_import_keypair_from_backup(`backup`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_parse_public_key_z32(`publicKeyZ32`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_sign_message(`secretKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_verify_signature(`publicKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,`signatureHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     fun ffi_paykit_mobile_rustbuffer_alloc(`size`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun ffi_paykit_mobile_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -753,7 +773,27 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_receipt_store(
     ): Short
+    fun uniffi_paykit_mobile_checksum_func_derive_x25519_keypair(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_export_keypair_to_backup(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_format_public_key_z32(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_generate_device_id(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_generate_ed25519_keypair(
+    ): Short
     fun uniffi_paykit_mobile_checksum_func_get_version(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_import_keypair_from_backup(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_parse_public_key_z32(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_sign_message(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_verify_signature(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete(
     ): Short
@@ -988,7 +1028,37 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_func_create_receipt_store() != 25695.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_func_derive_x25519_keypair() != 35150.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret() != 9902.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_export_keypair_to_backup() != 64738.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_format_public_key_z32() != 60670.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_generate_device_id() != 4216.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_generate_ed25519_keypair() != 1379.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_func_get_version() != 23495.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_import_keypair_from_backup() != 2045.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_parse_public_key_z32() != 18323.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_sign_message() != 46705.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_verify_signature() != 6178.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete() != 59452.toShort()) {
@@ -1476,6 +1546,22 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
+    }
+}
+
+public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
+    override fun read(buf: ByteBuffer): ByteArray {
+        val len = buf.getInt()
+        val byteArr = ByteArray(len)
+        buf.get(byteArr)
+        return byteArr
+    }
+    override fun allocationSize(value: ByteArray): Int {
+        return 4 + value.size
+    }
+    override fun write(value: ByteArray, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        buf.put(value)
     }
 }
 
@@ -4692,6 +4778,52 @@ public object FfiConverterTypeCachedContactFFI: FfiConverterRustBuffer<CachedCon
 
 
 /**
+ * Generated Ed25519 keypair for identity.
+ */
+data class Ed25519Keypair (
+    /**
+     * Secret key (seed) - 32 bytes, hex encoded.
+     * SENSITIVE: Store securely, this is the root identity secret.
+     */
+    var `secretKeyHex`: String, 
+    /**
+     * Public key - 32 bytes, hex encoded.
+     */
+    var `publicKeyHex`: String, 
+    /**
+     * Public key in z-base32 format (pkarr format).
+     */
+    var `publicKeyZ32`: String
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeEd25519Keypair: FfiConverterRustBuffer<Ed25519Keypair> {
+    override fun read(buf: ByteBuffer): Ed25519Keypair {
+        return Ed25519Keypair(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: Ed25519Keypair) = (
+            FfiConverterString.allocationSize(value.`secretKeyHex`) +
+            FfiConverterString.allocationSize(value.`publicKeyHex`) +
+            FfiConverterString.allocationSize(value.`publicKeyZ32`)
+    )
+
+    override fun write(value: Ed25519Keypair, buf: ByteBuffer) {
+            FfiConverterString.write(value.`secretKeyHex`, buf)
+            FfiConverterString.write(value.`publicKeyHex`, buf)
+            FfiConverterString.write(value.`publicKeyZ32`, buf)
+    }
+}
+
+
+
+/**
  * Endpoint data for a payment method.
  */
 data class EndpointData (
@@ -4790,6 +4922,65 @@ public object FfiConverterTypeHealthCheckResult: FfiConverterRustBuffer<HealthCh
             FfiConverterLong.write(value.`checkedAt`, buf)
             FfiConverterOptionalULong.write(value.`latencyMs`, buf)
             FfiConverterOptionalString.write(value.`error`, buf)
+    }
+}
+
+
+
+/**
+ * Encrypted key backup for export/import.
+ */
+data class KeyBackup (
+    /**
+     * Version of the backup format.
+     */
+    var `version`: UInt, 
+    /**
+     * Encrypted secret key (AES-GCM).
+     */
+    var `encryptedDataHex`: String, 
+    /**
+     * Salt for key derivation from password.
+     */
+    var `saltHex`: String, 
+    /**
+     * Nonce for AES-GCM.
+     */
+    var `nonceHex`: String, 
+    /**
+     * Public key (not encrypted, for identification).
+     */
+    var `publicKeyZ32`: String
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeKeyBackup: FfiConverterRustBuffer<KeyBackup> {
+    override fun read(buf: ByteBuffer): KeyBackup {
+        return KeyBackup(
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: KeyBackup) = (
+            FfiConverterUInt.allocationSize(value.`version`) +
+            FfiConverterString.allocationSize(value.`encryptedDataHex`) +
+            FfiConverterString.allocationSize(value.`saltHex`) +
+            FfiConverterString.allocationSize(value.`nonceHex`) +
+            FfiConverterString.allocationSize(value.`publicKeyZ32`)
+    )
+
+    override fun write(value: KeyBackup, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`version`, buf)
+            FfiConverterString.write(value.`encryptedDataHex`, buf)
+            FfiConverterString.write(value.`saltHex`, buf)
+            FfiConverterString.write(value.`nonceHex`, buf)
+            FfiConverterString.write(value.`publicKeyZ32`, buf)
     }
 }
 
@@ -5649,6 +5840,58 @@ public object FfiConverterTypeSyncResultFFI: FfiConverterRustBuffer<SyncResultFf
 
 
 /**
+ * Derived X25519 keypair for Noise protocol.
+ */
+data class X25519Keypair (
+    /**
+     * Secret key - 32 bytes, hex encoded.
+     */
+    var `secretKeyHex`: String, 
+    /**
+     * Public key - 32 bytes, hex encoded.
+     */
+    var `publicKeyHex`: String, 
+    /**
+     * Device ID used for derivation.
+     */
+    var `deviceId`: String, 
+    /**
+     * Epoch used for derivation.
+     */
+    var `epoch`: UInt
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeX25519Keypair: FfiConverterRustBuffer<X25519Keypair> {
+    override fun read(buf: ByteBuffer): X25519Keypair {
+        return X25519Keypair(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: X25519Keypair) = (
+            FfiConverterString.allocationSize(value.`secretKeyHex`) +
+            FfiConverterString.allocationSize(value.`publicKeyHex`) +
+            FfiConverterString.allocationSize(value.`deviceId`) +
+            FfiConverterUInt.allocationSize(value.`epoch`)
+    )
+
+    override fun write(value: X25519Keypair, buf: ByteBuffer) {
+            FfiConverterString.write(value.`secretKeyHex`, buf)
+            FfiConverterString.write(value.`publicKeyHex`, buf)
+            FfiConverterString.write(value.`deviceId`, buf)
+            FfiConverterUInt.write(value.`epoch`, buf)
+    }
+}
+
+
+
+/**
  * Health status of a payment method.
  */
 enum class HealthStatus {
@@ -6059,10 +6302,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Transport(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6070,10 +6313,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Validation(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6081,10 +6324,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NotFound(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6092,10 +6335,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Serialization(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6103,10 +6346,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Internal(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6114,10 +6357,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NetworkTimeout(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6125,10 +6368,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class ConnectionException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6136,10 +6379,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class AuthenticationException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6147,10 +6390,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class SessionException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6158,10 +6401,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class RateLimitException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6169,10 +6412,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class PermissionDenied(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
 
@@ -6581,18 +6824,18 @@ sealed class StorageCacheException: Exception() {
     
     class Storage(
         
-        val `message`: String
+        val errorMessage: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     class Lock(
         
-        val `message`: String
+        val errorMessage: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
 
@@ -7780,6 +8023,117 @@ fun `createReceiptStore`(): ReceiptStore {
 }
 
         /**
+         * Derive X25519 keypair for Noise protocol from Ed25519 seed.
+         *
+         * This uses the pubky-noise KDF to derive device-specific encryption keys
+         * from the Ed25519 identity seed.
+         *
+         * # Arguments
+         *
+         * * `ed25519_secret_hex` - The Ed25519 secret key (seed) in hex format.
+         * * `device_id` - A unique identifier for this device.
+         * * `epoch` - Key rotation epoch (increment to rotate keys).
+         *
+         * # Returns
+         *
+         * The derived X25519 keypair for use with Noise protocol.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `deriveX25519Keypair`(`ed25519SecretHex`: String, `deviceId`: String, `epoch`: UInt): X25519Keypair {
+    return FfiConverterTypeX25519Keypair.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_derive_x25519_keypair(FfiConverterString.lower(`ed25519SecretHex`),FfiConverterString.lower(`deviceId`),FfiConverterUInt.lower(`epoch`),_status)
+})
+}
+
+        /**
+         * Derive Ed25519 public key from secret key.
+         *
+         * # Arguments
+         *
+         * * `secret_key_hex` - The 32-byte secret key in hex format.
+         *
+         * # Returns
+         *
+         * The complete keypair derived from the secret.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `ed25519KeypairFromSecret`(`secretKeyHex`: String): Ed25519Keypair {
+    return FfiConverterTypeEd25519Keypair.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(FfiConverterString.lower(`secretKeyHex`),_status)
+})
+}
+
+        /**
+         * Export keypair to encrypted backup.
+         *
+         * # Arguments
+         *
+         * * `secret_key_hex` - The secret key to backup.
+         * * `password` - Password to encrypt the backup.
+         *
+         * # Returns
+         *
+         * Encrypted backup that can be stored or transferred.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `exportKeypairToBackup`(`secretKeyHex`: String, `password`: String): KeyBackup {
+    return FfiConverterTypeKeyBackup.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_export_keypair_to_backup(FfiConverterString.lower(`secretKeyHex`),FfiConverterString.lower(`password`),_status)
+})
+}
+
+        /**
+         * Format public key as z-base32 (pkarr format).
+         */
+@Throws(PaykitMobileException::class)
+
+fun `formatPublicKeyZ32`(`publicKeyHex`: String): String {
+    return FfiConverterString.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_format_public_key_z32(FfiConverterString.lower(`publicKeyHex`),_status)
+})
+}
+
+        /**
+         * Get the unique device ID for this device.
+         *
+         * This should be stored persistently and reused for consistent key derivation.
+         * If not available, generates a new random device ID.
+         */
+
+fun `generateDeviceId`(): String {
+    return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_generate_device_id(_status)
+})
+}
+
+        /**
+         * Generate a new Ed25519 keypair for identity.
+         *
+         * This creates a new random identity. The secret key should be stored
+         * securely and backed up.
+         *
+         * # Returns
+         *
+         * A new Ed25519 keypair with the secret in hex format.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `generateEd25519Keypair`(): Ed25519Keypair {
+    return FfiConverterTypeEd25519Keypair.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_generate_ed25519_keypair(_status)
+})
+}
+
+        /**
          * Get the library version.
          */
 
@@ -7787,6 +8141,82 @@ fun `getVersion`(): String {
     return FfiConverterString.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_get_version(_status)
+})
+}
+
+        /**
+         * Import keypair from encrypted backup.
+         *
+         * # Arguments
+         *
+         * * `backup` - The encrypted backup.
+         * * `password` - Password to decrypt the backup.
+         *
+         * # Returns
+         *
+         * The decrypted keypair.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `importKeypairFromBackup`(`backup`: KeyBackup, `password`: String): Ed25519Keypair {
+    return FfiConverterTypeEd25519Keypair.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_import_keypair_from_backup(FfiConverterTypeKeyBackup.lower(`backup`),FfiConverterString.lower(`password`),_status)
+})
+}
+
+        /**
+         * Parse z-base32 public key to hex.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `parsePublicKeyZ32`(`publicKeyZ32`: String): String {
+    return FfiConverterString.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_parse_public_key_z32(FfiConverterString.lower(`publicKeyZ32`),_status)
+})
+}
+
+        /**
+         * Sign a message with Ed25519 secret key.
+         *
+         * # Arguments
+         *
+         * * `secret_key_hex` - The Ed25519 secret key in hex format.
+         * * `message` - The message bytes to sign.
+         *
+         * # Returns
+         *
+         * The 64-byte signature in hex format.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `signMessage`(`secretKeyHex`: String, `message`: ByteArray): String {
+    return FfiConverterString.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_sign_message(FfiConverterString.lower(`secretKeyHex`),FfiConverterByteArray.lower(`message`),_status)
+})
+}
+
+        /**
+         * Verify an Ed25519 signature.
+         *
+         * # Arguments
+         *
+         * * `public_key_hex` - The Ed25519 public key in hex format.
+         * * `message` - The original message bytes.
+         * * `signature_hex` - The 64-byte signature in hex format.
+         *
+         * # Returns
+         *
+         * True if the signature is valid, false otherwise.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `verifySignature`(`publicKeyHex`: String, `message`: ByteArray, `signatureHex`: String): Boolean {
+    return FfiConverterBoolean.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_verify_signature(FfiConverterString.lower(`publicKeyHex`),FfiConverterByteArray.lower(`message`),FfiConverterString.lower(`signatureHex`),_status)
 })
 }
 

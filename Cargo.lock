@@ -1505,6 +1505,7 @@ checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
+ "rand_core 0.6.4",
  "serde",
  "sha2",
  "subtle",
@@ -3230,18 +3231,27 @@ dependencies = [
 name = "paykit-mobile"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
+ "argon2",
  "clap",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "hex",
+ "hkdf",
  "paykit-interactive",
  "paykit-lib",
  "paykit-subscriptions",
+ "rand 0.8.5",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
  "uniffi",
  "uniffi_bindgen 0.25.3",
+ "zeroize",
 ]
 
 [[package]]

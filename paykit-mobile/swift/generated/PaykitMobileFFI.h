@@ -296,8 +296,30 @@ void*_Nonnull uniffi_paykit_mobile_fn_func_create_paykit_client(RustCallStatus *
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_receipt_store(RustCallStatus *_Nonnull out_status
     
 );
+RustBuffer uniffi_paykit_mobile_fn_func_derive_x25519_keypair(RustBuffer ed25519_secret_hex, RustBuffer device_id, uint32_t epoch, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(RustBuffer secret_key_hex, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_export_keypair_to_backup(RustBuffer secret_key_hex, RustBuffer password, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_format_public_key_z32(RustBuffer public_key_hex, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_generate_device_id(RustCallStatus *_Nonnull out_status
+    
+);
+RustBuffer uniffi_paykit_mobile_fn_func_generate_ed25519_keypair(RustCallStatus *_Nonnull out_status
+    
+);
 RustBuffer uniffi_paykit_mobile_fn_func_get_version(RustCallStatus *_Nonnull out_status
     
+);
+RustBuffer uniffi_paykit_mobile_fn_func_import_keypair_from_backup(RustBuffer backup, RustBuffer password, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_parse_public_key_z32(RustBuffer public_key_z32, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_sign_message(RustBuffer secret_key_hex, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+int8_t uniffi_paykit_mobile_fn_func_verify_signature(RustBuffer public_key_hex, RustBuffer message, RustBuffer signature_hex, RustCallStatus *_Nonnull out_status
 );
 RustBuffer ffi_paykit_mobile_rustbuffer_alloc(int32_t size, RustCallStatus *_Nonnull out_status
 );
@@ -429,7 +451,37 @@ uint16_t uniffi_paykit_mobile_checksum_func_create_paykit_client(void
 uint16_t uniffi_paykit_mobile_checksum_func_create_receipt_store(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_func_derive_x25519_keypair(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_export_keypair_to_backup(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_format_public_key_z32(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_generate_device_id(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_generate_ed25519_keypair(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_func_get_version(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_import_keypair_from_backup(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_parse_public_key_z32(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_sign_message(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_verify_signature(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete(void

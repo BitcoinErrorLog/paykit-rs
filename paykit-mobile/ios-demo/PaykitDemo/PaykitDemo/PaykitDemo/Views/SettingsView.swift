@@ -127,42 +127,111 @@ struct SettingsView: View {
 
 struct KeyManagementView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @State private var exportPassword = ""
+    @State private var importPassword = ""
+    @State private var importBackupText = ""
     
     var body: some View {
         List {
+            // Current Identity Section
             Section {
-                HStack {
-                    Text("Public Key")
-                    Spacer()
-                    Text(viewModel.publicKey.prefix(16) + "...")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                
-                Button("Copy Public Key") {
-                    UIPasteboard.general.string = viewModel.publicKey
-                }
-                
-                Button("Export Keys") {
-                    viewModel.showingExportSheet = true
+                if viewModel.hasIdentity {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("pkarr Identity (z-base32)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(viewModel.publicKeyZ32)
+                            .font(.system(.caption2, design: .monospaced))
+                            .lineLimit(2)
+                    }
+                    .padding(.vertical, 4)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Hex Format")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(viewModel.publicKey.prefix(32) + "...")
+                            .font(.system(.caption2, design: .monospaced))
+                    }
+                    .padding(.vertical, 4)
+                    
+                    HStack {
+                        Text("Device ID")
+                        Spacer()
+                        Text(viewModel.getDeviceId().prefix(12) + "...")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Button(action: { viewModel.copyPublicKey() }) {
+                        Label("Copy Public Key", systemImage: "doc.on.doc")
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "key.fill")
+                            .font(.largeTitle)
+                            .foregroundColor(.orange)
+                        Text("No Identity")
+                            .font(.headline)
+                        Text("Generate a new keypair or import from backup")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        
+                        Button("Create Identity") {
+                            viewModel.getOrCreateIdentity()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical)
                 }
             } header: {
-                Text("Your Keys")
+                Text("Your Identity")
             }
             
-            Section {
-                Button("Generate New Keypair") {
-                    viewModel.showingGenerateConfirmation = true
+            // Export Section
+            if viewModel.hasIdentity {
+                Section {
+                    Button(action: { viewModel.showingExportPassword = true }) {
+                        Label("Export Encrypted Backup", systemImage: "arrow.up.doc")
+                    }
+                } header: {
+                    Text("Backup")
+                } footer: {
+                    Text("Export your keys encrypted with a password for safe storage")
                 }
-                .foregroundColor(.orange)
-                
-                Button("Import from Backup") {
-                    viewModel.showingImportSheet = true
+            }
+            
+            // Import Section
+            Section {
+                Button(action: { viewModel.showingImportPassword = true }) {
+                    Label("Import from Backup", systemImage: "arrow.down.doc")
                 }
             } header: {
-                Text("Key Management")
+                Text("Restore")
+            }
+            
+            // Generate New Section
+            Section {
+                Button(action: { viewModel.showingGenerateConfirmation = true }) {
+                    Label("Generate New Keypair", systemImage: "key.horizontal")
+                }
+                .foregroundColor(.orange)
+            } header: {
+                Text("Advanced")
             } footer: {
-                Text("Warning: Generating a new keypair will change your identity")
+                Text("⚠️ Generating a new keypair will replace your current identity. Make sure you have a backup first!")
+            }
+            
+            // Error Display
+            if let error = viewModel.keyError {
+                Section {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
             }
         }
         .navigationTitle("Key Management")
@@ -173,6 +242,86 @@ struct KeyManagementView: View {
             }
         } message: {
             Text("This will replace your current keys. Make sure you have a backup!")
+        }
+        .alert("Export Backup", isPresented: $viewModel.showingExportPassword) {
+            SecureField("Password", text: $exportPassword)
+            Button("Cancel", role: .cancel) { exportPassword = "" }
+            Button("Export") {
+                viewModel.exportKeys(password: exportPassword)
+                exportPassword = ""
+            }
+        } message: {
+            Text("Enter a password to encrypt your backup")
+        }
+        .alert("Import Backup", isPresented: $viewModel.showingImportPassword) {
+            TextField("Backup JSON", text: $importBackupText)
+            SecureField("Password", text: $importPassword)
+            Button("Cancel", role: .cancel) { 
+                importBackupText = ""
+                importPassword = "" 
+            }
+            Button("Import") {
+                viewModel.importKeys(backupText: importBackupText, password: importPassword)
+                importBackupText = ""
+                importPassword = ""
+            }
+        } message: {
+            Text("Paste your backup JSON and enter the password")
+        }
+        .sheet(isPresented: $viewModel.showingExportSheet) {
+            ExportBackupSheet(backup: viewModel.exportedBackup)
+        }
+    }
+}
+
+struct ExportBackupSheet: View {
+    let backup: String
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.green)
+                
+                Text("Backup Created!")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Text("Copy this encrypted backup and store it safely:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                ScrollView {
+                    Text(backup)
+                        .font(.system(.caption2, design: .monospaced))
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                }
+                .frame(maxHeight: 300)
+                
+                Button(action: {
+                    UIPasteboard.general.string = backup
+                }) {
+                    Label("Copy to Clipboard", systemImage: "doc.on.doc")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Export Backup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
@@ -239,7 +388,7 @@ struct DeveloperOptionsView: View {
 
 class SettingsViewModel: ObservableObject {
     @Published var appVersion = "1.0.0"
-    @Published var paykitVersion = "0.0.1"
+    @Published var paykitVersion: String
     
     @Published var selectedNetwork: NetworkType = .mainnet
     @Published var useTestnet = false
@@ -260,11 +409,32 @@ class SettingsViewModel: ObservableObject {
     @Published var showingExportSheet = false
     @Published var showingImportSheet = false
     @Published var showingGenerateConfirmation = false
+    @Published var showingExportPassword = false
+    @Published var showingImportPassword = false
     
-    @Published var publicKey = "pk1abc123def456ghi789jkl012mno345"
+    @Published var publicKey = ""
+    @Published var publicKeyZ32 = ""
+    @Published var hasIdentity = false
     @Published var pendingPaymentsCount = 0
     @Published var cacheSize = "1.2 MB"
     @Published var lastSyncTime = "Just now"
+    
+    @Published var exportedBackup: String = ""
+    @Published var importBackupText: String = ""
+    @Published var backupPassword: String = ""
+    @Published var keyError: String? = nil
+    
+    private let keyManager: KeyManager
+    
+    init() {
+        self.keyManager = KeyManager()
+        self.paykitVersion = getVersion()
+        
+        // Load initial state from KeyManager
+        self.hasIdentity = keyManager.hasIdentity
+        self.publicKeyZ32 = keyManager.publicKeyZ32
+        self.publicKey = keyManager.publicKeyHex
+    }
     
     func clearCache() {
         cacheSize = "0 MB"
@@ -285,8 +455,64 @@ class SettingsViewModel: ObservableObject {
     }
     
     func generateNewKeypair() {
-        // In a real app, this would generate a new Ed25519 keypair
-        publicKey = "pk1new\(UUID().uuidString.prefix(20))"
+        do {
+            let keypair = try keyManager.generateNewIdentity()
+            publicKey = keypair.publicKeyHex
+            publicKeyZ32 = keypair.publicKeyZ32
+            hasIdentity = true
+            keyError = nil
+        } catch {
+            keyError = "Failed to generate keypair: \(error.localizedDescription)"
+        }
+    }
+    
+    func getOrCreateIdentity() {
+        do {
+            let keypair = try keyManager.getOrCreateIdentity()
+            publicKey = keypair.publicKeyHex
+            publicKeyZ32 = keypair.publicKeyZ32
+            hasIdentity = true
+            keyError = nil
+        } catch {
+            keyError = "Failed to get/create identity: \(error.localizedDescription)"
+        }
+    }
+    
+    func exportKeys(password: String) {
+        do {
+            let backup = try keyManager.exportBackup(password: password)
+            exportedBackup = try keyManager.backupToString(backup)
+            showingExportSheet = true
+            keyError = nil
+        } catch {
+            keyError = "Failed to export: \(error.localizedDescription)"
+        }
+    }
+    
+    func importKeys(backupText: String, password: String) {
+        do {
+            let backup = try keyManager.backupFromString(backupText)
+            let keypair = try keyManager.importBackup(backup, password: password)
+            publicKey = keypair.publicKeyHex
+            publicKeyZ32 = keypair.publicKeyZ32
+            hasIdentity = true
+            keyError = nil
+        } catch {
+            keyError = "Failed to import: \(error.localizedDescription)"
+        }
+    }
+    
+    func copyPublicKey() {
+        let keyToCopy = publicKeyZ32.isEmpty ? publicKey : publicKeyZ32
+        UIPasteboard.general.string = keyToCopy
+    }
+    
+    func getDeviceId() -> String {
+        keyManager.getDeviceId()
+    }
+    
+    func signData(_ data: Data) -> String? {
+        try? keyManager.sign(data: data)
     }
     
     func triggerTestPayment() {

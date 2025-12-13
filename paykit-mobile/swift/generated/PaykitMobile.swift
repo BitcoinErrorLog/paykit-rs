@@ -2,9 +2,12 @@
 // Trust me, you don't want to mess with it!
 import Foundation
 
-// The FFI types (RustBuffer, ForeignBytes, RustCallStatus, ForeignCallback)
-// come from PaykitMobileFFI.h via the bridging header.
-// No Swift definitions needed - the C types are used directly.
+// Depending on the consumer's build setup, the low-level FFI code
+// might be in a separate module, or it might be compiled inline into
+// this module. This is a bit of light hackery to work with both.
+#if canImport(PaykitMobileFFI)
+import PaykitMobileFFI
+#endif
 
 fileprivate extension RustBuffer {
     // Allocate a new buffer, copying the contents of a `UInt8` array.
@@ -405,6 +408,21 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
@@ -452,6 +470,7 @@ public protocol AuthenticatedTransportFfiProtocol : AnyObject {
     func put(path: String, content: String) throws 
     
 }
+
 /**
  * FFI wrapper for authenticated transport operations.
  *
@@ -735,6 +754,7 @@ public protocol ContactCacheFfiProtocol : AnyObject {
     func sync(remotePubkeys: [String]) throws  -> SyncResultFfi
     
 }
+
 /**
  * FFI-safe wrapper for local contact cache.
  */
@@ -973,6 +993,7 @@ public protocol DirectoryOperationsAsyncProtocol : AnyObject {
     func removePaymentEndpoint(transport: AuthenticatedTransportFfi, methodId: String) throws 
     
 }
+
 /**
  * Async directory operations manager.
  *
@@ -1373,6 +1394,7 @@ public protocol PaykitClientProtocol : AnyObject {
     func validateEndpoint(methodId: String, endpoint: String) throws  -> Bool
     
 }
+
 /**
  * Main Paykit client for mobile applications.
  */
@@ -2031,6 +2053,7 @@ public protocol PaykitInteractiveManagerFfiProtocol : AnyObject {
     func setGenerator(generator: ReceiptGeneratorCallback) throws 
     
 }
+
 /**
  * FFI wrapper for PaykitInteractiveManager.
  *
@@ -2435,6 +2458,7 @@ public protocol PaykitMessageBuilderProtocol : AnyObject {
     func parseMessage(messageJson: String) throws  -> ParsedMessage
     
 }
+
 /**
  * Builder for creating Paykit protocol messages.
  *
@@ -2722,6 +2746,7 @@ public protocol ReceiptStoreProtocol : AnyObject {
     func saveReceipt(receipt: ReceiptRequest) throws 
     
 }
+
 /**
  * In-memory receipt storage for mobile.
  *
@@ -2976,6 +3001,7 @@ public protocol UnauthenticatedTransportFfiProtocol : AnyObject {
     func list(ownerPubkey: String, prefix: String) throws  -> [String]
     
 }
+
 /**
  * FFI wrapper for unauthenticated (read-only) transport operations.
  *
@@ -3334,6 +3360,96 @@ public func FfiConverterTypeCachedContactFFI_lower(_ value: CachedContactFfi) ->
 
 
 /**
+ * Generated Ed25519 keypair for identity.
+ */
+public struct Ed25519Keypair {
+    /**
+     * Secret key (seed) - 32 bytes, hex encoded.
+     * SENSITIVE: Store securely, this is the root identity secret.
+     */
+    public var secretKeyHex: String
+    /**
+     * Public key - 32 bytes, hex encoded.
+     */
+    public var publicKeyHex: String
+    /**
+     * Public key in z-base32 format (pkarr format).
+     */
+    public var publicKeyZ32: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Secret key (seed) - 32 bytes, hex encoded.
+         * SENSITIVE: Store securely, this is the root identity secret.
+         */
+        secretKeyHex: String, 
+        /**
+         * Public key - 32 bytes, hex encoded.
+         */
+        publicKeyHex: String, 
+        /**
+         * Public key in z-base32 format (pkarr format).
+         */
+        publicKeyZ32: String) {
+        self.secretKeyHex = secretKeyHex
+        self.publicKeyHex = publicKeyHex
+        self.publicKeyZ32 = publicKeyZ32
+    }
+}
+
+
+extension Ed25519Keypair: Equatable, Hashable {
+    public static func ==(lhs: Ed25519Keypair, rhs: Ed25519Keypair) -> Bool {
+        if lhs.secretKeyHex != rhs.secretKeyHex {
+            return false
+        }
+        if lhs.publicKeyHex != rhs.publicKeyHex {
+            return false
+        }
+        if lhs.publicKeyZ32 != rhs.publicKeyZ32 {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(secretKeyHex)
+        hasher.combine(publicKeyHex)
+        hasher.combine(publicKeyZ32)
+    }
+}
+
+
+public struct FfiConverterTypeEd25519Keypair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Ed25519Keypair {
+        return
+            try Ed25519Keypair(
+                secretKeyHex: FfiConverterString.read(from: &buf), 
+                publicKeyHex: FfiConverterString.read(from: &buf), 
+                publicKeyZ32: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Ed25519Keypair, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.secretKeyHex, into: &buf)
+        FfiConverterString.write(value.publicKeyHex, into: &buf)
+        FfiConverterString.write(value.publicKeyZ32, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeEd25519Keypair_lift(_ buf: RustBuffer) throws -> Ed25519Keypair {
+    return try FfiConverterTypeEd25519Keypair.lift(buf)
+}
+
+public func FfiConverterTypeEd25519Keypair_lower(_ value: Ed25519Keypair) -> RustBuffer {
+    return FfiConverterTypeEd25519Keypair.lower(value)
+}
+
+
+/**
  * Endpoint data for a payment method.
  */
 public struct EndpointData {
@@ -3531,6 +3647,124 @@ public func FfiConverterTypeHealthCheckResult_lift(_ buf: RustBuffer) throws -> 
 
 public func FfiConverterTypeHealthCheckResult_lower(_ value: HealthCheckResult) -> RustBuffer {
     return FfiConverterTypeHealthCheckResult.lower(value)
+}
+
+
+/**
+ * Encrypted key backup for export/import.
+ */
+public struct KeyBackup {
+    /**
+     * Version of the backup format.
+     */
+    public var version: UInt32
+    /**
+     * Encrypted secret key (AES-GCM).
+     */
+    public var encryptedDataHex: String
+    /**
+     * Salt for key derivation from password.
+     */
+    public var saltHex: String
+    /**
+     * Nonce for AES-GCM.
+     */
+    public var nonceHex: String
+    /**
+     * Public key (not encrypted, for identification).
+     */
+    public var publicKeyZ32: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Version of the backup format.
+         */
+        version: UInt32, 
+        /**
+         * Encrypted secret key (AES-GCM).
+         */
+        encryptedDataHex: String, 
+        /**
+         * Salt for key derivation from password.
+         */
+        saltHex: String, 
+        /**
+         * Nonce for AES-GCM.
+         */
+        nonceHex: String, 
+        /**
+         * Public key (not encrypted, for identification).
+         */
+        publicKeyZ32: String) {
+        self.version = version
+        self.encryptedDataHex = encryptedDataHex
+        self.saltHex = saltHex
+        self.nonceHex = nonceHex
+        self.publicKeyZ32 = publicKeyZ32
+    }
+}
+
+
+extension KeyBackup: Equatable, Hashable {
+    public static func ==(lhs: KeyBackup, rhs: KeyBackup) -> Bool {
+        if lhs.version != rhs.version {
+            return false
+        }
+        if lhs.encryptedDataHex != rhs.encryptedDataHex {
+            return false
+        }
+        if lhs.saltHex != rhs.saltHex {
+            return false
+        }
+        if lhs.nonceHex != rhs.nonceHex {
+            return false
+        }
+        if lhs.publicKeyZ32 != rhs.publicKeyZ32 {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(version)
+        hasher.combine(encryptedDataHex)
+        hasher.combine(saltHex)
+        hasher.combine(nonceHex)
+        hasher.combine(publicKeyZ32)
+    }
+}
+
+
+public struct FfiConverterTypeKeyBackup: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KeyBackup {
+        return
+            try KeyBackup(
+                version: FfiConverterUInt32.read(from: &buf), 
+                encryptedDataHex: FfiConverterString.read(from: &buf), 
+                saltHex: FfiConverterString.read(from: &buf), 
+                nonceHex: FfiConverterString.read(from: &buf), 
+                publicKeyZ32: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KeyBackup, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.version, into: &buf)
+        FfiConverterString.write(value.encryptedDataHex, into: &buf)
+        FfiConverterString.write(value.saltHex, into: &buf)
+        FfiConverterString.write(value.nonceHex, into: &buf)
+        FfiConverterString.write(value.publicKeyZ32, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeKeyBackup_lift(_ buf: RustBuffer) throws -> KeyBackup {
+    return try FfiConverterTypeKeyBackup.lift(buf)
+}
+
+public func FfiConverterTypeKeyBackup_lower(_ value: KeyBackup) -> RustBuffer {
+    return FfiConverterTypeKeyBackup.lower(value)
 }
 
 
@@ -5228,6 +5462,109 @@ public func FfiConverterTypeSyncResultFFI_lower(_ value: SyncResultFfi) -> RustB
     return FfiConverterTypeSyncResultFFI.lower(value)
 }
 
+
+/**
+ * Derived X25519 keypair for Noise protocol.
+ */
+public struct X25519Keypair {
+    /**
+     * Secret key - 32 bytes, hex encoded.
+     */
+    public var secretKeyHex: String
+    /**
+     * Public key - 32 bytes, hex encoded.
+     */
+    public var publicKeyHex: String
+    /**
+     * Device ID used for derivation.
+     */
+    public var deviceId: String
+    /**
+     * Epoch used for derivation.
+     */
+    public var epoch: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Secret key - 32 bytes, hex encoded.
+         */
+        secretKeyHex: String, 
+        /**
+         * Public key - 32 bytes, hex encoded.
+         */
+        publicKeyHex: String, 
+        /**
+         * Device ID used for derivation.
+         */
+        deviceId: String, 
+        /**
+         * Epoch used for derivation.
+         */
+        epoch: UInt32) {
+        self.secretKeyHex = secretKeyHex
+        self.publicKeyHex = publicKeyHex
+        self.deviceId = deviceId
+        self.epoch = epoch
+    }
+}
+
+
+extension X25519Keypair: Equatable, Hashable {
+    public static func ==(lhs: X25519Keypair, rhs: X25519Keypair) -> Bool {
+        if lhs.secretKeyHex != rhs.secretKeyHex {
+            return false
+        }
+        if lhs.publicKeyHex != rhs.publicKeyHex {
+            return false
+        }
+        if lhs.deviceId != rhs.deviceId {
+            return false
+        }
+        if lhs.epoch != rhs.epoch {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(secretKeyHex)
+        hasher.combine(publicKeyHex)
+        hasher.combine(deviceId)
+        hasher.combine(epoch)
+    }
+}
+
+
+public struct FfiConverterTypeX25519Keypair: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> X25519Keypair {
+        return
+            try X25519Keypair(
+                secretKeyHex: FfiConverterString.read(from: &buf), 
+                publicKeyHex: FfiConverterString.read(from: &buf), 
+                deviceId: FfiConverterString.read(from: &buf), 
+                epoch: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: X25519Keypair, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.secretKeyHex, into: &buf)
+        FfiConverterString.write(value.publicKeyHex, into: &buf)
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterUInt32.write(value.epoch, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeX25519Keypair_lift(_ buf: RustBuffer) throws -> X25519Keypair {
+    return try FfiConverterTypeX25519Keypair.lift(buf)
+}
+
+public func FfiConverterTypeX25519Keypair_lower(_ value: X25519Keypair) -> RustBuffer {
+    return FfiConverterTypeX25519Keypair.lower(value)
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
@@ -6346,6 +6683,7 @@ public protocol PubkyAuthenticatedStorageCallback : AnyObject {
     func list(prefix: String)  -> StorageListResult
     
 }
+
 fileprivate extension NSLock {
     func withLock<T>(f: () throws -> T) rethrows -> T {
         self.lock()
@@ -6608,6 +6946,7 @@ public protocol PubkyUnauthenticatedStorageCallback : AnyObject {
 }
 
 
+
 // Declaration and FfiConverters for PubkyUnauthenticatedStorageCallback Callback Interface
 
 fileprivate let uniffiCallbackHandlerPubkyUnauthenticatedStorageCallback : ForeignCallback =
@@ -6762,6 +7101,7 @@ public protocol ReceiptGeneratorCallback : AnyObject {
     func generateReceipt(request: ReceiptRequest)  -> ReceiptGenerationResult
     
 }
+
 
 
 // Declaration and FfiConverters for ReceiptGeneratorCallback Callback Interface
@@ -7252,12 +7592,195 @@ public func createReceiptStore()  -> ReceiptStore {
     )
 }
 /**
+ * Derive X25519 keypair for Noise protocol from Ed25519 seed.
+ *
+ * This uses the pubky-noise KDF to derive device-specific encryption keys
+ * from the Ed25519 identity seed.
+ *
+ * # Arguments
+ *
+ * * `ed25519_secret_hex` - The Ed25519 secret key (seed) in hex format.
+ * * `device_id` - A unique identifier for this device.
+ * * `epoch` - Key rotation epoch (increment to rotate keys).
+ *
+ * # Returns
+ *
+ * The derived X25519 keypair for use with Noise protocol.
+ */
+public func deriveX25519Keypair(ed25519SecretHex: String, deviceId: String, epoch: UInt32) throws  -> X25519Keypair {
+    return try  FfiConverterTypeX25519Keypair.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_derive_x25519_keypair(
+        FfiConverterString.lower(ed25519SecretHex),
+        FfiConverterString.lower(deviceId),
+        FfiConverterUInt32.lower(epoch),$0)
+}
+    )
+}
+/**
+ * Derive Ed25519 public key from secret key.
+ *
+ * # Arguments
+ *
+ * * `secret_key_hex` - The 32-byte secret key in hex format.
+ *
+ * # Returns
+ *
+ * The complete keypair derived from the secret.
+ */
+public func ed25519KeypairFromSecret(secretKeyHex: String) throws  -> Ed25519Keypair {
+    return try  FfiConverterTypeEd25519Keypair.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(
+        FfiConverterString.lower(secretKeyHex),$0)
+}
+    )
+}
+/**
+ * Export keypair to encrypted backup.
+ *
+ * # Arguments
+ *
+ * * `secret_key_hex` - The secret key to backup.
+ * * `password` - Password to encrypt the backup.
+ *
+ * # Returns
+ *
+ * Encrypted backup that can be stored or transferred.
+ */
+public func exportKeypairToBackup(secretKeyHex: String, password: String) throws  -> KeyBackup {
+    return try  FfiConverterTypeKeyBackup.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_export_keypair_to_backup(
+        FfiConverterString.lower(secretKeyHex),
+        FfiConverterString.lower(password),$0)
+}
+    )
+}
+/**
+ * Format public key as z-base32 (pkarr format).
+ */
+public func formatPublicKeyZ32(publicKeyHex: String) throws  -> String {
+    return try  FfiConverterString.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_format_public_key_z32(
+        FfiConverterString.lower(publicKeyHex),$0)
+}
+    )
+}
+/**
+ * Get the unique device ID for this device.
+ *
+ * This should be stored persistently and reused for consistent key derivation.
+ * If not available, generates a new random device ID.
+ */
+public func generateDeviceId()  -> String {
+    return try!  FfiConverterString.lift(
+        try! rustCall() {
+    uniffi_paykit_mobile_fn_func_generate_device_id($0)
+}
+    )
+}
+/**
+ * Generate a new Ed25519 keypair for identity.
+ *
+ * This creates a new random identity. The secret key should be stored
+ * securely and backed up.
+ *
+ * # Returns
+ *
+ * A new Ed25519 keypair with the secret in hex format.
+ */
+public func generateEd25519Keypair() throws  -> Ed25519Keypair {
+    return try  FfiConverterTypeEd25519Keypair.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_generate_ed25519_keypair($0)
+}
+    )
+}
+/**
  * Get the library version.
  */
 public func getVersion()  -> String {
     return try!  FfiConverterString.lift(
         try! rustCall() {
     uniffi_paykit_mobile_fn_func_get_version($0)
+}
+    )
+}
+/**
+ * Import keypair from encrypted backup.
+ *
+ * # Arguments
+ *
+ * * `backup` - The encrypted backup.
+ * * `password` - Password to decrypt the backup.
+ *
+ * # Returns
+ *
+ * The decrypted keypair.
+ */
+public func importKeypairFromBackup(backup: KeyBackup, password: String) throws  -> Ed25519Keypair {
+    return try  FfiConverterTypeEd25519Keypair.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_import_keypair_from_backup(
+        FfiConverterTypeKeyBackup.lower(backup),
+        FfiConverterString.lower(password),$0)
+}
+    )
+}
+/**
+ * Parse z-base32 public key to hex.
+ */
+public func parsePublicKeyZ32(publicKeyZ32: String) throws  -> String {
+    return try  FfiConverterString.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_parse_public_key_z32(
+        FfiConverterString.lower(publicKeyZ32),$0)
+}
+    )
+}
+/**
+ * Sign a message with Ed25519 secret key.
+ *
+ * # Arguments
+ *
+ * * `secret_key_hex` - The Ed25519 secret key in hex format.
+ * * `message` - The message bytes to sign.
+ *
+ * # Returns
+ *
+ * The 64-byte signature in hex format.
+ */
+public func signMessage(secretKeyHex: String, message: Data) throws  -> String {
+    return try  FfiConverterString.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_sign_message(
+        FfiConverterString.lower(secretKeyHex),
+        FfiConverterData.lower(message),$0)
+}
+    )
+}
+/**
+ * Verify an Ed25519 signature.
+ *
+ * # Arguments
+ *
+ * * `public_key_hex` - The Ed25519 public key in hex format.
+ * * `message` - The original message bytes.
+ * * `signature_hex` - The 64-byte signature in hex format.
+ *
+ * # Returns
+ *
+ * True if the signature is valid, false otherwise.
+ */
+public func verifySignature(publicKeyHex: String, message: Data, signatureHex: String) throws  -> Bool {
+    return try  FfiConverterBool.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_verify_signature(
+        FfiConverterString.lower(publicKeyHex),
+        FfiConverterData.lower(message),
+        FfiConverterString.lower(signatureHex),$0)
 }
     )
 }
@@ -7295,7 +7818,37 @@ private var initializationResult: InitializationResult {
     if (uniffi_paykit_mobile_checksum_func_create_receipt_store() != 25695) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_func_derive_x25519_keypair() != 35150) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret() != 9902) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_export_keypair_to_backup() != 64738) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_format_public_key_z32() != 60670) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_generate_device_id() != 4216) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_generate_ed25519_keypair() != 1379) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_func_get_version() != 23495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_import_keypair_from_backup() != 2045) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_parse_public_key_z32() != 18323) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_sign_message() != 46705) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_verify_signature() != 6178) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete() != 59452) {

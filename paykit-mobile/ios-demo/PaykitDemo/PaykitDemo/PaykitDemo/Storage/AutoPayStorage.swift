@@ -147,16 +147,27 @@ struct StoredAutoPayRule: Identifiable, Codable {
 class AutoPayStorage {
     
     private let keychain: KeychainStorage
-    private let settingsKey = "paykit.autopay.settings"
-    private let limitsKey = "paykit.autopay.limits"
-    private let rulesKey = "paykit.autopay.rules"
+    private let identityName: String
     
     // In-memory cache
     private var settingsCache: AutoPaySettings?
     private var limitsCache: [StoredPeerLimit]?
     private var rulesCache: [StoredAutoPayRule]?
     
-    init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+    private var settingsKey: String {
+        "paykit.autopay.\(identityName).settings"
+    }
+    
+    private var limitsKey: String {
+        "paykit.autopay.\(identityName).limits"
+    }
+    
+    private var rulesKey: String {
+        "paykit.autopay.\(identityName).rules"
+    }
+    
+    init(identityName: String, keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+        self.identityName = identityName
         self.keychain = keychain
     }
     

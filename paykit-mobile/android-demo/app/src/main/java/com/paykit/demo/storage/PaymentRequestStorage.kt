@@ -12,14 +12,15 @@ import java.util.Date
 /**
  * Manages persistent storage of payment requests using EncryptedSharedPreferences.
  */
-class PaymentRequestStorage(context: Context) {
+class PaymentRequestStorage(context: Context, private val identityName: String) {
     
     companion object {
         private const val TAG = "PaymentRequestStorage"
-        private const val PREFS_NAME = "paykit_payment_requests"
-        private const val REQUESTS_KEY = "requests_list"
         private const val MAX_REQUESTS_TO_KEEP = 200
     }
+    
+    private val PREFS_NAME = "paykit_payment_requests_$identityName"
+    private val REQUESTS_KEY = "requests_list"
     
     private val json = Json { 
         ignoreUnknownKeys = true 

@@ -13,14 +13,15 @@ import kotlinx.serialization.json.Json
 /**
  * Manages persistent storage of payment receipts using EncryptedSharedPreferences.
  */
-class ReceiptStorage(context: Context) {
+class ReceiptStorage(context: Context, private val identityName: String) {
     
     companion object {
         private const val TAG = "ReceiptStorage"
-        private const val PREFS_NAME = "paykit_receipts"
-        private const val RECEIPTS_KEY = "receipts_list"
         private const val MAX_RECEIPTS_TO_KEEP = 500
     }
+    
+    private val PREFS_NAME = "paykit_receipts_$identityName"
+    private val RECEIPTS_KEY = "receipts_list"
     
     private val json = Json { 
         ignoreUnknownKeys = true 

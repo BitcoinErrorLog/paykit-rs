@@ -11,12 +11,17 @@ import Foundation
 class ContactStorage {
     
     private let keychain: KeychainStorage
-    private let contactsKey = "paykit.contacts.list"
+    private let identityName: String
     
     // In-memory cache
     private var contactsCache: [Contact]?
     
-    init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+    private var contactsKey: String {
+        "paykit.contacts.\(identityName)"
+    }
+    
+    init(identityName: String, keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+        self.identityName = identityName
         self.keychain = keychain
     }
     

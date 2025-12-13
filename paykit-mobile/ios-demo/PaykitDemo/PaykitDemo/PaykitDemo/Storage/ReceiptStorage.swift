@@ -11,13 +11,18 @@ import Foundation
 class ReceiptStorage {
     
     private let keychain: KeychainStorage
-    private let receiptsKey = "paykit.receipts.list"
+    private let identityName: String
     private let maxReceiptsToKeep = 500  // Limit stored receipts
     
     // In-memory cache
     private var receiptsCache: [Receipt]?
     
-    init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+    private var receiptsKey: String {
+        "paykit.receipts.\(identityName)"
+    }
+    
+    init(identityName: String, keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+        self.identityName = identityName
         self.keychain = keychain
     }
     

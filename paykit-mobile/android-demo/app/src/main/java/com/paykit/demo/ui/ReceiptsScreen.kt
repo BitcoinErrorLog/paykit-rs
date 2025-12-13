@@ -21,6 +21,7 @@ import com.paykit.demo.model.PaymentDirection
 import com.paykit.demo.model.PaymentStatus
 import com.paykit.demo.model.Receipt
 import com.paykit.demo.storage.ReceiptStorage
+import com.paykit.mobile.KeyManager
 import android.content.Intent
 import java.text.DateFormat
 import java.text.NumberFormat
@@ -226,7 +227,11 @@ fun ReceiptsScreen(
     viewModel: ReceiptsViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val storage = remember { ReceiptStorage(context) }
+    val keyManager = remember { KeyManager(context) }
+    val currentIdentityName by keyManager.currentIdentityName.collectAsState()
+    val storage = remember(currentIdentityName) {
+        ReceiptStorage(context, currentIdentityName ?: "default")
+    }
     var showFilterSheet by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {

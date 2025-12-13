@@ -272,10 +272,29 @@ class SubscriptionsViewModel: ObservableObject {
     @Published var daysIntoPeriod: Int = 15
     @Published var prorationResult: ProrationResult?
     
-    private let storage = SubscriptionStorage()
+    private let keyManager = KeyManager()
+    private var storage: SubscriptionStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return SubscriptionStorage(identityName: identityName)
+    }
     
     init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
         loadSubscriptions()
+    }
+    
+    @objc private func identityDidChange() {
+        loadSubscriptions()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func loadSubscriptions() {

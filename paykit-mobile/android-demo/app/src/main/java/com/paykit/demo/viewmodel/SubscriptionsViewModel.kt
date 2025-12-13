@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.paykit.demo.model.StoredSubscription
 import com.paykit.demo.storage.SubscriptionStorage
+import com.paykit.mobile.KeyManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +17,12 @@ import kotlinx.coroutines.flow.update
  */
 class SubscriptionsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val storage = SubscriptionStorage(application)
+    private val keyManager = KeyManager(application)
+    private val storage: SubscriptionStorage
+        get() {
+            val identityName = keyManager.currentIdentityName.value ?: "default"
+            return SubscriptionStorage(application, identityName)
+        }
     
     private val _uiState = MutableStateFlow(SubscriptionsUiState())
     val uiState: StateFlow<SubscriptionsUiState> = _uiState.asStateFlow()

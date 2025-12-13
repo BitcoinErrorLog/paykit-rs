@@ -4,6 +4,7 @@ pub mod contacts;
 pub mod dashboard;
 pub mod discover;
 pub mod list;
+pub mod migrate;
 pub mod pay;
 pub mod publish;
 pub mod qr;
@@ -39,12 +40,19 @@ pub fn set_current_identity(storage_dir: &std::path::Path, name: &str) -> anyhow
 }
 
 /// Load the current identity
-pub fn load_current_identity(
+pub async fn load_current_identity(
     storage_dir: &std::path::Path,
 ) -> anyhow::Result<paykit_demo_core::Identity> {
     let name = get_current_identity(storage_dir)?
         .ok_or_else(|| anyhow::anyhow!("No identity configured. Run 'paykit-demo setup' first."))?;
 
-    let identity_manager = paykit_demo_core::IdentityManager::new(storage_dir.join("identities"));
-    identity_manager.load(&name)
+    // Try secure storage first
+    let metadata_path = storage_dir.join("identities_metadata.json");
+    if metadata_path.exists() {
+        let secure_manager = paykit_demo_core::SecureIdentityManager::new(storage_dir);
+        secure_manager.load(&name).await
+    } else {
+        let identity_manager = paykit_demo_core::IdentityManager::new(storage_dir.join("identities"));
+        identity_manager.load(&name)
+    }
 }

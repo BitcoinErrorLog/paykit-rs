@@ -30,7 +30,7 @@ pub async fn send_request(
     description: Option<String>,
     expires_in: Option<u64>,
 ) -> Result<()> {
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     ui::header("Send Payment Request");
 
@@ -323,7 +323,7 @@ pub async fn propose_subscription(
     frequency: &str,
     description: &str,
 ) -> Result<()> {
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     ui::header("Propose Subscription");
 
@@ -393,7 +393,7 @@ pub async fn propose_subscription(
 /// Accept a subscription proposal
 #[tracing::instrument(skip(storage_dir))]
 pub async fn accept_subscription(storage_dir: &Path, subscription_id: &str) -> Result<()> {
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
     let storage = create_subscription_storage(storage_dir)?;
 
     ui::header("Accept Subscription");

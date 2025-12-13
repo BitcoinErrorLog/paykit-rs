@@ -11,13 +11,14 @@ import kotlinx.serialization.json.Json
 /**
  * Manages persistent storage of contacts using EncryptedSharedPreferences.
  */
-class ContactStorage(context: Context) {
+class ContactStorage(context: Context, private val identityName: String) {
     
     companion object {
         private const val TAG = "ContactStorage"
-        private const val PREFS_NAME = "paykit_contacts"
-        private const val CONTACTS_KEY = "contacts_list"
     }
+    
+    private val PREFS_NAME = "paykit_contacts_$identityName"
+    private val CONTACTS_KEY = "contacts_list"
     
     private val json = Json { 
         ignoreUnknownKeys = true 

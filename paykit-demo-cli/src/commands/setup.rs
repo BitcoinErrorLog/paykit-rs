@@ -1,7 +1,7 @@
 //! Setup command - create a new identity
 
 use anyhow::Result;
-use paykit_demo_core::{Identity, IdentityManager};
+use paykit_demo_core::{Identity, IdentityManager, SecureIdentityManager};
 use std::path::Path;
 
 use crate::ui;
@@ -20,14 +20,20 @@ pub async fn run(storage_dir: &Path, name: Option<String>, verbose: bool) -> Res
         ui::info(&format!("Creating identity '{}'...", name));
     }
 
-    // Create storage directory
-    let identities_dir = storage_dir.join("identities");
-    std::fs::create_dir_all(&identities_dir)?;
-
-    let identity_manager = IdentityManager::new(&identities_dir);
+    // Try secure storage first (if metadata file exists, we're using secure storage)
+    let metadata_path = storage_dir.join("identities_metadata.json");
+    let using_secure_storage = metadata_path.exists();
 
     // Check if identity already exists
-    if identity_manager.load(&name).is_ok()
+    let identity_exists = if using_secure_storage {
+        let secure_manager = SecureIdentityManager::new(storage_dir);
+        secure_manager.list()?.contains(&name)
+    } else {
+        let identities_dir = storage_dir.join("identities");
+        IdentityManager::new(&identities_dir).load(&name).is_ok()
+    };
+
+    if identity_exists
         && !ui::confirm(
             &format!("Identity '{}' already exists. Overwrite?", name),
             false,
@@ -43,7 +49,15 @@ pub async fn run(storage_dir: &Path, name: Option<String>, verbose: bool) -> Res
     spinner.finish_and_clear();
 
     // Save identity
-    identity_manager.save(&identity, &name)?;
+    if using_secure_storage {
+        let secure_manager = SecureIdentityManager::new(storage_dir);
+        secure_manager.save(&identity, &name).await?;
+    } else {
+        let identities_dir = storage_dir.join("identities");
+        std::fs::create_dir_all(&identities_dir)?;
+        let identity_manager = IdentityManager::new(&identities_dir);
+        identity_manager.save(&identity, &name)?;
+    }
 
     // Set as current
     super::set_current_identity(storage_dir, &name)?;
@@ -58,10 +72,15 @@ pub async fn run(storage_dir: &Path, name: Option<String>, verbose: bool) -> Res
     ui::info("Scan this QR code to share your Pubky URI:");
     ui::qr_code(&identity.pubky_uri())?;
 
-    ui::info(&format!(
-        "Identity saved to: {:?}",
-        identities_dir.join(format!("{}.json", name))
-    ));
+    if using_secure_storage {
+        ui::info("Identity saved to secure storage (OS keychain/credential manager)");
+    } else {
+        ui::info(&format!(
+            "Identity saved to: {:?}",
+            storage_dir.join("identities").join(format!("{}.json", name))
+        ));
+        ui::warning("Using plaintext storage. Run 'paykit-demo migrate' to use secure storage.");
+    }
 
     Ok(())
 }

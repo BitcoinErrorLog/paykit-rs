@@ -10,7 +10,9 @@ import Combine
 
 struct ContactsView: View {
     @StateObject private var viewModel = ContactsViewModel()
+    @EnvironmentObject var appState: AppState
     @State private var showingAddSheet = false
+    @State private var showingDiscoveryResults = false
     @State private var searchText = ""
     
     var body: some View {
@@ -25,8 +27,19 @@ struct ContactsView: View {
             .navigationTitle("Contacts")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAddSheet = true }) {
-                        Image(systemName: "plus")
+                    Menu {
+                        Button(action: { showingAddSheet = true }) {
+                            Label("Add Contact", systemImage: "person.crop.circle.badge.plus")
+                        }
+                        Button(action: {
+                            Task {
+                                await viewModel.discoverContacts(directoryService: appState.paykitClient.createDirectoryService())
+                            }
+                        }) {
+                            Label("Discover from Follows", systemImage: "person.badge.plus")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -36,6 +49,17 @@ struct ContactsView: View {
             }
             .sheet(isPresented: $showingAddSheet) {
                 AddContactSheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showingDiscoveryResults) {
+                DiscoveryResultsView(
+                    contacts: viewModel.discoveredContacts,
+                    onImport: { contacts in
+                        viewModel.importDiscovered(contacts)
+                    },
+                    onDismiss: {
+                        viewModel.showingDiscoveryResults = false
+                    }
+                )
             }
             .onAppear {
                 viewModel.loadContacts()
@@ -314,9 +338,33 @@ class ContactsViewModel: ObservableObject {
     @Published var filteredContacts: [Contact] = []
     @Published var isLoading = false
     @Published var error: String?
+    @Published var discoveredContacts: [DiscoveredContact] = []
+    @Published var showingDiscoveryResults = false
     
-    private let storage = ContactStorage()
+    private let keyManager = KeyManager()
+    private var storage: ContactStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return ContactStorage(identityName: identityName)
+    }
     private var searchQuery = ""
+    
+    init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
+    }
+    
+    @objc private func identityDidChange() {
+        loadContacts()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     func loadContacts() {
         isLoading = true
@@ -354,6 +402,243 @@ class ContactsViewModel: ObservableObject {
             loadContacts()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+    
+    func discoverContacts(directoryService: DirectoryService) async {
+        isLoading = true
+        error = nil
+        
+        // Get current identity's public key
+        guard let currentIdentityName = keyManager.getCurrentIdentityName(),
+              let identityInfo = keyManager.getIdentityInfo(name: currentIdentityName),
+              let publicKey = keyManager.publicKey(name: currentIdentityName) else {
+            await MainActor.run {
+                self.error = "No active identity found"
+                self.isLoading = false
+            }
+            return
+        }
+        
+        do {
+            // Fetch known contacts from Pubky follows
+            let contactPubkeys = try await directoryService.fetchKnownContacts(ownerPubkey: publicKey)
+            
+            // Fetch supported payments for each contact to get more info
+            var discovered: [DiscoveredContact] = []
+            for pubkey in contactPubkeys {
+                // Check if contact already exists locally
+                let existingContact = contacts.first { $0.publicKeyZ32 == pubkey }
+                if existingContact != nil {
+                    continue // Skip contacts we already have
+                }
+                
+                // Try to fetch supported payments to see if they have payment methods
+                let supportedPayments = try? await directoryService.fetchSupportedPayments(ownerPubkey: pubkey)
+                let hasPaymentMethods = supportedPayments?.isEmpty == false
+                
+                // Create a discovered contact
+                let discoveredContact = DiscoveredContact(
+                    publicKeyZ32: pubkey,
+                    hasPaymentMethods: hasPaymentMethods,
+                    supportedMethods: supportedPayments?.map { $0.methodId } ?? []
+                )
+                discovered.append(discoveredContact)
+            }
+            
+            await MainActor.run {
+                self.discoveredContacts = discovered
+                self.showingDiscoveryResults = true
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = "Failed to discover contacts: \(error.localizedDescription)"
+                self.isLoading = false
+            }
+        }
+    }
+    
+    func importDiscovered(_ contactsToImport: [DiscoveredContact]) {
+        for discovered in contactsToImport {
+            // Generate a default name from the public key
+            let name = "Contact \(discovered.publicKeyZ32.prefix(8))"
+            let contact = Contact(
+                publicKeyZ32: discovered.publicKeyZ32,
+                name: name,
+                notes: discovered.hasPaymentMethods ? "Discovered from follows" : nil
+            )
+            do {
+                try addContact(contact)
+            } catch {
+                self.error = "Failed to import contact: \(error.localizedDescription)"
+            }
+        }
+        showingDiscoveryResults = false
+    }
+}
+
+/// A discovered contact from Pubky follows
+struct DiscoveredContact: Identifiable {
+    let id: String
+    let publicKeyZ32: String
+    let hasPaymentMethods: Bool
+    let supportedMethods: [String]
+    
+    init(publicKeyZ32: String, hasPaymentMethods: Bool, supportedMethods: [String]) {
+        self.id = publicKeyZ32
+        self.publicKeyZ32 = publicKeyZ32
+        self.hasPaymentMethods = hasPaymentMethods
+        self.supportedMethods = supportedMethods
+    }
+    
+    var abbreviatedKey: String {
+        guard publicKeyZ32.count > 16 else { return publicKeyZ32 }
+        let prefix = publicKeyZ32.prefix(8)
+        let suffix = publicKeyZ32.suffix(8)
+        return "\(prefix)...\(suffix)"
+    }
+}
+
+/// View for displaying discovered contacts and allowing import
+struct DiscoveryResultsView: View {
+    let contacts: [DiscoveredContact]
+    let onImport: ([DiscoveredContact]) -> Void
+    let onDismiss: () -> Void
+    
+    @State private var selectedContacts: Set<String> = []
+    @State private var isImporting = false
+    
+    var body: some View {
+        NavigationView {
+            Group {
+                if contacts.isEmpty {
+                    emptyStateView
+                } else {
+                    discoveryList
+                }
+            }
+            .navigationTitle("Discovered Contacts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onDismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Import") {
+                        importSelected()
+                    }
+                    .disabled(selectedContacts.isEmpty || isImporting)
+                }
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "person.badge.plus")
+                .font(.system(size: 80))
+                .foregroundColor(.secondary)
+            
+            Text("No New Contacts")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("No new contacts found in your follows list.\nAll contacts may already be imported.")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+    }
+    
+    private var discoveryList: some View {
+        List {
+            Section {
+                Text("Select contacts to import")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            ForEach(contacts) { contact in
+                DiscoveredContactRow(
+                    contact: contact,
+                    isSelected: selectedContacts.contains(contact.id),
+                    onToggle: {
+                        if selectedContacts.contains(contact.id) {
+                            selectedContacts.remove(contact.id)
+                        } else {
+                            selectedContacts.insert(contact.id)
+                        }
+                    }
+                )
+            }
+        }
+    }
+    
+    private func importSelected() {
+        isImporting = true
+        let toImport = contacts.filter { selectedContacts.contains($0.id) }
+        onImport(toImport)
+        isImporting = false
+    }
+}
+
+struct DiscoveredContactRow: View {
+    let contact: DiscoveredContact
+    let isSelected: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onToggle) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .blue : .secondary)
+            }
+            .buttonStyle(.plain)
+            
+            Circle()
+                .fill(Color.green.opacity(0.2))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "person.badge.plus")
+                        .foregroundColor(.green)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(contact.abbreviatedKey)
+                    .font(.headline)
+                    .fontDesign(.monospaced)
+                
+                if contact.hasPaymentMethods {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                        Text("Has payment methods")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if !contact.supportedMethods.isEmpty {
+                        Text(contact.supportedMethods.joined(separator: ", "))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text("No payment methods")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onToggle()
         }
     }
 }

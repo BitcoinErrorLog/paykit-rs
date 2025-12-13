@@ -18,7 +18,29 @@ class ReceiptsViewModel: ObservableObject {
     @Published var exportData: String?
     @Published var showExportSheet = false
     
-    private let storage = ReceiptStorage()
+    private let keyManager = KeyManager()
+    private var storage: ReceiptStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return ReceiptStorage(identityName: identityName)
+    }
+    
+    init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
+    }
+    
+    @objc private func identityDidChange() {
+        loadReceipts()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     var filteredReceipts: [Receipt] {
         var result = receipts

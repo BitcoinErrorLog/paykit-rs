@@ -11,13 +11,18 @@ import Foundation
 class PaymentRequestStorage {
     
     private let keychain: KeychainStorage
-    private let requestsKey = "paykit.payment_requests.list"
+    private let identityName: String
     private let maxRequestsToKeep = 200  // Limit stored requests
     
     // In-memory cache
     private var requestsCache: [StoredPaymentRequest]?
     
-    init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+    private var requestsKey: String {
+        "paykit.payment_requests.\(identityName)"
+    }
+    
+    init(identityName: String, keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+        self.identityName = identityName
         self.keychain = keychain
     }
     

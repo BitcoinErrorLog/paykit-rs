@@ -9,7 +9,7 @@ use crate::ui;
 pub async fn identity(storage_dir: &Path, _verbose: bool) -> Result<()> {
     ui::header("Identity QR Code");
 
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
     let uri = identity.pubky_uri();
 
     ui::info(&format!("Identity: {}", uri));
@@ -56,7 +56,7 @@ pub async fn request(
 ) -> Result<()> {
     ui::header("Payment Request QR Code");
 
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     // Build paykit URI with parameters
     let mut uri = format!("paykit://{}/request", identity.public_key());

@@ -46,6 +46,9 @@ enum Commands {
         name: String,
     },
 
+    /// Migrate identities from plaintext to secure storage
+    Migrate,
+
     /// Configure payment wallet (LND, Esplora)
     Wallet {
         #[command(subcommand)]
@@ -522,6 +525,9 @@ async fn main() -> Result<()> {
         }
         Commands::Switch { name } => {
             commands::switch::run(&storage_dir, &name, cli.verbose).await?;
+        }
+        Commands::Migrate => {
+            commands::migrate::run(&storage_dir, cli.verbose).await?;
         }
         Commands::Wallet { action } => match action {
             WalletAction::Status => {

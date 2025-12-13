@@ -11,7 +11,7 @@ pub async fn run(storage_dir: &Path, verbose: bool) -> Result<()> {
     ui::header("Paykit Dashboard");
 
     // Load identity
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     ui::key_value("Identity", &identity.pubky_uri());
     if let Some(nickname) = &identity.nickname {

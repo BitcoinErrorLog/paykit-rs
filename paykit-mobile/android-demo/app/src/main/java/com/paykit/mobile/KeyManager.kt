@@ -25,6 +25,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
 /**
+ * Identity information for display and management
+ */
+data class IdentityInfo(
+    val name: String,
+    val publicKeyZ32: String,
+    val publicKeyHex: String,
+    val nickname: String?,
+    val createdAt: Long
+)
+
+/**
  * Manages cryptographic keys for Paykit
  *
  * This class handles:
@@ -32,14 +43,29 @@ import org.json.JSONObject
  * - Deriving X25519 device keys for Noise protocol
  * - Secure storage in Android EncryptedSharedPreferences
  * - Key backup/restore with password encryption
+ * - Multiple identity management
  */
 class KeyManager(context: Context) {
     
     companion object {
         private const val PREFS_NAME = "paykit_keys"
+        
+        // Legacy single identity keys (for migration)
         private const val KEY_SECRET = "paykit.identity.secret"
         private const val KEY_PUBLIC = "paykit.identity.public"
         private const val KEY_PUBLIC_Z32 = "paykit.identity.public.z32"
+        
+        // Multiple identity keys (new format)
+        private fun secretKey(name: String) = "paykit.identity.$name.secret"
+        private fun publicKey(name: String) = "paykit.identity.$name.public"
+        private fun publicKeyZ32(name: String) = "paykit.identity.$name.public.z32"
+        private fun nickname(name: String) = "paykit.identity.$name.nickname"
+        private fun createdAt(name: String) = "paykit.identity.$name.created_at"
+        
+        // Current identity and list (stored in regular SharedPreferences)
+        private const val KEY_CURRENT_IDENTITY = "paykit.current_identity"
+        private const val KEY_IDENTITY_LIST = "paykit.identity_list"
+        
         private const val KEY_DEVICE_ID = "paykit.device.id"
         private const val KEY_EPOCH = "paykit.device.epoch"
     }
@@ -54,8 +80,15 @@ class KeyManager(context: Context) {
     private val _publicKeyHex = MutableStateFlow("")
     val publicKeyHex: StateFlow<String> = _publicKeyHex.asStateFlow()
     
-    // Encrypted storage
+    private val _currentIdentityName = MutableStateFlow<String?>(null)
+    val currentIdentityName: StateFlow<String?> = _currentIdentityName.asStateFlow()
+    
+    // Encrypted storage for keys
     private val prefs: SharedPreferences
+    
+    // Regular SharedPreferences for metadata
+    private val regularPrefs: SharedPreferences
+    
     private val deviceId: String
     
     init {
@@ -64,7 +97,7 @@ class KeyManager(context: Context) {
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
         
-        // Create encrypted shared preferences
+        // Create encrypted shared preferences for keys
         prefs = EncryptedSharedPreferences.create(
             context,
             PREFS_NAME,
@@ -73,12 +106,18 @@ class KeyManager(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
         
+        // Regular SharedPreferences for metadata (current identity, list)
+        regularPrefs = context.getSharedPreferences("paykit_metadata", Context.MODE_PRIVATE)
+        
         // Get or generate device ID
         deviceId = prefs.getString(KEY_DEVICE_ID, null) ?: run {
             val newId = generateDeviceId()
             prefs.edit().putString(KEY_DEVICE_ID, newId).apply()
             newId
         }
+        
+        // Migrate single identity to multiple if needed
+        migrateSingleIdentity()
         
         // Load identity state
         loadIdentityState()
@@ -94,64 +133,281 @@ class KeyManager(context: Context) {
      * @return The Ed25519 keypair
      */
     fun getOrCreateIdentity(): Ed25519Keypair {
-        val existingSecret = prefs.getString(KEY_SECRET, null)
-        return if (existingSecret != null) {
-            // Restore from storage
-            ed25519KeypairFromSecret(existingSecret)
+        val currentName = getCurrentIdentityName()
+        
+        return if (currentName != null) {
+            // Load existing identity
+            getIdentity(currentName)
         } else {
-            // Generate new identity
-            generateNewIdentity()
+            // No current identity, create default
+            createIdentity("default", null)
         }
     }
     
     /**
-     * Generate a new identity (replaces existing if any)
+     * Get identity by name
      *
+     * @param name Identity name
+     * @return The Ed25519 keypair
+     */
+    fun getIdentity(name: String): Ed25519Keypair {
+        val secretKey = secretKey(name)
+        val secretHex = prefs.getString(secretKey, null)
+            ?: throw KeyManagerException.IdentityNotFound(name)
+        return ed25519KeypairFromSecret(secretHex)
+    }
+    
+    /**
+     * Get identity info without loading secret key
+     *
+     * @param name Identity name
+     * @return IdentityInfo or null if not found
+     */
+    fun getIdentityInfo(name: String): IdentityInfo? {
+        val publicKeyZ32 = prefs.getString(publicKeyZ32(name), null) ?: return null
+        val publicKeyHex = prefs.getString(publicKey(name), null) ?: return null
+        val nickname = prefs.getString(nickname(name), null)
+        val createdAt = prefs.getLong(createdAt(name), 0L)
+        
+        return IdentityInfo(
+            name = name,
+            publicKeyZ32 = publicKeyZ32,
+            publicKeyHex = publicKeyHex,
+            nickname = nickname,
+            createdAt = createdAt
+        )
+    }
+    
+    /**
+     * List all identities
+     *
+     * @return List of IdentityInfo
+     */
+    fun listIdentities(): List<IdentityInfo> {
+        val identityList = regularPrefs.getString(KEY_IDENTITY_LIST, null)
+            ?.split(",")
+            ?.filter { it.isNotEmpty() }
+            ?: return emptyList()
+        
+        return identityList.mapNotNull { name ->
+            getIdentityInfo(name)
+        }
+    }
+    
+    /**
+     * Create a new identity
+     *
+     * @param name Unique name for the identity
+     * @param nickname Optional nickname
      * @return The new Ed25519 keypair
      */
-    fun generateNewIdentity(): Ed25519Keypair {
+    fun createIdentity(name: String, nickname: String?): Ed25519Keypair {
+        // Validate name
+        if (name.isEmpty()) {
+            throw KeyManagerException.InvalidIdentityName("Name cannot be empty")
+        }
+        
+        // Check for duplicates
+        if (getIdentityInfo(name) != null) {
+            throw KeyManagerException.DuplicateIdentity(name)
+        }
+        
+        // Generate keypair
         val keypair = generateEd25519Keypair()
         
-        // Store in encrypted preferences
+        // Store in encrypted preferences with name prefix
         prefs.edit()
-            .putString(KEY_SECRET, keypair.secretKeyHex)
-            .putString(KEY_PUBLIC, keypair.publicKeyHex)
-            .putString(KEY_PUBLIC_Z32, keypair.publicKeyZ32)
+            .putString(secretKey(name), keypair.secretKeyHex)
+            .putString(publicKey(name), keypair.publicKeyHex)
+            .putString(publicKeyZ32(name), keypair.publicKeyZ32)
             .apply()
         
-        // Update state
-        _hasIdentity.value = true
-        _publicKeyZ32.value = keypair.publicKeyZ32
-        _publicKeyHex.value = keypair.publicKeyHex
+        if (nickname != null) {
+            prefs.edit().putString(this.nickname(name), nickname).apply()
+        }
+        
+        val createdAt = System.currentTimeMillis()
+        prefs.edit().putLong(createdAt(name), createdAt).apply()
+        
+        // Add to identity list
+        val identityList = regularPrefs.getString(KEY_IDENTITY_LIST, null)
+            ?.split(",")
+            ?.filter { it.isNotEmpty() }
+            ?.toMutableList()
+            ?: mutableListOf()
+        
+        if (!identityList.contains(name)) {
+            identityList.add(name)
+            regularPrefs.edit()
+                .putString(KEY_IDENTITY_LIST, identityList.joinToString(","))
+                .apply()
+        }
+        
+        // If no current identity, set this as current
+        if (getCurrentIdentityName() == null) {
+            switchIdentity(name)
+        }
         
         return keypair
     }
     
     /**
+     * Switch to a different identity
+     *
+     * @param name Identity name to switch to
+     */
+    fun switchIdentity(name: String) {
+        // Validate identity exists
+        if (getIdentityInfo(name) == null) {
+            throw KeyManagerException.IdentityNotFound(name)
+        }
+        
+        // Update current identity
+        regularPrefs.edit()
+            .putString(KEY_CURRENT_IDENTITY, name)
+            .apply()
+        
+        _currentIdentityName.value = name
+        
+        // Reload identity state
+        loadIdentityState()
+    }
+    
+    /**
+     * Delete an identity
+     *
+     * @param name Identity name to delete
+     */
+    fun deleteIdentity(name: String) {
+        // Prevent deleting current identity (must switch first)
+        if (name == getCurrentIdentityName()) {
+            throw KeyManagerException.CannotDeleteCurrentIdentity()
+        }
+        
+        // Delete all encrypted entries for this identity
+        prefs.edit()
+            .remove(secretKey(name))
+            .remove(publicKey(name))
+            .remove(publicKeyZ32(name))
+            .remove(nickname(name))
+            .remove(createdAt(name))
+            .apply()
+        
+        // Remove from identity list
+        val identityList = regularPrefs.getString(KEY_IDENTITY_LIST, null)
+            ?.split(",")
+            ?.filter { it.isNotEmpty() && it != name }
+            ?: emptyList()
+        
+        regularPrefs.edit()
+            .putString(KEY_IDENTITY_LIST, identityList.joinToString(","))
+            .apply()
+        
+        // If was current, set first available as current
+        if (identityList.isNotEmpty()) {
+            switchIdentity(identityList.first())
+        } else {
+            regularPrefs.edit().remove(KEY_CURRENT_IDENTITY).apply()
+            _currentIdentityName.value = null
+            loadIdentityState()
+        }
+    }
+    
+    /**
+     * Get current identity name
+     *
+     * @return Current identity name or null
+     */
+    fun getCurrentIdentityName(): String? {
+        return regularPrefs.getString(KEY_CURRENT_IDENTITY, null)
+    }
+    
+    /**
+     * Generate a new identity (replaces existing if any) - Legacy method for backward compatibility
+     *
+     * @return The new Ed25519 keypair
+     */
+    fun generateNewIdentity(): Ed25519Keypair {
+        // Use current identity name or "default"
+        val name = getCurrentIdentityName() ?: "default"
+        
+        // Delete existing if any
+        if (getIdentityInfo(name) != null) {
+            try {
+                deleteIdentity(name)
+            } catch (e: KeyManagerException.CannotDeleteCurrentIdentity) {
+                // If it's current, switch first
+                val allIdentities = listIdentities()
+                val otherIdentity = allIdentities.firstOrNull { it.name != name }
+                if (otherIdentity != null) {
+                    switchIdentity(otherIdentity.name)
+                    deleteIdentity(name)
+                } else {
+                    // No other identity, just overwrite
+                }
+            }
+        }
+        
+        return createIdentity(name, null)
+    }
+    
+    /**
      * Get the current public key in z-base32 format (pkarr format)
      */
-    fun getCurrentPublicKeyZ32(): String? = prefs.getString(KEY_PUBLIC_Z32, null)
+    fun getCurrentPublicKeyZ32(): String? {
+        val name = getCurrentIdentityName() ?: return null
+        return prefs.getString(publicKeyZ32(name), null)
+    }
     
     /**
      * Get the current public key in hex format
      */
-    fun getCurrentPublicKeyHex(): String? = prefs.getString(KEY_PUBLIC, null)
+    fun getCurrentPublicKeyHex(): String? {
+        val name = getCurrentIdentityName() ?: return null
+        return prefs.getString(publicKey(name), null)
+    }
     
     /**
-     * Delete the current identity
+     * Delete the current identity - Legacy method for backward compatibility
      *
      * Warning: This cannot be undone unless you have a backup!
      */
     fun deleteIdentity() {
+        val name = getCurrentIdentityName() ?: throw KeyManagerException.NoIdentity()
+        deleteIdentity(name)
+    }
+    
+    /**
+     * Migrate existing single identity to named system
+     */
+    private fun migrateSingleIdentity() {
+        // Check for old single identity keys
+        val oldSecret = prefs.getString(KEY_SECRET, null) ?: return
+        
+        // Load old identity
+        val oldPublic = prefs.getString(KEY_PUBLIC, null) ?: return
+        val oldPublicZ32 = prefs.getString(KEY_PUBLIC_Z32, null) ?: return
+        
+        // Create "default" identity with old keys
+        prefs.edit()
+            .putString(secretKey("default"), oldSecret)
+            .putString(publicKey("default"), oldPublic)
+            .putString(publicKeyZ32("default"), oldPublicZ32)
+            .putLong(createdAt("default"), System.currentTimeMillis())
+            .apply()
+        
+        // Delete old keys
         prefs.edit()
             .remove(KEY_SECRET)
             .remove(KEY_PUBLIC)
             .remove(KEY_PUBLIC_Z32)
             .apply()
         
-        _hasIdentity.value = false
-        _publicKeyZ32.value = ""
-        _publicKeyHex.value = ""
+        // Set "default" as current
+        regularPrefs.edit()
+            .putString(KEY_CURRENT_IDENTITY, "default")
+            .putString(KEY_IDENTITY_LIST, "default")
+            .apply()
     }
     
     // ============================================================================
@@ -165,7 +421,9 @@ class KeyManager(context: Context) {
      * @return The X25519 keypair for this device and epoch
      */
     fun getDeviceX25519Key(epoch: UInt = 0u): X25519Keypair {
-        val secretHex = prefs.getString(KEY_SECRET, null)
+        val name = getCurrentIdentityName() ?: throw KeyManagerException.NoIdentity()
+        val secretKey = secretKey(name)
+        val secretHex = prefs.getString(secretKey, null)
             ?: throw KeyManagerException.NoIdentity()
         
         return deriveX25519Keypair(
@@ -205,7 +463,9 @@ class KeyManager(context: Context) {
      * @return Hex-encoded signature
      */
     fun sign(data: ByteArray): String {
-        val secretHex = prefs.getString(KEY_SECRET, null)
+        val name = getCurrentIdentityName() ?: throw KeyManagerException.NoIdentity()
+        val secretKey = secretKey(name)
+        val secretHex = prefs.getString(secretKey, null)
             ?: throw KeyManagerException.NoIdentity()
         
         return signMessage(secretHex, data)
@@ -234,7 +494,9 @@ class KeyManager(context: Context) {
      * @return The encrypted backup
      */
     fun exportBackup(password: String): KeyBackup {
-        val secretHex = prefs.getString(KEY_SECRET, null)
+        val name = getCurrentIdentityName() ?: throw KeyManagerException.NoIdentity()
+        val secretKey = secretKey(name)
+        val secretHex = prefs.getString(secretKey, null)
             ?: throw KeyManagerException.NoIdentity()
         
         return exportKeypairToBackup(secretHex, password)
@@ -245,22 +507,43 @@ class KeyManager(context: Context) {
      *
      * @param backup The encrypted backup
      * @param password Password to decrypt
+     * @param name Name for the imported identity (defaults to backup public key prefix)
      * @return The restored keypair
      */
-    fun importBackup(backup: KeyBackup, password: String): Ed25519Keypair {
+    fun importBackup(backup: KeyBackup, password: String, name: String? = null): Ed25519Keypair {
         val keypair = importKeypairFromBackup(backup, password)
         
-        // Store in encrypted preferences
+        // Use provided name or generate from public key
+        val identityName = name ?: backup.publicKeyZ32.take(8)
+        
+        // Store in encrypted preferences with name prefix
         prefs.edit()
-            .putString(KEY_SECRET, keypair.secretKeyHex)
-            .putString(KEY_PUBLIC, keypair.publicKeyHex)
-            .putString(KEY_PUBLIC_Z32, keypair.publicKeyZ32)
+            .putString(secretKey(identityName), keypair.secretKeyHex)
+            .putString(publicKey(identityName), keypair.publicKeyHex)
+            .putString(publicKeyZ32(identityName), keypair.publicKeyZ32)
+            .putLong(createdAt(identityName), System.currentTimeMillis())
             .apply()
         
-        // Update state
-        _hasIdentity.value = true
-        _publicKeyZ32.value = keypair.publicKeyZ32
-        _publicKeyHex.value = keypair.publicKeyHex
+        // Add to identity list
+        val identityList = regularPrefs.getString(KEY_IDENTITY_LIST, null)
+            ?.split(",")
+            ?.filter { it.isNotEmpty() }
+            ?.toMutableList()
+            ?: mutableListOf()
+        
+        if (!identityList.contains(identityName)) {
+            identityList.add(identityName)
+            regularPrefs.edit()
+                .putString(KEY_IDENTITY_LIST, identityList.joinToString(","))
+                .apply()
+        }
+        
+        // If no current identity, set this as current
+        if (getCurrentIdentityName() == null) {
+            switchIdentity(identityName)
+        } else {
+            loadIdentityState()
+        }
         
         return keypair
     }
@@ -297,13 +580,22 @@ class KeyManager(context: Context) {
     // ============================================================================
     
     private fun loadIdentityState() {
-        val pubZ32 = prefs.getString(KEY_PUBLIC_Z32, null)
-        val pubHex = prefs.getString(KEY_PUBLIC, null)
+        val name = getCurrentIdentityName()
+        _currentIdentityName.value = name
         
-        if (pubZ32 != null && pubHex != null) {
-            _hasIdentity.value = true
-            _publicKeyZ32.value = pubZ32
-            _publicKeyHex.value = pubHex
+        if (name != null) {
+            val pubZ32 = prefs.getString(publicKeyZ32(name), null)
+            val pubHex = prefs.getString(publicKey(name), null)
+            
+            if (pubZ32 != null && pubHex != null) {
+                _hasIdentity.value = true
+                _publicKeyZ32.value = pubZ32
+                _publicKeyHex.value = pubHex
+            } else {
+                _hasIdentity.value = false
+                _publicKeyZ32.value = ""
+                _publicKeyHex.value = ""
+            }
         } else {
             _hasIdentity.value = false
             _publicKeyZ32.value = ""
@@ -320,5 +612,9 @@ sealed class KeyManagerException(message: String) : Exception(message) {
     class NoIdentity : KeyManagerException("No identity key exists. Generate or import one first.")
     class InvalidBackup : KeyManagerException("Invalid backup format.")
     class BackupDecryptionFailed : KeyManagerException("Failed to decrypt backup. Check your password.")
+    class IdentityNotFound(val name: String) : KeyManagerException("Identity '$name' not found.")
+    class DuplicateIdentity(val name: String) : KeyManagerException("Identity '$name' already exists.")
+    class InvalidIdentityName(val message: String) : KeyManagerException("Invalid identity name: $message")
+    class CannotDeleteCurrentIdentity : KeyManagerException("Cannot delete current identity. Switch to another identity first.")
 }
 

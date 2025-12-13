@@ -1,7 +1,7 @@
 # Paykit Workspace - Complete Build Guide
 
 **Platform**: macOS, Linux  
-**Last Updated**: November 20, 2025
+**Last Updated**: December 12, 2025
 
 ---
 
@@ -46,6 +46,9 @@ cargo test --workspace --lib
 - **Python 3** - For web demo development server
 - **wasm-pack** - For building web demo
 - **Node.js/npm** - For web demo npm scripts
+- **UniFFI 0.25+** - For mobile bindings (iOS/Android)
+- **Xcode 15.0+** - For iOS demo (Swift 5.9+, iOS 16.0+)
+- **Android NDK** - For Android demo (Kotlin 1.8+)
 
 ---
 
@@ -148,6 +151,7 @@ Each project has its own BUILD.md:
 - **paykit-demo-cli**: [paykit-demo-cli/BUILD.md](./paykit-demo-cli/BUILD.md)
 - **paykit-demo-core**: [paykit-demo-core/BUILD.md](./paykit-demo-core/BUILD.md)
 - **paykit-demo-web**: [paykit-demo-web/BUILD_INSTRUCTIONS.md](./paykit-demo-web/BUILD_INSTRUCTIONS.md)
+- **paykit-mobile**: [paykit-mobile/README.md](./paykit-mobile/README.md) - Mobile FFI bindings
 
 ### Special: Web Demo (WASM)
 
@@ -255,6 +259,9 @@ paykit-rs-master/
 ├── paykit-lib/              # Core Paykit library
 ├── paykit-interactive/      # Interactive payment protocol
 ├── paykit-subscriptions/    # Subscription protocol
+├── paykit-mobile/           # Mobile FFI bindings (iOS/Android)
+│   ├── ios-demo/           # iOS demo application
+│   └── android-demo/       # Android demo application
 ├── paykit-demo-cli/         # CLI demo application
 ├── paykit-demo-core/        # Shared demo logic
 ├── paykit-demo-web/         # Web/WASM demo
@@ -272,6 +279,7 @@ paykit-subscriptions
     ↓
 paykit-demo-core → paykit-demo-cli
                 → paykit-demo-web
+                → paykit-mobile
 ```
 
 ---
@@ -522,6 +530,9 @@ Each component has detailed build documentation:
 - **[paykit-demo-core/BUILD.md](paykit-demo-core/BUILD.md)** - Shared demo logic build
 - **[paykit-demo-cli/BUILD.md](paykit-demo-cli/BUILD.md)** - CLI demo build instructions
 - **[paykit-demo-web/BUILD_INSTRUCTIONS.md](paykit-demo-web/BUILD_INSTRUCTIONS.md)** - Web demo WASM build instructions
+- **[paykit-mobile/README.md](paykit-mobile/README.md)** - Mobile FFI bindings build instructions
+- **[paykit-mobile/ios-demo/QUICK_START.md](paykit-mobile/ios-demo/QUICK_START.md)** - iOS demo quick start guide
+- **[paykit-mobile/ios-demo/BUILD_AND_TEST.md](paykit-mobile/ios-demo/BUILD_AND_TEST.md)** - iOS demo detailed build guide
 
 ## Next Steps
 
@@ -554,6 +565,7 @@ After building successfully:
 1. **Homebrew Rust**: Must use Rustup (not Homebrew's Rust). See Prerequisites section above.
 2. **WASM build fails**: Need WASM target installed: `rustup target add wasm32-unknown-unknown`. See [paykit-demo-web/BUILD_INSTRUCTIONS.md](paykit-demo-web/BUILD_INSTRUCTIONS.md)
 3. **OpenSSL errors**: Install libssl-dev (Linux) or ensure OpenSSL is available (macOS). See Troubleshooting section above.
+4. **uniffi-bindgen not found**: Install from source for uniffi 0.25. See [paykit-mobile/ios-demo/install-uniffi-bindgen.sh](paykit-mobile/ios-demo/install-uniffi-bindgen.sh) or [paykit-mobile/ios-demo/QUICK_START.md](paykit-mobile/ios-demo/QUICK_START.md)
 
 ---
 

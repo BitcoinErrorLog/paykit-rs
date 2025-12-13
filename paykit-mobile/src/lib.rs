@@ -826,6 +826,7 @@ impl PaykitClient {
     // ========================================================================
 
     /// Create a payment request.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_payment_request(
         &self,
         from_pubkey: String,
@@ -1241,7 +1242,7 @@ mod tests {
         let period_end = now + (10 * 86400);
 
         let remaining = client.days_remaining_in_period(period_end);
-        assert!(remaining >= 9 && remaining <= 10);
+        assert!((9..=10).contains(&remaining));
     }
 
     #[test]

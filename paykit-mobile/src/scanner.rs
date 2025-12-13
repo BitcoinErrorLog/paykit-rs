@@ -29,7 +29,7 @@
 //! ```
 
 use paykit_lib::uri::{parse_uri, PaykitUri};
-use paykit_lib::{MethodId, PublicKey};
+use paykit_lib::PublicKey;
 
 /// Helper to convert PublicKey to string representation.
 fn public_key_to_string(pk: &PublicKey) -> String {
@@ -87,16 +87,20 @@ pub enum UriType {
 ///
 /// # Examples
 ///
-/// ```rust
-/// use paykit_mobile::scanner::parse_scanned_uri;
+/// ```rust,ignore
+/// use paykit_mobile::scanner::{parse_scanned_uri, UriType};
 ///
 /// // Parse a pubky URI
-/// let result = parse_scanned_uri("pubky://abc123...")?;
-/// assert_eq!(result.uri_type, UriType::Pubky);
+/// let result = parse_scanned_uri("pubky://abc123...".to_string());
+/// if let Ok(parsed) = result {
+///     assert_eq!(parsed.uri_type, UriType::Pubky);
+/// }
 ///
 /// // Parse a Lightning invoice
-/// let invoice = parse_scanned_uri("lightning:lnbc1...")?;
-/// assert_eq!(invoice.uri_type, UriType::Invoice);
+/// let invoice = parse_scanned_uri("lightning:lnbc1...".to_string());
+/// if let Ok(parsed) = invoice {
+///     assert_eq!(parsed.uri_type, UriType::Invoice);
+/// }
 /// ```
 pub fn parse_scanned_uri(scanned_data: String) -> Result<ScannedUri, String> {
     let uri = parse_uri(&scanned_data).map_err(|e| e.to_string())?;

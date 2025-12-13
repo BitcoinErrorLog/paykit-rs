@@ -18,7 +18,7 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Method Selection | **Real** | Smart method selection with strategy options |
 | Subscriptions | **Real** | EncryptedSharedPreferences-backed subscription storage |
 | Auto-Pay | **Real** | EncryptedSharedPreferences-backed settings, limits, and rules |
-| Payment Requests | UI Only | Sample data, not persisted |
+| Payment Requests | **Real** | EncryptedSharedPreferences storage with FFI integration |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
@@ -396,8 +396,10 @@ Test the key management features:
 The following use sample data for UI demonstration:
 - Subscriptions: Empty state initially
 - Auto-Pay: Basic toggle only
-- Payment Requests: Sample data
 - Directory Operations: Uses mock transport by default (configurable for real Pubky integration)
+
+**Real Features**:
+- Payment Requests: Persisted to EncryptedSharedPreferences, created via PaykitClient FFI
 
 ## Roadmap
 
@@ -412,8 +414,10 @@ Completed improvements:
 
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
-2. **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences
-3. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Noise Integration**: Real encrypted payments via Noise protocol
+
+Recently completed:
+- ✅ **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences with FFI integration
 
 ## Troubleshooting
 

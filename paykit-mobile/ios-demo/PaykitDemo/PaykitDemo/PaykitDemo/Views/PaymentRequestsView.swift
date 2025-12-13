@@ -26,6 +26,11 @@ struct PaymentRequestsView: View {
                                 viewModel.handleRequestAction(request: request, action: action)
                             }
                         }
+                        .onDelete { indexSet in
+                            for index in indexSet {
+                                viewModel.deleteRequest(id: viewModel.pendingRequests[index].id)
+                            }
+                        }
                     }
                 } header: {
                     Text("Pending Requests")
@@ -68,7 +73,9 @@ struct PaymentRequestsView: View {
                         }
                         
                         Button("Create Request") {
-                            viewModel.createRequest(client: appState.paykitClient)
+                            // Get public key from KeyManager if available
+                            let myPubkey = "pk1demo..." // TODO: Get from KeyManager
+                            viewModel.createRequest(client: appState.paykitClient, myPublicKey: myPubkey)
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity)
@@ -81,8 +88,18 @@ struct PaymentRequestsView: View {
                 
                 // Request History Section
                 Section {
-                    ForEach(viewModel.requestHistory) { request in
-                        RequestHistoryRow(request: request)
+                    if viewModel.requestHistory.isEmpty {
+                        Text("No request history")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(viewModel.requestHistory) { request in
+                            RequestHistoryRow(request: request)
+                        }
+                        .onDelete { indexSet in
+                            for index in indexSet {
+                                viewModel.deleteRequest(id: viewModel.requestHistory[index].id)
+                            }
+                        }
                     }
                 } header: {
                     Text("History")
@@ -96,19 +113,27 @@ struct PaymentRequestsView: View {
                     }
                 }
             }
+            .alert("Error", isPresented: $viewModel.showError) {
+                Button("OK") { }
+            } message: {
+                Text(viewModel.errorMessage ?? "Unknown error")
+            }
+            .onAppear {
+                viewModel.refreshRequests()
+            }
         }
     }
 }
 
 struct PaymentRequestRow: View {
-    let request: PaymentRequestInfo
+    let request: StoredPaymentRequest
     let onAction: (RequestAction) -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading) {
-                    Text(request.fromName)
+                    Text(request.counterpartyName)
                         .font(.headline)
                     Text(request.description)
                         .font(.caption)
@@ -121,9 +146,12 @@ struct PaymentRequestRow: View {
                     Text("\(request.amountSats) sats")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text(request.methodId)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        Text(request.methodId)
+                        Image(systemName: request.direction == .incoming ? "arrow.down" : "arrow.up")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
             }
             
@@ -158,13 +186,17 @@ struct PaymentRequestRow: View {
 }
 
 struct RequestHistoryRow: View {
-    let request: PaymentRequestInfo
+    let request: StoredPaymentRequest
     
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text(request.fromName)
-                    .font(.subheadline)
+                HStack(spacing: 4) {
+                    Image(systemName: request.direction == .incoming ? "arrow.down.circle" : "arrow.up.circle")
+                        .foregroundColor(request.direction == .incoming ? .green : .blue)
+                    Text(request.counterpartyName)
+                        .font(.subheadline)
+                }
                 Text(request.description)
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -186,7 +218,7 @@ struct RequestHistoryRow: View {
         }
     }
     
-    private func statusColor(_ status: RequestStatusType) -> Color {
+    private func statusColor(_ status: PaymentRequestStatus) -> Color {
         switch status {
         case .pending: return .yellow
         case .accepted: return .green
@@ -205,8 +237,10 @@ enum RequestAction {
 // MARK: - View Model
 
 class PaymentRequestsViewModel: ObservableObject {
-    @Published var pendingRequests: [PaymentRequestInfo] = []
-    @Published var requestHistory: [PaymentRequestInfo] = []
+    @Published var pendingRequests: [StoredPaymentRequest] = []
+    @Published var requestHistory: [StoredPaymentRequest] = []
+    @Published var errorMessage: String?
+    @Published var showError = false
     
     // Create request form
     @Published var recipientPubkey = ""
@@ -216,125 +250,102 @@ class PaymentRequestsViewModel: ObservableObject {
     @Published var hasExpiry = true
     @Published var expiryHours = 24
     
+    private let storage = PaymentRequestStorage()
+    
     init() {
-        loadSampleData()
+        loadRequests()
     }
     
-    func createRequest(client: PaykitClientWrapper) {
+    func loadRequests() {
+        // Check for expired requests first
+        try? storage.checkExpirations()
+        
+        // Load from persistent storage
+        let allRequests = storage.listRequests()
+        pendingRequests = allRequests.filter { $0.status == .pending }
+        requestHistory = allRequests.filter { $0.status != .pending }
+    }
+    
+    func createRequest(client: PaykitClientWrapper, myPublicKey: String) {
         let expirySeconds = hasExpiry ? UInt64(expiryHours * 3600) : nil
         
-        if let request = client.createPaymentRequest(
-            fromPubkey: "pk1me...",
+        guard let ffiRequest = client.createPaymentRequest(
+            fromPubkey: myPublicKey,
             toPubkey: recipientPubkey,
             amountSats: requestAmount,
             currency: "SAT",
             methodId: requestMethod,
             description: requestDescription,
             expiresInSecs: expirySeconds
-        ) {
-            let newRequest = PaymentRequestInfo(
-                id: request.requestId,
-                fromPubkey: request.toPubkey,
-                fromName: "You",
-                amountSats: request.amountSats,
-                methodId: request.methodId,
-                description: request.description,
-                createdAt: Date(),
-                expiresAt: request.expiresAt.map { Date(timeIntervalSince1970: Double($0)) },
-                status: .pending
-            )
-            pendingRequests.insert(newRequest, at: 0)
+        ) else {
+            showErrorMessage("Failed to create payment request")
+            return
+        }
+        
+        // Convert FFI request to storable format
+        let newRequest = StoredPaymentRequest.fromFFI(ffiRequest, direction: .outgoing)
+        
+        do {
+            try storage.addRequest(newRequest)
+            loadRequests()  // Refresh the lists
             
             // Reset form
             recipientPubkey = ""
             requestDescription = ""
+        } catch {
+            showErrorMessage("Failed to save payment request: \(error.localizedDescription)")
         }
     }
     
-    func handleRequestAction(request: PaymentRequestInfo, action: RequestAction) {
-        guard let index = pendingRequests.firstIndex(where: { $0.id == request.id }) else {
-            return
-        }
-        
-        var updatedRequest = request
+    func handleRequestAction(request: StoredPaymentRequest, action: RequestAction) {
+        let newStatus: PaymentRequestStatus
         switch action {
         case .accept:
-            updatedRequest.status = .accepted
+            newStatus = .accepted
         case .decline:
-            updatedRequest.status = .declined
+            newStatus = .declined
         }
         
-        pendingRequests.remove(at: index)
-        requestHistory.insert(updatedRequest, at: 0)
+        do {
+            try storage.updateStatus(id: request.id, status: newStatus)
+            loadRequests()  // Refresh the lists
+        } catch {
+            showErrorMessage("Failed to update request: \(error.localizedDescription)")
+        }
+    }
+    
+    func deleteRequest(id: String) {
+        do {
+            try storage.deleteRequest(id: id)
+            loadRequests()
+        } catch {
+            showErrorMessage("Failed to delete request: \(error.localizedDescription)")
+        }
     }
     
     func refreshRequests() {
-        // In a real app, this would fetch from the network
+        loadRequests()
     }
     
-    private func loadSampleData() {
-        pendingRequests = [
-            PaymentRequestInfo(
-                id: "1",
-                fromPubkey: "pk1alice...",
-                fromName: "Alice",
-                amountSats: 5000,
-                methodId: "lightning",
-                description: "Split dinner bill",
-                createdAt: Date().addingTimeInterval(-3600),
-                expiresAt: Date().addingTimeInterval(86400),
-                status: .pending
-            ),
-            PaymentRequestInfo(
-                id: "2",
-                fromPubkey: "pk1bob...",
-                fromName: "Bob",
-                amountSats: 2500,
-                methodId: "lightning",
-                description: "Concert tickets",
-                createdAt: Date().addingTimeInterval(-7200),
-                expiresAt: nil,
-                status: .pending
-            ),
-        ]
-        
-        requestHistory = [
-            PaymentRequestInfo(
-                id: "3",
-                fromPubkey: "pk1charlie...",
-                fromName: "Charlie",
-                amountSats: 1000,
-                methodId: "lightning",
-                description: "Coffee",
-                createdAt: Date().addingTimeInterval(-86400),
-                expiresAt: nil,
-                status: .paid
-            ),
-        ]
+    func clearAllRequests() {
+        do {
+            try storage.clearAll()
+            loadRequests()
+        } catch {
+            showErrorMessage("Failed to clear requests: \(error.localizedDescription)")
+        }
     }
-}
-
-struct PaymentRequestInfo: Identifiable {
-    let id: String
-    let fromPubkey: String
-    let fromName: String
-    let amountSats: Int64
-    let methodId: String
-    let description: String
-    let createdAt: Date
-    let expiresAt: Date?
-    var status: RequestStatusType
-}
-
-enum RequestStatusType: String {
-    case pending = "Pending"
-    case accepted = "Accepted"
-    case declined = "Declined"
-    case expired = "Expired"
-    case paid = "Paid"
+    
+    private func showErrorMessage(_ message: String) {
+        errorMessage = message
+        showError = true
+    }
 }
 
 #Preview {
     PaymentRequestsView()
         .environmentObject(AppState())
 }
+
+
+

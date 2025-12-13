@@ -18,7 +18,7 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | Method Selection | **Real** | Smart method selection with strategy options |
 | Subscriptions | **Real** | Keychain-backed subscription storage |
 | Auto-Pay | **Real** | Keychain-backed settings, limits, and rules |
-| Payment Requests | UI Only | Sample data, not persisted |
+| Payment Requests | **Real** | Keychain-backed storage with FFI integration |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
@@ -333,8 +333,10 @@ Test the key management features:
 The following use sample data for UI demonstration:
 - Subscriptions: Shows sample subscriptions
 - Auto-Pay: Shows sample rules and limits
-- Payment Requests: Shows sample requests
 - Directory Operations: Uses mock transport by default (configurable for real Pubky integration)
+
+**Real Features**:
+- Payment Requests: Persisted to Keychain, created via PaykitClient FFI
 
 ## Roadmap
 
@@ -349,8 +351,10 @@ Completed improvements:
 
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
-2. **Payment Request Persistence**: Store payment requests in Keychain
-3. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Noise Integration**: Real encrypted payments via Noise protocol
+
+Recently completed:
+- ✅ **Payment Request Persistence**: Store payment requests in Keychain with FFI integration
 
 ## Related Documentation
 

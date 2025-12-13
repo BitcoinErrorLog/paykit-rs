@@ -121,17 +121,119 @@ let limit = PeerSpendingLimit::new(
 ### Core Components
 
 - **`Subscription`**: Bilateral agreement with cryptographic signatures
-- **`PaymentRequest`**: Asynchronous payment request with metadata
-- **`SubscriptionManager`**: Handles subscription lifecycle and auto-pay
+- **`PaymentRequest`**: Asynchronous payment request with metadata and expiration
+- **`SubscriptionManager`**: Handles subscription lifecycle and auto-pay automation
 - **`NonceStore`**: Thread-safe nonce tracking for replay prevention
-- **`Amount`**: Safe financial arithmetic with overflow protection
+- **`Amount`**: Safe financial arithmetic with overflow protection using `rust_decimal`
+
+### Additional Modules
+
+- **`invoice`**: Structured invoice generation with items, shipping, and tax information
+- **`discovery`**: Automatic subscription discovery from Pubky directory
+- **`fallback`**: Fallback payment handling when primary method fails
+- **`modifications`**: Track subscription modifications and history
+- **`proration`**: Prorated billing calculations for mid-cycle changes
+- **`monitor`**: Background monitoring for subscription payments (native only)
+
+### Invoice Generation
+
+Create structured invoices with line items, shipping, and tax:
+
+```rust
+use paykit_subscriptions::invoice::{Invoice, InvoiceItem, ShippingInfo, TaxInfo};
+
+let invoice = Invoice::new(
+    "INV-001".to_string(),
+    subscriber_pubkey,
+    provider_pubkey,
+)
+.with_items(vec![
+    InvoiceItem::new("Service Plan", Amount::from_sats(10000), 1),
+])
+.with_shipping(ShippingInfo::new(/* ... */))
+.with_tax(TaxInfo::new(Amount::from_sats(1000), "VAT".to_string()));
+```
+
+### Subscription Discovery
+
+Automatically discover subscriptions from Pubky directory:
+
+```rust
+use paykit_subscriptions::discovery::SubscriptionDiscovery;
+
+let discovery = SubscriptionDiscovery::new(transport);
+let subscriptions = discovery.discover_for_key(&pubkey).await?;
+```
+
+### Fallback Handling
+
+Configure fallback payment methods when primary method fails:
+
+```rust
+use paykit_subscriptions::fallback::{FallbackHandler, SubscriptionFallbackPolicy};
+
+let policy = SubscriptionFallbackPolicy::new()
+    .with_fallback_order(vec![
+        MethodId("lightning".into()),
+        MethodId("onchain".into()),
+    ]);
+
+let handler = FallbackHandler::new(policy);
+let result = handler.attempt_payment(&subscription, &amount).await?;
+```
+
+### Modification Tracking
+
+Track subscription modifications and maintain history:
+
+```rust
+use paykit_subscriptions::modifications::{ModificationHistory, ModificationRecord};
+
+let history = ModificationHistory::new();
+history.record(ModificationRecord::amount_change(
+    old_amount,
+    new_amount,
+    timestamp,
+))?;
+
+let changes = history.get_all_modifications(&subscription_id)?;
+```
+
+### Proration
+
+Calculate prorated amounts for mid-cycle changes:
+
+```rust
+use paykit_subscriptions::proration::ProrationCalculator;
+
+let calculator = ProrationCalculator::new();
+let prorated = calculator.calculate_proration(
+    &subscription,
+    &new_amount,
+    &change_date,
+)?;
+```
+
+### Background Monitoring
+
+Monitor subscriptions in the background (native platforms only):
+
+```rust
+use paykit_subscriptions::monitor::SubscriptionMonitor;
+
+let monitor = SubscriptionMonitor::new(manager, storage);
+monitor.start().await?;
+
+// Monitor runs in background, checking for due payments
+// and executing auto-pay rules
+```
 
 ### Storage Abstraction
 
 The `SubscriptionStorage` trait allows pluggable storage backends:
 
-- **Native**: `FileSubscriptionStorage` with file-level locking
-- **WASM**: Storage backed by browser localStorage (planned)
+- **Native**: `FileSubscriptionStorage` with file-level locking for atomic operations
+- **WASM**: Storage backed by browser localStorage (planned for future release)
 
 ### Transport Integration
 
@@ -180,15 +282,31 @@ cargo test --test concurrency_tests
 4. **Signature Verification**: Always verify signatures before processing
 5. **Replay Protection**: Maintain nonce database to detect replays
 
+## Status
+
+- Core subscription protocol with Ed25519 signatures and replay protection
+- Payment requests with expiration and metadata support
+- Auto-pay rules with spending limits and atomic enforcement
+- Invoice generation with structured line items, shipping, and tax
+- Subscription discovery from Pubky directory
+- Fallback payment handling for method failures
+- Modification tracking and history
+- Proration calculations for mid-cycle changes
+- Background monitoring for native platforms
+- Comprehensive test coverage (44 unit tests, 12 property tests, 6 concurrency tests, 7 spending limit tests)
+
 ## Related Components
 
 This crate integrates with other Paykit components:
 
-- **[paykit-lib](../paykit-lib/README.md)** - Core payment directory operations (may be used for directory features)
+- **[paykit-lib](../paykit-lib/README.md)** - Core payment directory operations and method discovery
 - **[paykit-interactive](../paykit-interactive/README.md)** - Real-time payment execution over encrypted channels
+- **[paykit-mobile](../paykit-mobile/README.md)** - FFI bindings for iOS and Android mobile integration
 - **[paykit-demo-core](../paykit-demo-core/)** - Shared demo logic that uses subscriptions
 - **[paykit-demo-cli](../paykit-demo-cli/README.md)** - CLI demo with subscription management features
 - **[paykit-demo-web](../paykit-demo-web/README.md)** - Web demo with subscription and auto-pay features
+- **[paykit-mobile/ios-demo](../paykit-mobile/ios-demo/README.md)** - iOS demo with subscription features
+- **[paykit-mobile/android-demo](../paykit-mobile/android-demo/README.md)** - Android demo with subscription features
 
 ## Dependencies
 

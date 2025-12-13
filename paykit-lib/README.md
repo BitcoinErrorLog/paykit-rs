@@ -346,12 +346,128 @@ if let Some(lnd_config) = get_lnd_config_from_env() {
 
 See [docs/TESTNET_SETUP.md](../docs/TESTNET_SETUP.md) for detailed setup instructions.
 
+## Additional Modules
+
+Beyond the core directory API, this crate provides several additional modules for payment processing:
+
+### Payment Method Plugins (`methods`)
+
+Extensible plugin system for payment methods with validation and execution:
+
+```rust
+use paykit_lib::methods::{PaymentMethodRegistry, OnchainPlugin, LightningPlugin};
+
+let registry = PaymentMethodRegistry::new();
+registry.register(Box::new(OnchainPlugin::new()));
+registry.register(Box::new(LightningPlugin::new()));
+
+// Validate an endpoint before publishing
+let plugin = registry.get(&MethodId("onchain".into())).unwrap();
+let result = plugin.validate_endpoint(&EndpointData("bc1q...".into()));
+assert!(result.valid);
+```
+
+### Health Monitoring (`health`)
+
+Monitor payment method health status for automatic failover:
+
+```rust
+use paykit_lib::health::{HealthMonitor, HealthStatus};
+
+let monitor = HealthMonitor::new(registry);
+monitor.check_method(&MethodId("lightning".into())).await?;
+
+let status = monitor.get_status(&MethodId("lightning".into()));
+if status.is_usable() {
+    // Method is healthy or degraded but usable
+}
+```
+
+### Method Selection (`selection`)
+
+Automatic payment method selection based on preferences, amount, and constraints:
+
+```rust
+use paykit_lib::selection::{PaymentMethodSelector, SelectionPreferences};
+
+let selector = PaymentMethodSelector::with_defaults();
+let prefs = SelectionPreferences::balanced(); // or cost_optimized(), speed_optimized(), etc.
+
+let result = selector.select(&supported_payments, &amount, &prefs)?;
+println!("Selected: {} (reason: {})", result.primary, result.reason);
+```
+
+### Private Endpoints (`private_endpoints`)
+
+Encrypted private payment endpoints for sensitive transactions:
+
+```rust
+use paykit_lib::private_endpoints::{PrivateEndpointManager, EncryptionKey};
+
+let manager = PrivateEndpointManager::new(encryption_key);
+let encrypted = manager.encrypt_endpoint(&endpoint_data).await?;
+let decrypted = manager.decrypt_endpoint(&encrypted).await?;
+```
+
+### Key Rotation (`rotation`)
+
+Manage key rotation policies and automatic rotation:
+
+```rust
+use paykit_lib::rotation::{RotationManager, RotationPolicy};
+
+let policy = RotationPolicy::time_based(Duration::from_secs(86400 * 30)); // 30 days
+let manager = RotationManager::new(policy);
+manager.check_and_rotate(&keypair).await?;
+```
+
+### Secure Storage (`secure_storage`)
+
+Platform-specific secure storage for sensitive data:
+
+- **iOS**: Keychain via `security-framework`
+- **Android**: EncryptedSharedPreferences
+- **Desktop**: OS credential stores (macOS Keychain, Linux Secret Service, Windows Credential Manager)
+- **Web**: Browser localStorage (encrypted)
+- **Memory**: In-memory storage for testing
+
+```rust
+use paykit_lib::secure_storage::{SecureStorage, SecureStorageProvider};
+
+let storage = SecureStorageProvider::default();
+storage.store("key", b"secret_data").await?;
+let data = storage.retrieve("key").await?;
+```
+
+### Routing (`routing`)
+
+Payment routing and pathfinding for multi-hop payments.
+
+### URI Parsing (`uri`)
+
+Parse and generate Paykit URIs for payment requests:
+
+```rust
+use paykit_lib::uri::{parse_uri, PaykitUri};
+
+let uri = parse_uri("paykit:pubkey123?method=lightning&amount=1000")?;
+println!("Payee: {}", uri.payee);
+println!("Method: {:?}", uri.method);
+```
+
 ## Status
 
 - Public directory API and Pubky adapters in place.
 - Integration tests using `pubky-testnet::EphemeralTestnet` (opt-in, requires network).
 - LND and Esplora executors with `http-executor` feature.
 - Testnet configuration helpers for development.
+- Payment method plugins with validation and execution.
+- Health monitoring for automatic failover.
+- Method selection with preference-based strategies.
+- Private endpoint encryption for sensitive transactions.
+- Key rotation management with configurable policies.
+- Platform-specific secure storage (iOS, Android, Desktop, Web).
+- URI parsing for payment request handling.
 
 ## Documentation
 

@@ -119,14 +119,113 @@ cargo test --all-features
 
 ## Modules
 
-- **transport**: `PubkyNoiseChannel` implementation for encrypted communication
-- **rate_limit**: `HandshakeRateLimiter` for DoS protection
+### Core Modules
+
+- **transport**: `PubkyNoiseChannel` implementation for encrypted communication (TCP and WebSocket)
+- **rate_limit**: `HandshakeRateLimiter` for DoS protection with configurable limits
+- **connection_limit**: Connection limiting to prevent resource exhaustion
 - **manager**: `PaykitInteractiveManager` for payment flow orchestration
-- **storage**: `PaykitStorage` trait for receipt persistence
+- **storage**: `PaykitStorage` trait for receipt persistence with smart checkout helpers
+
+### Advanced Features
+
+- **metadata**: Metadata validation and parsing for orders, shipping, taxes, and payments
+- **proof**: Payment proof generation and verification with multiple proof types
+- **status**: Payment status tracking and lifecycle management
+- **metrics**: Performance metrics and monitoring for payment flows
+
+### Smart Checkout
+
+The storage module includes smart checkout helpers that automatically select the best payment method:
+
+```rust
+use paykit_interactive::storage::{smart_checkout, CheckoutResult};
+
+// Automatically select best method from available options
+let result = smart_checkout(
+    &supported_payments,
+    &amount,
+    &user_preferences,
+).await?;
+
+match result {
+    CheckoutResult::Success { method, endpoint } => {
+        // Proceed with payment using selected method
+    }
+    CheckoutResult::NoMethodAvailable => {
+        // Handle no available methods
+    }
+    CheckoutResult::Error(e) => {
+        // Handle error
+    }
+}
+```
+
+### Metadata Validation
+
+Validate and parse structured metadata for payment requests:
+
+```rust
+use paykit_interactive::metadata::{OrderMetadata, ShippingMetadata, PaymentMetadata};
+
+let order = OrderMetadata::new("order_123")
+    .with_items(vec![/* items */])
+    .with_total(Amount::from_sats(10000));
+
+let shipping = ShippingMetadata::new(ShippingAddress::new(/* ... */))
+    .with_method(ShippingMethod::Standard);
+
+let payment_metadata = PaymentMetadata::new()
+    .with_order(order)
+    .with_shipping(shipping);
+```
+
+### Payment Proof
+
+Generate and verify cryptographic proofs of payment:
+
+```rust
+use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
+
+// Generate proof after payment
+let proof = PaymentProof::new(
+    ProofType::LightningPreimage,
+    preimage_bytes,
+    &receipt,
+)?;
+
+// Verify proof
+let verifier = ProofVerifierRegistry::default();
+let result = verifier.verify(&proof, &receipt)?;
+assert!(result.is_valid());
+```
+
+### Status Tracking
+
+Track payment status through the lifecycle:
+
+```rust
+use paykit_interactive::status::{PaymentStatus, PaymentStatusTracker};
+
+let tracker = PaymentStatusTracker::new();
+tracker.update_status(&receipt_id, PaymentStatus::Pending).await?;
+tracker.update_status(&receipt_id, PaymentStatus::Confirmed).await?;
+
+let status = tracker.get_status(&receipt_id).await?;
+```
+
+## Transport Support
+
+The crate supports multiple transport backends:
+
+- **TCP**: Direct TCP connections with Noise protocol
+- **WebSocket**: WebSocket connections for browser and web applications
+- **Custom**: Implement `PaykitNoiseChannel` trait for custom transports
 
 ## Documentation
 
-- [Build Instructions](BUILD.md) (if exists)
+- [Build Instructions](BUILD.md)
+- [Noise Integration Guide](../docs/NOISE_INTEGRATION.md)
 - [Repository Root README](../README.md)
 - [Paykit Roadmap](../PAYKIT_ROADMAP.md)
 

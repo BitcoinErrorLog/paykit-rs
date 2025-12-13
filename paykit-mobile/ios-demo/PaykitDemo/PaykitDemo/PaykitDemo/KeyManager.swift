@@ -14,6 +14,7 @@
 //   print("Your public key: \(keypair.publicKeyZ32)")
 
 import Foundation
+import Combine
 
 /// Manages cryptographic keys for Paykit
 ///
@@ -111,7 +112,7 @@ public final class KeyManager: ObservableObject {
     ///
     /// - Returns: The public key or nil if no identity exists
     public func getCurrentPublicKeyHex() -> String? {
-        try? keychain.retrieveString(key: Keys.publicKeyHex)
+        try? keychain.retrieveString(key: Keys.publicKey)
     }
     
     /// Delete the current identity

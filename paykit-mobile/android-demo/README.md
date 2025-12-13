@@ -1,39 +1,70 @@
 # Paykit Android Demo
 
-A comprehensive Android demo application showcasing all Paykit features including auto-pay, subscriptions, and payment requests.
+A comprehensive Android demo application showcasing Paykit features including key management, auto-pay, subscriptions, and payment requests.
+
+## Current Status
+
+> **Demo Application**: This is a demonstration app. Some features use real implementations while others use sample data for UI demonstration.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Key Management | **Real** | Ed25519/X25519 via Rust FFI, EncryptedSharedPreferences |
+| Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
+| Payment Methods | UI Only | Static list, not connected to PaykitClient |
+| Health Monitoring | UI Only | Displays mock "Healthy" status |
+| Subscriptions | UI Only | Empty state, no sample data |
+| Auto-Pay | UI Only | Basic UI state only |
+| Payment Requests | UI Only | Sample data, not persisted |
+| Directory Operations | Not Implemented | Requires Pubky transport |
+| Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
 
-### Payment Methods
+### Key Management (Real)
+
+The demo includes full cryptographic key management via Rust FFI:
+
+- **Ed25519 Identity Keys**: Generate real pkarr-compatible identity keypairs
+- **X25519 Device Keys**: Derive Noise protocol encryption keys via HKDF
+- **EncryptedSharedPreferences**: Secure storage with AES-256-GCM
+- **Encrypted Backup**: Export/import with password-protected encryption (Argon2 + AES-GCM)
+- **z-base32 Format**: Public keys displayed in pkarr-compatible format
+
+Key files:
+- `KeyManager.kt` - High-level key management API
+- `paykit_mobile.kt` - UniFFI generated Kotlin bindings
+
+### Payment Methods (UI Demo)
+
 - View available payment methods (Lightning, On-Chain)
-- Health status monitoring for each method
-- Endpoint validation
-- Smart method selection with customizable strategies
+- Health status monitoring (static data)
+- Endpoint validation UI
+- Smart method selection UI
 
-### Subscriptions
-- Create and manage subscriptions
-- Proration calculator for upgrades/downgrades
-- Multiple billing frequencies (daily, weekly, monthly)
-- Active subscription tracking
+### Subscriptions (UI Demo)
 
-### Auto-Pay
+- Create and manage subscriptions (placeholder)
+- Proration calculator planned
+- Multiple billing frequencies
+
+### Auto-Pay (UI Demo)
+
 - Enable/disable auto-pay globally
 - Set global daily spending limits
-- Per-peer spending limits with usage tracking
-- Custom auto-pay rules with conditions
-- Recent auto-payment history
-- Visual spending limit progress bars
+- Basic UI state management
 
-### Payment Requests
+### Payment Requests (UI Demo)
+
 - Create payment requests with optional expiry
 - Accept/decline incoming requests
 - Request history with status tracking
-- Support for Lightning and On-Chain
 
 ### Settings
+
 - Network selection (Mainnet/Testnet/Regtest)
 - Security settings (biometric, background lock)
 - Notification preferences
+- **Key management** (real implementation)
 - Developer options for testing
 
 ## Project Structure
@@ -41,22 +72,29 @@ A comprehensive Android demo application showcasing all Paykit features includin
 ```
 android-demo/
 ├── app/
-│   ├── build.gradle.kts        # App build configuration
+│   ├── build.gradle.kts          # App build configuration
 │   └── src/main/
 │       ├── AndroidManifest.xml
-│       └── java/com/paykit/demo/
-│           ├── PaykitDemoApp.kt      # Application class
-│           ├── MainActivity.kt       # Main activity with navigation
-│           ├── ui/
-│           │   ├── AutoPayScreen.kt      # Auto-pay settings UI
-│           │   ├── PaymentMethodsScreen.kt # Methods UI
-│           │   ├── SubscriptionsScreen.kt  # Subscriptions UI
-│           │   ├── PaymentRequestsScreen.kt # Requests UI
-│           │   ├── SettingsScreen.kt       # Settings UI
-│           │   └── theme/
-│           │       └── Theme.kt          # Material 3 theme
-│           └── viewmodel/
-│               └── AutoPayViewModel.kt   # Auto-pay logic
+│       ├── jniLibs/              # Native libraries (.so files)
+│       │   ├── arm64-v8a/
+│       │   └── x86_64/
+│       └── java/com/paykit/
+│           ├── demo/
+│           │   ├── PaykitDemoApp.kt      # Application class
+│           │   ├── MainActivity.kt       # Main activity with navigation
+│           │   ├── ui/
+│           │   │   ├── AutoPayScreen.kt      # Auto-pay settings UI
+│           │   │   ├── PaymentMethodsScreen.kt # Methods UI (static)
+│           │   │   ├── SubscriptionsScreen.kt  # Subscriptions UI
+│           │   │   ├── PaymentRequestsScreen.kt # Requests UI
+│           │   │   ├── SettingsScreen.kt       # Settings with key management
+│           │   │   └── theme/
+│           │   │       └── Theme.kt          # Material 3 theme
+│           │   └── viewmodel/
+│           │       └── AutoPayViewModel.kt   # Auto-pay logic (stub)
+│           └── mobile/
+│               ├── KeyManager.kt         # Real key management
+│               └── paykit_mobile.kt      # UniFFI bindings
 ├── build.gradle.kts            # Root build configuration
 └── settings.gradle.kts         # Project settings
 ```
@@ -66,6 +104,7 @@ android-demo/
 - Android SDK 26+ (Android 8.0 Oreo)
 - Kotlin 1.9+
 - Android Studio Hedgehog (2023.1.1) or later
+- Rust toolchain (for building paykit-mobile)
 
 ## Dependencies
 
@@ -73,71 +112,145 @@ The demo uses:
 - **Jetpack Compose** - Modern UI toolkit
 - **Material 3** - Latest Material Design
 - **Navigation Compose** - Type-safe navigation
-- **EncryptedSharedPreferences** - Secure storage
+- **EncryptedSharedPreferences** - Secure storage (androidx.security:security-crypto)
+- **JNA** - Java Native Access for UniFFI
 - **Kotlin Coroutines** - Async operations
 
 ## Setup
 
-### 1. Copy Storage Implementations
-
-Copy the Kotlin storage files from `paykit-mobile/kotlin/` to your project:
-
-```
-kotlin/
-├── EncryptedPreferencesStorage.kt  # Base secure storage
-├── AutoPayStorage.kt               # Auto-pay specific storage
-└── PrivateEndpointStorage.kt       # Private endpoint storage
-```
-
-### 2. Build Paykit Mobile Library
-
-Build the Paykit mobile library for Android:
+### 1. Build Native Libraries
 
 ```bash
-cd paykit-mobile
+cd paykit-rs-master/paykit-mobile
+
+# Install cargo-ndk if needed
+cargo install cargo-ndk
 
 # Build for Android targets
-cargo ndk -t armeabi-v7a -t arm64-v8a -t x86_64 -o android-demo/app/src/main/jniLibs build --release
+cargo ndk -t arm64-v8a -t x86_64 \
+    -o android-demo/app/src/main/jniLibs \
+    build --release
 
 # Generate Kotlin bindings
 uniffi-bindgen generate \
-    --library target/release/libpaykit_mobile.so \
-    -l kotlin \
-    -o kotlin
+    --library target/release/libpaykit_mobile.dylib \
+    --language kotlin \
+    --out-dir kotlin/generated
 ```
 
-### 3. Add Paykit Bindings
+### 2. Copy Bindings
 
-Copy the generated bindings to your project:
+```bash
+# Copy generated bindings
+cp kotlin/generated/com/paykit/mobile/paykit_mobile.kt \
+   android-demo/app/src/main/java/com/paykit/mobile/
 
+# Copy KeyManager
+cp kotlin/KeyManager.kt \
+   android-demo/app/src/main/java/com/paykit/mobile/
 ```
-app/src/main/java/uniffi/paykit_mobile/paykit_mobile.kt
+
+### 3. Patch Kotlin Bindings
+
+The generated bindings have a known issue with `message` property conflicts. Run:
+
+```bash
+python3 << 'EOF'
+import re
+with open('android-demo/app/src/main/java/com/paykit/mobile/paykit_mobile.kt', 'r') as f:
+    content = f.read()
+content = re.sub(r'val `message`: String', 'val errorMessage: String', content)
+content = re.sub(r'get\(\) = "message=\$\{ `message` \}"', 'get() = "message=${ errorMessage }"', content)
+with open('android-demo/app/src/main/java/com/paykit/mobile/paykit_mobile.kt', 'w') as f:
+    f.write(content)
+print("Patched successfully")
+EOF
 ```
 
-### 4. Configure build.gradle.kts
+### 4. Build and Run
 
-Ensure the native libraries are included:
+```bash
+cd android-demo
+./gradlew assembleDebug
+./gradlew installDebug
+```
+
+Or open in Android Studio and run.
+
+## Security Model
+
+### EncryptedSharedPreferences
+
+All sensitive data is stored using Android's EncryptedSharedPreferences:
+
+- **Key Encryption**: AES-256-SIV
+- **Value Encryption**: AES-256-GCM
+- **Master Key**: Hardware-backed keystore when available
+
+### Key Backup Security
+
+Exported backups use:
+
+- **Key Derivation**: Argon2id with random salt
+- **Encryption**: AES-256-GCM
+- **Integrity**: Authenticated encryption prevents tampering
+
+### What's NOT Secure (Demo Limitations)
+
+- Auto-pay settings not persisted securely
+- No biometric authentication enforced
+- Sample data visible in production builds
+
+## Using KeyManager
 
 ```kotlin
-android {
-    sourceSets {
-        main {
-            jniLibs.srcDirs("src/main/jniLibs")
+import com.paykit.mobile.KeyManager
+
+class MyActivity : ComponentActivity() {
+    private lateinit var keyManager: KeyManager
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Initialize KeyManager with context
+        keyManager = KeyManager(applicationContext)
+        
+        // Check for existing identity
+        if (keyManager.hasIdentity.value) {
+            Log.d("Paykit", "Public Key: ${keyManager.publicKeyZ32.value}")
+        }
+        
+        // Generate new identity
+        try {
+            val keypair = keyManager.generateNewIdentity()
+            Log.d("Paykit", "New key: ${keypair.publicKeyZ32}")
+        } catch (e: Exception) {
+            Log.e("Paykit", "Error: ${e.message}")
+        }
+        
+        // Export encrypted backup
+        try {
+            val backup = keyManager.exportBackup("my-secure-password")
+            val json = keyManager.backupToString(backup)
+            // Save json to file or share
+        } catch (e: Exception) {
+            Log.e("Paykit", "Export failed: ${e.message}")
+        }
+        
+        // Import from backup
+        try {
+            val backup = keyManager.backupFromString(jsonString)
+            val keypair = keyManager.importBackup(backup, "my-secure-password")
+        } catch (e: Exception) {
+            Log.e("Paykit", "Import failed: ${e.message}")
         }
     }
 }
 ```
 
-### 5. Build and Run
-
-```bash
-./gradlew assembleDebug
-./gradlew installDebug
-```
-
 ## Auto-Pay Flow
 
-The auto-pay system works as follows:
+The auto-pay system architecture (UI demonstration only):
 
 ```
 Payment Request Received
@@ -173,32 +286,67 @@ Payment Request Received
                    Approval
 ```
 
-## Security Features
-
-### Encrypted Storage
-- All sensitive data stored using `EncryptedSharedPreferences`
-- AES-256-GCM encryption for values
-- AES-256-SIV encryption for keys
-- Hardware-backed keystore when available
-
-### Biometric Protection
-- Optional biometric requirement for payments
-- StrongBox support on compatible devices
-- Configurable threshold for biometric prompts
-
-### Spending Limits
-- Global daily limits with automatic reset
-- Per-peer limits with configurable periods
-- Real-time usage tracking
-
 ## Testing
 
-The demo includes mock data for testing without real payments:
-- Sample peer spending limits
-- Sample auto-pay rules
-- Sample recent payments
+### Real Features
 
-For real testing, enable testnet mode in Settings.
+Test the key management features:
+1. Go to Settings → Manage Keys
+2. Generate a new keypair (or one is created automatically)
+3. Export with password
+4. Import from backup
+
+### Demo Features
+
+The following use static/sample data for UI demonstration:
+- Payment Methods: Shows 2 hardcoded methods
+- Health Status: Always shows "Healthy"
+- Subscriptions: Empty state
+- Auto-Pay: Basic toggle only
+- Payment Requests: Sample data
+
+## Roadmap
+
+Planned improvements to make this a full production demo:
+
+1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
+2. **Persist Data**: Store subscriptions/auto-pay in EncryptedPrefs
+3. **Add Contacts**: Contact management with directory lookup
+4. **Add Dashboard**: Overview with statistics
+5. **Noise Integration**: Real encrypted payments
+
+## Troubleshooting
+
+### Native Library Not Found
+
+```
+java.lang.UnsatisfiedLinkError: dlopen failed
+```
+
+Ensure native libraries are in the correct location:
+```
+app/src/main/jniLibs/
+├── arm64-v8a/
+│   └── libpaykit_mobile.so
+└── x86_64/
+    └── libpaykit_mobile.so
+```
+
+### JNA Issues
+
+If you see JNA-related errors, ensure the dependency is correct:
+```kotlin
+implementation("net.java.dev.jna:jna:5.14.0@aar")
+```
+
+### Kotlin Binding Errors
+
+If you see "Conflicting declarations" errors, re-run the patching script above.
+
+## Related Documentation
+
+- [paykit-mobile README](../README.md) - FFI library documentation
+- [iOS Demo README](../ios-demo/README.md) - iOS equivalent
 
 ## License
 

@@ -3,6 +3,7 @@ target/
 
 # Archive folder for review/audit documents
 /archive/
+docs/archive/
 
 # Xcode user-specific files
 *.xcuserstate

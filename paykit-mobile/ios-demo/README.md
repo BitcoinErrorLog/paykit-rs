@@ -8,8 +8,11 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| Dashboard | **Real** | Overview with stats, recent activity, quick actions |
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, Keychain storage |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
+| Contacts | **Real** | Keychain-backed contact storage |
+| Receipts | **Real** | Payment history with search and filtering |
 | Payment Methods | UI Only | Static list, not connected to PaykitClient |
 | Health Monitoring | UI Only | Displays mock "Healthy" status |
 | Subscriptions | UI Only | Sample data, not persisted |
@@ -19,6 +22,25 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
+
+### Dashboard (Real)
+
+The dashboard provides an overview of your payment activity:
+
+- **Stats Cards**: Total sent/received, contact count, pending transactions
+- **Recent Activity**: Latest receipts with status indicators
+- **Quick Actions**: Send, Receive, and Scan buttons
+- **Pull to Refresh**: Update all statistics
+
+### Receipts (Real)
+
+Full payment history management with Keychain persistence:
+
+- **Receipt List**: All payments with direction and status indicators
+- **Search**: Find receipts by counterparty, memo, or key
+- **Filtering**: Filter by direction (sent/received) or status
+- **Detail View**: Full receipt details with transaction info
+- **Statistics**: Total sent/received, completed/pending counts
 
 ### Key Management (Real)
 
@@ -90,12 +112,20 @@ PaykitDemo/
 ├── PaykitMobile.swift           # UniFFI generated Swift bindings
 ├── PaykitMobileFFI.h            # C header for FFI
 ├── Models/
-│   └── AutoPayModels.swift      # Auto-pay data models
+│   ├── AutoPayModels.swift      # Auto-pay data models
+│   ├── Contact.swift            # Contact data model
+│   └── Receipt.swift            # Receipt data model
+├── Storage/
+│   ├── ContactStorage.swift     # Keychain-backed contact storage
+│   └── ReceiptStorage.swift     # Keychain-backed receipt storage
 ├── ViewModels/
 │   └── AutoPayViewModel.swift   # Auto-pay business logic (sample data)
 └── Views/
     ├── ContentView.swift        # Main tab navigation
+    ├── DashboardView.swift      # Dashboard with stats and activity
     ├── PaymentMethodsView.swift # Payment methods UI (static)
+    ├── ContactsView.swift       # Contact management
+    ├── ReceiptsView.swift       # Receipt history with filtering
     ├── SubscriptionsView.swift  # Subscriptions UI (sample data)
     ├── AutoPayView.swift        # Auto-pay settings UI (sample data)
     ├── PaymentRequestsView.swift # Payment requests UI (sample data)
@@ -265,13 +295,16 @@ The following use sample data for UI demonstration:
 
 ## Roadmap
 
-Planned improvements to make this a full production demo:
+Completed improvements:
+- ✅ **Contacts**: Contact management with Keychain persistence
+- ✅ **Dashboard**: Overview with statistics and recent activity
+- ✅ **Receipts**: Payment history with search and filtering
 
+Planned improvements:
 1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
 2. **Persist Data**: Store subscriptions/auto-pay in Keychain
-3. **Add Contacts**: Contact management with directory lookup
-4. **Add Dashboard**: Overview with statistics
-5. **Noise Integration**: Real encrypted payments
+3. **Directory Lookup**: Fetch contacts from Pubky directory
+4. **Noise Integration**: Real encrypted payments via Noise protocol
 
 ## Related Documentation
 

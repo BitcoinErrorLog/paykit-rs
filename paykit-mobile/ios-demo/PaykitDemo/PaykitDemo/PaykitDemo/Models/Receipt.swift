@@ -45,6 +45,12 @@ struct Receipt: Identifiable, Codable, Equatable {
     var memo: String?
     /// Transaction ID (if applicable)
     var txId: String?
+    /// Payment proof (optional, JSON string)
+    var proof: String?
+    /// Whether proof has been verified
+    var proofVerified: Bool = false
+    /// Timestamp when proof was verified
+    var proofVerifiedAt: Date?
     
     init(
         direction: PaymentDirection,
@@ -65,6 +71,9 @@ struct Receipt: Identifiable, Codable, Equatable {
         self.completedAt = nil
         self.memo = memo
         self.txId = nil
+        self.proof = nil
+        self.proofVerified = false
+        self.proofVerifiedAt = nil
     }
     
     /// Mark as completed
@@ -146,8 +155,17 @@ extension Receipt {
             createdAt: Date(timeIntervalSince1970: Double(ffiReceipt.createdAt)),
             completedAt: nil,
             memo: nil,
-            txId: nil
+            txId: nil,
+            proof: nil,
+            proofVerified: false,
+            proofVerifiedAt: nil
         )
+    }
+    
+    /// Mark proof as verified
+    mutating func markProofVerified() {
+        self.proofVerified = true
+        self.proofVerifiedAt = Date()
     }
 }
 
@@ -166,7 +184,10 @@ extension Receipt {
         createdAt: Date,
         completedAt: Date?,
         memo: String?,
-        txId: String?
+        txId: String?,
+        proof: String?,
+        proofVerified: Bool,
+        proofVerifiedAt: Date?
     ) {
         self.id = id
         self.direction = direction
@@ -179,6 +200,9 @@ extension Receipt {
         self.completedAt = completedAt
         self.memo = memo
         self.txId = txId
+        self.proof = proof
+        self.proofVerified = proofVerified
+        self.proofVerifiedAt = proofVerifiedAt
     }
 }
 

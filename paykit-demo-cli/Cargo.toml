@@ -17,9 +17,9 @@ path = "src/main.rs"
 
 [dependencies]
 paykit-demo-core = { path = "../paykit-demo-core" }
-paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
+paykit-lib = { path = "../paykit-lib", features = ["pubky", "file-storage"] }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
-paykit-interactive = { path = "../paykit-interactive" }
+paykit-interactive = { path = "../paykit-interactive", features = ["http-executor"] }
 pubky = "0.6.0-rc.6"
 pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
 clap = { version = "4", features = ["derive", "color"] }

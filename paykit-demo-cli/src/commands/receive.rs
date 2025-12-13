@@ -37,6 +37,7 @@ impl ReceiptGenerator for DemoReceiptGenerator {
 /// Simple storage adapter for the demo
 struct DemoStorageAdapter {
     storage: DemoStorage,
+    endpoint_manager: Option<paykit_lib::private_endpoints::PrivateEndpointManager<paykit_lib::private_endpoints::FileStore>>,
 }
 
 #[async_trait::async_trait]
@@ -86,19 +87,33 @@ impl PaykitStorage for DemoStorageAdapter {
 
     async fn save_private_endpoint(
         &self,
-        _peer: &paykit_lib::PublicKey,
-        _method: &paykit_lib::MethodId,
-        _endpoint: &str,
+        peer: &paykit_lib::PublicKey,
+        method: &paykit_lib::MethodId,
+        endpoint: &str,
     ) -> paykit_interactive::Result<()> {
-        // For demo, we don't persist private endpoints
+        if let Some(ref manager) = self.endpoint_manager {
+            let endpoint_data = paykit_lib::EndpointData::new(endpoint.to_string());
+            manager
+                .store_endpoint(peer.clone(), method.clone(), endpoint_data, None)
+                .await
+                .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))?;
+            return Ok(());
+        }
+        // Fallback: store in memory (demo only)
         Ok(())
     }
 
     async fn get_private_endpoint(
         &self,
-        _peer: &paykit_lib::PublicKey,
-        _method: &paykit_lib::MethodId,
+        peer: &paykit_lib::PublicKey,
+        method: &paykit_lib::MethodId,
     ) -> paykit_interactive::Result<Option<String>> {
+        if let Some(ref manager) = self.endpoint_manager {
+            if let Some(endpoint_data) = manager.get_endpoint(peer, method).await
+                .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))? {
+                return Ok(Some(endpoint_data.0));
+            }
+        }
         Ok(None)
     }
 
@@ -106,6 +121,8 @@ impl PaykitStorage for DemoStorageAdapter {
         &self,
         _peer: &paykit_lib::PublicKey,
     ) -> paykit_interactive::Result<Vec<(paykit_lib::MethodId, String)>> {
+        // FileStore doesn't expose list_for_peer through manager
+        // Would need direct store access
         Ok(vec![])
     }
 
@@ -114,6 +131,8 @@ impl PaykitStorage for DemoStorageAdapter {
         _peer: &paykit_lib::PublicKey,
         _method: &paykit_lib::MethodId,
     ) -> paykit_interactive::Result<()> {
+        // FileStore doesn't expose remove directly through manager
+        // Would need to access store directly
         Ok(())
     }
 }
@@ -151,8 +170,48 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
     // Setup storage and manager
     let demo_storage = DemoStorage::new(storage_dir.join("data"));
     demo_storage.init()?;
+    
+    // Setup private endpoint storage with encryption
+    let endpoint_manager = {
+        use paykit_lib::private_endpoints::{FileStore, PrivateEndpointManager, encryption};
+        
+        let endpoints_dir = storage_dir.join("private_endpoints");
+        let key_path = storage_dir.join(".endpoint_key");
+        
+        // Try to load existing key, or generate new one
+        let key = if key_path.exists() {
+            let key_bytes = std::fs::read(&key_path)
+                .context("Failed to read endpoint encryption key")?;
+            if key_bytes.len() != 32 {
+                anyhow::bail!("Invalid key length");
+            }
+            let mut key_array = [0u8; 32];
+            key_array.copy_from_slice(&key_bytes);
+            key_array
+        } else {
+            // Generate new key
+            let key = encryption::generate_key();
+            let key_array = *key; // Dereference Zeroizing wrapper
+            std::fs::write(&key_path, &key_array)
+                .context("Failed to save endpoint encryption key")?;
+            // Set restrictive permissions (Unix only)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+                    .ok();
+            }
+            key_array
+        };
+        
+        let store = FileStore::new_encrypted(&endpoints_dir, key)
+            .context("Failed to create encrypted endpoint store")?;
+        Some(PrivateEndpointManager::new(store))
+    };
+    
     let storage_adapter = Arc::new(Box::new(DemoStorageAdapter {
         storage: demo_storage,
+        endpoint_manager,
     }) as Box<dyn PaykitStorage>);
     let generator = Arc::new(Box::new(DemoReceiptGenerator) as Box<dyn ReceiptGenerator>);
     let manager = PaykitInteractiveManager::new(storage_adapter, generator);

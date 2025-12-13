@@ -293,6 +293,86 @@ impl WasmReceiptStorage {
         Ok(stats.into())
     }
 
+    /// Verify payment proof for a receipt
+    ///
+    /// # Arguments
+    ///
+    /// * `receipt_id` - The receipt ID to verify
+    ///
+    /// # Returns
+    ///
+    /// JS object with verification result:
+    /// - `valid: boolean` - Whether proof is valid
+    /// - `errors: string[]` - Array of error messages if invalid
+    /// - `details: object` - Additional verification details
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let storage = WasmReceiptStorage::new();
+    /// let result = storage.verify_proof("receipt_123").await?;
+    /// ```
+    pub async fn verify_proof(&self, receipt_id: &str) -> Result<JsValue, JsValue> {
+        use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
+        use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
+        
+        // Get receipt
+        let receipt_json = self.get_receipt(receipt_id).await?
+            .ok_or_else(|| utils::js_error(&format!("Receipt not found: {}", receipt_id)))?;
+        
+        let receipt: PaykitReceipt = serde_json::from_str(&receipt_json)
+            .map_err(|e| utils::js_error(&format!("Failed to parse receipt: {}", e)))?;
+        
+        let proof_json = receipt.proof
+            .ok_or_else(|| utils::js_error("Receipt has no proof"))?;
+        
+        // Parse proof
+        let proof: PaymentProof = serde_json::from_value(proof_json.clone())
+            .map_err(|e| utils::js_error(&format!("Failed to parse proof: {}", e)))?;
+        
+        // Verify based on proof type
+        let verification_result = match proof.proof_type {
+            ProofType::LightningPreimage { .. } => {
+                let verifier = RealLightningProofVerifier::new();
+                verifier.verify(&proof).await
+            }
+            ProofType::BitcoinTxid { .. } => {
+                // Bitcoin verification requires Esplora API - not available in WASM
+                return Err(utils::js_error("Bitcoin proof verification requires server-side Esplora API"));
+            }
+            ProofType::Custom { .. } => {
+                return Err(utils::js_error("Custom proof verification not implemented"));
+            }
+        };
+        
+        // Build result object
+        let result = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&result, &"valid".into(), &verification_result.valid.into());
+        
+        let errors_array = js_sys::Array::new();
+        for error in &verification_result.errors {
+            errors_array.push(&JsValue::from_str(error));
+        }
+        let _ = js_sys::Reflect::set(&result, &"errors".into(), &errors_array.into());
+        
+        if let Some(details) = verification_result.details {
+            let details_js = serde_wasm_bindgen::to_value(&details)
+                .map_err(|e| utils::js_error(&format!("Failed to serialize details: {}", e)))?;
+            let _ = js_sys::Reflect::set(&result, &"details".into(), &details_js);
+        }
+        
+        // Update receipt if verification succeeded
+        if verification_result.valid {
+            let mut updated_receipt = receipt;
+            updated_receipt = updated_receipt.mark_proof_verified();
+            let updated_json = serde_json::to_string(&updated_receipt)
+                .map_err(|e| utils::js_error(&format!("Failed to serialize receipt: {}", e)))?;
+            self.save_receipt(receipt_id, &updated_json).await?;
+        }
+        
+        Ok(result.into())
+    }
+
     /// Clear all receipts
     ///
     /// # Examples

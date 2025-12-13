@@ -137,7 +137,17 @@ enum Commands {
     },
 
     /// Show payment receipts
-    Receipts,
+    Receipts {
+        /// Receipt ID to show details for
+        #[arg(short, long)]
+        id: Option<String>,
+    },
+    
+    /// Verify payment proof for a receipt
+    VerifyProof {
+        /// Receipt ID to verify
+        receipt_id: String,
+    },
 
     /// QR code operations - display and parse
     Qr {
@@ -654,8 +664,16 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Commands::Receipts => {
-            commands::receipts::run(&storage_dir, cli.verbose).await?;
+        Commands::Receipts { id } => {
+            if let Some(receipt_id) = id {
+                commands::receipts::show(&storage_dir, &receipt_id, cli.verbose).await?;
+            } else {
+                commands::receipts::run(&storage_dir, cli.verbose).await?;
+            }
+        }
+        
+        Commands::VerifyProof { receipt_id } => {
+            commands::receipts::verify_proof(&storage_dir, &receipt_id, cli.verbose).await?;
         }
         Commands::Qr { action } => match action {
             QrAction::Identity => {

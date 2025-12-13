@@ -213,9 +213,9 @@ class PaykitClientWrapper: ObservableObject {
 
 /// Configuration for directory service transport
 enum DirectoryTransportMode {
-    /// Use mock transport (for development/testing)
+    /// Use mock transport (for offline development/testing only)
     case mock
-    /// Use callback-based transport with Pubky SDK
+    /// Use callback-based transport with Pubky SDK (recommended for production)
     case callback(PubkyUnauthenticatedStorageCallback)
 }
 
@@ -226,38 +226,52 @@ enum DirectoryTransportMode {
 ///
 /// ## Usage
 ///
-/// ### Development/Testing (Mock Transport)
-/// ```swift
-/// let service = DirectoryService(mode: .mock)
-/// ```
-///
-/// ### Production (Real Pubky Transport)
+/// ### Production (Real Pubky Transport) - Recommended
 /// ```swift
 /// let pubkyCallback = MyPubkyStorageCallback(pubkyClient: myPubkyClient)
 /// let service = DirectoryService(mode: .callback(pubkyCallback))
 /// ```
+///
+/// ### Development/Testing Only (Mock Transport)
+/// ```swift
+/// let service = DirectoryService(mode: .mock)
+/// ```
+///
+/// ## Important
+///
+/// For real directory operations, you must provide a `PubkyUnauthenticatedStorageCallback`
+/// implementation that connects to the Pubky SDK. See the example implementation below.
 class DirectoryService {
     private let directoryOps: DirectoryOperationsAsync
     private let unauthTransport: UnauthenticatedTransportFfi
     
     /// Whether this service is using mock transport
+    /// 
+    /// Note: Mock mode is only for offline development. In production,
+    /// use callback mode with a real Pubky SDK implementation.
     let isMockMode: Bool
     
-    /// Initialize with mock transport (default for demo)
+    /// Initialize with mock transport (for development only)
+    /// 
+    /// - Warning: Mock mode does not connect to real Pubky infrastructure.
+    ///   For production use, initialize with `DirectoryService(mode: .callback(...))`
     convenience init() {
+        // Default to mock for demo purposes - production apps should use callback mode
         self.init(mode: .mock)
     }
     
     /// Initialize with specified transport mode
-    /// - Parameter mode: Transport mode (mock or callback)
+    /// - Parameter mode: Transport mode (mock for offline dev, callback for production)
     init(mode: DirectoryTransportMode) {
         switch mode {
         case .mock:
             self.unauthTransport = UnauthenticatedTransportFfi.newMock()
             self.isMockMode = true
+            print("⚠️ DirectoryService initialized in MOCK mode - not connected to Pubky")
         case .callback(let callback):
             self.unauthTransport = UnauthenticatedTransportFfi.fromCallback(callback: callback)
             self.isMockMode = false
+            print("✅ DirectoryService initialized with real Pubky transport")
         }
         self.directoryOps = try! createDirectoryOperationsAsync()
     }

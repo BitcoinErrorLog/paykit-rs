@@ -84,6 +84,47 @@ impl DemoStorage {
         Ok(receipts)
     }
 
+    /// Save a receipt as JSON (for interactive protocol receipts)
+    pub fn save_receipt_json(&self, id: &str, json: &str) -> Result<()> {
+        let receipts_dir = self.storage_dir.join("interactive_receipts");
+        std::fs::create_dir_all(&receipts_dir)?;
+        let path = receipts_dir.join(format!("{}.json", id));
+        std::fs::write(&path, json)?;
+        Ok(())
+    }
+
+    /// Get a receipt JSON by ID
+    pub fn get_receipt_json(&self, id: &str) -> Result<Option<String>> {
+        let path = self
+            .storage_dir
+            .join("interactive_receipts")
+            .join(format!("{}.json", id));
+        if !path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(&path)?;
+        Ok(Some(json))
+    }
+
+    /// List all receipt JSONs
+    pub fn list_receipt_jsons(&self) -> Result<Vec<String>> {
+        let receipts_dir = self.storage_dir.join("interactive_receipts");
+        if !receipts_dir.exists() {
+            return Ok(vec![]);
+        }
+        let mut jsons = Vec::new();
+        for entry in std::fs::read_dir(&receipts_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().map(|e| e == "json").unwrap_or(false) {
+                if let Ok(json) = std::fs::read_to_string(&path) {
+                    jsons.push(json);
+                }
+            }
+        }
+        Ok(jsons)
+    }
+
     fn data_path(&self) -> PathBuf {
         self.storage_dir.join("data.json")
     }

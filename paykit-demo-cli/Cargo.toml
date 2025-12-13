@@ -21,11 +21,13 @@ paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive" }
 pubky = "0.6.0-rc.6"
+pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
 clap = { version = "4", features = ["derive", "color"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+async-trait = "0.1"
 
 # Terminal UI
 console = "0.15"

@@ -44,10 +44,10 @@ const PAYKIT_PATH_PREFIX: &str = "/pub/paykit.app/v0/";
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PublishMode {
-    /// Mock mode - saves to localStorage only (default)
-    #[default]
+    /// Mock mode - saves to localStorage only (for offline development)
     Mock,
-    /// Direct mode - attempts direct HTTP PUT to homeserver
+    /// Direct mode - attempts direct HTTP PUT to homeserver (default)
+    #[default]
     Direct,
     /// Proxy mode - routes through a CORS proxy
     Proxy,
@@ -95,13 +95,32 @@ pub struct DirectoryClient {
 
 #[wasm_bindgen]
 impl DirectoryClient {
-    /// Create a new directory client with default settings (mock mode)
+    /// Create a new directory client with default settings (Direct mode)
+    ///
+    /// Direct mode attempts to publish directly to the homeserver.
+    /// If CORS issues occur, use `withProxy()` or `withMockMode()` instead.
     ///
     /// # Arguments
     ///
     /// * `homeserver` - The Pubky homeserver URL (e.g., "https://demo.httprelay.io")
     #[wasm_bindgen(constructor)]
     pub fn new(homeserver: String) -> DirectoryClient {
+        DirectoryClient {
+            homeserver,
+            proxy_url: None,
+            mode: PublishMode::Direct,
+        }
+    }
+
+    /// Create a directory client with mock mode (for offline development)
+    ///
+    /// Mock mode saves to localStorage only, without making network requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `homeserver` - The Pubky homeserver URL (used for query operations)
+    #[wasm_bindgen(js_name = withMockMode)]
+    pub fn with_mock_mode(homeserver: String) -> DirectoryClient {
         DirectoryClient {
             homeserver,
             proxy_url: None,
@@ -575,6 +594,13 @@ mod tests {
     fn test_directory_client_creation() {
         let client = DirectoryClient::new("https://demo.httprelay.io".to_string());
         assert_eq!(client.homeserver, "https://demo.httprelay.io");
+        assert_eq!(client.mode, PublishMode::Direct);
+    }
+
+    #[wasm_bindgen_test]
+    fn test_directory_client_mock_mode() {
+        let client = DirectoryClient::with_mock_mode("https://demo.httprelay.io".to_string());
+        assert_eq!(client.homeserver, "https://demo.httprelay.io");
         assert_eq!(client.mode, PublishMode::Mock);
     }
 
@@ -608,7 +634,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_mock_publish() {
-        let client = DirectoryClient::new("https://demo.httprelay.io".to_string());
+        let client = DirectoryClient::with_mock_mode("https://demo.httprelay.io".to_string());
         let result = client
             .publish_endpoint("testpubkey123", "lightning", "lnurl1234", None)
             .await
@@ -621,7 +647,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn test_mock_remove() {
-        let client = DirectoryClient::new("https://demo.httprelay.io".to_string());
+        let client = DirectoryClient::with_mock_mode("https://demo.httprelay.io".to_string());
 
         // First publish
         client

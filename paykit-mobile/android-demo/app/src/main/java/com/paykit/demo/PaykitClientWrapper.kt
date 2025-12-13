@@ -226,10 +226,10 @@ class PaykitClientWrapper private constructor(
  * Configuration for directory service transport mode.
  */
 sealed class DirectoryTransportMode {
-    /** Use mock transport (for development/testing) */
+    /** Use mock transport (for offline development only - does not connect to Pubky) */
     object Mock : DirectoryTransportMode()
     
-    /** Use callback-based transport with Pubky SDK */
+    /** Use callback-based transport with Pubky SDK (recommended for production) */
     data class Callback(val storage: PubkyUnauthenticatedStorageCallback) : DirectoryTransportMode()
 }
 
@@ -239,16 +239,21 @@ sealed class DirectoryTransportMode {
  * 
  * ## Usage
  * 
- * ### Development/Testing (Mock Transport)
- * ```kotlin
- * val service = DirectoryService(DirectoryTransportMode.Mock)
- * ```
- * 
- * ### Production (Real Pubky Transport)
+ * ### Production (Real Pubky Transport) - Recommended
  * ```kotlin
  * val pubkyCallback = MyPubkyStorageCallback(pubkyClient)
  * val service = DirectoryService(DirectoryTransportMode.Callback(pubkyCallback))
  * ```
+ * 
+ * ### Development Only (Mock Transport)
+ * ```kotlin
+ * val service = DirectoryService(DirectoryTransportMode.Mock)
+ * ```
+ * 
+ * ## Important
+ * 
+ * For real directory operations, you must provide a `PubkyUnauthenticatedStorageCallback`
+ * implementation that connects to the Pubky SDK. See the example implementation below.
  */
 class DirectoryService(mode: DirectoryTransportMode = DirectoryTransportMode.Mock) {
     companion object {
@@ -258,7 +263,12 @@ class DirectoryService(mode: DirectoryTransportMode = DirectoryTransportMode.Moc
     private val directoryOps: DirectoryOperationsAsync
     private val unauthTransport: UnauthenticatedTransportFfi
     
-    /** Whether this service is using mock transport */
+    /** 
+     * Whether this service is using mock transport.
+     * 
+     * Note: Mock mode is only for offline development. In production,
+     * use callback mode with a real Pubky SDK implementation.
+     */
     val isMockMode: Boolean
     
     init {
@@ -266,10 +276,12 @@ class DirectoryService(mode: DirectoryTransportMode = DirectoryTransportMode.Moc
             is DirectoryTransportMode.Mock -> {
                 unauthTransport = UnauthenticatedTransportFfi.newMock()
                 isMockMode = true
+                Log.w(TAG, "⚠️ DirectoryService initialized in MOCK mode - not connected to Pubky")
             }
             is DirectoryTransportMode.Callback -> {
                 unauthTransport = UnauthenticatedTransportFfi.fromCallback(mode.storage)
                 isMockMode = false
+                Log.i(TAG, "✅ DirectoryService initialized with real Pubky transport")
             }
         }
         directoryOps = createDirectoryOperationsAsync()

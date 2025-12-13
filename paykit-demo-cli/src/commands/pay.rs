@@ -1,10 +1,18 @@
 //! Pay command - initiate payment
 //!
-//! Executes real payments when a wallet is configured, otherwise shows simulation.
+//! Executes real payments with Noise protocol negotiation when the recipient is a Pubky URI.
+//! Falls back to direct payment when a Lightning invoice or Bitcoin address is provided.
 
-use anyhow::Result;
-use paykit_demo_core::DemoStorage;
+use anyhow::{Context, Result};
+use paykit_demo_core::{DemoStorage, DirectoryClient};
+use paykit_interactive::{PaykitNoiseMessage, PaykitReceipt};
+use paykit_lib::MethodId;
+use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
+use pubky_noise::{DummyRing, NoiseClient};
 use std::path::Path;
+use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use super::wallet::WalletConfig;
 use crate::ui;
@@ -51,7 +59,22 @@ pub async fn run(
 
     ui::separator();
 
-    // Check wallet configuration
+    // Check if recipient is a Pubky URI - if so, use Noise negotiation
+    if payee_uri.starts_with("pubky://") {
+        return execute_noise_payment(
+            storage_dir,
+            &identity,
+            &payee_uri,
+            amount.as_deref(),
+            currency.as_deref(),
+            method,
+            dry_run,
+            verbose,
+        )
+        .await;
+    }
+
+    // Check wallet configuration for direct payments
     let wallet_config = WalletConfig::load(storage_dir)?;
 
     match method.to_lowercase().as_str() {
@@ -87,6 +110,194 @@ pub async fn run(
     // Log payment attempt
     if !dry_run {
         log_payment_attempt(storage_dir, &payee_uri, &amount_str, method)?;
+    }
+
+    Ok(())
+}
+
+/// Execute payment using Noise protocol to negotiate with recipient
+#[allow(clippy::too_many_arguments)]
+async fn execute_noise_payment(
+    storage_dir: &Path,
+    identity: &paykit_demo_core::Identity,
+    payee_uri: &str,
+    amount: Option<&str>,
+    currency: Option<&str>,
+    method: &str,
+    dry_run: bool,
+    verbose: bool,
+) -> Result<()> {
+    ui::info("Using Noise protocol to negotiate payment...");
+
+    // Parse payee public key from URI
+    let payee_pk_str = payee_uri.strip_prefix("pubky://").unwrap_or(payee_uri);
+    let payee_pk: paykit_lib::PublicKey = payee_pk_str
+        .parse()
+        .context("Failed to parse payee public key")?;
+
+    if dry_run {
+        ui::info("DRY RUN - Would negotiate payment via Noise:");
+        ui::info(&format!("  Payee: {}", payee_uri));
+        if let Some(amt) = amount {
+            ui::info(&format!("  Amount: {} {}", amt, currency.unwrap_or("SAT")));
+        }
+        ui::info(&format!("  Method: {}", method));
+        ui::info("  No actual connection will be made");
+        return Ok(());
+    }
+
+    // First, discover the payee's endpoints
+    let spinner = ui::spinner("Discovering recipient endpoints...");
+    let client = DirectoryClient::new("8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
+    let endpoints = client.query_methods(&payee_pk).await;
+    spinner.finish_and_clear();
+
+    match endpoints {
+        Ok(methods) if !methods.is_empty() => {
+            ui::info(&format!("Found {} endpoint(s)", methods.len()));
+            for m in &methods {
+                ui::key_value(&format!("  {}", m.method_id), &m.endpoint);
+            }
+        }
+        Ok(_) => {
+            ui::warning("No public endpoints found for recipient");
+            ui::info("The recipient may use private endpoints via Noise negotiation");
+        }
+        Err(e) => {
+            if verbose {
+                ui::warning(&format!("Directory query failed: {}", e));
+            }
+        }
+    }
+
+    // For demo, we need the recipient's Noise server address
+    // In production, this would come from the directory or be negotiated
+    ui::separator();
+    ui::info("To complete Noise payment negotiation:");
+    ui::info("  1. Recipient must be running: paykit-demo receive --port <PORT>");
+    ui::info("  2. You need recipient's Noise public key and address");
+    ui::separator();
+
+    // Try to connect if we have connection info (for demo, use localhost)
+    let connect_addr =
+        std::env::var("PAYKIT_PAYEE_ADDR").unwrap_or_else(|_| "127.0.0.1:8888".to_string());
+    let payee_noise_pk = std::env::var("PAYKIT_PAYEE_NOISE_PK").ok();
+
+    if let Some(noise_pk_hex) = payee_noise_pk {
+        ui::info(&format!("Connecting to {} ...", connect_addr));
+
+        // Parse the noise public key
+        let noise_pk_bytes = hex::decode(&noise_pk_hex).context("Invalid Noise public key hex")?;
+        if noise_pk_bytes.len() != 32 {
+            anyhow::bail!("Noise public key must be 32 bytes");
+        }
+        let mut server_pk = [0u8; 32];
+        server_pk.copy_from_slice(&noise_pk_bytes);
+
+        // Setup Noise client
+        let seed = identity.keypair.secret_key();
+        let ring = Arc::new(DummyRing::new(seed, "paykit-payer"));
+        let noise_client = NoiseClient::<_, ()>::new_direct("paykit-payer", b"demo-device", ring);
+
+        // Connect
+        let mut socket = TcpStream::connect(&connect_addr)
+            .await
+            .context("Failed to connect to recipient")?;
+
+        // Perform handshake
+        let spinner = ui::spinner("Performing Noise handshake...");
+        let (client_hs, first_msg) = client_start_ik_direct(&noise_client, &server_pk, None)
+            .context("Failed to initiate handshake")?;
+
+        socket.write_all(&first_msg).await?;
+
+        let mut response = vec![0u8; 4096];
+        let n = socket.read(&mut response).await?;
+        response.truncate(n);
+
+        let mut link =
+            client_complete_ik(client_hs, &response).context("Failed to complete handshake")?;
+        spinner.finish_and_clear();
+
+        ui::success(&format!("Session established: {}", link.session_id()));
+
+        // Create receipt request
+        let receipt_id = uuid::Uuid::new_v4().to_string();
+        let provisional_receipt = PaykitReceipt::new(
+            receipt_id.clone(),
+            identity.public_key(),
+            payee_pk.clone(),
+            MethodId::new(method),
+            amount.map(String::from),
+            Some(currency.unwrap_or("SAT").to_string()),
+            serde_json::json!({}),
+        );
+
+        let request_msg = PaykitNoiseMessage::RequestReceipt {
+            provisional_receipt: provisional_receipt.clone(),
+        };
+
+        // Send request
+        let request_json = serde_json::to_vec(&request_msg)?;
+        let encrypted = link.encrypt(&request_json)?;
+        let len_bytes = (encrypted.len() as u32).to_be_bytes();
+        socket.write_all(&len_bytes).await?;
+        socket.write_all(&encrypted).await?;
+
+        ui::info("Receipt request sent, waiting for confirmation...");
+
+        // Read response
+        let mut len_buf = [0u8; 4];
+        socket.read_exact(&mut len_buf).await?;
+        let len = u32::from_be_bytes(len_buf) as usize;
+
+        let mut ciphertext = vec![0u8; len];
+        socket.read_exact(&mut ciphertext).await?;
+
+        let plaintext = link.decrypt(&ciphertext)?;
+        let response_msg: PaykitNoiseMessage = serde_json::from_slice(&plaintext)?;
+
+        match response_msg {
+            PaykitNoiseMessage::ConfirmReceipt { receipt } => {
+                ui::separator();
+                ui::success("Receipt confirmed!");
+                ui::key_value("Receipt ID", &receipt.receipt_id);
+                if let Some(amt) = &receipt.amount {
+                    ui::key_value("Amount", amt);
+                }
+                ui::key_value("Method", &receipt.method_id.0);
+
+                // Save receipt
+                let demo_storage = DemoStorage::new(storage_dir.join("data"));
+                demo_storage.init()?;
+                let receipt_json = serde_json::to_string(&receipt)?;
+                demo_storage.save_receipt_json(&receipt.receipt_id, &receipt_json)?;
+
+                ui::info("Receipt saved locally");
+
+                // Log payment
+                log_payment_attempt(
+                    storage_dir,
+                    payee_uri,
+                    amount.unwrap_or("unspecified"),
+                    method,
+                )?;
+            }
+            PaykitNoiseMessage::Error { code, message } => {
+                ui::error(&format!("Payment rejected: {} - {}", code, message));
+            }
+            _ => {
+                ui::error("Unexpected response from recipient");
+            }
+        }
+    } else {
+        ui::info("To test Noise payment negotiation:");
+        ui::info("  1. In terminal 1: paykit-demo receive --port 8888");
+        ui::info("  2. Note the 'Noise public key' displayed");
+        ui::info("  3. In terminal 2: Set environment variables:");
+        ui::info("     export PAYKIT_PAYEE_ADDR=127.0.0.1:8888");
+        ui::info("     export PAYKIT_PAYEE_NOISE_PK=<noise_public_key_hex>");
+        ui::info("  4. Run this pay command again");
     }
 
     Ok(())

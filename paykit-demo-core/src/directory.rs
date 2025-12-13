@@ -6,11 +6,10 @@ use paykit_lib::{
     AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
     PubkyUnauthenticatedTransport, PublicKey, UnauthenticatedTransportRead,
 };
-use pubky::{PubkySession, PublicStorage};
+use pubky::{Pubky, PubkySession, PublicStorage};
 
 /// Client for interacting with the Pubky directory
 pub struct DirectoryClient {
-    #[allow(dead_code)]
     homeserver: String,
 }
 
@@ -20,6 +19,11 @@ impl DirectoryClient {
         Self {
             homeserver: homeserver.into(),
         }
+    }
+
+    /// Get the homeserver URL
+    pub fn homeserver(&self) -> &str {
+        &self.homeserver
     }
 
     /// Publish payment methods to the public directory
@@ -78,19 +82,16 @@ impl DirectoryClient {
         Ok(())
     }
 
-    /// Create a Pubky session for authenticated operations
+    /// Create a Pubky session for authenticated operations.
     ///
-    /// This creates a session using the Pubky SDK with the provided keypair.
-    /// The homeserver URL from this DirectoryClient is used for the session.
+    /// This creates a session by signing in to a homeserver using the Pubky SDK.
+    /// It attempts to sign in first (for returning users), falling back to signup
+    /// if the user doesn't have an account.
     ///
-    /// # Note
+    /// # Arguments
     ///
-    /// This is a placeholder implementation. In production, you should:
-    /// 1. Use `pubky::Pubky::new()` to create a Pubky instance
-    /// 2. Get a signer from the SDK: `sdk.signer(keypair)`
-    /// 3. Call `signer.signup(&homeserver_public_key, None).await`
-    ///
-    /// For testing, use `pubky_testnet::EphemeralTestnet` to create sessions.
+    /// * `keypair` - The Ed25519 keypair for authentication
+    /// * `use_testnet` - If true, use testnet configuration; otherwise use mainnet
     ///
     /// # Example
     ///
@@ -99,21 +100,68 @@ impl DirectoryClient {
     /// use pubky::Keypair;
     ///
     /// # async fn example() -> anyhow::Result<()> {
-    /// let client = DirectoryClient::new("https://homeserver.example.com");
+    /// let client = DirectoryClient::new("8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
     /// let keypair = Keypair::random();
-    /// // In production, create session using Pubky SDK directly
-    /// // For now, this method is a placeholder
+    /// let session = client.create_session(&keypair, true).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn create_session(&self, _keypair: &pubky::Keypair) -> Result<PubkySession> {
-        // NOTE: Session creation requires Pubky SDK setup
-        // 1. Create Pubky instance with homeserver URL
-        // 2. Get signer: sdk.signer(keypair)
-        // 3. Signup: signer.signup(&homeserver_pk, None).await
-        anyhow::bail!(
-            "Session creation not yet implemented. \
-             Use Pubky SDK directly: sdk.signer(keypair).signup(&homeserver_pk, None).await"
-        )
+    pub async fn create_session(
+        &self,
+        keypair: &pubky::Keypair,
+        use_testnet: bool,
+    ) -> Result<PubkySession> {
+        // Create Pubky SDK instance
+        let pubky = if use_testnet {
+            Pubky::testnet().context("Failed to create Pubky testnet instance")?
+        } else {
+            Pubky::new().context("Failed to create Pubky instance")?
+        };
+
+        // Parse homeserver public key from the URL/ID
+        let homeserver_pk = self
+            .homeserver
+            .parse::<PublicKey>()
+            .context("Invalid homeserver public key")?;
+
+        // Get signer from SDK
+        let signer = pubky.signer(keypair.clone());
+
+        // Try to sign in first (for returning users)
+        match signer.signin().await {
+            Ok(session) => Ok(session),
+            Err(_) => {
+                // Signup if signin fails (new user)
+                signer
+                    .signup(&homeserver_pk, None)
+                    .await
+                    .context("Failed to signup to homeserver")
+            }
+        }
+    }
+
+    /// Create a Pubky session with a signup token (for homeservers that require registration).
+    pub async fn create_session_with_token(
+        &self,
+        keypair: &pubky::Keypair,
+        signup_token: &str,
+        use_testnet: bool,
+    ) -> Result<PubkySession> {
+        let pubky = if use_testnet {
+            Pubky::testnet().context("Failed to create Pubky testnet instance")?
+        } else {
+            Pubky::new().context("Failed to create Pubky instance")?
+        };
+
+        let homeserver_pk = self
+            .homeserver
+            .parse::<PublicKey>()
+            .context("Invalid homeserver public key")?;
+
+        let signer = pubky.signer(keypair.clone());
+        signer
+            .signup(&homeserver_pk, Some(signup_token))
+            .await
+            .context("Failed to signup with token")
     }
 }

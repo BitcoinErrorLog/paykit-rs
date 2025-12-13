@@ -1,19 +1,42 @@
 # Paykit
 
-> A flexible payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).
+> **A flexible, decentralized payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).**
 
-## Overview
+Paykit enables seamless payment discovery, negotiation, and coordination through public directories and private encrypted channels. It provides a unified interface for managing payments across different methods while maintaining privacy and cryptographic security.
 
-Paykit enables payment method discovery and interactive payment flows using:
-- **Public Directory**: Discover payment methods via Pubky homeservers
-- **Private Channels**: Negotiate payments over encrypted Noise Protocol channels
-- **Receipt Exchange**: Cryptographic proof of payment coordination
+## 🌟 Key Features
 
-## Project Structure
+### Core Capabilities
+
+- **🔍 Payment Method Discovery**: Query public directories to discover how someone accepts payments
+- **📡 Public Directory Publishing**: Publish your payment methods to Pubky homeservers for discovery
+- **🔐 Encrypted Payment Channels**: Private Noise Protocol channels for secure payment negotiation
+- **🧾 Receipt Exchange**: Cryptographic proof of payment coordination and tracking
+- **💳 Multi-Method Support**: Bitcoin onchain, Lightning Network, and extensible to other methods
+- **👥 Contact Management**: Store and manage payment counterparties with metadata
+- **📊 Health Monitoring**: Real-time status checks for payment methods
+- **🎯 Smart Method Selection**: Strategy-based selection (cost, speed, privacy, balanced)
+
+### Subscription & Automation
+
+- **🔄 Subscription Management**: Create and manage recurring payment agreements
+- **🤖 Auto-Pay Rules**: Automated payment approval with configurable conditions
+- **💰 Spending Limits**: Per-peer and global limits with daily/weekly/monthly periods
+- **📝 Payment Requests**: Create, send, and manage payment requests with expiration
+- **🔒 Cryptographic Signatures**: Secure subscription agreements with Ed25519 signatures
+
+### Platform Support
+
+- **🖥️ CLI**: Full-featured command-line interface with real payment execution
+- **🌐 Web**: WebAssembly browser application with interactive dashboard
+- **📱 iOS**: Native SwiftUI app with Keychain storage and FFI integration
+- **🤖 Android**: Native Jetpack Compose app with EncryptedSharedPreferences and FFI integration
+
+## 📦 Project Structure
 
 ```
 paykit-rs-master/
-├── paykit-lib/              # Core library (public directory, transport traits)
+├── paykit-lib/              # Core library (directory, transport traits, executors)
 ├── paykit-interactive/      # Interactive payment protocol (Noise + receipts)
 ├── paykit-subscriptions/    # Subscription management and auto-pay
 ├── paykit-demo-core/        # Shared demo application logic
@@ -27,7 +50,7 @@ paykit-rs-master/
     └── android-demo/        # Complete Android demo app (Jetpack Compose)
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Try the CLI Demo
 
@@ -45,6 +68,12 @@ cargo build --release
 
 # Discover someone's payment methods
 ./target/release/paykit-demo discover pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo
+
+# Create a subscription
+./target/release/paykit-demo subscriptions create --provider pubky://... --amount 10000 --frequency monthly
+
+# Configure auto-pay
+./target/release/paykit-demo autopay enable --peer pubky://... --max-amount 50000
 ```
 
 See the [CLI README](paykit-demo-cli/README.md) for complete documentation.
@@ -62,15 +91,216 @@ python3 -m http.server 8080
 
 Then open `http://localhost:8080` in your browser. See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
 
-## Components
+### Try the Mobile Demos
+
+**iOS**: Open `paykit-mobile/ios-demo/PaykitDemo/PaykitDemo.xcodeproj` in Xcode  
+**Android**: Open `paykit-mobile/android-demo` in Android Studio
+
+See the [Mobile README](paykit-mobile/README.md) for complete setup instructions.
+
+## 📋 Complete Feature List
+
+### Identity & Key Management
+
+- ✅ Ed25519 identity keypairs (pkarr-compatible)
+- ✅ X25519 device keys for Noise protocol (HKDF derivation)
+- ✅ Multiple identity support with switching
+- ✅ Encrypted key backup/restore (Argon2 + AES-GCM)
+- ✅ Platform-native secure storage:
+  - iOS: Keychain Services
+  - Android: EncryptedSharedPreferences with hardware-backed keystore
+  - Web: localStorage (demo) / IndexedDB (production-ready)
+  - CLI: Encrypted file storage
+
+### Directory Operations
+
+- ✅ **Publish Payment Methods**: Make your payment endpoints discoverable
+- ✅ **Discover Methods**: Query public directories for payment methods
+- ✅ **Fetch Endpoints**: Get specific payment endpoints by method
+- ✅ **Remove Endpoints**: Unpublish payment methods
+- ✅ **Fetch Known Contacts**: Discover contacts from Pubky follows
+- ✅ **Multiple Publishing Modes** (Web):
+  - Mock mode (localStorage only)
+  - Direct mode (CORS-enabled homeserver)
+  - Proxy mode (via CORS proxy)
+
+### Payment Methods
+
+- ✅ **Method Listing**: Discover available payment methods
+- ✅ **Health Monitoring**: Real-time status checks for each method
+- ✅ **Endpoint Validation**: Verify addresses/invoices before use
+- ✅ **Smart Selection**: Strategy-based method selection:
+  - Balanced (default)
+  - Cost-optimized
+  - Speed-optimized
+  - Privacy-focused
+- ✅ **Usability Checks**: Verify method availability before payment
+
+### Payment Coordination
+
+- ✅ **Noise Protocol Channels**: Encrypted TCP/WebSocket channels
+- ✅ **Payment Requests**: Create and manage payment requests
+- ✅ **Receipt Exchange**: Cryptographic proof of payment coordination
+- ✅ **Request/Response Flow**: Negotiate payment terms securely
+- ✅ **Private Endpoint Exchange**: Share endpoints over encrypted channels
+
+### Subscriptions
+
+- ✅ **Create Subscriptions**: Set up recurring payment agreements
+- ✅ **Multiple Frequencies**: Daily, weekly, monthly, yearly billing
+- ✅ **Proration Calculator**: Calculate charges for upgrades/downgrades
+- ✅ **Active/Paused States**: Manage subscription lifecycle
+- ✅ **Cryptographic Signatures**: Secure subscription agreements
+- ✅ **Payment Request Generation**: Auto-generate requests from subscriptions
+
+### Auto-Pay & Spending Limits
+
+- ✅ **Global Auto-Pay Toggle**: Enable/disable auto-pay system-wide
+- ✅ **Global Daily Limits**: Set spending caps per day
+- ✅ **Per-Peer Limits**: Individual limits with usage tracking
+- ✅ **Auto-Pay Rules**: Custom conditions for automatic approval
+- ✅ **Period Tracking**: Daily/weekly/monthly period management
+- ✅ **Atomic Reservations**: Thread-safe spending reservations
+- ✅ **Overflow Protection**: Safe arithmetic with bounds checking
+
+### Receipts & Payment History
+
+- ✅ **Receipt Generation**: Create receipts via FFI with cryptographic IDs
+- ✅ **Receipt Storage**: Persistent storage with search and filtering
+- ✅ **Status Tracking**: Pending, completed, failed, refunded
+- ✅ **Transaction IDs**: Link receipts to on-chain transactions
+- ✅ **Counterparty Tracking**: Track payments by contact
+- ✅ **Memo Support**: Add notes to receipts
+- ✅ **Statistics**: Total sent/received, completion rates
+
+### Contacts
+
+- ✅ **Contact Management**: Add, edit, delete contacts
+- ✅ **Search & Filter**: Find contacts by name or public key
+- ✅ **Payment History**: Track payments per contact
+- ✅ **Metadata**: Notes and custom fields
+- ✅ **Import from Pubky**: Import contacts from follows directory
+
+### Dashboard & Analytics
+
+- ✅ **Unified Dashboard**: Overview of all Paykit features
+- ✅ **Real-Time Statistics**: Contacts, methods, receipts, subscriptions
+- ✅ **Recent Activity**: Latest receipts and requests
+- ✅ **Quick Actions**: Common tasks accessible from dashboard
+- ✅ **Progress Tracking**: Setup completion indicators
+
+## 🎯 Demo Applications
+
+### CLI Demo (`paykit-demo-cli`)
+
+**Status**: ✅ **Reference Implementation** - Most complete demo with all features
+
+**Features**:
+- Full identity and key management
+- Real Pubky homeserver integration
+- TCP-based Noise protocol channels
+- Real payment execution (with LND/Esplora)
+- Complete subscription lifecycle
+- Auto-pay with spending limits
+- Contact management
+- Receipt tracking
+
+**Use Cases**: Development, testing, server-side integration, reference implementation
+
+### Web Demo (`paykit-demo-web`)
+
+**Status**: ✅ **Full Feature Coverage** - Complete browser-based demo
+
+**Features**:
+- WebAssembly-based (runs entirely in browser)
+- Interactive dashboard with statistics
+- WebSocket-based Noise protocol
+- Configurable directory publishing (Mock/Direct/Proxy)
+- Full subscription and auto-pay management
+- Contact management with localStorage
+- Receipt history with filtering
+- Payment method configuration
+
+**Use Cases**: Browser-based applications, web wallets, demo/showcase
+
+### iOS Demo (`paykit-mobile/ios-demo`)
+
+**Status**: ✅ **Full FFI Integration** - Native SwiftUI app
+
+**Features**:
+- Keychain-backed secure storage
+- Full FFI integration (Payment Methods, Health, Selection)
+- Payment request persistence with FFI
+- Receipt generation via FFI
+- Configurable directory transport (mock/callback)
+- Subscription management
+- Auto-pay rules and spending limits
+- Contact management
+- Dashboard with statistics
+
+**Use Cases**: iOS apps, mobile wallets, native integrations
+
+### Android Demo (`paykit-mobile/android-demo`)
+
+**Status**: ✅ **Full FFI Integration** - Native Jetpack Compose app
+
+**Features**:
+- EncryptedSharedPreferences with hardware-backed keystore
+- Full FFI integration (Payment Methods, Health, Selection)
+- Payment request persistence with FFI
+- Receipt generation via FFI
+- Configurable directory transport (mock/callback)
+- Subscription management
+- Auto-pay rules and spending limits
+- Contact management
+- Material 3 design
+- Dashboard with statistics
+
+**Use Cases**: Android apps, mobile wallets, native integrations
+
+## 🏗️ Architecture
+
+### Payment Discovery Flow
+
+```
+User A                    Pubky Homeserver              User B
+  |                              |                         |
+  |--Publish Methods------------>|                         |
+  |  (onchain, lightning)        |                         |
+  |                              |                         |
+  |                              |<---Query Methods--------|
+  |                              |                         |
+  |                              |----Return Methods------>|
+```
+
+### Interactive Payment Flow
+
+```
+Payer                    Noise Channel                 Payee
+  |                              |                         |
+  |--Connect (Noise_IK)----------|------------------------>|
+  |                              |                         |
+  |--RequestReceipt--------------|------------------------>|
+  |  (provisional)               |                         |
+  |                              |                         |
+  |<-ConfirmReceipt--------------|-------------------------|
+  |  (with invoice)              |                         |
+  |                              |                         |
+  |--Execute Payment (off-protocol)                        |
+```
+
+## 📚 Components
 
 ### paykit-lib
 
-Core library providing:
-- Payment method directory operations
-- Transport trait abstractions
+**Core library** providing payment method directory operations and transport abstractions.
+
+**Key Features**:
+- Transport trait abstractions (`AuthenticatedTransport`, `UnauthenticatedTransportRead`)
 - Pubky homeserver integration
-- Public endpoint management
+- Payment method discovery and publishing
+- Health monitoring and method selection
+- Payment executors (LND, Esplora, testnet)
 
 **Key APIs**:
 ```rust
@@ -92,13 +322,18 @@ let transport = PubkyUnauthenticatedTransport::new(storage);
 let methods = transport.fetch_supported_payments(&public_key).await?;
 ```
 
+See [paykit-lib README](paykit-lib/README.md) for complete API documentation.
+
 ### paykit-interactive
 
-Interactive payment protocol using:
-- Pubky Noise for encrypted channels
-- Receipt negotiation
+**Interactive payment protocol** using Noise encryption and receipt exchange.
+
+**Key Features**:
+- Pubky Noise for encrypted channels (TCP, WebSocket)
+- Receipt negotiation and exchange
 - Private endpoint exchange
-- Payment coordination
+- Payment coordination messages
+- Rate limiting and connection management
 
 **Key APIs**:
 ```rust
@@ -116,86 +351,74 @@ let receipt = manager.initiate_payment(&mut channel, provisional_receipt).await?
 let response = manager.handle_message(msg, &payer, &payee).await?;
 ```
 
-### paykit-demo-core
-
-Shared business logic for demo applications:
-- Identity management (Ed25519/X25519 keypairs)
-- Directory client wrapper
-- Payment coordinator
-- File-based storage
-- Contact management
+See [paykit-interactive README](paykit-interactive/README.md) for complete documentation.
 
 ### paykit-subscriptions
 
-Subscription management and automated payments:
-- Subscription agreements with cryptographic signatures
+**Subscription management and automated payments** with cryptographic security.
+
+**Key Features**:
+- Subscription agreements with Ed25519 signatures
 - Payment requests with expiration and metadata
 - Auto-pay rules with spending limits
-- Thread-safe nonce tracking and spending limit enforcement
+- Thread-safe nonce tracking
 - Safe arithmetic with overflow protection
+- Per-peer and global spending limits
 
 **Key APIs**:
 ```rust
-use paykit_subscriptions::{Subscription, SubscriptionTerms, PaymentFrequency, AutoPayRule};
+use paykit_subscriptions::{
+    Subscription, 
+    SubscriptionTerms, 
+    PaymentFrequency, 
+    AutoPayRule
+};
 
 // Create subscription
-let terms = SubscriptionTerms::new(amount, currency, PaymentFrequency::Monthly { day_of_month: 1 });
+let terms = SubscriptionTerms::new(
+    amount, 
+    currency, 
+    PaymentFrequency::Monthly { day_of_month: 1 }
+);
 let subscription = Subscription::new(provider_pk, subscriber_pk, terms);
 
 // Configure auto-pay
-let rule = AutoPayRule::new(subscription_id, peer_pk, max_amount, period_seconds);
+let rule = AutoPayRule::new(
+    subscription_id, 
+    peer_pk, 
+    max_amount, 
+    period_seconds
+);
 ```
 
-See the [Subscriptions README](paykit-subscriptions/README.md) for complete documentation.
-
-### paykit-demo-cli
-
-Full-featured command-line demonstration:
-- Identity setup and management
-- Payment method publishing
-- Directory discovery
-- Contact management
-- Payment simulation
-- Receipt viewing
-- Subscription management
-- Auto-pay configuration
-
-### paykit-demo-web
-
-WebAssembly browser application:
-- Full Paykit functionality in the browser
-- Identity management with localStorage persistence
-- Contact management and directory discovery
-- Payment method configuration
-- Subscription and auto-pay management
-- Spending limits with visual progress tracking
-- Receipt tracking
-- Interactive dashboard
-
-See the [Web Demo README](paykit-demo-web/README.md) for complete documentation.
+See [paykit-subscriptions README](paykit-subscriptions/README.md) for complete documentation.
 
 ### paykit-mobile
 
-Mobile FFI bindings and demo applications:
-- UniFFI-based bindings for iOS (Swift) and Android (Kotlin)
+**Mobile FFI bindings** for iOS and Android with platform-native secure storage.
+
+**Key Features**:
+- UniFFI-based bindings (Swift, Kotlin)
 - Platform-native secure storage adapters
 - Complete demo apps with all Paykit features
+- FFI integration for all core operations
 
 **iOS Demo (SwiftUI)**:
 - Keychain-based secure storage
-- Auto-pay configuration with spending limits
-- Subscription management
-- Payment method discovery
+- Full FFI integration
+- Payment requests and receipts
+- Subscription and auto-pay management
 
 **Android Demo (Jetpack Compose)**:
-- EncryptedSharedPreferences storage with biometric support
+- EncryptedSharedPreferences with hardware-backed keystore
 - Material 3 design
-- Auto-pay rules and spending tracking
-- Full subscription workflow
+- Full FFI integration
+- Payment requests and receipts
+- Subscription and auto-pay management
 
-See the [Mobile README](paykit-mobile/README.md) and [Mobile Integration Guide](docs/mobile-integration.md) for complete documentation.
+See [paykit-mobile README](paykit-mobile/README.md) and [Mobile Integration Guide](docs/mobile-integration.md) for complete documentation.
 
-## Installation
+## 🔧 Installation
 
 ### Prerequisites
 
@@ -232,9 +455,13 @@ cargo build --release
 # Web demo (WASM)
 cd paykit-demo-web
 wasm-pack build --target web --out-dir www/pkg
+
+# Mobile bindings
+cd paykit-mobile
+cargo build --release
 ```
 
-## Usage Examples
+## 💻 Usage Examples
 
 ### Using paykit-lib
 
@@ -272,89 +499,60 @@ paykit-demo contacts add bob pubky://...
 # Discover payment methods
 paykit-demo discover pubky://...
 
+# Create subscription
+paykit-demo subscriptions create --provider pubky://... --amount 10000 --frequency monthly
+
+# Configure auto-pay
+paykit-demo autopay enable --peer pubky://... --max-amount 50000
+
 # View receipts
 paykit-demo receipts
 ```
 
 See [CLI README](paykit-demo-cli/README.md) for complete examples.
 
-## Development Status
+## ✅ Development Status
 
-### ✅ Completed
+### Completed Features
 
 **Core Components**
-- `paykit-lib`: Core library with transport traits and public directory operations
-- `paykit-interactive`: Interactive payment protocol with Noise encryption and receipts
-- `paykit-subscriptions`: Subscription management, payment requests, and auto-pay automation
-- `paykit-demo-core`: Shared business logic with SubscriptionCoordinator for demo applications
+- ✅ `paykit-lib`: Core library with transport traits and public directory operations
+- ✅ `paykit-interactive`: Interactive payment protocol with Noise encryption and receipts
+- ✅ `paykit-subscriptions`: Subscription management, payment requests, and auto-pay automation
+- ✅ `paykit-demo-core`: Shared business logic with SubscriptionCoordinator for demo applications
+- ✅ `paykit-mobile`: Complete FFI bindings with platform-native storage adapters
 
 **Demo Applications**
-- `paykit-demo-cli`: Full-featured command-line demo with all Paykit features
-- `paykit-demo-web`: Complete WebAssembly browser demo with interactive UI
-- `paykit-mobile/ios-demo`: iOS demo app with SwiftUI and Keychain storage
-- `paykit-mobile/android-demo`: Android demo app with Jetpack Compose and EncryptedSharedPreferences
+- ✅ `paykit-demo-cli`: Full-featured command-line demo with real payment execution
+- ✅ `paykit-demo-web`: Complete WebAssembly browser demo with interactive UI
+- ✅ `paykit-mobile/ios-demo`: iOS demo app with SwiftUI and Keychain storage
+- ✅ `paykit-mobile/android-demo`: Android demo app with Jetpack Compose and EncryptedSharedPreferences
 
-**Features**
-- Identity management (Ed25519/X25519 keypairs)
-- Payment method discovery and publishing
-- Contact management
-- Subscription agreements and payment requests
-- Auto-pay rules with per-payment and per-period limits
-- Peer spending limits with daily/weekly/monthly periods
-- Atomic spending reservations with commit/rollback
-- Receipt exchange and tracking
-- Noise protocol encryption for private channels
-- Platform-native secure storage (Keychain, EncryptedSharedPreferences)
-- Comprehensive test coverage (100+ tests)
+**Feature Parity**
+- ✅ All demos have rich feature parity with real implementations
+- ✅ Full FFI integration across iOS and Android
+- ✅ Configurable directory publishing (Mock/Direct/Proxy)
+- ✅ Persistent storage for all data types
+- ✅ Comprehensive test coverage (100+ tests)
 
 **Payment Plugins**
-- `OnchainPlugin`: Bitcoin on-chain payment execution with proof generation
-- `LightningPlugin`: Lightning Network payments (BOLT11, LNURL)
+- ✅ `OnchainPlugin`: Bitcoin on-chain payment execution with proof generation
+- ✅ `LightningPlugin`: Lightning Network payments (BOLT11, LNURL)
 
-### 🚧 In Progress
+### In Progress
 
 - Full Noise protocol integration for live payments
-- Pubky session creation API
-- Real-time payment negotiation
+- Pubky session creation API improvements
+- Real-time payment negotiation enhancements
 
-### 📋 Planned
+### Planned
 
 - Desktop Electron app (end-user application)
 - Multi-signature support
 - Hardware wallet integration
+- Additional payment method plugins
 
-## Architecture
-
-### Payment Discovery Flow
-
-```
-User A                    Pubky Homeserver              User B
-  |                              |                         |
-  |--Publish Methods------------>|                         |
-  |  (onchain, lightning)        |                         |
-  |                              |                         |
-  |                              |<---Query Methods--------|
-  |                              |                         |
-  |                              |----Return Methods------>|
-```
-
-### Interactive Payment Flow
-
-```
-Payer                    Noise Channel                 Payee
-  |                              |                         |
-  |--Connect (Noise_IK)----------|------------------------>|
-  |                              |                         |
-  |--RequestReceipt--------------|------------------------>|
-  |  (provisional)               |                         |
-  |                              |                         |
-  |<-ConfirmReceipt--------------|-------------------------|
-  |  (with invoice)              |                         |
-  |                              |                         |
-  |--Execute Payment (off-protocol)                        |
-```
-
-## Testing
+## 🧪 Testing
 
 ```bash
 # Run all tests
@@ -363,25 +561,36 @@ cargo test --all --all-features
 # Test specific component
 cd paykit-lib && cargo test
 cd paykit-interactive && cargo test
+cd paykit-subscriptions && cargo test
 
 # Test with network access (for integration tests)
 cargo test --test pubky_sdk_compliance -- --test-threads=1
+
+# Test mobile FFI bindings
+cd paykit-mobile && cargo test --lib
 ```
 
-## Documentation
+## 📖 Documentation
 
 ### Component Documentation
 - [paykit-lib](paykit-lib/README.md) - Core library API reference
 - [paykit-interactive](paykit-interactive/README.md) - Interactive payment protocol
 - [paykit-subscriptions](paykit-subscriptions/README.md) - Subscription management
-- [paykit-demo-core](paykit-demo-core/BUILD.md) - Shared demo logic
+- [paykit-demo-core](paykit-demo-core/README.md) - Shared demo logic
 - [paykit-demo-cli](paykit-demo-cli/README.md) - CLI demo user guide
 - [paykit-demo-web](paykit-demo-web/README.md) - Web demo user guide
 - [paykit-mobile](paykit-mobile/README.md) - Mobile FFI bindings
 
+### Demo App Documentation
+- [CLI Demo](paykit-demo-cli/README.md) - Complete CLI reference
+- [Web Demo](paykit-demo-web/README.md) - Browser application guide
+- [iOS Demo](paykit-mobile/ios-demo/README.md) - iOS app documentation
+- [Android Demo](paykit-mobile/android-demo/README.md) - Android app documentation
+
 ### Feature Guides
 - [Auto-Pay Guide](docs/autopay-guide.md) - Auto-pay rules and spending limits
 - [Mobile Integration](docs/mobile-integration.md) - iOS and Android integration
+- [Testnet Setup](docs/TESTNET_SETUP.md) - Testnet configuration
 
 ### Project Documentation
 - [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and component relationships
@@ -389,9 +598,9 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 - [Security Guide](SECURITY.md) - Security considerations and best practices
 - [Deployment Guide](DEPLOYMENT.md) - Deployment instructions
 - [Build Instructions](BUILD.md) - Build and development setup
-- [Documentation Index](docs/README.md) - Complete documentation index
+- [Demo Apps Comprehensive Plan](DEMO_APPS_COMPREHENSIVE_PLAN.md) - Feature parity analysis
 
-## Security Considerations
+## 🔒 Security Considerations
 
 **For Production Use**:
 1. Store private keys in secure enclaves/HSMs
@@ -401,14 +610,17 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 5. Use TLS for all network communication
 6. Implement key rotation policies
 7. Add audit logging
+8. Use hardware-backed keystores on mobile platforms
 
 **Demo Limitations**:
-- Keys stored in plain JSON files
+- Keys stored in plain JSON files (CLI) or platform storage (mobile/web)
 - Simplified error handling
-- No rate limiting
+- No rate limiting (except in interactive protocol)
 - Simulation mode for some operations
 
-## Contributing
+See [SECURITY.md](SECURITY.md) for detailed security guidance.
+
+## 🤝 Contributing
 
 This is a demonstration/reference implementation. Contributions welcome:
 
@@ -419,7 +631,7 @@ This is a demonstration/reference implementation. Contributions welcome:
 
 See [repository guidelines](./_RULES.md) for detailed conventions.
 
-## Dependencies
+## 📦 Dependencies
 
 **Core**:
 - `pubky` 0.6.0-rc.6 - Pubky protocol SDK
@@ -433,17 +645,21 @@ See [repository guidelines](./_RULES.md) for detailed conventions.
 - `dialoguer` - Interactive prompts
 - `qrcode` - QR code generation
 
-## License
+**Mobile**:
+- `uniffi` - FFI bindings generation
+- Platform-native storage APIs
+
+## 📄 License
 
 MIT
 
-## Related Projects
+## 🔗 Related Projects
 
 - [Pubky](https://pubky.org) - Decentralized identity and data protocol
 - [Pubky Noise](../pubky-noise-main/) - Noise Protocol implementation
 - [Bitkit](https://bitkit.to) - Reference wallet implementation
 
-## Contact
+## 📞 Contact
 
 For questions or support, please open an issue in the repository.
 

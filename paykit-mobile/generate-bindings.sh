@@ -138,14 +138,22 @@ generate_bindings() {
     echo "Generating bindings"
     echo "========================================"
     
-    if ! command -v uniffi-bindgen &> /dev/null; then
+    # Try using our built-in binary first
+    if cargo run --bin generate-bindings --features bindgen-cli -- --library "$LIB_PATH" -l swift -o paykit-mobile/swift/generated 2>/dev/null; then
+        echo "✅ Used built-in bindings generator"
+    elif command -v uniffi-bindgen &> /dev/null; then
+        echo "Using system uniffi-bindgen..."
+    else
         echo ""
-        echo "uniffi-bindgen not found. Install it with:"
-        echo "  cargo install uniffi-bindgen-cli@0.25"
+        echo "⚠️  uniffi-bindgen not found."
         echo ""
-        echo "Then run this script again, or manually:"
-        echo "  uniffi-bindgen generate --library $LIB_PATH -l swift -o paykit-mobile/swift"
-        echo "  uniffi-bindgen generate --library $LIB_PATH -l kotlin -o paykit-mobile/kotlin"
+        echo "The bindings generator binary isn't available for uniffi 0.25."
+        echo "However, you can still proceed with the Xcode project setup."
+        echo ""
+        echo "The library is built and ready. The bindings are Swift wrappers"
+        echo "that can be added later, or you can use the Rust library directly"
+        echo "via a C bridge if needed."
+        echo ""
         return 1
     fi
 

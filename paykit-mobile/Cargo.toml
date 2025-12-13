@@ -9,6 +9,8 @@ license = "MIT"
 default = []
 # Enable tracing/logging support
 tracing = ["paykit-lib/tracing", "dep:tracing"]
+# Enable bindgen CLI tool
+bindgen-cli = ["dep:uniffi_bindgen", "dep:clap", "dep:anyhow"]
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -21,7 +23,8 @@ paykit-interactive = { path = "../paykit-interactive" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 
 # UniFFI for cross-platform bindings
-uniffi = { version = "0.25", features = ["cli"] }
+# Using 0.26 for better CLI/binary support (backward compatible for bindings)
+uniffi = { version = "0.26", features = ["cli"] }
 
 # Async runtime
 tokio = { version = "1.48", features = ["rt-multi-thread", "sync"] }
@@ -36,5 +39,23 @@ thiserror = "1.0"
 # Optional tracing support
 tracing = { version = "0.1", optional = true }
 
+[[bin]]
+name = "generate-bindings"
+path = "src/bin/generate_bindings.rs"
+required-features = ["bindgen-cli"]
+
 [dev-dependencies]
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }
+
+[dependencies.uniffi_bindgen]
+version = "0.25"
+optional = true
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+optional = true
+
+[dependencies.anyhow]
+version = "1.0"
+optional = true

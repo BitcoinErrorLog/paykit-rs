@@ -1,6 +1,6 @@
 //! Publish command - publish payment methods to directory
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use paykit_demo_core::{DirectoryClient, PaymentMethod};
 use std::path::Path;
 
@@ -54,22 +54,56 @@ pub async fn run(
     }
 
     // Create directory client
-    let _client = DirectoryClient::new(homeserver);
+    let client = DirectoryClient::new(homeserver);
 
-    tracing::warn!("Full Pubky session publishing not yet fully implemented");
-    // Note: Full implementation requires PubkyClient from pubky crate
-    // This will be completed in the test-driven implementation phase
-    ui::warning("Session creation for publishing will be completed with end-to-end tests");
-    ui::info("In production, this would:");
-    ui::info("  1. Create a PubkyClient and session with your keypair");
-    ui::info("  2. Publish methods via PubkyAuthenticatedTransport");
-    ui::info("  3. Make them discoverable via your Pubky URI");
+    // Create Pubky session
+    let spinner = ui::spinner("Connecting to homeserver...");
 
-    // For now, just show what would happen
-    ui::separator();
-    ui::success("Methods prepared for publishing");
-    ui::info(&format!("Discoverable at: {}", identity.pubky_uri()));
-    tracing::info!("Publish command completed (stub mode)");
+    // Determine if we should use testnet (check if homeserver looks like a testnet address)
+    // For demo purposes, we default to testnet mode for safety
+    let use_testnet = true;
+
+    let session = match client.create_session(&identity.keypair, use_testnet).await {
+        Ok(session) => {
+            spinner.finish_and_clear();
+            tracing::info!("Session created successfully");
+            session
+        }
+        Err(e) => {
+            spinner.finish_and_clear();
+            ui::error(&format!("Failed to create session: {}", e));
+            ui::info("Make sure:");
+            ui::info("  1. The homeserver is reachable");
+            ui::info("  2. You have network connectivity");
+            ui::info("  3. The homeserver public key is valid");
+            return Err(e).context("Failed to establish session with homeserver");
+        }
+    };
+
+    // Publish methods
+    let spinner = ui::spinner("Publishing payment methods...");
+
+    match client.publish_methods(&session, &methods).await {
+        Ok(()) => {
+            spinner.finish_and_clear();
+            ui::separator();
+            ui::success(&format!(
+                "Successfully published {} payment method(s)",
+                methods.len()
+            ));
+            ui::info(&format!("Discoverable at: {}", identity.pubky_uri()));
+            tracing::info!(
+                "Published {} methods for {}",
+                methods.len(),
+                identity.pubky_uri()
+            );
+        }
+        Err(e) => {
+            spinner.finish_and_clear();
+            ui::error(&format!("Failed to publish: {}", e));
+            return Err(e).context("Failed to publish payment methods");
+        }
+    }
 
     Ok(())
 }

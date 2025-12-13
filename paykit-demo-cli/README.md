@@ -1,10 +1,45 @@
 # Paykit Demo CLI
 
-> **Production-Quality Command-Line Interface for Demonstrating Paykit Payment Protocol**
+> **Command-Line Interface for Demonstrating Paykit Payment Protocol**
 
-A feature-complete CLI application showcasing all Paykit capabilities: public directory operations, private Noise-encrypted payments, subscription management, auto-pay automation, and receipt coordination.
+A feature-rich CLI application showcasing Paykit capabilities: public directory operations, private Noise-encrypted payments, subscription management, auto-pay automation, and receipt coordination.
 
-## ✨ Features
+## Current Status
+
+> **Demo Application**: Core protocol features work but payment execution is simulated.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Identity Management | **Real** | Ed25519 keypairs, file persistence |
+| Contact Management | **Real** | Full CRUD operations |
+| Directory Publish | **Real** | Pubky homeserver integration |
+| Directory Discover | **Real** | HTTP queries to homeservers |
+| Noise Handshake | **Real** | TCP-based encrypted channel |
+| Payment Coordination | **Real** | Request/receipt exchange |
+| Payment Execution | **Simulation** | Shows "simulation mode" message |
+| Subscriptions | **Real** | Full P2P lifecycle |
+| Auto-Pay Rules | **Real** | Rules and limits with file persistence |
+| Spending Limits | **Real** | Per-peer limits with period tracking |
+| Receipts | **Real** | Stored and queryable |
+
+### Key Limitation
+
+**Payment Execution**: The `pay` command establishes a real Noise-encrypted channel and exchanges payment coordination messages, but the actual payment (sending Bitcoin/Lightning) is simulated. The CLI shows:
+
+```
+Payment flow simulation mode - actual payment execution pending
+```
+
+This is because:
+1. Actual payment requires wallet integration (LND, CLN, Bitcoin Core)
+2. Different payment methods require different implementations
+3. Demo focuses on the Paykit protocol, not wallet operations
+
+For real payments, integrate with:
+- Lightning: LND/CLN RPC
+- On-chain: Bitcoin Core RPC or Electrum
+
+## Features
 
 ### 🔐 Identity Management
 - Ed25519 keypair generation and management

@@ -1,10 +1,38 @@
 # Paykit Demo Web
 
-**Production-Ready Browser Application for Paykit Payment Protocol**
+**Browser Application for Demonstrating Paykit Payment Protocol**
 
-A fully functional WebAssembly application demonstrating all Paykit capabilities in the browser: identity management, directory discovery, subscription management, auto-pay automation, and real-time encrypted payments via WebSocket-based Noise protocol.
+A WebAssembly application demonstrating Paykit capabilities in the browser: identity management, directory discovery, subscription management, auto-pay automation, and real-time encrypted payments via WebSocket-based Noise protocol.
 
-## ✨ Features
+## Current Status
+
+> **Demo Application**: Most features are fully implemented but directory publishing uses mock storage.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Identity Management | **Real** | Ed25519 keypairs, localStorage persistence |
+| Contact Management | **Real** | Full CRUD, localStorage persistence |
+| Receipt Management | **Real** | Full history with filtering, localStorage |
+| Dashboard | **Real** | Statistics from real stored data |
+| Noise Payments | **Real** | WebSocket-based encrypted payments |
+| Payment Methods | **Partial** | Configured locally, mock publish |
+| Directory Publish | **Mock** | `mock_publish()` saves locally only |
+| Directory Discover | **Real** | HTTP queries to homeservers |
+| Subscriptions | **Real** | Full P2P lifecycle, localStorage |
+| Auto-Pay | **Real** | Rules and limits, localStorage |
+| Spending Limits | **Real** | Per-peer limits with period reset |
+
+### Key Limitation
+
+**Directory Publishing**: The `publish_methods()` function uses `mock_publish()` which saves to localStorage only. Methods are NOT published to actual Pubky homeservers. To enable real publishing:
+
+1. Configure a homeserver URL in the app
+2. Implement the actual HTTP PUT to the homeserver
+3. Handle authentication with the homeserver
+
+This limitation exists because browser CORS restrictions require a proxy or homeserver with CORS headers.
+
+## Features
 
 ### 🏠 Dashboard
 - Unified overview of all Paykit features

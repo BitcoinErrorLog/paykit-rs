@@ -13,6 +13,8 @@ class ReceiptsViewModel: ObservableObject {
     @Published var filterDirection: PaymentDirection?
     @Published var filterStatus: PaymentStatus?
     @Published var isLoading = true
+    @Published var errorMessage: String?
+    @Published var showError = false
     
     private let storage = ReceiptStorage()
     
@@ -48,12 +50,84 @@ class ReceiptsViewModel: ObservableObject {
         isLoading = false
     }
     
+    /// Create a receipt using the PaykitClient FFI and store it
+    /// - Parameters:
+    ///   - client: The PaykitClientWrapper
+    ///   - direction: Payment direction (sent or received)
+    ///   - counterpartyKey: The counterparty's public key
+    ///   - counterpartyName: Optional display name
+    ///   - amountSats: Amount in satoshis
+    ///   - methodId: Payment method (e.g., "lightning", "onchain")
+    ///   - memo: Optional memo/note
+    /// - Returns: The created receipt, or nil if failed
+    @discardableResult
+    func createReceipt(
+        client: PaykitClientWrapper,
+        direction: PaymentDirection,
+        counterpartyKey: String,
+        counterpartyName: String? = nil,
+        amountSats: UInt64,
+        methodId: String,
+        memo: String? = nil
+    ) -> Receipt? {
+        let payer = direction == .sent ? "self" : counterpartyKey
+        let payee = direction == .sent ? counterpartyKey : "self"
+        
+        guard let ffiReceipt = client.createReceipt(
+            payer: payer,
+            payee: payee,
+            methodId: methodId,
+            amount: String(amountSats),
+            currency: "SAT"
+        ) else {
+            showErrorMessage("Failed to create receipt via FFI")
+            return nil
+        }
+        
+        // Convert FFI receipt to local storage format
+        var localReceipt = Receipt.fromFFI(ffiReceipt, direction: direction, counterpartyName: counterpartyName)
+        localReceipt.memo = memo
+        
+        do {
+            try storage.addReceipt(localReceipt)
+            loadReceipts()
+            return localReceipt
+        } catch {
+            showErrorMessage("Failed to save receipt: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    /// Mark a receipt as completed
+    func completeReceipt(id: String, txId: String? = nil) {
+        guard var receipt = storage.getReceipt(id: id) else { return }
+        receipt.complete(txId: txId)
+        do {
+            try storage.updateReceipt(receipt)
+            loadReceipts()
+        } catch {
+            showErrorMessage("Failed to update receipt: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Mark a receipt as failed
+    func failReceipt(id: String) {
+        guard var receipt = storage.getReceipt(id: id) else { return }
+        receipt.fail()
+        do {
+            try storage.updateReceipt(receipt)
+            loadReceipts()
+        } catch {
+            showErrorMessage("Failed to update receipt: \(error.localizedDescription)")
+        }
+    }
+    
     func deleteReceipt(_ receipt: Receipt) {
         do {
             try storage.deleteReceipt(id: receipt.id)
             loadReceipts()
         } catch {
-            print("Failed to delete receipt: \(error)")
+            showErrorMessage("Failed to delete receipt: \(error.localizedDescription)")
         }
     }
     
@@ -61,6 +135,11 @@ class ReceiptsViewModel: ObservableObject {
         filterDirection = nil
         filterStatus = nil
         searchText = ""
+    }
+    
+    private func showErrorMessage(_ message: String) {
+        errorMessage = message
+        showError = true
     }
 }
 

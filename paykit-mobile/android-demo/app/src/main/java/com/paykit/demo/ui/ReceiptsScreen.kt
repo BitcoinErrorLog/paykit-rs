@@ -33,6 +33,8 @@ class ReceiptsViewModel : ViewModel() {
     var filterStatus by mutableStateOf<PaymentStatus?>(null)
     var isLoading by mutableStateOf(true)
         private set
+    var errorMessage by mutableStateOf<String?>(null)
+    var showError by mutableStateOf(false)
     
     val filteredReceipts: List<Receipt>
         get() {
@@ -67,6 +69,73 @@ class ReceiptsViewModel : ViewModel() {
         isLoading = false
     }
     
+    /**
+     * Create a receipt using the PaykitClient FFI and store it
+     * @param storage The ReceiptStorage instance
+     * @param client The PaykitClientWrapper
+     * @param direction Payment direction (sent or received)
+     * @param counterpartyKey The counterparty's public key
+     * @param counterpartyName Optional display name
+     * @param amountSats Amount in satoshis
+     * @param methodId Payment method (e.g., "lightning", "onchain")
+     * @param memo Optional memo/note
+     * @return The created receipt, or null if failed
+     */
+    fun createReceipt(
+        storage: ReceiptStorage,
+        client: com.paykit.demo.PaykitClientWrapper,
+        direction: PaymentDirection,
+        counterpartyKey: String,
+        counterpartyName: String? = null,
+        amountSats: Long,
+        methodId: String,
+        memo: String? = null
+    ): Receipt? {
+        val payer = if (direction == PaymentDirection.SENT) "self" else counterpartyKey
+        val payee = if (direction == PaymentDirection.SENT) counterpartyKey else "self"
+        
+        val ffiReceipt = client.createReceipt(
+            payer = payer,
+            payee = payee,
+            methodId = methodId,
+            amount = amountSats.toString(),
+            currency = "SAT"
+        )
+        
+        if (ffiReceipt == null) {
+            showErrorMessage("Failed to create receipt via FFI")
+            return null
+        }
+        
+        // Convert FFI receipt to local storage format
+        var localReceipt = Receipt.fromFFI(ffiReceipt, direction, counterpartyName)
+        if (memo != null) {
+            localReceipt = localReceipt.copy(memo = memo)
+        }
+        
+        storage.addReceipt(localReceipt)
+        loadReceipts(storage)
+        return localReceipt
+    }
+    
+    /**
+     * Mark a receipt as completed
+     */
+    fun completeReceipt(storage: ReceiptStorage, id: String, txId: String? = null) {
+        val receipt = storage.getReceipt(id) ?: return
+        storage.updateReceipt(receipt.complete(txId))
+        loadReceipts(storage)
+    }
+    
+    /**
+     * Mark a receipt as failed
+     */
+    fun failReceipt(storage: ReceiptStorage, id: String) {
+        val receipt = storage.getReceipt(id) ?: return
+        storage.updateReceipt(receipt.fail())
+        loadReceipts(storage)
+    }
+    
     fun deleteReceipt(storage: ReceiptStorage, receipt: Receipt) {
         storage.deleteReceipt(receipt.id)
         loadReceipts(storage)
@@ -76,6 +145,11 @@ class ReceiptsViewModel : ViewModel() {
         filterDirection = null
         filterStatus = null
         searchText = ""
+    }
+    
+    private fun showErrorMessage(message: String) {
+        errorMessage = message
+        showError = true
     }
 }
 

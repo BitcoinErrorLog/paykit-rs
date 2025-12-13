@@ -2,6 +2,7 @@ package com.paykit.demo.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.paykit.demo.model.Receipt
 import com.paykit.demo.viewmodel.AutoPayViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * Auto-Pay Settings Screen
@@ -61,6 +65,22 @@ fun AutoPayScreen(
                         usedToday = uiState.usedToday,
                         onLimitChange = { viewModel.setDailyLimit(it) }
                     )
+                }
+
+                // Recent Auto-Payments Section
+                if (uiState.recentAutoPayments.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Recent Payments",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    
+                    items(uiState.recentAutoPayments.size) { index ->
+                        val receipt = uiState.recentAutoPayments[index]
+                        RecentPaymentCard(receipt = receipt)
+                    }
                 }
 
                 item {
@@ -214,5 +234,50 @@ fun EmptyState(message: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+fun RecentPaymentCard(receipt: Receipt) {
+    val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+    val dateStr = dateFormat.format(Date(receipt.timestamp))
+    
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.ArrowUpward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column {
+                    Text(
+                        text = receipt.displayName,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = dateStr,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text(
+                text = "${receipt.amount.formatSats()} sats",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }

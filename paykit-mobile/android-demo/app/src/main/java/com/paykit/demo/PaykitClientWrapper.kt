@@ -215,10 +215,27 @@ class PaykitClientWrapper private constructor(
     // MARK: - Directory Operations
     
     /**
-     * Create a directory service for fetching contacts and payment endpoints
+     * Create a directory service for fetching contacts and payment endpoints.
+     *
+     * By default, uses mock transport for demo purposes.
+     * Set "paykit.useRealDirectoryTransport" in SharedPreferences to true and implement
+     * a PubkyUnauthenticatedStorageCallback to enable real Pubky directory operations.
      */
     fun createDirectoryService(): DirectoryService {
-        return DirectoryService()
+        val prefs = context.getSharedPreferences("paykit_settings", Context.MODE_PRIVATE)
+        val useRealTransport = prefs.getBoolean("useRealDirectoryTransport", false)
+        
+        return if (useRealTransport) {
+            // To use real transport, you need to:
+            // 1. Implement PubkyUnauthenticatedStorageCallback with real Pubky SDK calls
+            // 2. Create the callback instance and pass to DirectoryService(mode = ...)
+            //
+            // For now, fall back to mock until a real callback is provided
+            Log.w(TAG, "Real directory transport requested but no callback configured - using mock")
+            DirectoryService(mode = DirectoryTransportMode.Mock)
+        } else {
+            DirectoryService(mode = DirectoryTransportMode.Mock)
+        }
     }
 }
 

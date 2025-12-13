@@ -289,7 +289,7 @@ impl WebSocketNoiseChannel {
 /// WASM-exposed client for initiating payments over WebSocket
 #[wasm_bindgen]
 pub struct WasmPaymentClient {
-    // Will be implemented in Phase 4
+    coordinator: crate::payment::WasmPaymentCoordinator,
 }
 
 impl Default for WasmPaymentClient {
@@ -303,30 +303,160 @@ impl WasmPaymentClient {
     /// Create a new payment client
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            coordinator: crate::payment::WasmPaymentCoordinator::new(),
+        }
     }
 
     /// Connect to a payee and initiate a payment
-    /// Returns a promise that resolves with the receipt
+    ///
+    /// # Arguments
+    ///
+    /// * `payer_identity_json` - JSON string of the payer's identity (from Identity.toJSON())
+    /// * `homeserver` - Pubky homeserver URL for endpoint discovery
+    /// * `payee_pubkey` - Recipient's public key (can be pubky:// URI or raw key)
+    /// * `amount` - Payment amount as string
+    /// * `currency` - Currency code (e.g., "SAT", "USD")
+    /// * `method` - Payment method ID (e.g., "lightning", "onchain")
+    ///
+    /// # Returns
+    ///
+    /// A promise that resolves with the receipt JSON string
+    ///
+    /// # Example
+    ///
+    /// ```javascript
+    /// const client = new WasmPaymentClient();
+    /// const identity = Identity.fromJSON(localStorage.getItem('identity'));
+    /// const receipt = await client.pay(
+    ///     identity.toJSON(),
+    ///     'https://homeserver.example.com',
+    ///     'pubky://8pin...',
+    ///     '1000',
+    ///     'SAT',
+    ///     'lightning'
+    /// );
+    /// ```
     pub async fn pay(
         &self,
-        _ws_url: &str,
-        _payee_pubkey: &str,
-        _amount: &str,
-        _currency: &str,
-        _method: &str,
-    ) -> std::result::Result<JsValue, JsValue> {
-        // Will be implemented in Phase 4 - Interactive Payment Integration
-        Err(JsValue::from_str(
-            "Payment client not yet implemented - Phase 4",
-        ))
+        payer_identity_json: &str,
+        homeserver: &str,
+        payee_pubkey: &str,
+        amount: &str,
+        currency: &str,
+        method: &str,
+    ) -> std::result::Result<String, JsValue> {
+        use crate::directory::DirectoryClient;
+        use crate::payment::parse_noise_endpoint_wasm;
+        use paykit_lib::PublicKey;
+        use std::str::FromStr;
+
+        // Extract payee public key (handle pubky:// URIs)
+        let payee_pubkey_str = if payee_pubkey.starts_with("pubky://") {
+            payee_pubkey.strip_prefix("pubky://").unwrap()
+        } else {
+            payee_pubkey
+        };
+
+        let payee = PublicKey::from_str(payee_pubkey_str)
+            .map_err(|e| JsValue::from_str(&format!("Invalid payee pubkey: {}", e)))?;
+
+        // Discover payment endpoint from directory
+        let client = DirectoryClient::new(homeserver.to_string());
+        let methods_js = client
+            .query_methods(&payee.to_string())
+            .await
+            .map_err(|e| {
+                let error_msg = if e.is_string() {
+                    e.as_string().unwrap_or_else(|| format!("{:?}", e))
+                } else {
+                    format!("{:?}", e)
+                };
+                JsValue::from_str(&format!("Directory query failed: {}", error_msg))
+            })?;
+
+        // Convert JsValue to a Rust map to find noise:// endpoint
+        // The methods object is a JavaScript object with method_id -> endpoint mappings
+        let noise_endpoint = {
+            use js_sys::{Object, Reflect};
+            
+            // Try to convert to a JavaScript object
+            let obj = if methods_js.is_object() {
+                Object::from(methods_js)
+            } else {
+                return Err(JsValue::from_str("Directory query returned invalid format"));
+            };
+
+            // Get all keys
+            let keys = Object::keys(&obj);
+            let mut found_endpoint: Option<String> = None;
+
+            for i in 0..keys.length() {
+                if let Some(key_js) = keys.get(i).as_string() {
+                    if let Ok(endpoint_js) = Reflect::get(&obj, &key_js.into()) {
+                        if let Some(endpoint_str) = endpoint_js.as_string() {
+                            if endpoint_str.starts_with("noise://") {
+                                found_endpoint = Some(endpoint_str);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            found_endpoint.ok_or_else(|| {
+                JsValue::from_str(
+                    "No noise:// endpoint found for recipient. Recipient must publish a noise:// endpoint.",
+                )
+            })?
+        };
+
+        // Parse noise endpoint to get WebSocket URL and server key
+        let endpoint_info = parse_noise_endpoint_wasm(&noise_endpoint)?;
+        let endpoint_json: serde_json::Value = serde_json::from_str(
+            &endpoint_info
+                .as_string()
+                .ok_or_else(|| JsValue::from_str("Failed to parse endpoint info"))?,
+        )
+        .map_err(|e| JsValue::from_str(&format!("JSON parse error: {}", e)))?;
+
+        let ws_url = endpoint_json
+            .get("ws_url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| JsValue::from_str("Missing ws_url in endpoint info"))?;
+        let server_key_hex = endpoint_json
+            .get("server_key_hex")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| JsValue::from_str("Missing server_key_hex in endpoint info"))?;
+
+        // Initiate payment using coordinator
+        self.coordinator
+            .initiate_payment(
+                payer_identity_json,
+                ws_url,
+                &payee.to_string(),
+                server_key_hex,
+                amount,
+                currency,
+                method,
+            )
+            .await
     }
 }
 
 /// WASM-exposed server for receiving payments over WebSocket
+///
+/// **Browser Limitation**: Browsers cannot directly accept incoming TCP/WebSocket connections.
+/// To receive payments in a browser, you must use a WebSocket relay server that:
+/// 1. Listens on a TCP port
+/// 2. Accepts incoming Noise protocol connections
+/// 3. Relays messages to/from browser clients via WebSocket
+///
+/// This struct provides utilities for handling payment requests once they arrive
+/// via a relay server, but does not implement the listening functionality.
 #[wasm_bindgen]
 pub struct WasmPaymentServer {
-    // Will be implemented in Phase 4
+    receiver: crate::payment::WasmPaymentReceiver,
 }
 
 impl Default for WasmPaymentServer {
@@ -340,14 +470,76 @@ impl WasmPaymentServer {
     /// Create a new payment server
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            receiver: crate::payment::WasmPaymentReceiver::new(),
+        }
+    }
+
+    /// Accept a payment request (for use with relay server)
+    ///
+    /// This method processes a payment request that was received via a WebSocket relay server.
+    /// The relay server should:
+    /// 1. Accept incoming Noise protocol connections
+    /// 2. Decrypt messages using the Noise channel
+    /// 3. Forward decrypted payment requests to this method via WebSocket
+    ///
+    /// # Arguments
+    ///
+    /// * `request_json` - JSON string of the payment request (PaykitReceipt)
+    ///
+    /// # Returns
+    ///
+    /// Confirmed receipt JSON string
+    ///
+    /// # Example
+    ///
+    /// ```javascript
+    /// // In relay server WebSocket handler:
+    /// const server = new WasmPaymentServer();
+    /// const receipt = await server.acceptPayment(requestJson);
+    /// // Send receipt back via relay server
+    /// ```
+    pub async fn accept_payment(&self, request_json: &str) -> std::result::Result<String, JsValue> {
+        self.receiver.accept_payment(request_json).await
+    }
+
+    /// Get stored receipts
+    pub async fn get_receipts(&self) -> std::result::Result<Vec<JsValue>, JsValue> {
+        self.receiver.get_receipts().await
     }
 
     /// Start listening for payment requests
-    /// Note: In browser, this requires a WebSocket relay server
+    ///
+    /// **Note**: This method is not fully implemented because browsers cannot directly
+    /// listen on TCP ports. To receive payments in a browser:
+    ///
+    /// 1. **Use a WebSocket Relay Server**: Set up a server that:
+    ///    - Listens on a TCP port (e.g., 8888)
+    ///    - Accepts Noise protocol connections
+    ///    - Relays messages to/from browser clients via WebSocket
+    ///
+    /// 2. **Connect from Browser**: Connect to the relay server's WebSocket endpoint
+    ///    and handle incoming payment requests using `accept_payment()`
+    ///
+    /// # Example Relay Server Architecture
+    ///
+    /// ```
+    /// [Noise Client] --TCP--> [Relay Server] --WebSocket--> [Browser]
+    /// ```
+    ///
+    /// The relay server:
+    /// - Accepts Noise connections on TCP port
+    /// - Decrypts/encrypts messages
+    /// - Forwards to browser via WebSocket
+    /// - Returns responses back through Noise channel
+    ///
+    /// For a complete implementation, see the CLI demo's `receive` command which
+    /// implements a full Noise protocol server.
     pub async fn listen(&self, _port: u16) -> std::result::Result<(), JsValue> {
-        // Will be implemented in Phase 4 - Interactive Payment Integration
-        Err(JsValue::from_str("Payment server not yet implemented - Phase 4. Browser cannot listen directly; requires WebSocket relay server."))
+        Err(JsValue::from_str(
+            "Browser cannot listen directly on TCP ports. Use a WebSocket relay server. \
+             See documentation for details on setting up a relay server architecture.",
+        ))
     }
 }
 

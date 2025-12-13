@@ -77,7 +77,8 @@ mod desktop;
 
 pub use memory::InMemoryKeyStorage;
 pub use traits::{
-    KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageErrorCode, SecureStorageResult,
+    KeyMetadata, SecureKeyStorage, SecureKeyStorageExt, SecureStorageError, SecureStorageErrorCode,
+    SecureStorageResult, StoreOptions,
 };
 
 #[cfg(target_os = "ios")]

@@ -193,6 +193,55 @@ impl WasmPaymentMethodConfig {
             .map_err(|e| JsValue::from_str(&format!("Deserialization error: {}", e)))?;
         Ok(WasmPaymentMethodConfig { inner })
     }
+
+    /// Validate the payment method endpoint
+    ///
+    /// Uses the Paykit method registry to validate that the endpoint
+    /// is properly formatted for the given method type.
+    ///
+    /// # Returns
+    ///
+    /// A JavaScript object with validation results:
+    /// ```json
+    /// {
+    ///   "valid": true|false,
+    ///   "errors": ["error1", "error2"],
+    ///   "warnings": ["warning1"]
+    /// }
+    /// ```
+    pub fn validate(&self) -> std::result::Result<JsValue, JsValue> {
+        use paykit_lib::methods::{default_registry, ValidationResult};
+        use paykit_lib::{EndpointData, MethodId};
+
+        let registry = default_registry();
+        let method_id = MethodId::new(&self.inner.method_id);
+
+        let result = if let Some(plugin) = registry.get(&method_id) {
+            let endpoint_data = EndpointData(self.inner.endpoint.clone());
+            plugin.validate_endpoint(&endpoint_data)
+        } else {
+            // No validator for this method type - assume valid
+            ValidationResult::valid()
+        };
+
+        // Convert to JS object
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"valid".into(), &result.valid.into())?;
+        
+        let errors = js_sys::Array::new();
+        for error in &result.errors {
+            errors.push(&error.into());
+        }
+        js_sys::Reflect::set(&obj, &"errors".into(), &errors)?;
+        
+        let warnings = js_sys::Array::new();
+        for warning in &result.warnings {
+            warnings.push(&warning.into());
+        }
+        js_sys::Reflect::set(&obj, &"warnings".into(), &warnings)?;
+
+        Ok(obj.into())
+    }
 }
 
 /// Storage manager for payment methods in browser localStorage

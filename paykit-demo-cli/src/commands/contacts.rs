@@ -41,16 +41,43 @@ pub async fn add(
     Ok(())
 }
 
-pub async fn list(storage_dir: &Path, _verbose: bool) -> Result<()> {
+pub async fn list(storage_dir: &Path, search_query: Option<&str>, _verbose: bool) -> Result<()> {
     ui::header("Contacts");
 
     let storage = DemoStorage::new(storage_dir.join("data"));
-    let contacts = storage.list_contacts()?;
+    let mut contacts = storage.list_contacts()?;
+
+    // Filter by search query if provided
+    if let Some(query) = search_query {
+        let query_lower = query.to_lowercase();
+        contacts.retain(|contact| {
+            contact.name.to_lowercase().contains(&query_lower)
+                || contact.public_key.to_string().to_lowercase().contains(&query_lower)
+                || contact
+                    .pubky_uri()
+                    .to_lowercase()
+                    .contains(&query_lower)
+                || contact
+                    .notes
+                    .as_ref()
+                    .map(|n| n.to_lowercase().contains(&query_lower))
+                    .unwrap_or(false)
+        });
+    }
 
     if contacts.is_empty() {
-        ui::info("No contacts found");
-        ui::info("Use 'paykit-demo contacts add' to add contacts");
+        if search_query.is_some() {
+            ui::info("No contacts found matching search query");
+        } else {
+            ui::info("No contacts found");
+            ui::info("Use 'paykit-demo contacts add' to add contacts");
+        }
         return Ok(());
+    }
+
+    if search_query.is_some() {
+        ui::info(&format!("Found {} matching contact(s)", contacts.len()));
+        ui::separator();
     }
 
     for contact in contacts {

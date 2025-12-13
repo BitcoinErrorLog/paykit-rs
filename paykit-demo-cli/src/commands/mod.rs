@@ -1,5 +1,6 @@
 //! CLI command implementations
 
+pub mod backup;
 pub mod contacts;
 pub mod dashboard;
 pub mod discover;

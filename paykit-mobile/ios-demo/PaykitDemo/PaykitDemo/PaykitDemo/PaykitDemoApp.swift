@@ -204,8 +204,24 @@ class PaykitClientWrapper: ObservableObject {
     // MARK: - Directory Operations
     
     /// Create a directory service for fetching contacts and payment endpoints
+    ///
+    /// By default, uses mock transport for demo purposes.
+    /// Set `useRealDirectoryTransport` in UserDefaults to true and implement
+    /// a PubkyStorageCallback to enable real Pubky directory operations.
     func createDirectoryService() -> DirectoryService {
-        DirectoryService()
+        let useRealTransport = UserDefaults.standard.bool(forKey: "paykit.useRealDirectoryTransport")
+        
+        if useRealTransport {
+            // To use real transport, you need to:
+            // 1. Implement PubkyUnauthenticatedStorageCallback with real Pubky SDK calls
+            // 2. Create the callback instance and pass to DirectoryService(mode: .callback(...))
+            //
+            // For now, fall back to mock until a real callback is provided
+            print("⚠️ Real directory transport requested but no callback configured - using mock")
+            return DirectoryService(mode: .mock)
+        } else {
+            return DirectoryService(mode: .mock)
+        }
     }
 }
 

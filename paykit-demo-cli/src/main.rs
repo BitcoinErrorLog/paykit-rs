@@ -49,6 +49,23 @@ enum Commands {
     /// Migrate identities from plaintext to secure storage
     Migrate,
 
+    /// Export identity to encrypted backup file
+    Backup {
+        /// Output file for the backup (JSON format)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+
+    /// Restore identity from encrypted backup file
+    Restore {
+        /// Input backup file to restore from
+        input: String,
+
+        /// Name for the restored identity
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+
     /// Configure payment wallet (LND, Esplora)
     Wallet {
         #[command(subcommand)]
@@ -462,7 +479,11 @@ enum ContactAction {
     },
 
     /// List all contacts
-    List,
+    List {
+        /// Search query to filter contacts by name or public key
+        #[arg(short, long)]
+        search: Option<String>,
+    },
 
     /// Remove a contact
     Remove {
@@ -529,6 +550,12 @@ async fn main() -> Result<()> {
         Commands::Migrate => {
             commands::migrate::run(&storage_dir, cli.verbose).await?;
         }
+        Commands::Backup { output } => {
+            commands::backup::export(&storage_dir, output.as_deref(), cli.verbose).await?;
+        }
+        Commands::Restore { input, name } => {
+            commands::backup::import(&storage_dir, &input, name.as_deref(), cli.verbose).await?;
+        }
         Commands::Wallet { action } => match action {
             WalletAction::Status => {
                 commands::wallet::status(&storage_dir, cli.verbose).await?;
@@ -590,8 +617,8 @@ async fn main() -> Result<()> {
                 commands::contacts::add(&storage_dir, &name, &uri, notes.as_deref(), cli.verbose)
                     .await?;
             }
-            ContactAction::List => {
-                commands::contacts::list(&storage_dir, cli.verbose).await?;
+            ContactAction::List { search } => {
+                commands::contacts::list(&storage_dir, search.as_deref(), cli.verbose).await?;
             }
             ContactAction::Remove { name } => {
                 commands::contacts::remove(&storage_dir, &name, cli.verbose).await?;

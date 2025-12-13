@@ -67,6 +67,16 @@ impl CoreIdentity {
     }
 }
 
+/// Encrypted backup format for identity
+#[derive(Clone, Serialize, Deserialize)]
+struct EncryptedBackup {
+    version: u32,
+    encrypted_data_hex: String,
+    salt_hex: String,
+    nonce_hex: String,
+    public_key_z32: String,
+}
+
 /// JavaScript-facing identity wrapper
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -120,6 +130,124 @@ impl Identity {
         let inner: CoreIdentity =
             serde_json::from_str(json).map_err(|e| utils::js_error(&e.to_string()))?;
         Ok(Identity { inner })
+    }
+
+    /// Export identity to encrypted backup
+    ///
+    /// Uses Argon2 for password-based key derivation and AES-256-GCM for encryption.
+    /// Returns a JSON string containing the encrypted backup.
+    #[wasm_bindgen(js_name = exportBackup)]
+    pub fn export_backup(&self, password: &str) -> Result<String, JsValue> {
+        use aes_gcm::{
+            aead::{Aead, KeyInit},
+            Aes256Gcm, Nonce,
+        };
+        use argon2::Argon2;
+        use rand::RngCore;
+
+        let secret_bytes = self.inner.keypair.secret_key();
+
+        // Derive encryption key from password using Argon2
+        let mut salt = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut salt);
+
+        let mut encryption_key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
+            .map_err(|e| utils::js_error(&format!("Key derivation failed: {}", e)))?;
+
+        // Encrypt with AES-GCM
+        let cipher = Aes256Gcm::new_from_slice(&encryption_key)
+            .map_err(|e| utils::js_error(&format!("Cipher init failed: {}", e)))?;
+
+        let mut nonce_bytes = [0u8; 12];
+        rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let encrypted = cipher
+            .encrypt(nonce, secret_bytes.as_ref())
+            .map_err(|e| utils::js_error(&format!("Encryption failed: {}", e)))?;
+
+        let backup = EncryptedBackup {
+            version: 1,
+            encrypted_data_hex: hex::encode(encrypted),
+            salt_hex: hex::encode(salt),
+            nonce_hex: hex::encode(nonce_bytes),
+            public_key_z32: self.public_key(),
+        };
+
+        serde_json::to_string(&backup)
+            .map_err(|e| utils::js_error(&format!("Serialization failed: {}", e)))
+    }
+
+    /// Import identity from encrypted backup
+    ///
+    /// Uses Argon2 for password-based key derivation and AES-256-GCM for decryption.
+    #[wasm_bindgen(js_name = importBackup)]
+    pub fn import_backup(backup_json: &str, password: &str) -> Result<Identity, JsValue> {
+        use aes_gcm::{
+            aead::{Aead, KeyInit},
+            Aes256Gcm, Nonce,
+        };
+        use argon2::Argon2;
+
+        let backup: EncryptedBackup = serde_json::from_str(backup_json)
+            .map_err(|e| utils::js_error(&format!("Invalid backup format: {}", e)))?;
+
+        if backup.version != 1 {
+            return Err(utils::js_error(&format!(
+                "Unsupported backup version: {}",
+                backup.version
+            )));
+        }
+
+        let salt = hex::decode(&backup.salt_hex)
+            .map_err(|e| utils::js_error(&format!("Invalid salt: {}", e)))?;
+        let nonce_bytes = hex::decode(&backup.nonce_hex)
+            .map_err(|e| utils::js_error(&format!("Invalid nonce: {}", e)))?;
+        let encrypted = hex::decode(&backup.encrypted_data_hex)
+            .map_err(|e| utils::js_error(&format!("Invalid encrypted data: {}", e)))?;
+
+        // Derive encryption key from password
+        let mut encryption_key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
+            .map_err(|e| utils::js_error(&format!("Key derivation failed: {}", e)))?;
+
+        // Decrypt with AES-GCM
+        let cipher = Aes256Gcm::new_from_slice(&encryption_key)
+            .map_err(|e| utils::js_error(&format!("Cipher init failed: {}", e)))?;
+
+        if nonce_bytes.len() != 12 {
+            return Err(utils::js_error("Invalid nonce length"));
+        }
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let decrypted = cipher
+            .decrypt(nonce, encrypted.as_ref())
+            .map_err(|_| utils::js_error("Decryption failed - wrong password or corrupted data"))?;
+
+        if decrypted.len() != 32 {
+            return Err(utils::js_error("Invalid decrypted data length"));
+        }
+
+        let mut secret_key = [0u8; 32];
+        secret_key.copy_from_slice(&decrypted);
+
+        let keypair = Keypair::from_secret_key(&secret_key);
+
+        // Verify public key matches
+        let derived_public_key = keypair.public_key().to_z32();
+        if derived_public_key != backup.public_key_z32 {
+            return Err(utils::js_error("Public key mismatch - backup may be corrupted"));
+        }
+
+        Ok(Identity {
+            inner: CoreIdentity {
+                keypair,
+                nickname: None,
+            },
+        })
     }
 
     /// Get Ed25519 secret key (for Noise key derivation)

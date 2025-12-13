@@ -41,7 +41,7 @@ pub use crate::methods::{LightningPlugin, OnchainPlugin};
 pub use crate::methods::{BitcoinExecutor, LightningExecutor};
 
 // Secure storage
-pub use crate::secure_storage::SecureKeyStorage;
+pub use crate::secure_storage::{SecureKeyStorage, SecureKeyStorageExt, StoreOptions};
 
 // Pubky transport (when available)
 #[cfg(feature = "pubky")]

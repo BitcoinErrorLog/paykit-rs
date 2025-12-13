@@ -6,7 +6,7 @@ A WebAssembly application demonstrating Paykit capabilities in the browser: iden
 
 ## Current Status
 
-> **Demo Application**: Most features are fully implemented but directory publishing uses mock storage.
+> **Demo Application**: Most features are fully implemented. Directory publishing now supports multiple modes.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -15,22 +15,58 @@ A WebAssembly application demonstrating Paykit capabilities in the browser: iden
 | Receipt Management | **Real** | Full history with filtering, localStorage |
 | Dashboard | **Real** | Statistics from real stored data |
 | Noise Payments | **Real** | WebSocket-based encrypted payments |
-| Payment Methods | **Partial** | Configured locally, mock publish |
-| Directory Publish | **Mock** | `mock_publish()` saves locally only |
+| Payment Methods | **Real** | Configured locally with real publishing options |
+| Directory Publish | **Configurable** | Mock, Direct, or Proxy modes |
 | Directory Discover | **Real** | HTTP queries to homeservers |
 | Subscriptions | **Real** | Full P2P lifecycle, localStorage |
 | Auto-Pay | **Real** | Rules and limits, localStorage |
 | Spending Limits | **Real** | Per-peer limits with period reset |
 
-### Key Limitation
+### Directory Publishing Modes
 
-**Directory Publishing**: The `publish_methods()` function uses `mock_publish()` which saves to localStorage only. Methods are NOT published to actual Pubky homeservers. To enable real publishing:
+The `DirectoryClient` now supports three publishing modes to work around browser CORS restrictions:
 
-1. Configure a homeserver URL in the app
-2. Implement the actual HTTP PUT to the homeserver
-3. Handle authentication with the homeserver
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Mock** | Saves to localStorage only (default) | Development/testing |
+| **Direct** | HTTP PUT directly to homeserver | Homeserver with CORS headers |
+| **Proxy** | Routes through a CORS proxy | Production without CORS headers |
 
-This limitation exists because browser CORS restrictions require a proxy or homeserver with CORS headers.
+#### Usage Examples
+
+```javascript
+// Mock mode (default) - for development
+const mockClient = new DirectoryClient("https://homeserver.example.com");
+await mockClient.publishEndpoint(publicKey, "lightning", "lnurl1...", null);
+// Result: Saved to localStorage only
+
+// Direct mode - requires CORS-enabled homeserver
+const directClient = DirectoryClient.withDirectAccess("https://cors-enabled.example.com");
+await directClient.publishEndpoint(publicKey, "lightning", "lnurl1...", authToken);
+// Result: Real HTTP PUT to homeserver
+
+// Proxy mode - uses a CORS proxy
+const proxyClient = DirectoryClient.withProxy(
+    "https://homeserver.example.com",
+    "https://cors-proxy.example.com"
+);
+await proxyClient.publishEndpoint(publicKey, "lightning", "lnurl1...", authToken);
+// Result: Request routed through proxy to homeserver
+```
+
+#### Bulk Publishing
+
+```javascript
+const storage = new WasmPaymentMethodStorage();
+const client = DirectoryClient.withProxy(homeserver, proxy);
+
+// Publish all public methods at once
+const result = await storage.publishToDirectory(client, publicKey, authToken);
+console.log(result); // "Published 3 method(s) successfully, 0 failed."
+
+// Remove all published methods
+await storage.unpublishFromDirectory(client, publicKey, authToken);
+```
 
 ## Features
 

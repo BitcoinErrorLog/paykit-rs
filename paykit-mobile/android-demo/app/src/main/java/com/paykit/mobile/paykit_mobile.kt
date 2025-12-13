@@ -6059,10 +6059,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Transport(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6070,10 +6070,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Validation(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6081,10 +6081,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NotFound(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6092,10 +6092,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Serialization(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6103,10 +6103,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Internal(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6114,10 +6114,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NetworkTimeout(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6125,10 +6125,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class ConnectionException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6136,10 +6136,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class AuthenticationException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6147,10 +6147,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class SessionException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6158,10 +6158,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class RateLimitException(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     /**
@@ -6169,10 +6169,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class PermissionDenied(
         
-        val `message`: String
+        val errorMessage: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
 
@@ -6581,18 +6581,18 @@ sealed class StorageCacheException: Exception() {
     
     class Storage(
         
-        val `message`: String
+        val errorMessage: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
     class Lock(
         
-        val `message`: String
+        val errorMessage: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "message=${ errorMessage }"
     }
     
 

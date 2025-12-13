@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             PaykitDemoTheme {
-                PaykitDemoApp()
+                PaykitDemoContent()
             }
         }
     }
@@ -66,7 +66,7 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PaykitDemoApp() {
+fun PaykitDemoContent() {
     val navController = rememberNavController()
     val screens = listOf(
         Screen.Methods,

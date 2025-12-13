@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.paykit.demo.app-mergeDebugResources-51:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "/Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/res/values-v16/values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "65",
+                        "endOffsets": "116"
+                    }
+                }
+            ]
+        }
+    ]
+}

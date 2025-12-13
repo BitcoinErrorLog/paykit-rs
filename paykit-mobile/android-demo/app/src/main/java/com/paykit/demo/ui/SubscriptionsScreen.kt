@@ -244,7 +244,7 @@ fun SubscriptionsScreen() {
 
                         prorationResult?.let { result ->
                             Spacer(modifier = Modifier.height(16.dp))
-                            Divider()
+                            HorizontalDivider()
                             Spacer(modifier = Modifier.height(8.dp))
 
                             Row(

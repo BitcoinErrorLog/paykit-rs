@@ -51,6 +51,8 @@ Without wallet configuration, the CLI shows simulation mode with setup instructi
 - Pubky URI creation and display
 - Multiple identity support with switching
 - Secure key derivation for Noise protocol
+- **Secure Storage**: OS keychain support (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux)
+- **Migration**: Migrate existing plaintext identities to secure storage
 
 ### 📡 Directory Operations
 - Publish payment methods to Pubky homeservers
@@ -112,6 +114,7 @@ paykit-demo receipts
 | `whoami` | Show current identity | `paykit-demo whoami` |
 | `list` | List all identities | `paykit-demo list` |
 | `switch` | Switch identity | `paykit-demo switch bob` |
+| `migrate` | Migrate plaintext identities to secure storage | `paykit-demo migrate` |
 
 ### Wallet Configuration
 
@@ -203,7 +206,7 @@ Data is stored in:
 
 ```
 paykit-demo/
-├── identities/           # Ed25519 keypairs (JSON)
+├── identities/           # Ed25519 keypairs (JSON) - plaintext or secure storage
 │   ├── alice.json
 │   └── bob.json
 ├── data/
@@ -211,6 +214,8 @@ paykit-demo/
 │   └── subscriptions/   # Subscription data
 └── .current_identity    # Active identity marker
 ```
+
+**Note**: New identities are stored in OS keychain by default (if available). Use `paykit-demo migrate` to migrate existing plaintext identities to secure storage.
 
 ## 🏗️ Architecture
 
@@ -271,15 +276,24 @@ cargo test --test pay_integration     # Payment tests
 
 **⚠️ This is DEMO software for development and testing**
 
+### Secure Storage (Available)
+
+The CLI now supports OS-level secure storage for identities:
+- **macOS**: Keychain Services
+- **Windows**: Credential Manager
+- **Linux**: Secret Service (libsecret)
+
+New identities created with `paykit-demo setup` are stored securely by default (if secure storage is available). Use `paykit-demo migrate` to migrate existing plaintext identities to secure storage.
+
 ### Not Production-Ready
-- Private keys stored in **plaintext JSON files**
-- No encryption at rest
-- No OS keychain integration
+- Legacy plaintext identity storage still supported (fallback)
+- No encryption at rest for data files (contacts, receipts, etc.)
 - Simplified error handling
+- No hardware security module integration
 
 ### For Production Use
-- Implement secure key storage (Keychain/KeyStore/Credential Manager)
-- Add key encryption at rest
+- ✅ Secure key storage implemented (OS keychain)
+- Add encryption at rest for data files
 - Use hardware security modules for high-value keys
 - Implement proper session management
 - Add rate limiting and DoS protection

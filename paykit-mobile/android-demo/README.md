@@ -11,14 +11,17 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Dashboard | **Real** | Overview with stats, recent activity, quick actions |
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, EncryptedSharedPreferences |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
-| Contacts | **Real** | EncryptedSharedPreferences-backed contact storage |
-| Receipts | **Real** | FFI-backed creation, EncryptedSharedPrefs storage, search/filtering |
+| Contacts | **Real** | EncryptedSharedPreferences-backed contact storage, identity-scoped |
+| Contact Discovery | **Real** | Discover contacts from Pubky follows directory |
+| Receipts | **Real** | FFI-backed creation, EncryptedSharedPrefs storage, search/filtering, identity-scoped |
 | Payment Methods | **Real** | Lists methods via PaykitClient FFI, validates endpoints |
 | Health Monitoring | **Real** | Real health checks via PaykitClient.checkHealth() |
 | Method Selection | **Real** | Smart method selection with strategy options |
-| Subscriptions | **Real** | EncryptedSharedPreferences-backed subscription storage |
-| Auto-Pay | **Real** | EncryptedSharedPreferences-backed settings, limits, and rules |
-| Payment Requests | **Real** | EncryptedSharedPreferences storage with FFI integration |
+| Subscriptions | **Real** | EncryptedSharedPreferences-backed subscription storage, identity-scoped |
+| Auto-Pay | **Real** | EncryptedSharedPreferences-backed settings, limits, and rules, identity-scoped |
+| Payment Requests | **Real** | EncryptedSharedPreferences storage with FFI integration, identity-scoped |
+| QR Scanner | **Real** | QR code scanning with Paykit URI parsing (manual input for testing) |
+| Multiple Identities | **Real** | Create, switch, and manage multiple identities |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
@@ -93,13 +96,18 @@ Auto-pay settings management with EncryptedSharedPreferences persistence:
 - Accept/decline incoming requests
 - Request history with status tracking
 
-### Contacts (NEW - Real Implementation)
+### Contacts (Real Implementation)
 - Add and manage payment recipients
-- Persistent storage using EncryptedSharedPreferences
+- Persistent storage using EncryptedSharedPreferences (identity-scoped)
 - Search contacts by name or public key
 - Copy public keys to clipboard
 - Payment history tracking per contact
 - Notes and metadata support
+- **Contact Discovery**: Discover contacts from Pubky follows directory
+  - Fetch known contacts from any public key's follows list
+  - View supported payment methods for discovered contacts
+  - Multi-select import with one tap
+  - Automatically filters out contacts you already have
 
 ### Directory Operations (Configurable Transport)
 
@@ -146,12 +154,33 @@ class MyPubkyStorage(
 }
 ```
 
+### QR Scanner (Real Implementation)
+
+- **QR Code Scanning**: Scan and parse Paykit URIs
+- **Paykit URI Parsing**: Automatically detects and parses Paykit URIs
+- **Multiple URI Types**: Supports Pubky, Invoice, and Payment Request URIs
+- **Result Handling**: Shows parsed information and allows navigation to appropriate flows
+- **Permission Handling**: Requests camera permission at runtime
+- **Manual Input**: Manual input option for testing (camera preview integration pending)
+- Accessible from Dashboard quick actions
+- **Note**: For production, integrate a QR scanning library (ML Kit Barcode Scanning or ZXing recommended)
+
+### Multiple Identities (Real Implementation)
+
+- **Identity Management**: Create, list, switch, and delete identities
+- **Identity-Scoped Storage**: All data (contacts, receipts, subscriptions, etc.) is isolated per identity
+- **Automatic Migration**: Existing single-identity users are automatically migrated
+- **Identity Switching**: Seamlessly switch between identities with automatic data reloading
+- **Identity List Screen**: Full UI for managing all identities
+- Accessible from Settings → Manage Identities
+
 ### Settings
 
 - Network selection (Mainnet/Testnet/Regtest)
 - Security settings (biometric, background lock)
 - Notification preferences
 - **Key management** (real implementation)
+- **Identity management** (create, switch, delete identities)
 - Developer options for testing
 
 ## Project Structure
@@ -405,20 +434,25 @@ The following use sample data for UI demonstration:
 
 Completed improvements:
 - ✅ **Contacts**: Contact management with EncryptedSharedPreferences
+- ✅ **Contact Discovery**: Discover contacts from Pubky follows directory
+- ✅ **QR Scanner**: QR code scanning with Paykit URI parsing
+- ✅ **Multiple Identities**: Full identity management with identity-scoped storage
 - ✅ **Dashboard**: Overview with statistics and recent activity
-- ✅ **Receipts**: Payment history with search and filtering
+- ✅ **Receipts**: Payment history with search and filtering (identity-scoped)
 - ✅ **Payment Methods**: Real FFI integration with PaykitClient
 - ✅ **Health Monitoring**: Real health checks via PaykitClient.checkHealth()
 - ✅ **Method Selection**: Smart method selection with strategy options
 - ✅ **Directory Transport**: Configurable mock/callback transport for Pubky integration
+- ✅ **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences with FFI integration (identity-scoped)
+- ✅ **Receipt Generation**: Create receipts via FFI with EncryptedSharedPreferences storage (identity-scoped)
+- ✅ **Subscription Storage**: Identity-scoped subscription management
+- ✅ **Auto-Pay Storage**: Identity-scoped auto-pay settings and rules
 
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
 2. **Noise Integration**: Real encrypted payments via Noise protocol
-
-Recently completed:
-- ✅ **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences with FFI integration
-- ✅ **Receipt Generation**: Create receipts via FFI with EncryptedSharedPreferences storage
+3. **QR Scanner Camera Preview**: Integrate camera preview with QR scanning library (ML Kit or ZXing)
+4. **QR Scanner Navigation**: Add navigation flows for scanned QR codes (payment flows, contact addition, etc.)
 
 ## Troubleshooting
 

@@ -8,8 +8,11 @@ A comprehensive Android demo application showcasing Paykit features including ke
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| Dashboard | **Real** | Overview with stats, recent activity, quick actions |
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, EncryptedSharedPreferences |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
+| Contacts | **Real** | EncryptedSharedPreferences-backed contact storage |
+| Receipts | **Real** | Payment history with search and filtering |
 | Payment Methods | UI Only | Static list, not connected to PaykitClient |
 | Health Monitoring | UI Only | Displays mock "Healthy" status |
 | Subscriptions | UI Only | Empty state, no sample data |
@@ -19,6 +22,25 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
+
+### Dashboard (Real)
+
+The dashboard provides an overview of your payment activity:
+
+- **Stats Cards**: Total sent/received, contact count, pending transactions
+- **Recent Activity**: Latest receipts with status indicators
+- **Quick Actions**: Send, Receive, and Scan buttons
+- **Material 3 Design**: Modern UI with card-based layout
+
+### Receipts (Real)
+
+Full payment history management with EncryptedSharedPreferences persistence:
+
+- **Receipt List**: All payments with direction and status indicators
+- **Search**: Find receipts by counterparty, memo, or key
+- **Filter Sheet**: Filter by direction (sent/received) or status
+- **Delete Support**: Remove individual receipts
+- **Statistics**: Total sent/received, completed/pending counts
 
 ### Key Management (Real)
 
@@ -90,9 +112,18 @@ android-demo/
 │           ├── demo/
 │           │   ├── PaykitDemoApp.kt      # Application class
 │           │   ├── MainActivity.kt       # Main activity with navigation
+│           │   ├── model/
+│           │   │   ├── Contact.kt        # Contact data model
+│           │   │   └── Receipt.kt        # Receipt data model
+│           │   ├── storage/
+│           │   │   ├── ContactStorage.kt # Encrypted contact storage
+│           │   │   └── ReceiptStorage.kt # Encrypted receipt storage
 │           │   ├── ui/
+│           │   │   ├── DashboardScreen.kt    # Dashboard with stats
 │           │   │   ├── AutoPayScreen.kt      # Auto-pay settings UI
 │           │   │   ├── PaymentMethodsScreen.kt # Methods UI (static)
+│           │   │   ├── ContactsScreen.kt     # Contact management
+│           │   │   ├── ReceiptsScreen.kt     # Receipt history
 │           │   │   ├── SubscriptionsScreen.kt  # Subscriptions UI
 │           │   │   ├── PaymentRequestsScreen.kt # Requests UI
 │           │   │   ├── SettingsScreen.kt       # Settings with key management
@@ -315,13 +346,16 @@ The following use static/sample data for UI demonstration:
 
 ## Roadmap
 
-Planned improvements to make this a full production demo:
+Completed improvements:
+- ✅ **Contacts**: Contact management with EncryptedSharedPreferences
+- ✅ **Dashboard**: Overview with statistics and recent activity
+- ✅ **Receipts**: Payment history with search and filtering
 
+Planned improvements:
 1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
 2. **Persist Data**: Store subscriptions/auto-pay in EncryptedPrefs
-3. **Add Contacts**: Contact management with directory lookup
-4. **Add Dashboard**: Overview with statistics
-5. **Noise Integration**: Real encrypted payments
+3. **Directory Lookup**: Fetch contacts from Pubky directory
+4. **Noise Integration**: Real encrypted payments via Noise protocol
 
 ## Troubleshooting
 

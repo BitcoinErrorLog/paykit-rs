@@ -21,6 +21,7 @@ import com.paykit.demo.model.PaymentDirection
 import com.paykit.demo.model.PaymentStatus
 import com.paykit.demo.model.Receipt
 import com.paykit.demo.storage.ReceiptStorage
+import android.content.Intent
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
@@ -35,6 +36,8 @@ class ReceiptsViewModel : ViewModel() {
         private set
     var errorMessage by mutableStateOf<String?>(null)
     var showError by mutableStateOf(false)
+    var exportData by mutableStateOf<String?>(null)
+    var showExportDialog by mutableStateOf(false)
     
     val filteredReceipts: List<Receipt>
         get() {
@@ -147,10 +150,74 @@ class ReceiptsViewModel : ViewModel() {
         searchText = ""
     }
     
+    // Export Functions
+    
+    /**
+     * Export receipts to JSON format
+     */
+    fun exportToJSON(): String {
+        val receiptsList = filteredReceipts.map { receipt ->
+            mapOf(
+                "id" to receipt.id,
+                "direction" to receipt.direction.name,
+                "counterparty" to receipt.counterpartyKey,
+                "displayName" to receipt.displayName,
+                "amount" to receipt.amount,
+                "currency" to receipt.currency,
+                "paymentMethod" to receipt.paymentMethod,
+                "status" to receipt.status.name,
+                "createdAt" to receipt.createdAt,
+                "completedAt" to receipt.completedAt,
+                "memo" to receipt.memo,
+                "txId" to receipt.txId
+            )
+        }
+        return org.json.JSONArray(receiptsList.map { org.json.JSONObject(it) }).toString(2)
+    }
+    
+    /**
+     * Export receipts to CSV format
+     */
+    fun exportToCSV(): String {
+        val header = "ID,Direction,Counterparty,Display Name,Amount,Currency,Payment Method,Status,Created At,Completed At,Memo,Transaction ID\n"
+        val rows = filteredReceipts.joinToString("\n") { receipt ->
+            listOf(
+                receipt.id,
+                receipt.direction.name,
+                receipt.counterpartyKey,
+                receipt.displayName.replace(",", ";"),
+                receipt.amount.toString(),
+                receipt.currency,
+                receipt.paymentMethod,
+                receipt.status.name,
+                DateFormat.getDateTimeInstance().format(Date(receipt.createdAt)),
+                receipt.completedAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "",
+                (receipt.memo ?: "").replace(",", ";"),
+                receipt.txId ?: ""
+            ).joinToString(",")
+        }
+        return header + rows
+    }
+    
+    /**
+     * Prepare export data
+     */
+    fun prepareExport(format: ExportFormat) {
+        exportData = when (format) {
+            ExportFormat.JSON -> exportToJSON()
+            ExportFormat.CSV -> exportToCSV()
+        }
+        showExportDialog = true
+    }
+    
     private fun showErrorMessage(message: String) {
         errorMessage = message
         showError = true
     }
+}
+
+enum class ExportFormat {
+    JSON, CSV
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,11 +233,53 @@ fun ReceiptsScreen(
         viewModel.loadReceipts(storage)
     }
     
+    var showExportMenu by remember { mutableStateOf(false) }
+    
+    // Handle share intent
+    if (viewModel.showExportDialog && viewModel.exportData != null) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, viewModel.exportData)
+            putExtra(Intent.EXTRA_SUBJECT, "Paykit Receipts Export")
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Share Receipts"))
+        viewModel.showExportDialog = false
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Receipts") },
                 actions = {
+                    Box {
+                        IconButton(
+                            onClick = { showExportMenu = true },
+                            enabled = viewModel.receipts.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Export")
+                        }
+                        DropdownMenu(
+                            expanded = showExportMenu,
+                            onDismissRequest = { showExportMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export as JSON") },
+                                onClick = {
+                                    viewModel.prepareExport(ExportFormat.JSON)
+                                    showExportMenu = false
+                                },
+                                leadingIcon = { Icon(Icons.Default.Description, null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export as CSV") },
+                                onClick = {
+                                    viewModel.prepareExport(ExportFormat.CSV)
+                                    showExportMenu = false
+                                },
+                                leadingIcon = { Icon(Icons.Default.TableChart, null) }
+                            )
+                        }
+                    }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }

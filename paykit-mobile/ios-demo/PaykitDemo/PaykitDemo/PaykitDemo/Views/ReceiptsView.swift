@@ -15,6 +15,8 @@ class ReceiptsViewModel: ObservableObject {
     @Published var isLoading = true
     @Published var errorMessage: String?
     @Published var showError = false
+    @Published var exportData: String?
+    @Published var showExportSheet = false
     
     private let storage = ReceiptStorage()
     
@@ -137,10 +139,86 @@ class ReceiptsViewModel: ObservableObject {
         searchText = ""
     }
     
+    // MARK: - Export Functions
+    
+    /// Export receipts to JSON format
+    func exportToJSON() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        
+        let receiptDicts = filteredReceipts.map { receipt -> [String: Any] in
+            [
+                "id": receipt.id,
+                "direction": receipt.direction.rawValue,
+                "counterparty": receipt.counterpartyKey,
+                "displayName": receipt.displayName,
+                "amount": receipt.amount,
+                "currency": receipt.currency,
+                "paymentMethod": receipt.paymentMethod,
+                "status": receipt.status.rawValue,
+                "createdAt": ISO8601DateFormatter().string(from: receipt.createdAt),
+                "completedAt": receipt.completedAt.map { ISO8601DateFormatter().string(from: $0) } as Any,
+                "memo": receipt.memo as Any,
+                "txId": receipt.txId as Any
+            ]
+        }
+        
+        if let jsonData = try? JSONSerialization.data(withJSONObject: receiptDicts, options: .prettyPrinted),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            return jsonString
+        }
+        return "[]"
+    }
+    
+    /// Export receipts to CSV format
+    func exportToCSV() -> String {
+        var csv = "ID,Direction,Counterparty,Display Name,Amount,Currency,Payment Method,Status,Created At,Completed At,Memo,Transaction ID\n"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        
+        for receipt in filteredReceipts {
+            let row = [
+                receipt.id,
+                receipt.direction.rawValue,
+                receipt.counterpartyKey,
+                receipt.displayName.replacingOccurrences(of: ",", with: ";"),
+                String(receipt.amount),
+                receipt.currency,
+                receipt.paymentMethod,
+                receipt.status.rawValue,
+                dateFormatter.string(from: receipt.createdAt),
+                receipt.completedAt.map { dateFormatter.string(from: $0) } ?? "",
+                (receipt.memo ?? "").replacingOccurrences(of: ",", with: ";"),
+                receipt.txId ?? ""
+            ]
+            csv += row.joined(separator: ",") + "\n"
+        }
+        
+        return csv
+    }
+    
+    /// Prepare export data and show share sheet
+    func prepareExport(format: ExportFormat) {
+        switch format {
+        case .json:
+            exportData = exportToJSON()
+        case .csv:
+            exportData = exportToCSV()
+        }
+        showExportSheet = true
+    }
+    
     private func showErrorMessage(_ message: String) {
         errorMessage = message
         showError = true
     }
+}
+
+enum ExportFormat {
+    case json
+    case csv
 }
 
 struct ReceiptsView: View {
@@ -170,6 +248,19 @@ struct ReceiptsView: View {
             }
             .navigationTitle("Receipts")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Menu {
+                        Button(action: { viewModel.prepareExport(format: .json) }) {
+                            Label("Export as JSON", systemImage: "doc.text")
+                        }
+                        Button(action: { viewModel.prepareExport(format: .csv) }) {
+                            Label("Export as CSV", systemImage: "tablecells")
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .disabled(viewModel.receipts.isEmpty)
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showFilterSheet = true }) {
                         Image(systemName: "line.3.horizontal.decrease.circle")
@@ -178,6 +269,11 @@ struct ReceiptsView: View {
             }
             .sheet(isPresented: $showFilterSheet) {
                 FilterSheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showExportSheet) {
+                if let exportData = viewModel.exportData {
+                    ShareSheet(items: [exportData])
+                }
             }
             .onAppear {
                 viewModel.loadReceipts()
@@ -525,6 +621,18 @@ struct DetailRow: View {
                 .font(.body)
         }
     }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

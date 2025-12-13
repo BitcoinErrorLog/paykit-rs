@@ -37,6 +37,11 @@ class MainActivity : ComponentActivity() {
  * Navigation destinations
  */
 sealed class Screen(val route: String, val title: String, val icon: @Composable () -> Unit) {
+    object Dashboard : Screen(
+        "dashboard",
+        "Dashboard",
+        { Icon(Icons.Default.Home, contentDescription = "Dashboard") }
+    )
     object Methods : Screen(
         "methods",
         "Methods",
@@ -46,6 +51,11 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "contacts",
         "Contacts",
         { Icon(Icons.Default.Person, contentDescription = "Contacts") }
+    )
+    object Receipts : Screen(
+        "receipts",
+        "Receipts",
+        { Icon(Icons.Default.ReceiptLong, contentDescription = "Receipts") }
     )
     object Subscriptions : Screen(
         "subscriptions",
@@ -74,8 +84,10 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
 fun PaykitDemoContent() {
     val navController = rememberNavController()
     val screens = listOf(
+        Screen.Dashboard,
         Screen.Methods,
         Screen.Contacts,
+        Screen.Receipts,
         Screen.Subscriptions,
         Screen.AutoPay,
         Screen.Requests,
@@ -113,11 +125,13 @@ fun PaykitDemoContent() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Methods.route,
+            startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Methods.route) { PaymentMethodsScreen() }
             composable(Screen.Contacts.route) { ContactsScreen() }
+            composable(Screen.Receipts.route) { ReceiptsScreen() }
             composable(Screen.Subscriptions.route) { SubscriptionsScreen() }
             composable(Screen.AutoPay.route) { AutoPayScreen() }
             composable(Screen.Requests.route) { PaymentRequestsScreen() }

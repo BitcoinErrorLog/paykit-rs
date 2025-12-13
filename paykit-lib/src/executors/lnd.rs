@@ -1,9 +1,39 @@
 //! LND REST API executor implementation.
 //!
 //! Connects to LND nodes via their REST API for Lightning payments.
+//!
+//! # Feature Flags
+//!
+//! This module requires the `http-executor` feature flag to be enabled for actual
+//! HTTP requests. Without it, all requests return an `Unimplemented` error.
+//!
+//! ```toml
+//! [dependencies]
+//! paykit-lib = { version = "1.0", features = ["http-executor"] }
+//! ```
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use paykit_lib::executors::{LndConfig, LndExecutor};
+//! use paykit_lib::methods::LightningExecutor;
+//!
+//! let config = LndConfig::new("https://localhost:8080", "your_macaroon_hex");
+//! let executor = LndExecutor::new(config)?;
+//!
+//! // Decode an invoice
+//! let decoded = executor.decode_invoice("lnbc...").await?;
+//! println!("Amount: {:?} msat", decoded.amount_msat);
+//!
+//! // Pay an invoice
+//! let result = executor.pay_invoice("lnbc...", None, None).await?;
+//! println!("Payment preimage: {}", result.preimage);
+//! ```
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "http-executor")]
+use std::time::Duration;
 
 use super::config::LndConfig;
 use crate::methods::{
@@ -12,12 +42,31 @@ use crate::methods::{
 use crate::{PaykitError, Result};
 
 /// LND REST API executor for Lightning payments.
+///
+/// This executor connects to an LND node via its REST API to execute
+/// Lightning Network payments, decode invoices, and estimate fees.
+///
+/// # Security
+///
+/// The macaroon is sent with each request for authentication. Ensure you use
+/// HTTPS in production and consider using a restricted macaroon with minimal
+/// permissions needed for your use case.
+#[derive(Debug)]
 pub struct LndExecutor {
     config: LndConfig,
+    #[cfg(feature = "http-executor")]
+    client: reqwest::Client,
 }
 
 impl LndExecutor {
     /// Create a new LND executor with the given configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The REST URL is empty
+    /// - The macaroon is empty
+    /// - (With `http-executor` feature) The HTTP client cannot be built
     pub fn new(config: LndConfig) -> Result<Self> {
         // Validate configuration
         if config.rest_url.is_empty() {
@@ -33,7 +82,18 @@ impl LndExecutor {
             });
         }
 
-        Ok(Self { config })
+        #[cfg(feature = "http-executor")]
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(config.timeout_secs))
+            .danger_accept_invalid_certs(config.tls_cert_pem.is_some()) // Accept self-signed if cert provided
+            .build()
+            .map_err(|e| PaykitError::Internal(format!("Failed to build HTTP client: {}", e)))?;
+
+        Ok(Self {
+            config,
+            #[cfg(feature = "http-executor")]
+            client,
+        })
     }
 
     /// Get the configuration.
@@ -42,64 +102,130 @@ impl LndExecutor {
     }
 
     /// Build the full URL for an API endpoint.
-    ///
-    /// Note: Currently unused as full HTTP client implementation is pending.
-    /// Will be used when REST API integration is complete.
-    #[allow(dead_code)]
+    #[cfg(feature = "http-executor")]
+    fn url(&self, path: &str) -> String {
+        format!("{}/v1/{}", self.config.rest_url.trim_end_matches('/'), path)
+    }
+
+    /// Build the full URL for an API endpoint (for tests).
+    #[cfg(all(not(feature = "http-executor"), test))]
     fn url(&self, path: &str) -> String {
         format!("{}/v1/{}", self.config.rest_url.trim_end_matches('/'), path)
     }
 
     /// Make an authenticated GET request.
+    #[cfg(feature = "http-executor")]
     async fn get<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T> {
-        self.request("GET", path, Option::<&()>::None).await
+        let url = self.url(path);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("Grpc-Metadata-macaroon", &self.config.macaroon_hex)
+            .send()
+            .await
+            .map_err(|e| self.map_reqwest_error(e))?;
+
+        self.handle_response(response).await
+    }
+
+    /// Make an authenticated GET request (stub when feature disabled).
+    #[cfg(not(feature = "http-executor"))]
+    async fn get<T: for<'de> Deserialize<'de>>(&self, _path: &str) -> Result<T> {
+        Err(PaykitError::Unimplemented(
+            "LND HTTP client not compiled - enable the 'http-executor' feature",
+        ))
     }
 
     /// Make an authenticated POST request.
+    #[cfg(feature = "http-executor")]
     async fn post<T: for<'de> Deserialize<'de>, B: Serialize>(
         &self,
         path: &str,
         body: &B,
     ) -> Result<T> {
-        self.request("POST", path, Some(body)).await
+        let url = self.url(path);
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Grpc-Metadata-macaroon", &self.config.macaroon_hex)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| self.map_reqwest_error(e))?;
+
+        self.handle_response(response).await
     }
 
-    /// Make an authenticated HTTP request.
-    async fn request<T: for<'de> Deserialize<'de>, B: Serialize>(
+    /// Make an authenticated POST request (stub when feature disabled).
+    #[cfg(not(feature = "http-executor"))]
+    async fn post<T: for<'de> Deserialize<'de>, B: Serialize>(
         &self,
-        _method: &str,
-        path: &str,
-        _body: Option<&B>,
+        _path: &str,
+        _body: &B,
     ) -> Result<T> {
-        // This is a stub implementation.
-        // In a full implementation, you would use reqwest or another HTTP client:
-        //
-        // ```
-        // let client = reqwest::Client::builder()
-        //     .timeout(Duration::from_secs(self.config.timeout_secs))
-        //     .build()?;
-        //
-        // let mut request = match method {
-        //     "GET" => client.get(&self.url(path)),
-        //     "POST" => client.post(&self.url(path)),
-        //     _ => return Err(PaykitError::Internal("Invalid method".to_string())),
-        // };
-        //
-        // request = request.header("Grpc-Metadata-macaroon", &self.config.macaroon_hex);
-        //
-        // if let Some(body) = body {
-        //     request = request.json(body);
-        // }
-        //
-        // let response = request.send().await?;
-        // let result: T = response.json().await?;
-        // Ok(result)
-        // ```
-
-        let _ = path;
         Err(PaykitError::Unimplemented(
-            "LND HTTP client not compiled - add reqwest dependency",
+            "LND HTTP client not compiled - enable the 'http-executor' feature",
         ))
+    }
+
+    /// Handle an HTTP response, parsing JSON or returning an error.
+    #[cfg(feature = "http-executor")]
+    async fn handle_response<T: for<'de> Deserialize<'de>>(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<T> {
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+
+            return match status.as_u16() {
+                401 | 403 => Err(PaykitError::Auth(format!(
+                    "LND authentication failed: {}",
+                    error_text
+                ))),
+                404 => Err(PaykitError::NotFound {
+                    resource_type: "LND resource".to_string(),
+                    identifier: error_text,
+                }),
+                429 => Err(PaykitError::RateLimited {
+                    retry_after_ms: 5000,
+                }),
+                500..=599 => Err(PaykitError::Internal(format!(
+                    "LND server error ({}): {}",
+                    status, error_text
+                ))),
+                _ => Err(PaykitError::Transport(format!(
+                    "LND request failed ({}): {}",
+                    status, error_text
+                ))),
+            };
+        }
+
+        response
+            .json::<T>()
+            .await
+            .map_err(|e| PaykitError::Serialization(format!("Failed to parse LND response: {}", e)))
+    }
+
+    /// Map reqwest errors to PaykitError.
+    #[cfg(feature = "http-executor")]
+    fn map_reqwest_error(&self, e: reqwest::Error) -> PaykitError {
+        if e.is_timeout() {
+            PaykitError::ConnectionTimeout {
+                operation: "LND request".to_string(),
+                timeout_ms: self.config.timeout_secs * 1000,
+            }
+        } else if e.is_connect() {
+            PaykitError::ConnectionFailed {
+                target: self.config.rest_url.clone(),
+                reason: e.to_string(),
+            }
+        } else {
+            PaykitError::Transport(format!("LND request failed: {}", e))
+        }
     }
 }
 
@@ -240,7 +366,9 @@ impl LightningExecutor for LndExecutor {
     }
 }
 
-// LND REST API types
+// ============================================================================
+// LND REST API Types
+// ============================================================================
 
 #[derive(Serialize)]
 struct LndPayReq {
@@ -275,7 +403,6 @@ struct LndRoute {
 }
 
 /// LND hop information from route.
-/// Fields match the LND REST API response schema.
 #[derive(Deserialize)]
 #[allow(dead_code)] // Fields required for serde deserialization from LND API
 struct LndHop {
@@ -333,6 +460,10 @@ struct LndPayment {
     status: String,
 }
 
+// ============================================================================
+// Tests
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,14 +477,19 @@ mod tests {
     }
 
     #[test]
-    fn test_lnd_executor_validation() {
+    fn test_lnd_executor_validation_empty_url() {
         let config = LndConfig::new("", "macaroon123");
         let result = LndExecutor::new(config);
         assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("REST URL"));
+    }
 
+    #[test]
+    fn test_lnd_executor_validation_empty_macaroon() {
         let config = LndConfig::new("https://localhost:8080", "");
         let result = LndExecutor::new(config);
         assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Macaroon"));
     }
 
     #[test]
@@ -364,6 +500,17 @@ mod tests {
         assert_eq!(
             executor.url("channels/transactions"),
             "https://localhost:8080/v1/channels/transactions"
+        );
+    }
+
+    #[test]
+    fn test_url_building_no_trailing_slash() {
+        let config = LndConfig::new("https://localhost:8080", "macaroon123");
+        let executor = LndExecutor::new(config).unwrap();
+
+        assert_eq!(
+            executor.url("payreq/lnbc123"),
+            "https://localhost:8080/v1/payreq/lnbc123"
         );
     }
 }

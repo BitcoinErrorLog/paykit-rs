@@ -176,15 +176,23 @@ impl PaymentFrequency {
         }
     }
 
-    /// Human-readable description
-    pub fn to_string(&self) -> String {
+    /// Human-readable description (deprecated, use Display trait)
+    pub fn description(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl std::fmt::Display for PaymentFrequency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PaymentFrequency::Daily => "Daily".to_string(),
-            PaymentFrequency::Weekly => "Weekly".to_string(),
-            PaymentFrequency::Monthly { day_of_month } => format!("Monthly (day {})", day_of_month),
-            PaymentFrequency::Yearly { month, day } => format!("Yearly ({}/{})", month, day),
+            PaymentFrequency::Daily => write!(f, "Daily"),
+            PaymentFrequency::Weekly => write!(f, "Weekly"),
+            PaymentFrequency::Monthly { day_of_month } => {
+                write!(f, "Monthly (day {})", day_of_month)
+            }
+            PaymentFrequency::Yearly { month, day } => write!(f, "Yearly ({}/{})", month, day),
             PaymentFrequency::Custom { interval_seconds } => {
-                format!("Every {} seconds", interval_seconds)
+                write!(f, "Every {} seconds", interval_seconds)
             }
         }
     }

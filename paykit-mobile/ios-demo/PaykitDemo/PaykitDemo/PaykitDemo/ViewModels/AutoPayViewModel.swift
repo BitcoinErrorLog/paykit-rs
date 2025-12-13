@@ -3,6 +3,7 @@
 //  PaykitDemo
 //
 //  ViewModel for auto-pay settings and spending limits
+//  Uses Keychain-backed AutoPayStorage for secure persistence
 //
 
 import Foundation
@@ -31,52 +32,56 @@ class AutoPayViewModel: ObservableObject {
     
     // MARK: - Private Properties
     
-    private let storage = UserDefaults.standard
-    private let storageKeyPrefix = "paykit.autopay."
+    private let autoPayStorage = AutoPayStorage()
     
     // MARK: - Initialization
     
     init() {
-        loadSettings()
-        loadSampleData()
+        loadFromStorage()
     }
     
     // MARK: - Peer Limits
     
     func addPeerLimit(_ limit: PeerSpendingLimit) {
         peerLimits.append(limit)
-        savePeerLimits()
+        savePeerLimitToStorage(limit)
     }
     
     func updatePeerLimit(_ limit: PeerSpendingLimit) {
         if let index = peerLimits.firstIndex(where: { $0.id == limit.id }) {
             peerLimits[index] = limit
-            savePeerLimits()
+            savePeerLimitToStorage(limit)
         }
     }
     
     func removePeerLimits(at offsets: IndexSet) {
+        let toRemove = offsets.map { peerLimits[$0] }
         peerLimits.remove(atOffsets: offsets)
-        savePeerLimits()
+        for limit in toRemove {
+            try? autoPayStorage.deletePeerLimit(id: limit.id)
+        }
     }
     
     // MARK: - Auto-Pay Rules
     
     func addRule(_ rule: AutoPayRule) {
         autoPayRules.append(rule)
-        saveRules()
+        saveRuleToStorage(rule)
     }
     
     func updateRule(_ rule: AutoPayRule) {
         if let index = autoPayRules.firstIndex(where: { $0.id == rule.id }) {
             autoPayRules[index] = rule
-            saveRules()
+            saveRuleToStorage(rule)
         }
     }
     
     func removeRules(at offsets: IndexSet) {
+        let toRemove = offsets.map { autoPayRules[$0] }
         autoPayRules.remove(atOffsets: offsets)
-        saveRules()
+        for rule in toRemove {
+            try? autoPayStorage.deleteRule(id: rule.id)
+        }
     }
     
     // MARK: - Auto-Pay Logic
@@ -161,7 +166,8 @@ class AutoPayViewModel: ObservableObject {
             recentPayments = Array(recentPayments.prefix(50))
         }
         
-        saveRecentPayments()
+        // Note: Recent payments are kept in-memory for demo purposes
+        // Could be persisted to Keychain if needed
     }
     
     // MARK: - Reset
@@ -173,7 +179,21 @@ class AutoPayViewModel: ObservableObject {
         peerLimits = []
         autoPayRules = []
         recentPayments = []
-        saveSettings()
+        
+        // Clear storage
+        var settings = autoPayStorage.getSettings()
+        settings.isEnabled = false
+        settings.globalDailyLimitSats = 100000
+        settings.currentDailySpentSats = 0
+        try? autoPayStorage.saveSettings(settings)
+        
+        // Clear all limits and rules
+        for limit in autoPayStorage.getPeerLimits() {
+            try? autoPayStorage.deletePeerLimit(id: limit.id)
+        }
+        for rule in autoPayStorage.getRules() {
+            try? autoPayStorage.deleteRule(id: rule.id)
+        }
     }
     
     func resetDailyUsage() {
@@ -181,116 +201,85 @@ class AutoPayViewModel: ObservableObject {
         for i in peerLimits.indices {
             if peerLimits[i].period == .daily {
                 peerLimits[i].used = 0
+                savePeerLimitToStorage(peerLimits[i])
             }
         }
-        savePeerLimits()
+        
+        // Also update global settings
+        var settings = autoPayStorage.getSettings()
+        settings.currentDailySpentSats = 0
+        try? autoPayStorage.saveSettings(settings)
     }
     
     // MARK: - Persistence
     
     private func saveSettings() {
-        storage.set(isEnabled, forKey: storageKeyPrefix + "enabled")
-        storage.set(dailyLimit, forKey: storageKeyPrefix + "dailyLimit")
-        storage.set(usedToday, forKey: storageKeyPrefix + "usedToday")
+        var settings = autoPayStorage.getSettings()
+        settings.isEnabled = isEnabled
+        settings.globalDailyLimitSats = dailyLimit
+        settings.currentDailySpentSats = usedToday
+        try? autoPayStorage.saveSettings(settings)
     }
     
-    private func loadSettings() {
-        isEnabled = storage.bool(forKey: storageKeyPrefix + "enabled")
-        dailyLimit = storage.object(forKey: storageKeyPrefix + "dailyLimit") as? Int64 ?? 100000
-        usedToday = storage.object(forKey: storageKeyPrefix + "usedToday") as? Int64 ?? 0
-    }
-    
-    private func savePeerLimits() {
-        if let data = try? JSONEncoder().encode(peerLimits) {
-            storage.set(data, forKey: storageKeyPrefix + "peerLimits")
-        }
-    }
-    
-    private func saveRules() {
-        if let data = try? JSONEncoder().encode(autoPayRules) {
-            storage.set(data, forKey: storageKeyPrefix + "rules")
-        }
-    }
-    
-    private func saveRecentPayments() {
-        if let data = try? JSONEncoder().encode(recentPayments) {
-            storage.set(data, forKey: storageKeyPrefix + "recentPayments")
-        }
-    }
-    
-    private func loadSampleData() {
-        // Add sample data for demo purposes
-        if peerLimits.isEmpty {
-            peerLimits = [
-                PeerSpendingLimit(
-                    id: "1",
-                    peerPubkey: "pk1abc123def456...",
-                    peerName: "Alice's Store",
-                    limit: 50000,
-                    used: 12500,
-                    period: .daily,
-                    periodStart: Date()
-                ),
-                PeerSpendingLimit(
-                    id: "2",
-                    peerPubkey: "pk1xyz789ghi012...",
-                    peerName: "Coffee Shop",
-                    limit: 10000,
-                    used: 3200,
-                    period: .daily,
-                    periodStart: Date()
-                ),
-            ]
+    private func loadFromStorage() {
+        // Load global settings
+        let settings = autoPayStorage.getSettings()
+        isEnabled = settings.isEnabled
+        dailyLimit = settings.globalDailyLimitSats
+        usedToday = settings.currentDailySpentSats
+        
+        // Load peer limits - convert from storage type to view model type
+        peerLimits = autoPayStorage.getPeerLimits().map { storedLimit in
+            PeerSpendingLimit(
+                id: storedLimit.id,
+                peerPubkey: storedLimit.peerPubkey,
+                peerName: storedLimit.peerName,
+                limit: storedLimit.limitSats,
+                used: storedLimit.spentSats,
+                period: SpendingPeriod(rawValue: storedLimit.period.capitalized) ?? .daily,
+                periodStart: storedLimit.lastResetDate
+            )
         }
         
-        if autoPayRules.isEmpty {
-            autoPayRules = [
-                AutoPayRule(
-                    id: "1",
-                    name: "Small Lightning Payments",
-                    description: "Auto-approve Lightning payments under 1000 sats",
-                    isEnabled: true,
-                    maxAmount: 1000,
-                    methodFilter: "lightning",
-                    peerFilter: nil
-                ),
-                AutoPayRule(
-                    id: "2",
-                    name: "Trusted Merchants",
-                    description: "Auto-approve all payments from verified merchants",
-                    isEnabled: false,
-                    maxAmount: 10000,
-                    methodFilter: nil,
-                    peerFilter: nil
-                ),
-            ]
+        // Load auto-pay rules - convert from storage type to view model type
+        autoPayRules = autoPayStorage.getRules().map { storedRule in
+            AutoPayRule(
+                id: storedRule.id,
+                name: storedRule.name,
+                description: "Max: \(storedRule.maxAmountSats ?? 0) sats",
+                isEnabled: storedRule.isEnabled,
+                maxAmount: storedRule.maxAmountSats,
+                methodFilter: storedRule.allowedMethods.first,
+                peerFilter: storedRule.allowedPeers.first
+            )
         }
         
-        if recentPayments.isEmpty {
-            let now = Date()
-            recentPayments = [
-                RecentAutoPayment(
-                    id: "1",
-                    peerPubkey: "pk1abc...",
-                    peerName: "Alice's Store",
-                    amount: 500,
-                    description: "Monthly subscription",
-                    timestamp: now.addingTimeInterval(-3600),
-                    status: .completed,
-                    ruleId: "1"
-                ),
-                RecentAutoPayment(
-                    id: "2",
-                    peerPubkey: "pk1xyz...",
-                    peerName: "Coffee Shop",
-                    amount: 320,
-                    description: "Morning coffee",
-                    timestamp: now.addingTimeInterval(-7200),
-                    status: .completed,
-                    ruleId: "1"
-                ),
-            ]
-        }
+        // Recent payments stay in-memory for demo (could add to storage later)
+        recentPayments = []
+    }
+    
+    private func savePeerLimitToStorage(_ limit: PeerSpendingLimit) {
+        // Convert view model type to storage type
+        var storedLimit = StoredPeerLimit(
+            peerPubkey: limit.peerPubkey,
+            peerName: limit.peerName,
+            limitSats: limit.limit,
+            period: limit.period.rawValue.lowercased()
+        )
+        storedLimit.spentSats = limit.used
+        try? autoPayStorage.savePeerLimit(storedLimit)
+    }
+    
+    private func saveRuleToStorage(_ rule: AutoPayRule) {
+        // Convert view model type to storage type
+        var storedRule = StoredAutoPayRule(
+            name: rule.name,
+            maxAmountSats: rule.maxAmount,
+            allowedMethods: rule.methodFilter.map { [$0] } ?? [],
+            allowedPeers: rule.peerFilter.map { [$0] } ?? []
+        )
+        storedRule.isEnabled = rule.isEnabled
+        try? autoPayStorage.saveRule(storedRule)
     }
 }
 

@@ -11,6 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.paykit.demo.model.StoredSubscription
+import com.paykit.demo.viewmodel.ProrationResult
+import com.paykit.demo.viewmodel.SubscriptionsViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -18,13 +22,18 @@ import java.util.*
  * Subscriptions Screen
  *
  * Displays and manages subscriptions including:
- * - Active subscriptions list
+ * - Active subscriptions list with persistence
  * - Create new subscription
  * - Proration calculator
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SubscriptionsScreen() {
+fun SubscriptionsScreen(
+    viewModel: SubscriptionsViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    
+    var providerName by remember { mutableStateOf("") }
     var providerPubkey by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf(1000L) }
     var description by remember { mutableStateOf("") }
@@ -34,29 +43,17 @@ fun SubscriptionsScreen() {
     var currentAmount by remember { mutableStateOf(1000L) }
     var newAmount by remember { mutableStateOf(2000L) }
     var daysIntoPeriod by remember { mutableStateOf(15) }
-    var prorationResult by remember { mutableStateOf<ProrationResultData?>(null) }
+    var prorationResult by remember { mutableStateOf<ProrationResult?>(null) }
 
-    val subscriptions = remember {
-        listOf(
-            SubscriptionData(
-                id = "1",
-                providerName = "Premium News",
-                amountSats = 5000,
-                frequency = "Monthly",
-                description = "Monthly news subscription",
-                nextPayment = Date(System.currentTimeMillis() + 15L * 24 * 3600 * 1000),
-                isActive = true
-            ),
-            SubscriptionData(
-                id = "2",
-                providerName = "Coffee Club",
-                amountSats = 10000,
-                frequency = "Weekly",
-                description = "Weekly coffee delivery",
-                nextPayment = Date(System.currentTimeMillis() + 3L * 24 * 3600 * 1000),
-                isActive = true
-            )
-        )
+    // Clear form on success
+    LaunchedEffect(uiState.showSuccess) {
+        if (uiState.showSuccess) {
+            providerName = ""
+            providerPubkey = ""
+            description = ""
+            kotlinx.coroutines.delay(2000)
+            viewModel.dismissSuccess()
+        }
     }
 
     Scaffold(
@@ -64,8 +61,8 @@ fun SubscriptionsScreen() {
             TopAppBar(
                 title = { Text("Subscriptions") },
                 actions = {
-                    IconButton(onClick = { /* Add */ }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add")
+                    IconButton(onClick = { viewModel.loadSubscriptions() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
             )
@@ -80,18 +77,36 @@ fun SubscriptionsScreen() {
         ) {
             // Active Subscriptions Section
             item {
-                Text(
-                    text = "Active Subscriptions",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Active Subscriptions",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (uiState.subscriptions.isNotEmpty()) {
+                        Text(
+                            text = "${uiState.subscriptions.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            items(uiState.subscriptions, key = { it.id }) { subscription ->
+                SubscriptionCardFromStorage(
+                    subscription = subscription,
+                    onToggle = { viewModel.toggleSubscription(subscription.id) },
+                    onDelete = { viewModel.deleteSubscription(subscription.id) }
                 )
             }
 
-            items(subscriptions) { subscription ->
-                SubscriptionCard(subscription)
-            }
-
-            if (subscriptions.isEmpty()) {
+            if (uiState.subscriptions.isEmpty()) {
                 item {
                     EmptyState("No active subscriptions")
                 }
@@ -113,6 +128,15 @@ fun SubscriptionsScreen() {
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = providerName,
+                            onValueChange = { providerName = it },
+                            label = { Text("Provider Name") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedTextField(
                             value = providerPubkey,
@@ -157,11 +181,39 @@ fun SubscriptionsScreen() {
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
-                            onClick = { /* Create subscription */ },
+                            onClick = { 
+                                viewModel.createSubscription(
+                                    providerName = providerName,
+                                    providerPubkey = providerPubkey,
+                                    amountSats = amount,
+                                    frequency = selectedFrequency.lowercase(),
+                                    description = description
+                                )
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = providerPubkey.isNotEmpty()
+                            enabled = providerPubkey.isNotEmpty() && providerName.isNotEmpty()
                         ) {
                             Text("Create Subscription")
+                        }
+
+                        // Success message
+                        if (uiState.showSuccess) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Subscription created!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+
+                        // Error message
+                        uiState.errorMessage?.let { error ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
@@ -221,20 +273,10 @@ fun SubscriptionsScreen() {
 
                         Button(
                             onClick = {
-                                // Calculate proration
-                                val daysRemaining = 30 - daysIntoPeriod
-                                val creditPerDay = currentAmount / 30.0
-                                val chargePerDay = newAmount / 30.0
-
-                                val credit = (creditPerDay * daysRemaining).toLong()
-                                val charge = (chargePerDay * daysRemaining).toLong()
-                                val net = charge - credit
-
-                                prorationResult = ProrationResultData(
-                                    credit = credit,
-                                    charge = charge,
-                                    net = net,
-                                    isRefund = net < 0
+                                prorationResult = viewModel.calculateProration(
+                                    currentAmountSats = currentAmount,
+                                    newAmountSats = newAmount,
+                                    daysIntoPeriod = daysIntoPeriod
                                 )
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -252,14 +294,14 @@ fun SubscriptionsScreen() {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Credit:")
-                                Text("${result.credit} sats")
+                                Text("${result.creditSats} sats")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Charge:")
-                                Text("${result.charge} sats")
+                                Text("${result.chargeSats} sats")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -267,7 +309,7 @@ fun SubscriptionsScreen() {
                             ) {
                                 Text("Net:", style = MaterialTheme.typography.titleSmall)
                                 Text(
-                                    text = "${kotlin.math.abs(result.net)} sats",
+                                    text = "${result.netSats} sats",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = if (result.isRefund) Color(0xFF4CAF50) else Color(0xFFFFA500)
                                 )
@@ -288,7 +330,11 @@ fun SubscriptionsScreen() {
 }
 
 @Composable
-fun SubscriptionCard(subscription: SubscriptionData) {
+fun SubscriptionCardFromStorage(
+    subscription: StoredSubscription,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit
+) {
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
 
     Card(
@@ -320,7 +366,7 @@ fun SubscriptionCard(subscription: SubscriptionData) {
                         style = MaterialTheme.typography.titleSmall
                     )
                     Text(
-                        text = subscription.frequency,
+                        text = subscription.frequency.replaceFirstChar { it.uppercase() },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -335,45 +381,43 @@ fun SubscriptionCard(subscription: SubscriptionData) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row {
-                    Text("Next payment: ", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        text = dateFormat.format(subscription.nextPayment),
+                    subscription.nextPaymentAt?.let { nextMs ->
+                        Text("Next payment: ", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = dateFormat.format(Date(nextMs)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } ?: Text(
+                        text = "No scheduled payment",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                if (subscription.isActive) {
+                TextButton(onClick = onToggle) {
                     Surface(
-                        color = Color(0xFF4CAF50).copy(alpha = 0.2f),
+                        color = if (subscription.isActive) Color(0xFF4CAF50).copy(alpha = 0.2f) 
+                               else Color.Gray.copy(alpha = 0.2f),
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = "Active",
+                            text = if (subscription.isActive) "Active" else "Paused",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4CAF50),
+                            color = if (subscription.isActive) Color(0xFF4CAF50) else Color.Gray,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
             }
+
+            if (subscription.paymentCount > 0) {
+                Text(
+                    text = "${subscription.paymentCount} payment(s) made",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
-
-data class SubscriptionData(
-    val id: String,
-    val providerName: String,
-    val amountSats: Long,
-    val frequency: String,
-    val description: String,
-    val nextPayment: Date,
-    val isActive: Boolean
-)
-
-data class ProrationResultData(
-    val credit: Long,
-    val charge: Long,
-    val net: Long,
-    val isRefund: Boolean
-)

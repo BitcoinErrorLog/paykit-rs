@@ -271,16 +271,90 @@ cargo test -p paykit-lib --features integration-tests -- --ignored
 
 **Note**: These tests may fail if network is unavailable or the Pubky testnet is unreachable.
 
+## Payment Executors
+
+The crate also includes payment executor implementations for actually sending payments via Lightning or on-chain Bitcoin.
+
+### Feature Flags
+
+Enable the `http-executor` feature for real HTTP requests:
+
+```toml
+[dependencies]
+paykit-lib = { version = "1.0", features = ["http-executor"] }
+```
+
+### Lightning Payments (LND)
+
+```rust
+use paykit_lib::executors::{LndConfig, LndExecutor};
+use paykit_lib::methods::LightningExecutor;
+
+// Configure LND connection
+let config = LndConfig::new("https://localhost:8080", "your_macaroon_hex")
+    .with_timeout(60);
+let executor = LndExecutor::new(config)?;
+
+// Decode an invoice
+let decoded = executor.decode_invoice("lnbc...").await?;
+println!("Amount: {:?} msat", decoded.amount_msat);
+
+// Pay an invoice
+let result = executor.pay_invoice("lnbc...", None, None).await?;
+println!("Preimage: {}", result.preimage);
+
+// Estimate fees
+let fee_msat = executor.estimate_fee("lnbc...").await?;
+```
+
+### On-chain Bitcoin (Esplora)
+
+```rust
+use paykit_lib::executors::EsploraExecutor;
+
+// Use a preset configuration for testnet
+let executor = EsploraExecutor::blockstream_testnet()?;
+
+// Get fee estimates
+let fees = executor.get_fee_estimates().await?;
+println!("Next block: {} sat/vB", fees.get_rate_for_blocks(1));
+
+// Check address balance
+let info = executor.get_address_info("tb1q...").await?;
+println!("Balance: {} sats", info.confirmed_balance());
+
+// Broadcast a signed transaction
+let txid = executor.broadcast_tx("0200000001...").await?;
+```
+
+### Testnet Configuration
+
+Use the `testnet` module for easy development setup:
+
+```rust
+use paykit_lib::executors::testnet::{TestnetConfig, get_lnd_config_from_env};
+
+// Preset for Polar regtest environment
+let config = TestnetConfig::polar_alice("your_macaroon_hex");
+
+// Or load from environment variables
+// PAYKIT_LND_URL, PAYKIT_LND_MACAROON, PAYKIT_NETWORK
+if let Some(lnd_config) = get_lnd_config_from_env() {
+    let executor = LndExecutor::new(lnd_config)?;
+}
+```
+
+See [docs/TESTNET_SETUP.md](../docs/TESTNET_SETUP.md) for detailed setup instructions.
+
 ## Status
 
 - Public directory API and Pubky adapters in place.
 - Integration tests using `pubky-testnet::EphemeralTestnet` (opt-in, requires network).
-- Planned future work:
-  - UniFFI bindings for Bitkit native apps.
-  - Higher-level Paykit receipt types in a separate crate.
-  - Optional non-Pubky transports such as direct P2P or Tor.
+- LND and Esplora executors with `http-executor` feature.
+- Testnet configuration helpers for development.
 
 ## Documentation
 
 - [Build Instructions](BUILD.md)
+- [Testnet Setup Guide](../docs/TESTNET_SETUP.md)
 - [Repository Root README](../README.md)

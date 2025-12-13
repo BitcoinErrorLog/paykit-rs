@@ -15,10 +15,10 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | Receipts | **Real** | Payment history with search and filtering |
 | Payment Methods | UI Only | Static list, not connected to PaykitClient |
 | Health Monitoring | UI Only | Displays mock "Healthy" status |
-| Subscriptions | UI Only | Sample data, not persisted |
-| Auto-Pay | UI Only | Sample data, not persisted |
+| Subscriptions | **Real** | Keychain-backed subscription storage |
+| Auto-Pay | **Real** | Keychain-backed settings, limits, and rules |
 | Payment Requests | UI Only | Sample data, not persisted |
-| Directory Operations | Not Implemented | Requires Pubky transport |
+| Directory Operations | **Mock** | DirectoryService with mock transport (real Pubky integration pending) |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
@@ -64,21 +64,26 @@ Key files:
 - Endpoint validation UI
 - Smart method selection UI
 
-### Subscriptions (UI Demo)
+### Subscriptions (Real)
 
-- Create and manage subscriptions (sample data)
-- Proration calculator for upgrades/downgrades
-- Multiple billing frequencies (daily, weekly, monthly, yearly)
-- Active subscription tracking
+Subscription management with Keychain persistence:
 
-### Auto-Pay (UI Demo)
+- **Create Subscriptions**: Set provider, amount, frequency, and method
+- **Proration Calculator**: Calculate charges when upgrading/downgrading
+- **Multiple Frequencies**: Daily, weekly, monthly, yearly billing
+- **Active Tracking**: Toggle subscriptions active/paused
+- **Keychain Storage**: Persistent subscription data via SubscriptionStorage
 
-- Enable/disable auto-pay globally
-- Set global daily spending limits
-- Per-peer spending limits with usage tracking
-- Custom auto-pay rules with conditions
-- Recent auto-payment history
-- Visual spending limit progress bars
+### Auto-Pay (Real)
+
+Auto-pay settings management with Keychain persistence:
+
+- **Enable/Disable**: Toggle auto-pay globally
+- **Global Daily Limits**: Set spending caps per day
+- **Per-Peer Limits**: Individual limits with usage tracking
+- **Auto-Pay Rules**: Custom conditions for automatic approval
+- **Recent Payments**: In-memory history (could be extended to Keychain)
+- **Keychain Storage**: Settings, limits, and rules persist via AutoPayStorage
 
 ### Payment Requests (UI Demo)
 
@@ -199,7 +204,7 @@ Exported backups use:
 
 ### What's NOT Secure (Demo Limitations)
 
-- Subscription/Auto-Pay data uses UserDefaults (not Keychain)
+- Recent auto-payments stored in-memory only
 - No biometric authentication enforced
 - Sample data visible in production builds
 
@@ -302,9 +307,8 @@ Completed improvements:
 
 Planned improvements:
 1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
-2. **Persist Data**: Store subscriptions/auto-pay in Keychain
-3. **Directory Lookup**: Fetch contacts from Pubky directory
-4. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Directory Lookup**: Fetch contacts from Pubky directory
+3. **Noise Integration**: Real encrypted payments via Noise protocol
 
 ## Related Documentation
 

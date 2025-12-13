@@ -129,10 +129,7 @@ pub async fn list_requests(
             "To",
             &req.to.to_string()[..20.min(req.to.to_string().len())],
         );
-        ui::key_value(
-            "Amount",
-            &format!("{} {}", req.amount, req.currency),
-        );
+        ui::key_value("Amount", &format!("{} {}", req.amount, req.currency));
 
         let created_dt =
             chrono::DateTime::from_timestamp(req.created_at, 0).unwrap_or_else(chrono::Utc::now);
@@ -415,8 +412,7 @@ pub async fn accept_subscription(storage_dir: &Path, subscription_id: &str) -> R
         "Amount",
         &format!(
             "{} {}",
-            subscription.terms.amount,
-            subscription.terms.currency
+            subscription.terms.amount, subscription.terms.currency
         ),
     );
     ui::key_value("Frequency", &subscription.terms.frequency.to_string());
@@ -506,8 +502,7 @@ pub async fn list_subscriptions(
             "Amount",
             &format!(
                 "{} {}",
-                subscription.terms.amount,
-                subscription.terms.currency
+                subscription.terms.amount, subscription.terms.currency
             ),
         );
         ui::key_value("Frequency", &subscription.terms.frequency.to_string());
@@ -550,8 +545,7 @@ pub async fn show_subscription(storage_dir: &Path, subscription_id: &str) -> Res
             "Amount",
             &format!(
                 "{} {}",
-                subscription.terms.amount.to_string(),
-                subscription.terms.currency
+                subscription.terms.amount, subscription.terms.currency
             ),
         );
         ui::key_value("Frequency", &subscription.terms.frequency.to_string());
@@ -597,8 +591,7 @@ pub async fn show_subscription(storage_dir: &Path, subscription_id: &str) -> Res
             "Amount",
             &format!(
                 "{} {}",
-                subscription.terms.amount.to_string(),
-                subscription.terms.currency
+                subscription.terms.amount, subscription.terms.currency
             ),
         );
         ui::key_value("Frequency", &subscription.terms.frequency.to_string());
@@ -693,8 +686,7 @@ pub async fn enable_autopay(
         "Amount",
         &format!(
             "{} {}",
-            subscription.subscription.terms.amount.to_string(),
-            subscription.subscription.terms.currency
+            subscription.subscription.terms.amount, subscription.subscription.terms.currency
         ),
     );
 
@@ -855,11 +847,7 @@ pub async fn show_peer_limits(storage_dir: &Path, peer: Option<String>) -> Resul
             ui::key_value("Peer", &limit.peer.to_z32());
             ui::key_value(
                 "Total Limit",
-                &format!(
-                    "{} per {}",
-                    limit.total_amount_limit.to_string(),
-                    limit.period
-                ),
+                &format!("{} per {}", limit.total_amount_limit, limit.period),
             );
             ui::key_value("Current Spent", &limit.current_spent.to_string());
             ui::key_value("Remaining", &limit.remaining_limit().to_string());
@@ -891,10 +879,7 @@ pub async fn show_peer_limits(storage_dir: &Path, peer: Option<String>) -> Resul
                 "Limit",
                 &format!(
                     "{} / {} {} ({}%)",
-                    limit.current_spent.to_string(),
-                    limit.total_amount_limit.to_string(),
-                    limit.period,
-                    percentage
+                    limit.current_spent, limit.total_amount_limit, limit.period, percentage
                 ),
             );
             ui::key_value("Remaining", &limit.remaining_limit().to_string());
@@ -967,7 +952,7 @@ pub async fn reset_peer_limit(storage_dir: &Path, peer: &str) -> Result<()> {
     ui::header("Reset Spending Limit");
 
     if let Some(mut limit) = storage.get_peer_limit(&peer_pk).await? {
-        let old_spent = limit.current_spent.clone();
+        let old_spent = limit.current_spent;
         // Reset the limit using the reset method
         limit.reset();
         storage.save_peer_limit(&limit).await?;

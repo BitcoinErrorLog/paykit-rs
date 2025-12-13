@@ -40,7 +40,7 @@ fn test_cli_version() {
         .expect("Failed to execute command");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Should output version info
     assert!(
         stdout.contains("paykit") || output.status.success(),
@@ -52,10 +52,10 @@ fn test_cli_version() {
 #[test]
 fn test_cli_list_empty() {
     use tempfile::TempDir;
-    
+
     // Create a temporary directory for test data
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    
+
     let output = Command::new("cargo")
         .args(["run", "-p", "paykit-demo-cli", "--", "list"])
         .env("PAYKIT_DEMO_DIR", temp_dir.path())
@@ -65,14 +65,14 @@ fn test_cli_list_empty() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should either show "no identities" or succeed with empty output
     let combined = format!("{}{}", stdout, stderr);
     assert!(
-        combined.to_lowercase().contains("no") 
-        || combined.to_lowercase().contains("empty")
-        || output.status.success()
-        || combined.contains("identit"),
+        combined.to_lowercase().contains("no")
+            || combined.to_lowercase().contains("empty")
+            || output.status.success()
+            || combined.contains("identit"),
         "List should handle empty state gracefully"
     );
 }
@@ -81,9 +81,9 @@ fn test_cli_list_empty() {
 #[test]
 fn test_cli_whoami_no_identity() {
     use tempfile::TempDir;
-    
+
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    
+
     let output = Command::new("cargo")
         .args(["run", "-p", "paykit-demo-cli", "--", "whoami"])
         .env("PAYKIT_DEMO_DIR", temp_dir.path())
@@ -93,13 +93,11 @@ fn test_cli_whoami_no_identity() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Should handle no identity gracefully
     let combined = format!("{}{}", stdout, stderr).to_lowercase();
     assert!(
-        combined.contains("no") 
-        || combined.contains("not set")
-        || combined.contains("identity"),
+        combined.contains("no") || combined.contains("not set") || combined.contains("identity"),
         "Whoami should handle no identity state"
     );
 }
@@ -108,7 +106,7 @@ fn test_cli_whoami_no_identity() {
 mod unit_tests {
     //! Unit tests that don't require running the binary
 
-    use paykit_lib::{MethodId, EndpointData};
+    use paykit_lib::{EndpointData, MethodId};
     use paykit_subscriptions::Amount;
 
     #[test]
@@ -127,7 +125,7 @@ mod unit_tests {
     fn test_amount_arithmetic() {
         let a = Amount::from_sats(1000);
         let b = Amount::from_sats(500);
-        
+
         let sum = a.checked_add(&b).unwrap();
         assert_eq!(sum, Amount::from_sats(1500));
     }
@@ -136,9 +134,8 @@ mod unit_tests {
     fn test_amount_comparison() {
         let a = Amount::from_sats(1000);
         let b = Amount::from_sats(500);
-        
+
         assert!(a > b);
         assert!(b < a);
     }
 }
-

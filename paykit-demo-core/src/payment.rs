@@ -3,7 +3,8 @@
 use crate::models::Receipt;
 use anyhow::{Context, Result};
 use paykit_interactive::{
-    PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt, PaykitStorage, ReceiptGenerator,
+    PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage, PaykitReceipt, PaykitStorage,
+    ReceiptGenerator,
 };
 use paykit_lib::{MethodId, PublicKey};
 use std::sync::Arc;
@@ -150,12 +151,18 @@ pub struct DemoPaykitStorage {
     endpoints: Arc<tokio::sync::Mutex<std::collections::HashMap<(String, String), String>>>,
 }
 
-impl DemoPaykitStorage {
-    pub fn new() -> Self {
+impl Default for DemoPaykitStorage {
+    fn default() -> Self {
         Self {
             receipts: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
             endpoints: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         }
+    }
+}
+
+impl DemoPaykitStorage {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

@@ -2,7 +2,7 @@
 //  SubscriptionsView.swift
 //  PaykitDemo
 //
-//  View for managing subscriptions
+//  View for managing subscriptions with persistent storage
 //
 
 import SwiftUI
@@ -22,11 +22,20 @@ struct SubscriptionsView: View {
                             .foregroundColor(.secondary)
                     } else {
                         ForEach(viewModel.subscriptions) { sub in
-                            SubscriptionRow(subscription: sub)
+                            SubscriptionRow(subscription: sub, viewModel: viewModel)
                         }
+                        .onDelete(perform: viewModel.deleteSubscriptions)
                     }
                 } header: {
-                    Text("Active Subscriptions")
+                    HStack {
+                        Text("Active Subscriptions")
+                        Spacer()
+                        if !viewModel.subscriptions.isEmpty {
+                            Text("\(viewModel.subscriptions.count)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
                 // Create New Subscription
@@ -34,6 +43,9 @@ struct SubscriptionsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Create Subscription")
                             .font(.headline)
+                        
+                        TextField("Provider Name", text: $viewModel.providerName)
+                            .textFieldStyle(.roundedBorder)
                         
                         TextField("Provider Public Key", text: $viewModel.providerPubkey)
                             .textFieldStyle(.roundedBorder)
@@ -48,10 +60,11 @@ struct SubscriptionsView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                         
-                        Picker("Frequency", selection: $viewModel.frequency) {
-                            Text("Daily").tag(PaymentFrequency.daily)
-                            Text("Weekly").tag(PaymentFrequency.weekly)
-                            Text("Monthly").tag(PaymentFrequency.monthly(dayOfMonth: 1))
+                        Picker("Frequency", selection: $viewModel.frequencyString) {
+                            Text("Daily").tag("daily")
+                            Text("Weekly").tag("weekly")
+                            Text("Monthly").tag("monthly")
+                            Text("Yearly").tag("yearly")
                         }
                         
                         Picker("Method", selection: $viewModel.methodId) {
@@ -67,7 +80,19 @@ struct SubscriptionsView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity)
-                        .disabled(viewModel.providerPubkey.isEmpty)
+                        .disabled(viewModel.providerPubkey.isEmpty || viewModel.providerName.isEmpty)
+                        
+                        if let error = viewModel.errorMessage {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        
+                        if viewModel.showSuccess {
+                            Text("Subscription created!")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
                     }
                     .padding(.vertical, 8)
                 } header: {
@@ -148,19 +173,26 @@ struct SubscriptionsView: View {
                 }
             }
             .navigationTitle("Subscriptions")
+            .refreshable {
+                viewModel.loadSubscriptions()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { viewModel.showingAddSubscription = true }) {
-                        Image(systemName: "plus")
+                    Button(action: { viewModel.loadSubscriptions() }) {
+                        Image(systemName: "arrow.clockwise")
                     }
                 }
+            }
+            .onAppear {
+                viewModel.loadSubscriptions()
             }
         }
     }
 }
 
 struct SubscriptionRow: View {
-    let subscription: SubscriptionInfo
+    let subscription: StoredSubscription
+    @ObservedObject var viewModel: SubscriptionsViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -179,26 +211,39 @@ struct SubscriptionRow: View {
                     Text("\(subscription.amountSats) sats")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text(subscription.frequencyText)
+                    Text(subscription.frequency.capitalized)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
             
             HStack {
-                Text("Next payment:")
-                Text(subscription.nextPaymentDate, style: .date)
-                    .foregroundColor(.secondary)
+                if let nextPayment = subscription.nextPaymentAt {
+                    Text("Next payment:")
+                    Text(nextPayment, style: .date)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("No scheduled payment")
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
-                if subscription.isActive {
-                    Text("Active")
+                
+                Button(action: { viewModel.toggleSubscription(id: subscription.id) }) {
+                    Text(subscription.isActive ? "Active" : "Paused")
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(Color.green.opacity(0.2))
-                        .foregroundColor(.green)
+                        .background(subscription.isActive ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                        .foregroundColor(subscription.isActive ? .green : .gray)
                         .cornerRadius(4)
                 }
+            }
+            
+            if subscription.paymentCount > 0 {
+                Text("\(subscription.paymentCount) payment(s) made")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
@@ -208,13 +253,16 @@ struct SubscriptionRow: View {
 // MARK: - View Model
 
 class SubscriptionsViewModel: ObservableObject {
-    @Published var subscriptions: [SubscriptionInfo] = []
+    @Published var subscriptions: [StoredSubscription] = []
     @Published var showingAddSubscription = false
+    @Published var errorMessage: String?
+    @Published var showSuccess = false
     
     // New subscription form
+    @Published var providerName = ""
     @Published var providerPubkey = ""
     @Published var amount: Int64 = 1000
-    @Published var frequency: PaymentFrequency = .monthly(dayOfMonth: 1)
+    @Published var frequencyString = "monthly"
     @Published var methodId = "lightning"
     @Published var description = ""
     
@@ -224,11 +272,29 @@ class SubscriptionsViewModel: ObservableObject {
     @Published var daysIntoPeriod: Int = 15
     @Published var prorationResult: ProrationResult?
     
+    private let storage = SubscriptionStorage()
+    
     init() {
-        loadSampleSubscriptions()
+        loadSubscriptions()
+    }
+    
+    func loadSubscriptions() {
+        subscriptions = storage.listSubscriptions()
     }
     
     func createSubscription(client: PaykitClientWrapper) {
+        errorMessage = nil
+        showSuccess = false
+        
+        // Convert frequency string to PaymentFrequency for FFI call
+        let frequency: PaymentFrequency
+        switch frequencyString {
+        case "daily": frequency = .daily
+        case "weekly": frequency = .weekly
+        case "yearly": frequency = .yearly(month: 1, day: 1)
+        default: frequency = .monthly(dayOfMonth: 1)
+        }
+        
         let terms = SubscriptionTerms(
             amountSats: amount,
             currency: "SAT",
@@ -237,29 +303,64 @@ class SubscriptionsViewModel: ObservableObject {
             description: description
         )
         
-        // In a real app, we'd use the actual subscriber key
+        // Create via FFI (validates with protocol)
         if let _ = client.createSubscription(
-            subscriber: "pk1subscriber...",
+            subscriber: "pk1subscriber...", // Would use actual key
             provider: providerPubkey,
             terms: terms
         ) {
-            // Add to list
-            let newSub = SubscriptionInfo(
-                id: UUID().uuidString,
-                providerId: providerPubkey,
-                providerName: "New Provider",
+            // Create stored subscription with persistence
+            let storedSub = StoredSubscription(
+                providerName: providerName,
+                providerPubkey: providerPubkey,
                 amountSats: amount,
-                frequency: frequency,
+                currency: "SAT",
+                frequency: frequencyString,
                 description: description,
-                nextPaymentDate: Date().addingTimeInterval(86400 * 30),
-                isActive: true
+                methodId: methodId
             )
-            subscriptions.append(newSub)
             
-            // Reset form
-            providerPubkey = ""
-            description = ""
+            do {
+                try storage.saveSubscription(storedSub)
+                loadSubscriptions()
+                
+                // Reset form
+                providerName = ""
+                providerPubkey = ""
+                description = ""
+                showSuccess = true
+                
+                // Hide success message after 2 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    self.showSuccess = false
+                }
+            } catch {
+                errorMessage = "Failed to save: \(error.localizedDescription)"
+            }
+        } else {
+            errorMessage = "Failed to create subscription via FFI"
         }
+    }
+    
+    func toggleSubscription(id: String) {
+        do {
+            try storage.toggleActive(id: id)
+            loadSubscriptions()
+        } catch {
+            errorMessage = "Failed to toggle: \(error.localizedDescription)"
+        }
+    }
+    
+    func deleteSubscriptions(at offsets: IndexSet) {
+        for index in offsets {
+            let sub = subscriptions[index]
+            do {
+                try storage.deleteSubscription(id: sub.id)
+            } catch {
+                errorMessage = "Failed to delete: \(error.localizedDescription)"
+            }
+        }
+        loadSubscriptions()
     }
     
     func calculateProration(client: PaykitClientWrapper) {
@@ -274,52 +375,6 @@ class SubscriptionsViewModel: ObservableObject {
             periodEnd: Int64(periodEnd.timeIntervalSince1970),
             changeDate: Int64(now.timeIntervalSince1970)
         )
-    }
-    
-    private func loadSampleSubscriptions() {
-        subscriptions = [
-            SubscriptionInfo(
-                id: "1",
-                providerId: "pk1provider1...",
-                providerName: "Premium News",
-                amountSats: 5000,
-                frequency: .monthly(dayOfMonth: 1),
-                description: "Monthly news subscription",
-                nextPaymentDate: Date().addingTimeInterval(86400 * 15),
-                isActive: true
-            ),
-            SubscriptionInfo(
-                id: "2",
-                providerId: "pk1provider2...",
-                providerName: "Coffee Club",
-                amountSats: 10000,
-                frequency: .weekly,
-                description: "Weekly coffee delivery",
-                nextPaymentDate: Date().addingTimeInterval(86400 * 3),
-                isActive: true
-            ),
-        ]
-    }
-}
-
-struct SubscriptionInfo: Identifiable {
-    let id: String
-    let providerId: String
-    let providerName: String
-    let amountSats: Int64
-    let frequency: PaymentFrequency
-    let description: String
-    let nextPaymentDate: Date
-    let isActive: Bool
-    
-    var frequencyText: String {
-        switch frequency {
-        case .daily: return "Daily"
-        case .weekly: return "Weekly"
-        case .monthly: return "Monthly"
-        case .yearly: return "Yearly"
-        case .custom(let secs): return "Every \(secs / 86400) days"
-        }
     }
 }
 

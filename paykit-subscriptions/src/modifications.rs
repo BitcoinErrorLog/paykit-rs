@@ -114,7 +114,7 @@ impl ModificationType {
                 format!("Change billing date to day {}", new_day)
             }
             ModificationType::ChangeFrequency { new_frequency } => {
-                format!("Change frequency to {}", new_frequency.to_string())
+                format!("Change frequency to {}", new_frequency)
             }
             ModificationType::Cancel { reason, .. } => {
                 if let Some(r) = reason {

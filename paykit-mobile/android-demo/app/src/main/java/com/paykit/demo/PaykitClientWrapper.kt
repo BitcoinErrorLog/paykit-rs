@@ -211,5 +211,76 @@ class PaykitClientWrapper private constructor(
             false
         }
     }
+    
+    // MARK: - Directory Operations
+    
+    /**
+     * Create a directory service for fetching contacts and payment endpoints
+     */
+    fun createDirectoryService(): DirectoryService {
+        return DirectoryService()
+    }
+}
+
+/**
+ * Service for interacting with the Pubky directory.
+ * Provides access to contacts and payment endpoint discovery.
+ */
+class DirectoryService {
+    companion object {
+        private const val TAG = "DirectoryService"
+    }
+    
+    private val directoryOps: DirectoryOperationsAsync
+    private val unauthTransport: UnauthenticatedTransportFfi
+    
+    init {
+        // Use mock transport for demo - replace with real transport in production
+        unauthTransport = UnauthenticatedTransportFfi.newMock()
+        directoryOps = createDirectoryOperationsAsync()
+    }
+    
+    /**
+     * Fetch known contacts from a user's Pubky directory
+     * @param ownerPubkey The public key of the owner (z-base32 format)
+     * @return List of contact public keys
+     */
+    suspend fun fetchKnownContacts(ownerPubkey: String): List<String> {
+        return try {
+            directoryOps.fetchKnownContacts(unauthTransport, ownerPubkey)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchKnownContacts failed: ${e.message}")
+            emptyList()
+        }
+    }
+    
+    /**
+     * Fetch payment endpoint for a specific method
+     * @param ownerPubkey The public key of the payee
+     * @param methodId The payment method ID (e.g., "lightning", "onchain")
+     * @return The endpoint data if found, null otherwise
+     */
+    suspend fun fetchPaymentEndpoint(ownerPubkey: String, methodId: String): String? {
+        return try {
+            directoryOps.fetchPaymentEndpoint(unauthTransport, ownerPubkey, methodId)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchPaymentEndpoint failed: ${e.message}")
+            null
+        }
+    }
+    
+    /**
+     * Fetch all supported payment methods for a payee
+     * @param ownerPubkey The public key of the payee
+     * @return List of payment methods supported by the payee
+     */
+    suspend fun fetchSupportedPayments(ownerPubkey: String): List<PaymentMethod> {
+        return try {
+            directoryOps.fetchSupportedPayments(unauthTransport, ownerPubkey)
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchSupportedPayments failed: ${e.message}")
+            emptyList()
+        }
+    }
 }
 

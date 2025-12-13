@@ -8,6 +8,8 @@ description = "Command-line demo application for Paykit"
 default = []
 # Pubky SDK compliance tests (opt-in, requires network and pubky testnet)
 pubky_compliance_tests = []
+# Enable real payment execution via HTTP executors (LND, Esplora)
+http-executor = ["paykit-lib/http-executor"]
 
 [[bin]]
 name = "paykit-demo"

@@ -30,6 +30,14 @@ A comprehensive Android demo application showcasing all Paykit features includin
 - Request history with status tracking
 - Support for Lightning and On-Chain
 
+### Contacts (NEW - Real Implementation)
+- Add and manage payment recipients
+- Persistent storage using EncryptedSharedPreferences
+- Search contacts by name or public key
+- Copy public keys to clipboard
+- Payment history tracking per contact
+- Notes and metadata support
+
 ### Settings
 - Network selection (Mainnet/Testnet/Regtest)
 - Security settings (biometric, background lock)

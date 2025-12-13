@@ -30,6 +30,14 @@ A comprehensive iOS demo application showcasing all Paykit features including au
 - Request history with status tracking
 - Support for Lightning and On-Chain
 
+### Contacts (NEW - Real Implementation)
+- Add and manage payment recipients
+- Persistent storage using iOS Keychain
+- Search contacts by name or public key
+- Copy public keys to clipboard
+- Payment history tracking per contact
+- Notes and metadata support
+
 ### Settings
 - Network selection (Mainnet/Testnet/Regtest)
 - Security settings (Face ID, background lock)

@@ -42,6 +42,11 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "Methods",
         { Icon(Icons.Default.CreditCard, contentDescription = "Methods") }
     )
+    object Contacts : Screen(
+        "contacts",
+        "Contacts",
+        { Icon(Icons.Default.Person, contentDescription = "Contacts") }
+    )
     object Subscriptions : Screen(
         "subscriptions",
         "Subscriptions",
@@ -70,6 +75,7 @@ fun PaykitDemoContent() {
     val navController = rememberNavController()
     val screens = listOf(
         Screen.Methods,
+        Screen.Contacts,
         Screen.Subscriptions,
         Screen.AutoPay,
         Screen.Requests,
@@ -111,6 +117,7 @@ fun PaykitDemoContent() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Methods.route) { PaymentMethodsScreen() }
+            composable(Screen.Contacts.route) { ContactsScreen() }
             composable(Screen.Subscriptions.route) { SubscriptionsScreen() }
             composable(Screen.AutoPay.route) { AutoPayScreen() }
             composable(Screen.Requests.route) { PaymentRequestsScreen() }

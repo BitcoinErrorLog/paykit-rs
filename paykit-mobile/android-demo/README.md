@@ -19,7 +19,7 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Subscriptions | **Real** | EncryptedSharedPreferences-backed subscription storage |
 | Auto-Pay | **Real** | EncryptedSharedPreferences-backed settings, limits, and rules |
 | Payment Requests | UI Only | Sample data, not persisted |
-| Directory Operations | **Mock** | DirectoryService with mock transport (real Pubky integration pending) |
+| Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
@@ -100,6 +100,51 @@ Auto-pay settings management with EncryptedSharedPreferences persistence:
 - Copy public keys to clipboard
 - Payment history tracking per contact
 - Notes and metadata support
+
+### Directory Operations (Configurable Transport)
+
+The DirectoryService supports both mock and real Pubky transport:
+
+```kotlin
+// Development/Testing mode (default)
+val service = DirectoryService(DirectoryTransportMode.Mock)
+
+// Production mode with real Pubky SDK
+val pubkyCallback = MyPubkyStorageCallback(pubkyClient)
+val service = DirectoryService(DirectoryTransportMode.Callback(pubkyCallback))
+
+// Fetch contacts and payment endpoints
+val contacts = service.fetchKnownContacts("pk...")
+val endpoint = service.fetchPaymentEndpoint("pk...", "lightning")
+val methods = service.fetchSupportedPayments("pk...")
+```
+
+To enable real Pubky integration, implement `PubkyUnauthenticatedStorageCallback`:
+
+```kotlin
+class MyPubkyStorage(
+    private val pubkyClient: PubkyClient
+) : PubkyUnauthenticatedStorageCallback {
+    
+    override fun get(ownerPubkey: String, path: String): StorageGetResult {
+        return try {
+            val content = pubkyClient.publicGet(ownerPubkey, path)
+            StorageGetResult(success = true, content = content, error = null)
+        } catch (e: Exception) {
+            StorageGetResult(success = false, content = null, error = e.message)
+        }
+    }
+    
+    override fun list(ownerPubkey: String, prefix: String): StorageListResult {
+        return try {
+            val entries = pubkyClient.publicList(ownerPubkey, prefix)
+            StorageListResult(success = true, entries = entries, error = null)
+        } catch (e: Exception) {
+            StorageListResult(success = false, entries = emptyList(), error = e.message)
+        }
+    }
+}
+```
 
 ### Settings
 
@@ -352,7 +397,7 @@ The following use sample data for UI demonstration:
 - Subscriptions: Empty state initially
 - Auto-Pay: Basic toggle only
 - Payment Requests: Sample data
-- Directory Operations: Uses mock transport (not connected to real Pubky homeserver)
+- Directory Operations: Uses mock transport by default (configurable for real Pubky integration)
 
 ## Roadmap
 
@@ -363,9 +408,10 @@ Completed improvements:
 - ✅ **Payment Methods**: Real FFI integration with PaykitClient
 - ✅ **Health Monitoring**: Real health checks via PaykitClient.checkHealth()
 - ✅ **Method Selection**: Smart method selection with strategy options
+- ✅ **Directory Transport**: Configurable mock/callback transport for Pubky integration
 
 Planned improvements:
-1. **Directory Lookup**: Fetch contacts from Pubky directory (replace mock transport)
+1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
 2. **Payment Request Persistence**: Store payment requests in EncryptedSharedPreferences
 3. **Noise Integration**: Real encrypted payments via Noise protocol
 

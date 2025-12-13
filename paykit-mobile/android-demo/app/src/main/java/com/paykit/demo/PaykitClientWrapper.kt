@@ -223,10 +223,34 @@ class PaykitClientWrapper private constructor(
 }
 
 /**
+ * Configuration for directory service transport mode.
+ */
+sealed class DirectoryTransportMode {
+    /** Use mock transport (for development/testing) */
+    object Mock : DirectoryTransportMode()
+    
+    /** Use callback-based transport with Pubky SDK */
+    data class Callback(val storage: PubkyUnauthenticatedStorageCallback) : DirectoryTransportMode()
+}
+
+/**
  * Service for interacting with the Pubky directory.
  * Provides access to contacts and payment endpoint discovery.
+ * 
+ * ## Usage
+ * 
+ * ### Development/Testing (Mock Transport)
+ * ```kotlin
+ * val service = DirectoryService(DirectoryTransportMode.Mock)
+ * ```
+ * 
+ * ### Production (Real Pubky Transport)
+ * ```kotlin
+ * val pubkyCallback = MyPubkyStorageCallback(pubkyClient)
+ * val service = DirectoryService(DirectoryTransportMode.Callback(pubkyCallback))
+ * ```
  */
-class DirectoryService {
+class DirectoryService(mode: DirectoryTransportMode = DirectoryTransportMode.Mock) {
     companion object {
         private const val TAG = "DirectoryService"
     }
@@ -234,9 +258,20 @@ class DirectoryService {
     private val directoryOps: DirectoryOperationsAsync
     private val unauthTransport: UnauthenticatedTransportFfi
     
+    /** Whether this service is using mock transport */
+    val isMockMode: Boolean
+    
     init {
-        // Use mock transport for demo - replace with real transport in production
-        unauthTransport = UnauthenticatedTransportFfi.newMock()
+        when (mode) {
+            is DirectoryTransportMode.Mock -> {
+                unauthTransport = UnauthenticatedTransportFfi.newMock()
+                isMockMode = true
+            }
+            is DirectoryTransportMode.Callback -> {
+                unauthTransport = UnauthenticatedTransportFfi.fromCallback(mode.storage)
+                isMockMode = false
+            }
+        }
         directoryOps = createDirectoryOperationsAsync()
     }
     
@@ -283,4 +318,34 @@ class DirectoryService {
         }
     }
 }
+
+/**
+ * Example implementation of PubkyUnauthenticatedStorageCallback.
+ * 
+ * Implement this interface to integrate with the real Pubky SDK.
+ * This example shows the interface - you need to replace the implementation
+ * with actual Pubky SDK calls.
+ * 
+ * ```kotlin
+ * class MyPubkyStorage(private val pubkyClient: PubkyClient) : PubkyUnauthenticatedStorageCallback {
+ *     override fun get(ownerPubkey: String, path: String): StorageGetResult {
+ *         return try {
+ *             val content = pubkyClient.publicGet(ownerPubkey, path)
+ *             StorageGetResult(success = true, content = content, error = null)
+ *         } catch (e: Exception) {
+ *             StorageGetResult(success = false, content = null, error = e.message)
+ *         }
+ *     }
+ *     
+ *     override fun list(ownerPubkey: String, prefix: String): StorageListResult {
+ *         return try {
+ *             val entries = pubkyClient.publicList(ownerPubkey, prefix)
+ *             StorageListResult(success = true, entries = entries, error = null)
+ *         } catch (e: Exception) {
+ *             StorageListResult(success = false, entries = emptyList(), error = e.message)
+ *         }
+ *     }
+ * }
+ * ```
+ */
 

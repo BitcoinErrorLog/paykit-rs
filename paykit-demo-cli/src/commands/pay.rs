@@ -17,6 +17,7 @@ use tokio::net::TcpStream;
 use super::wallet::WalletConfig;
 use crate::ui;
 
+#[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip(storage_dir))]
 pub async fn run(
     storage_dir: &Path,
@@ -24,6 +25,7 @@ pub async fn run(
     amount: Option<String>,
     currency: Option<String>,
     method: &str,
+    strategy: &str,
     dry_run: bool,
     verbose: bool,
 ) -> Result<()> {
@@ -42,7 +44,6 @@ pub async fn run(
     let payee_uri = resolve_recipient(storage_dir, recipient)?;
 
     ui::info(&format!("Recipient: {}", payee_uri));
-    ui::info(&format!("Method: {}", method));
 
     let amount_str = if let Some(amt) = &amount {
         if let Some(curr) = &currency {
@@ -57,6 +58,22 @@ pub async fn run(
         "unspecified".to_string()
     };
 
+    // Determine the payment method to use
+    let selected_method = if method.to_lowercase() == "auto" {
+        // Auto-select the best method
+        select_payment_method(
+            storage_dir,
+            &payee_uri,
+            amount.as_deref(),
+            strategy,
+            verbose,
+        )
+        .await?
+    } else {
+        ui::info(&format!("Method: {}", method));
+        method.to_string()
+    };
+
     ui::separator();
 
     // Check if recipient is a Pubky URI - if so, use Noise negotiation
@@ -67,7 +84,7 @@ pub async fn run(
             &payee_uri,
             amount.as_deref(),
             currency.as_deref(),
-            method,
+            &selected_method,
             dry_run,
             verbose,
         )
@@ -77,7 +94,7 @@ pub async fn run(
     // Check wallet configuration for direct payments
     let wallet_config = WalletConfig::load(storage_dir)?;
 
-    match method.to_lowercase().as_str() {
+    match selected_method.to_lowercase().as_str() {
         "lightning" | "ln" | "ln-btc" => {
             execute_lightning_payment(
                 storage_dir,
@@ -101,18 +118,128 @@ pub async fn run(
             .await?;
         }
         _ => {
-            ui::warning(&format!("Unknown payment method: {}", method));
-            ui::info("Supported methods: lightning, onchain");
+            ui::warning(&format!("Unknown payment method: {}", selected_method));
+            ui::info("Supported methods: lightning, onchain, auto");
             return Ok(());
         }
     }
 
     // Log payment attempt
     if !dry_run {
-        log_payment_attempt(storage_dir, &payee_uri, &amount_str, method)?;
+        log_payment_attempt(storage_dir, &payee_uri, &amount_str, &selected_method)?;
     }
 
     Ok(())
+}
+
+/// Select the best payment method using paykit-lib selection
+async fn select_payment_method(
+    _storage_dir: &Path,
+    payee_uri: &str,
+    amount: Option<&str>,
+    strategy: &str,
+    verbose: bool,
+) -> Result<String> {
+    use paykit_lib::methods::Amount;
+    use paykit_lib::selection::{PaymentMethodSelector, SelectionPreferences};
+
+    ui::info("Auto-selecting payment method...");
+
+    // Parse strategy and create preferences
+    let prefs = match strategy.to_lowercase().as_str() {
+        "balanced" => SelectionPreferences::balanced(),
+        "cost" => SelectionPreferences::cost_optimized(),
+        "speed" => SelectionPreferences::speed_optimized(),
+        "privacy" => SelectionPreferences::privacy_optimized(),
+        _ => {
+            ui::warning(&format!("Unknown strategy '{}', using balanced", strategy));
+            SelectionPreferences::balanced()
+        }
+    };
+
+    if verbose {
+        ui::info(&format!("Selection strategy: {}", strategy));
+    }
+
+    // Parse amount
+    let amount_sats = amount.and_then(|a| a.parse::<u64>().ok()).unwrap_or(10000); // Default to 10k sats if not specified
+
+    let amt = Amount::sats(amount_sats);
+
+    // Try to discover payee's supported methods
+    let payee_pk_str = payee_uri.strip_prefix("pubky://").unwrap_or(payee_uri);
+
+    let spinner = ui::spinner("Discovering recipient payment methods...");
+
+    // Query the directory for supported methods
+    let storage = pubky::PublicStorage::new().context("Failed to create PublicStorage")?;
+    let transport = paykit_lib::PubkyUnauthenticatedTransport::new(storage);
+
+    let payee_pk: paykit_lib::PublicKey = payee_pk_str
+        .parse()
+        .context("Failed to parse payee public key")?;
+
+    let supported = paykit_lib::get_payment_list(&transport, &payee_pk).await;
+
+    spinner.finish_and_clear();
+
+    match supported {
+        Ok(methods) if !methods.entries.is_empty() => {
+            if verbose {
+                ui::info(&format!(
+                    "Found {} supported method(s):",
+                    methods.entries.len()
+                ));
+                for (method_id, endpoint) in &methods.entries {
+                    ui::info(&format!("  - {}: {}", method_id.0, endpoint.0));
+                }
+            }
+
+            // Use the selector
+            let selector = PaymentMethodSelector::with_defaults();
+
+            match selector.select(&methods, &amt, &prefs) {
+                Ok(result) => {
+                    ui::success(&format!(
+                        "Selected method: {} (score: {:.2})",
+                        result.primary.0, result.score
+                    ));
+                    ui::info(&format!("Reason: {}", result.reason));
+
+                    if !result.fallbacks.is_empty() {
+                        ui::info(&format!(
+                            "Fallbacks: {}",
+                            result
+                                .fallbacks
+                                .iter()
+                                .map(|m| m.0.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+
+                    Ok(result.primary.0)
+                }
+                Err(e) => {
+                    ui::warning(&format!("Selection failed: {}", e));
+                    ui::info("Falling back to lightning");
+                    Ok("lightning".to_string())
+                }
+            }
+        }
+        Ok(_) => {
+            ui::warning("No payment methods found for recipient");
+            ui::info("Falling back to lightning (default)");
+            Ok("lightning".to_string())
+        }
+        Err(e) => {
+            if verbose {
+                ui::warning(&format!("Could not query methods: {}", e));
+            }
+            ui::info("Using lightning (default)");
+            Ok("lightning".to_string())
+        }
+    }
 }
 
 /// Execute payment using Noise protocol to negotiate with recipient

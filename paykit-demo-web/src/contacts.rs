@@ -515,6 +515,192 @@ impl WasmContactStorage {
 
         Ok(())
     }
+
+    /// Discover contacts from Pubky follows directory
+    ///
+    /// This function provides a framework for discovering contacts from your
+    /// Pubky follows list. In the web demo, this requires integration with
+    /// a CORS-enabled proxy or the DirectoryClient for remote access.
+    ///
+    /// # Arguments
+    ///
+    /// * `directory_client` - A configured DirectoryClient for querying
+    /// * `my_public_key` - Your z32-encoded public key to query follows from
+    ///
+    /// # Returns
+    ///
+    /// Array of discoverable contacts with their public keys.
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmContactStorage();
+    /// const client = DirectoryClient.withProxy(homeserver, proxy);
+    /// const discovered = await storage.discoverFromFollows(client, myPublicKey);
+    /// console.log(`Found ${discovered.length} potential contacts`);
+    /// ```
+    #[wasm_bindgen(js_name = discoverFromFollows)]
+    pub async fn discover_from_follows(
+        &self,
+        directory_client: &crate::directory::DirectoryClient,
+        my_public_key: &str,
+    ) -> Result<Vec<JsValue>, JsValue> {
+        const PUBKY_FOLLOWS_PATH: &str = "/pub/pubky.app/follows/";
+
+        // Validate the public key format
+        let _: paykit_lib::PublicKey = my_public_key
+            .parse()
+            .map_err(|e| JsValue::from_str(&format!("Invalid public key: {}", e)))?;
+
+        let follows_path = format!("pubky://{}{}", my_public_key, PUBKY_FOLLOWS_PATH);
+
+        let mut discovered = Vec::new();
+
+        // Query the follows directory using the directory client
+        // This uses the same proxy/direct mechanism as other directory operations
+        match directory_client
+            .list_directory(my_public_key, PUBKY_FOLLOWS_PATH)
+            .await
+        {
+            Ok(entries) => {
+                for entry in entries.iter() {
+                    if let Some(entry_str) = entry.as_string() {
+                        // Each entry in follows is a pubkey
+                        let pk_str = entry_str.trim_matches('/');
+
+                        // Validate it looks like a public key
+                        if pk_str.len() >= 32 {
+                            let js_obj = js_sys::Object::new();
+                            let _ =
+                                js_sys::Reflect::set(&js_obj, &"public_key".into(), &pk_str.into());
+                            let _ = js_sys::Reflect::set(
+                                &js_obj,
+                                &"pubky_uri".into(),
+                                &format!("pubky://{}", pk_str).into(),
+                            );
+                            let _ =
+                                js_sys::Reflect::set(&js_obj, &"source".into(), &"follows".into());
+                            let _ = js_sys::Reflect::set(
+                                &js_obj,
+                                &"source_path".into(),
+                                &follows_path.clone().into(),
+                            );
+
+                            // Check if they have Paykit endpoints
+                            let has_paykit =
+                                match directory_client.get_payment_list(pk_str, None).await {
+                                    Ok(methods) => !methods.is_empty(),
+                                    Err(_) => false,
+                                };
+                            let _ = js_sys::Reflect::set(
+                                &js_obj,
+                                &"has_paykit".into(),
+                                &has_paykit.into(),
+                            );
+
+                            discovered.push(js_obj.into());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                // Log the error but return empty array
+                crate::utils::warn(&format!(
+                    "Discovery from follows failed: {:?}",
+                    e.as_string()
+                ));
+            }
+        }
+
+        Ok(discovered)
+    }
+
+    /// Import discovered contacts into local storage
+    ///
+    /// Takes an array of discovered contacts (from `discoverFromFollows`) and
+    /// imports them as local contacts. Optionally filters to only import those
+    /// with Paykit payment endpoints.
+    ///
+    /// # Arguments
+    ///
+    /// * `discovered` - Array of discovered contact objects from `discoverFromFollows`
+    /// * `paykit_only` - If true, only import contacts that have Paykit endpoints
+    ///
+    /// # Returns
+    ///
+    /// Object with `imported` and `skipped` counts.
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmContactStorage();
+    /// const discovered = await storage.discoverFromFollows(myPublicKey);
+    /// const result = await storage.importDiscovered(discovered, true);
+    /// console.log(`Imported ${result.imported}, skipped ${result.skipped}`);
+    /// ```
+    #[wasm_bindgen(js_name = importDiscovered)]
+    pub async fn import_discovered(
+        &self,
+        discovered: Vec<JsValue>,
+        paykit_only: bool,
+    ) -> Result<JsValue, JsValue> {
+        let mut imported = 0u32;
+        let mut skipped = 0u32;
+
+        for contact_js in discovered {
+            // Check if it has paykit if filter is enabled
+            if paykit_only {
+                if let Ok(has_paykit) = js_sys::Reflect::get(&contact_js, &"has_paykit".into()) {
+                    if !has_paykit.as_bool().unwrap_or(false) {
+                        skipped += 1;
+                        continue;
+                    }
+                }
+            }
+
+            // Get the public key
+            let public_key = match js_sys::Reflect::get(&contact_js, &"public_key".into()) {
+                Ok(pk) => match pk.as_string() {
+                    Some(s) => s,
+                    None => {
+                        skipped += 1;
+                        continue;
+                    }
+                },
+                Err(_) => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            // Check if contact already exists
+            if let Ok(Some(_)) = self.get_contact(&public_key).await {
+                skipped += 1;
+                continue;
+            }
+
+            // Create default name from public key
+            let name = format!("Contact {}", &public_key[..8.min(public_key.len())]);
+
+            // Create and save the contact
+            if let Ok(contact) = WasmContact::new(public_key, name) {
+                let contact = contact.with_notes("Imported from Pubky follows".to_string());
+                if self.save_contact(&contact).await.is_ok() {
+                    imported += 1;
+                } else {
+                    skipped += 1;
+                }
+            } else {
+                skipped += 1;
+            }
+        }
+
+        let result = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&result, &"imported".into(), &imported.into());
+        let _ = js_sys::Reflect::set(&result, &"skipped".into(), &skipped.into());
+
+        Ok(result.into())
+    }
 }
 
 #[cfg(test)]

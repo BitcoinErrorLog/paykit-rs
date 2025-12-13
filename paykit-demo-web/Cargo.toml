@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Core Paykit libraries (WASM-compatible)
 paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
+paykit-interactive = { path = "../paykit-interactive" }
 # Note: paykit-subscriptions and paykit-interactive use tokio/native-only features
 # We'll implement WASM-compatible versions directly in this crate
 

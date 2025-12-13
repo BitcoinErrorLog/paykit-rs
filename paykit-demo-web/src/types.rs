@@ -241,6 +241,7 @@ impl SignedSubscription {
 
 /// A cryptographic receipt for payment coordination
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaykitReceipt {
     pub receipt_id: String,
     pub payer: PublicKey,
@@ -250,6 +251,15 @@ pub struct PaykitReceipt {
     pub currency: Option<String>,
     pub created_at: i64,
     pub metadata: serde_json::Value,
+    /// Payment proof (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof: Option<serde_json::Value>,
+    /// Whether proof has been verified
+    #[serde(default)]
+    pub proof_verified: bool,
+    /// Timestamp when proof was verified
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_verified_at: Option<i64>,
 }
 
 impl PaykitReceipt {
@@ -277,7 +287,27 @@ impl PaykitReceipt {
             currency,
             created_at: now,
             metadata,
+            proof: None,
+            proof_verified: false,
+            proof_verified_at: None,
         }
+    }
+
+    pub fn with_proof(mut self, proof: serde_json::Value) -> Self {
+        self.proof = Some(proof);
+        self
+    }
+
+    pub fn mark_proof_verified(mut self) -> Self {
+        self.proof_verified = true;
+        use std::time::{SystemTime, UNIX_EPOCH};
+        self.proof_verified_at = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64,
+        );
+        self
     }
 }
 

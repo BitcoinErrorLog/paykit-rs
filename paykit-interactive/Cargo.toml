@@ -12,6 +12,8 @@ thiserror = "1.0"
 async-trait = "0.1"
 tokio = { version = "1.0", features = ["time"], optional = true }
 tracing = { version = "0.1", optional = true }
+sha2 = "0.10"
+hex = "0.4"
 
 pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
 
@@ -20,6 +22,8 @@ default = ["timeout", "tcp-transport"]
 timeout = ["tokio"]
 tcp-transport = []
 tracing = ["dep:tracing"]
+# Enable real proof verification with Esplora API
+http-executor = ["paykit-lib/http-executor"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

@@ -66,6 +66,9 @@ impl PaymentCoordinator {
             currency: final_receipt.currency,
             timestamp: final_receipt.created_at,
             metadata: final_receipt.metadata,
+            proof: None,
+            proof_verified: false,
+            proof_verified_at: None,
         })
     }
 
@@ -110,6 +113,9 @@ impl PaymentCoordinator {
                     currency: receipt.currency,
                     timestamp: receipt.created_at,
                     metadata: receipt.metadata,
+                    proof: None,
+                    proof_verified: false,
+                    proof_verified_at: None,
                 }))
             } else {
                 Ok(None)

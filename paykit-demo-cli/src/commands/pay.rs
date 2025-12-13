@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use paykit_demo_core::{DemoStorage, DirectoryClient};
 use paykit_interactive::{PaykitNoiseMessage, PaykitReceipt};
 use paykit_lib::MethodId;
+use std::str::FromStr;
 use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
 use pubky_noise::{DummyRing, NoiseClient};
 use std::path::Path;
@@ -394,11 +395,31 @@ async fn execute_noise_payment(
                 }
                 ui::key_value("Method", &receipt.method_id.0);
 
-                // Save receipt
+                // Save receipt with proof if available
                 let demo_storage = DemoStorage::new(storage_dir.join("data"));
                 demo_storage.init()?;
+                
+                // Convert PaykitReceipt to core Receipt with proof
+                let core_receipt = paykit_demo_core::Receipt::new(
+                    receipt.receipt_id.clone(),
+                    receipt.payer.clone(),
+                    receipt.payee.clone(),
+                    receipt.method_id.0.clone(),
+                )
+                .with_amount(
+                    receipt.amount.clone().unwrap_or_default(),
+                    receipt.currency.clone().unwrap_or_default(),
+                )
+                .with_metadata(receipt.metadata.clone());
+                
+                // Note: Proof would be captured from payment execution
+                // For Noise payments, proof comes from the payment method plugin
+                // For now, we save the receipt as-is
                 let receipt_json = serde_json::to_string(&receipt)?;
                 demo_storage.save_receipt_json(&receipt.receipt_id, &receipt_json)?;
+                
+                // Also save as core Receipt for consistency
+                demo_storage.save_receipt(core_receipt)?;
 
                 ui::info("Receipt saved locally");
 
@@ -431,7 +452,7 @@ async fn execute_noise_payment(
 }
 
 async fn execute_lightning_payment(
-    _storage_dir: &Path,
+    storage_dir: &Path,
     wallet_config: &Option<WalletConfig>,
     payee_uri: &str,
     amount: Option<&str>,
@@ -515,6 +536,36 @@ async fn execute_lightning_payment(
                         ui::info(&format!("Preimage: {}", result.preimage));
                         ui::info(&format!("Fee: {} msat", result.fee_msat));
                         ui::info(&format!("Hops: {}", result.hops));
+                        
+                        // Capture proof for receipt
+                        let proof = paykit_lib::methods::PaymentProof::lightning_preimage(
+                            &result.preimage,
+                            &result.payment_hash,
+                        );
+                        let proof_json = serde_json::to_value(&proof)
+                            .context("Failed to serialize proof")?;
+                        
+                        // Save receipt with proof
+                        let demo_storage = DemoStorage::new(storage_dir.join("data"));
+                        demo_storage.init()?;
+                        
+                        let identity = super::load_current_identity(storage_dir).await?;
+                        let receipt = paykit_demo_core::Receipt::new(
+                            uuid::Uuid::new_v4().to_string(),
+                            identity.public_key(),
+                            payee_uri.parse().unwrap_or_else(|_| {
+                                paykit_lib::PublicKey::from_str("8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo").unwrap()
+                            }),
+                            "lightning".to_string(),
+                        )
+                        .with_amount(
+                            amount.unwrap_or("0").to_string(),
+                            "SAT".to_string(),
+                        )
+                        .with_proof(proof_json);
+                        
+                        demo_storage.save_receipt(receipt)?;
+                        ui::info("Receipt with proof saved");
                     }
                     paykit_lib::methods::LightningPaymentStatus::Pending => {
                         ui::warning("Payment pending...");

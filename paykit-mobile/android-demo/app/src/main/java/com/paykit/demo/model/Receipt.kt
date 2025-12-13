@@ -49,7 +49,13 @@ data class Receipt(
     /** Optional memo/note */
     var memo: String? = null,
     /** Transaction ID (if applicable) */
-    var txId: String? = null
+    var txId: String? = null,
+    /** Payment proof (optional, JSON string) */
+    var proof: String? = null,
+    /** Whether proof has been verified */
+    var proofVerified: Boolean = false,
+    /** Timestamp when proof was verified (Unix timestamp in milliseconds) */
+    var proofVerifiedAt: Long? = null
 ) {
     companion object {
         /**
@@ -103,6 +109,16 @@ data class Receipt(
                 createdAt = ffiReceipt.createdAt * 1000 // Convert to milliseconds
             )
         }
+    }
+    
+    /**
+     * Mark proof as verified
+     */
+    fun markProofVerified(): Receipt {
+        return this.copy(
+            proofVerified = true,
+            proofVerifiedAt = System.currentTimeMillis()
+        )
     }
     
     /**

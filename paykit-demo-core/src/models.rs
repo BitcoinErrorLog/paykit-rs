@@ -79,6 +79,15 @@ pub struct Receipt {
     pub timestamp: i64,
     /// Additional metadata
     pub metadata: serde_json::Value,
+    /// Payment proof (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof: Option<serde_json::Value>,
+    /// Whether proof has been verified
+    #[serde(default)]
+    pub proof_verified: bool,
+    /// Timestamp when proof was verified
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof_verified_at: Option<i64>,
 }
 
 impl Receipt {
@@ -92,6 +101,9 @@ impl Receipt {
             currency: None,
             timestamp: current_timestamp(),
             metadata: serde_json::json!({}),
+            proof: None,
+            proof_verified: false,
+            proof_verified_at: None,
         }
     }
 
@@ -103,6 +115,17 @@ impl Receipt {
 
     pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = metadata;
+        self
+    }
+
+    pub fn with_proof(mut self, proof: serde_json::Value) -> Self {
+        self.proof = Some(proof);
+        self
+    }
+
+    pub fn mark_proof_verified(mut self) -> Self {
+        self.proof_verified = true;
+        self.proof_verified_at = Some(current_timestamp());
         self
     }
 }

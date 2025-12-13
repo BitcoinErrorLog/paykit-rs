@@ -346,6 +346,12 @@ fn current_timestamp() -> i64 {
         .as_secs() as i64
 }
 
+#[cfg(feature = "http-executor")]
+pub mod verifiers;
+
+#[cfg(feature = "http-executor")]
+pub use verifiers::{RealBitcoinProofVerifier, RealLightningProofVerifier};
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -47,12 +47,18 @@ cargo test --lib
 
 ## Features
 
-This crate has optional features:
+This crate has optional features that enable different functionality:
 
 ### Available Features
 
-- **`pubky`** (default): Enables Pubky transport integration
-- **`tracing`** (planned): Enables tracing instrumentation
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `pubky` | Yes | Enables Pubky transport integration for directory operations |
+| `http-executor` | No | Enables real HTTP clients for LND and Esplora executors |
+| `file-storage` | No | Enables encrypted file-based storage |
+| `tracing` | No | Enables tracing instrumentation for debugging |
+| `test-utils` | No | Enables test utilities for integration testing |
+| `integration-tests` | No | Enables Pubky integration tests (requires network) |
 
 ### Build with Specific Features
 
@@ -63,8 +69,41 @@ cargo build
 # No default features (minimal build)
 cargo build --no-default-features
 
-# Only specific features
-cargo build --no-default-features --features pubky
+# Enable HTTP executors for real LND/Esplora connections
+cargo build --features http-executor
+
+# Enable all features for development
+cargo build --all-features
+
+# WASM-compatible build (no http-executor)
+cargo build --target wasm32-unknown-unknown --no-default-features --features pubky
+```
+
+### Feature Details
+
+#### `http-executor`
+
+This feature enables the real HTTP client implementations in the executor modules:
+
+- **LndExecutor**: Full REST API client for LND nodes
+- **EsploraExecutor**: Full HTTP client for Esplora/mempool.space APIs
+
+Without this feature, executor methods return `Unimplemented` errors. This is useful for WASM targets where `reqwest` is not available.
+
+```bash
+# Build with executors enabled
+cargo build -p paykit-lib --features http-executor
+
+# Run executor tests
+cargo test -p paykit-lib --features http-executor --test executor_integration
+```
+
+#### `file-storage`
+
+Enables AES-GCM encrypted storage with Argon2 key derivation:
+
+```bash
+cargo build -p paykit-lib --features file-storage
 ```
 
 ---

@@ -15,6 +15,22 @@ class DashboardViewModel: ObservableObject {
     @Published var pendingCount: Int = 0
     @Published var isLoading = true
     
+    // Setup checklist properties
+    @Published var hasPaymentMethods: Bool = false
+    @Published var hasPublishedMethods: Bool = false
+    
+    var isSetupComplete: Bool {
+        contactCount > 0 && hasPaymentMethods && hasPublishedMethods
+    }
+    
+    var setupProgress: Int {
+        var completed = 1 // Identity is always created at this point
+        if contactCount > 0 { completed += 1 }
+        if hasPaymentMethods { completed += 1 }
+        if hasPublishedMethods { completed += 1 }
+        return (completed * 100) / 4
+    }
+    
     private let keyManager = KeyManager()
     private var receiptStorage: ReceiptStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
@@ -55,6 +71,13 @@ class DashboardViewModel: ObservableObject {
         totalReceived = receiptStorage.totalReceived()
         pendingCount = receiptStorage.pendingCount()
         
+        // Check payment methods (for demo, assume configured if we have any receipts)
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        let methodStorage = PaymentMethodStorage(identityName: identityName)
+        let methods = methodStorage.listMethods()
+        hasPaymentMethods = !methods.isEmpty
+        hasPublishedMethods = methods.contains { $0.isPublic }
+        
         isLoading = false
     }
 }
@@ -68,6 +91,11 @@ struct DashboardView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Setup Checklist (show if incomplete)
+                    if !viewModel.isSetupComplete {
+                        setupChecklistSection
+                    }
+                    
                     // Quick Stats
                     statsSection
                     
@@ -188,6 +216,55 @@ struct DashboardView: View {
         .padding(.vertical, 40)
         .background(Color(.systemBackground))
         .cornerRadius(12)
+    }
+    
+    // MARK: - Setup Checklist Section
+    
+    private var setupChecklistSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Setup Checklist")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(viewModel.setupProgress)%")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            VStack(spacing: 8) {
+                SetupCheckItem(
+                    title: "Create Identity",
+                    subtitle: "Generate your Paykit identity",
+                    isComplete: true,
+                    icon: "person.circle.fill"
+                )
+                
+                SetupCheckItem(
+                    title: "Add Contacts",
+                    subtitle: viewModel.contactCount > 0 ? "\(viewModel.contactCount) contact(s) added" : "Add payment recipients",
+                    isComplete: viewModel.contactCount > 0,
+                    icon: "person.2.fill"
+                )
+                
+                SetupCheckItem(
+                    title: "Configure Payment Methods",
+                    subtitle: "Set up Lightning or on-chain",
+                    isComplete: viewModel.hasPaymentMethods,
+                    icon: "creditcard.fill"
+                )
+                
+                SetupCheckItem(
+                    title: "Publish to Directory",
+                    subtitle: "Make your methods discoverable",
+                    isComplete: viewModel.hasPublishedMethods,
+                    icon: "globe"
+                )
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+        }
     }
     
     // MARK: - Quick Actions Section
@@ -335,6 +412,44 @@ struct QuickActionButton: View {
             .background(Color(.systemBackground))
             .cornerRadius(12)
             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        }
+    }
+}
+
+struct SetupCheckItem: View {
+    let title: String
+    let subtitle: String
+    let isComplete: Bool
+    let icon: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(isComplete ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: isComplete ? "checkmark.circle.fill" : icon)
+                    .foregroundColor(isComplete ? .green : .gray)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(isComplete ? .secondary : .primary)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            if isComplete {
+                Image(systemName: "checkmark")
+                    .foregroundColor(.green)
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
+use paykit_lib::prelude::{SecureKeyStorage, StoreOptions};
 use pubky::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -40,6 +41,33 @@ where
     Ok(Keypair::from_secret_key(&secret))
 }
 
+/// Encrypted backup of an identity
+#[derive(Clone, Serialize, Deserialize)]
+pub struct KeyBackup {
+    /// Version of the backup format
+    pub version: u32,
+    /// Encrypted secret key data (hex encoded)
+    pub encrypted_data_hex: String,
+    /// Salt used for key derivation (hex encoded)
+    pub salt_hex: String,
+    /// Nonce used for encryption (hex encoded)
+    pub nonce_hex: String,
+    /// Public key for identification (z32 encoded)
+    pub public_key_z32: String,
+}
+
+impl KeyBackup {
+    /// Serialize backup to JSON string
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string(self).context("Failed to serialize backup")
+    }
+
+    /// Deserialize backup from JSON string
+    pub fn from_json(json: &str) -> Result<Self> {
+        serde_json::from_str(json).context("Failed to parse backup")
+    }
+}
+
 impl Identity {
     /// Generate a new random identity
     pub fn generate() -> Self {
@@ -47,6 +75,107 @@ impl Identity {
             keypair: Keypair::random(),
             nickname: None,
         }
+    }
+
+    /// Export identity to encrypted backup
+    ///
+    /// Uses Argon2 for password-based key derivation and AES-256-GCM for encryption.
+    pub fn export_backup(&self, password: &str) -> Result<KeyBackup> {
+        use aes_gcm::{
+            aead::{Aead, KeyInit},
+            Aes256Gcm, Nonce,
+        };
+        use argon2::Argon2;
+        use rand::RngCore;
+
+        let secret_bytes = self.keypair.secret_key();
+
+        // Derive encryption key from password using Argon2
+        let mut salt = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut salt);
+
+        let mut encryption_key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
+            .map_err(|e| anyhow::anyhow!("Key derivation failed: {}", e))?;
+
+        // Encrypt with AES-GCM
+        let cipher = Aes256Gcm::new_from_slice(&encryption_key)
+            .map_err(|e| anyhow::anyhow!("Cipher init failed: {}", e))?;
+
+        let mut nonce_bytes = [0u8; 12];
+        rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let encrypted = cipher
+            .encrypt(nonce, secret_bytes.as_ref())
+            .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
+
+        Ok(KeyBackup {
+            version: 1,
+            encrypted_data_hex: hex::encode(encrypted),
+            salt_hex: hex::encode(salt),
+            nonce_hex: hex::encode(nonce_bytes),
+            public_key_z32: self.public_key().to_string(),
+        })
+    }
+
+    /// Import identity from encrypted backup
+    ///
+    /// Uses Argon2 for password-based key derivation and AES-256-GCM for decryption.
+    pub fn import_backup(backup: &KeyBackup, password: &str) -> Result<Self> {
+        use aes_gcm::{
+            aead::{Aead, KeyInit},
+            Aes256Gcm, Nonce,
+        };
+        use argon2::Argon2;
+
+        if backup.version != 1 {
+            anyhow::bail!("Unsupported backup version: {}", backup.version);
+        }
+
+        let salt = hex::decode(&backup.salt_hex).context("Invalid salt")?;
+        let nonce_bytes = hex::decode(&backup.nonce_hex).context("Invalid nonce")?;
+        let encrypted = hex::decode(&backup.encrypted_data_hex).context("Invalid encrypted data")?;
+
+        // Derive encryption key from password
+        let mut encryption_key = [0u8; 32];
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
+            .map_err(|e| anyhow::anyhow!("Key derivation failed: {}", e))?;
+
+        // Decrypt with AES-GCM
+        let cipher = Aes256Gcm::new_from_slice(&encryption_key)
+            .map_err(|e| anyhow::anyhow!("Cipher init failed: {}", e))?;
+
+        if nonce_bytes.len() != 12 {
+            anyhow::bail!("Invalid nonce length");
+        }
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let decrypted = cipher
+            .decrypt(nonce, encrypted.as_ref())
+            .map_err(|_| anyhow::anyhow!("Decryption failed - wrong password or corrupted data"))?;
+
+        if decrypted.len() != 32 {
+            anyhow::bail!("Invalid decrypted data length");
+        }
+
+        let mut secret_key = [0u8; 32];
+        secret_key.copy_from_slice(&decrypted);
+
+        let keypair = Keypair::from_secret_key(&secret_key);
+
+        // Verify public key matches
+        let derived_public_key = keypair.public_key().to_string();
+        if derived_public_key != backup.public_key_z32 {
+            anyhow::bail!("Public key mismatch - backup may be corrupted");
+        }
+
+        Ok(Self {
+            keypair,
+            nickname: None,
+        })
     }
 
     /// Create identity from existing keypair
@@ -201,7 +330,7 @@ pub struct SecureIdentityManager {
     metadata_path: PathBuf,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct IdentitiesMetadata {
     identities: Vec<IdentityMetadata>,
 }
@@ -231,7 +360,7 @@ impl SecureIdentityManager {
         self.storage.store(
             &format!("identity.{}.secret", name),
             secret_key_hex.as_bytes(),
-            paykit_lib::secure_storage::StoreOptions::default()
+            StoreOptions::default()
         ).await
         .map_err(|e| anyhow::anyhow!("Failed to store secret key: {}", e))?;
         

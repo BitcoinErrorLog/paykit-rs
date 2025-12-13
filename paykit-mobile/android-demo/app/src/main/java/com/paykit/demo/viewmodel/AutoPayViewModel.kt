@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.paykit.demo.model.AutoPayRule
 import com.paykit.demo.model.PeerSpendingLimit
+import com.paykit.demo.model.Receipt
 import com.paykit.demo.storage.AutoPayStorage
+import com.paykit.demo.storage.ReceiptStorage
 import com.paykit.mobile.KeyManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,11 +20,17 @@ import kotlinx.coroutines.flow.update
  */
 class AutoPayViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val context = application.applicationContext
     private val keyManager = KeyManager(application)
     private val storage: AutoPayStorage
         get() {
             val identityName = keyManager.currentIdentityName.value ?: "default"
             return AutoPayStorage(application, identityName)
+        }
+    private val receiptStorage: ReceiptStorage
+        get() {
+            val identityName = keyManager.currentIdentityName.value ?: "default"
+            return ReceiptStorage(context, identityName)
         }
     
     private val _uiState = MutableStateFlow(AutoPayUiState())
@@ -30,6 +38,13 @@ class AutoPayViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         loadFromStorage()
+    }
+
+    fun refreshRecentPayments() {
+        // Load recent sent payments as auto-payments (for demo, we treat all sent payments as auto-pay candidates)
+        val recentReceipts = receiptStorage.recentReceipts(5)
+            .filter { it.direction == com.paykit.demo.model.PaymentDirection.SENT }
+        _uiState.update { it.copy(recentAutoPayments = recentReceipts) }
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -130,12 +145,17 @@ class AutoPayViewModel(application: Application) : AndroidViewModel(application)
         val peerLimits = storage.getPeerLimits()
         val rules = storage.getRules()
         
+        // Load recent sent payments
+        val recentReceipts = receiptStorage.recentReceipts(5)
+            .filter { it.direction == com.paykit.demo.model.PaymentDirection.SENT }
+        
         _uiState.value = AutoPayUiState(
             isEnabled = settings.isEnabled,
             dailyLimit = settings.globalDailyLimitSats,
             usedToday = settings.currentDailySpentSats,
             peerLimits = peerLimits,
-            autoPayRules = rules
+            autoPayRules = rules,
+            recentAutoPayments = recentReceipts
         )
     }
 
@@ -159,5 +179,6 @@ data class AutoPayUiState(
     val dailyLimit: Long = 100000,
     val usedToday: Long = 0,
     val peerLimits: List<PeerSpendingLimit> = emptyList(),
-    val autoPayRules: List<AutoPayRule> = emptyList()
+    val autoPayRules: List<AutoPayRule> = emptyList(),
+    val recentAutoPayments: List<Receipt> = emptyList()
 )

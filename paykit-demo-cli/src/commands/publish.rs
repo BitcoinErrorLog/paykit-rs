@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use paykit_demo_core::{DirectoryClient, PaymentMethod};
+use paykit_lib::prelude::*;
 use std::path::Path;
 
 use crate::ui;
@@ -52,6 +53,49 @@ pub async fn run(
     for method in &methods {
         ui::key_value(&format!("  {}", method.method_id), &method.endpoint);
     }
+
+    // Validate payment methods before publishing
+    ui::separator();
+    ui::info("Validating payment methods...");
+    
+    let registry = default_registry();
+    let mut all_valid = true;
+    
+    for method in &methods {
+        let method_id = MethodId::new(&method.method_id);
+        
+        if let Some(plugin) = registry.get(&method_id) {
+            let endpoint_data = EndpointData::new(&method.endpoint);
+            
+            let result = plugin.validate_endpoint(&endpoint_data);
+            
+            if result.valid {
+                ui::success(&format!("  {} - valid", method.method_id));
+                if !result.warnings.is_empty() {
+                    for warning in &result.warnings {
+                        ui::warning(&format!("    Warning: {}", warning));
+                    }
+                }
+            } else {
+                all_valid = false;
+                ui::error(&format!("  {} - invalid", method.method_id));
+                for error in &result.errors {
+                    ui::error(&format!("    {}", error));
+                }
+            }
+        } else {
+            ui::warning(&format!("  {} - no validator available (will publish anyway)", method.method_id));
+        }
+    }
+    
+    if !all_valid {
+        ui::separator();
+        ui::error("Some payment methods failed validation");
+        ui::info("Fix the errors above before publishing");
+        return Ok(());
+    }
+    
+    ui::separator();
 
     // Create directory client
     let client = DirectoryClient::new(homeserver);

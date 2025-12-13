@@ -4,35 +4,35 @@
 
 Paykit enables seamless payment discovery, negotiation, and coordination through public directories and private encrypted channels. It provides a unified interface for managing payments across different methods while maintaining privacy and cryptographic security.
 
-## 🌟 Key Features
+## Key Features
 
 ### Core Capabilities
 
-- **🔍 Payment Method Discovery**: Query public directories to discover how someone accepts payments
-- **📡 Public Directory Publishing**: Publish your payment methods to Pubky homeservers for discovery
-- **🔐 Encrypted Payment Channels**: Private Noise Protocol channels for secure payment negotiation
-- **🧾 Receipt Exchange**: Cryptographic proof of payment coordination and tracking
-- **💳 Multi-Method Support**: Bitcoin onchain, Lightning Network, and extensible to other methods
-- **👥 Contact Management**: Store and manage payment counterparties with metadata
-- **📊 Health Monitoring**: Real-time status checks for payment methods
-- **🎯 Smart Method Selection**: Strategy-based selection (cost, speed, privacy, balanced)
+- **Payment Method Discovery**: Query public directories to discover how someone accepts payments
+- **Public Directory Publishing**: Publish your payment methods to Pubky homeservers for discovery
+- **Encrypted Payment Channels**: Private Noise Protocol channels for secure payment negotiation
+- **Receipt Exchange**: Cryptographic proof of payment coordination and tracking
+- **Multi-Method Support**: Bitcoin onchain, Lightning Network, and extensible to other methods
+- **Contact Management**: Store and manage payment counterparties with metadata
+- **Health Monitoring**: Real-time status checks for payment methods
+- **Smart Method Selection**: Strategy-based selection (cost, speed, privacy, balanced)
 
 ### Subscription & Automation
 
-- **🔄 Subscription Management**: Create and manage recurring payment agreements
-- **🤖 Auto-Pay Rules**: Automated payment approval with configurable conditions
-- **💰 Spending Limits**: Per-peer and global limits with daily/weekly/monthly periods
-- **📝 Payment Requests**: Create, send, and manage payment requests with expiration
-- **🔒 Cryptographic Signatures**: Secure subscription agreements with Ed25519 signatures
+- **Subscription Management**: Create and manage recurring payment agreements
+- **Auto-Pay Rules**: Automated payment approval with configurable conditions
+- **Spending Limits**: Per-peer and global limits with daily/weekly/monthly periods
+- **Payment Requests**: Create, send, and manage payment requests with expiration
+- **Cryptographic Signatures**: Secure subscription agreements with Ed25519 signatures
 
 ### Platform Support
 
-- **🖥️ CLI**: Full-featured command-line interface with real payment execution
-- **🌐 Web**: WebAssembly browser application with interactive dashboard
-- **📱 iOS**: Native SwiftUI app with Keychain storage and FFI integration
-- **🤖 Android**: Native Jetpack Compose app with EncryptedSharedPreferences and FFI integration
+- **CLI**: Full-featured command-line interface with real payment execution
+- **Web**: WebAssembly browser application with interactive dashboard
+- **iOS**: Native SwiftUI app with Keychain storage and FFI integration
+- **Android**: Native Jetpack Compose app with EncryptedSharedPreferences and FFI integration
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 paykit-rs-master/
@@ -50,7 +50,7 @@ paykit-rs-master/
     └── android-demo/        # Complete Android demo app (Jetpack Compose)
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Try the CLI Demo
 
@@ -98,7 +98,7 @@ Then open `http://localhost:8080` in your browser. See the [Web Demo README](pay
 
 See the [Mobile README](paykit-mobile/README.md) for complete setup instructions.
 
-## 📋 Complete Feature List
+## Complete Feature List
 
 ### Identity & Key Management
 
@@ -189,7 +189,7 @@ See the [Mobile README](paykit-mobile/README.md) for complete setup instructions
 - ✅ **Quick Actions**: Common tasks accessible from dashboard
 - ✅ **Progress Tracking**: Setup completion indicators
 
-## 🎯 Demo Applications
+## Demo Applications
 
 ### CLI Demo (`paykit-demo-cli`)
 
@@ -258,7 +258,7 @@ See the [Mobile README](paykit-mobile/README.md) for complete setup instructions
 
 **Use Cases**: Android apps, mobile wallets, native integrations
 
-## 🏗️ Architecture
+## Architecture
 
 ### Payment Discovery Flow
 
@@ -289,7 +289,7 @@ Payer                    Noise Channel                 Payee
   |--Execute Payment (off-protocol)                        |
 ```
 
-## 📚 Components
+## Components
 
 ### paykit-lib
 
@@ -418,7 +418,7 @@ See [paykit-subscriptions README](paykit-subscriptions/README.md) for complete d
 
 See [paykit-mobile README](paykit-mobile/README.md) and [Mobile Integration Guide](docs/mobile-integration.md) for complete documentation.
 
-## 🔧 Installation
+## Installation
 
 ### Prerequisites
 
@@ -461,7 +461,7 @@ cd paykit-mobile
 cargo build --release
 ```
 
-## 💻 Usage Examples
+## Usage Examples
 
 ### Using paykit-lib
 
@@ -511,7 +511,7 @@ paykit-demo receipts
 
 See [CLI README](paykit-demo-cli/README.md) for complete examples.
 
-## ✅ Development Status
+## Development Status
 
 ### Completed Features
 
@@ -552,7 +552,7 @@ See [CLI README](paykit-demo-cli/README.md) for complete examples.
 - Hardware wallet integration
 - Additional payment method plugins
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -570,7 +570,7 @@ cargo test --test pubky_sdk_compliance -- --test-threads=1
 cd paykit-mobile && cargo test --lib
 ```
 
-## 📖 Documentation
+## Documentation
 
 ### Component Documentation
 - [paykit-lib](paykit-lib/README.md) - Core library API reference
@@ -600,7 +600,7 @@ cd paykit-mobile && cargo test --lib
 - [Build Instructions](BUILD.md) - Build and development setup
 - [Demo Apps Comprehensive Plan](DEMO_APPS_COMPREHENSIVE_PLAN.md) - Feature parity analysis
 
-## 🔒 Security Considerations
+## Security Considerations
 
 **For Production Use**:
 1. Store private keys in secure enclaves/HSMs
@@ -620,7 +620,7 @@ cd paykit-mobile && cargo test --lib
 
 See [SECURITY.md](SECURITY.md) for detailed security guidance.
 
-## 🤝 Contributing
+## Contributing
 
 This is a demonstration/reference implementation. Contributions welcome:
 
@@ -631,7 +631,7 @@ This is a demonstration/reference implementation. Contributions welcome:
 
 See [repository guidelines](./_RULES.md) for detailed conventions.
 
-## 📦 Dependencies
+## Dependencies
 
 **Core**:
 - `pubky` 0.6.0-rc.6 - Pubky protocol SDK
@@ -649,20 +649,20 @@ See [repository guidelines](./_RULES.md) for detailed conventions.
 - `uniffi` - FFI bindings generation
 - Platform-native storage APIs
 
-## 📄 License
+## License
 
 MIT
 
-## 🔗 Related Projects
+## Related Projects
 
 - [Pubky](https://pubky.org) - Decentralized identity and data protocol
 - [Pubky Noise](../pubky-noise-main/) - Noise Protocol implementation
 - [Bitkit](https://bitkit.to) - Reference wallet implementation
 
-## 📞 Contact
+## Contact
 
 For questions or support, please open an issue in the repository.
 
 ---
 
-**Built with ❤️ for the decentralized web**
+**Built for the decentralized web**

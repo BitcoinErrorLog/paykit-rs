@@ -483,6 +483,25 @@ class KeyManager(context: Context) {
         return verifySignature(publicKeyHex, data, signatureHex)
     }
     
+    /**
+     * Get secret key as raw bytes (for Noise protocol handshake)
+     *
+     * @return 32-byte secret key, or null if no identity
+     */
+    fun getSecretKeyBytes(): ByteArray? {
+        val name = getCurrentIdentityName() ?: return null
+        val secretKey = secretKey(name)
+        val secretHex = prefs.getString(secretKey, null) ?: return null
+        
+        // Convert hex to bytes
+        return try {
+            secretHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                .takeIf { it.size == 32 }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
     // ============================================================================
     // Backup & Restore
     // ============================================================================

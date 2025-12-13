@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use super::traits::{
-    KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageErrorCode,
-    SecureStorageResult, StoreOptions,
+    KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageErrorCode, SecureStorageResult,
+    StoreOptions,
 };
 
 /// In-memory key storage entry.

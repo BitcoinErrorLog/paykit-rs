@@ -443,7 +443,8 @@ mod tests {
         );
 
         // Verify signature
-        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        let verifying_key =
+            VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
         assert!(
             verifying_key.verify(message, &signature).is_ok(),
             "Verification must succeed"
@@ -473,7 +474,8 @@ mod tests {
             "Signature must match RFC 8032 test vector 2"
         );
 
-        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        let verifying_key =
+            VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
         assert!(verifying_key.verify(message, &signature).is_ok());
     }
 
@@ -500,7 +502,8 @@ mod tests {
             "Signature must match RFC 8032 test vector 3"
         );
 
-        let verifying_key = VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
+        let verifying_key =
+            VerifyingKey::from_bytes(&public_key_bytes.try_into().unwrap()).unwrap();
         assert!(verifying_key.verify(message, &signature).is_ok());
     }
 }

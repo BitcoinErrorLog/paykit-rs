@@ -45,6 +45,7 @@ impl SubscriptionCoordinator {
     }
 
     /// Create a new subscription
+    #[allow(clippy::too_many_arguments)]
     pub fn create_subscription(
         &self,
         subscriber: PublicKey,
@@ -93,7 +94,7 @@ impl SubscriptionCoordinator {
         let mut request = PaymentRequest::new(
             subscription.provider.clone(),
             subscription.subscriber.clone(),
-            subscription.terms.amount.clone(),
+            subscription.terms.amount,
             subscription.terms.currency.clone(),
             subscription.terms.method.clone(),
         );

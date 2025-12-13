@@ -56,7 +56,10 @@ pub type RotationCallback = Arc<dyn Fn(&MethodId, &EndpointData) + Send + Sync>;
 
 /// Helper function to create a lock poisoning error.
 fn lock_error(context: &str) -> PaykitError {
-    PaykitError::Internal(format!("EndpointRotationManager: lock poisoned during {}", context))
+    PaykitError::Internal(format!(
+        "EndpointRotationManager: lock poisoned during {}",
+        context
+    ))
 }
 
 /// Manager for endpoint rotation.
@@ -197,13 +200,19 @@ impl EndpointRotationManager {
 
         // Update stored endpoint
         {
-            let mut endpoints = self.endpoints.write().map_err(|_| lock_error("rotate/endpoints"))?;
+            let mut endpoints = self
+                .endpoints
+                .write()
+                .map_err(|_| lock_error("rotate/endpoints"))?;
             endpoints.insert(method_id.0.clone(), new_endpoint.clone());
         }
 
         // Reset tracker
         {
-            let mut trackers = self.trackers.write().map_err(|_| lock_error("rotate/trackers"))?;
+            let mut trackers = self
+                .trackers
+                .write()
+                .map_err(|_| lock_error("rotate/trackers"))?;
             if let Some(tracker) = trackers.get_mut(&method_id.0) {
                 tracker.reset();
             }

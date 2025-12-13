@@ -625,14 +625,14 @@ mod tests {
         // Use low memory params for faster tests
         let params = Some(Argon2Params::low_memory());
 
-        let key1 = derive_key_from_passphrase_argon2(b"password123", b"unique_salt_16b!", params)
+        let key1 =
+            derive_key_from_passphrase_argon2(b"password123", b"unique_salt_16b!", params).unwrap();
+        let key2 =
+            derive_key_from_passphrase_argon2(b"password123", b"unique_salt_16b!", params).unwrap();
+        let key3 =
+            derive_key_from_passphrase_argon2(b"password123", b"different_salt!!", params).unwrap();
+        let key4 = derive_key_from_passphrase_argon2(b"different_pw", b"unique_salt_16b!", params)
             .unwrap();
-        let key2 = derive_key_from_passphrase_argon2(b"password123", b"unique_salt_16b!", params)
-            .unwrap();
-        let key3 = derive_key_from_passphrase_argon2(b"password123", b"different_salt!!", params)
-            .unwrap();
-        let key4 =
-            derive_key_from_passphrase_argon2(b"different_pw", b"unique_salt_16b!", params).unwrap();
 
         // Same inputs = same key
         assert_eq!(*key1, *key2);
@@ -648,12 +648,9 @@ mod tests {
         let salt = b"test_salt_16bytes";
 
         let hkdf_key = derive_key_from_passphrase(passphrase, salt).unwrap();
-        let argon2_key = derive_key_from_passphrase_argon2(
-            passphrase,
-            salt,
-            Some(Argon2Params::low_memory()),
-        )
-        .unwrap();
+        let argon2_key =
+            derive_key_from_passphrase_argon2(passphrase, salt, Some(Argon2Params::low_memory()))
+                .unwrap();
 
         // Keys should be different (different algorithms)
         assert_ne!(*hkdf_key, *argon2_key);

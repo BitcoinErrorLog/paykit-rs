@@ -2,7 +2,7 @@
 //!
 //! Executes real payments when a wallet is configured, otherwise shows simulation.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use paykit_demo_core::DemoStorage;
 use std::path::Path;
 

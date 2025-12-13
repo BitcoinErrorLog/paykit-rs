@@ -6,10 +6,10 @@
 //! Run with: `cargo bench --bench noise_benchmarks`
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use pubky_noise::{DummyRing, NoiseClient, NoiseServer, RingKeyProvider};
 use pubky_noise::datalink_adapter::{
     client_complete_ik, client_start_ik_direct, server_accept_ik, server_complete_ik,
 };
+use pubky_noise::{DummyRing, NoiseClient, NoiseServer, RingKeyProvider};
 use std::sync::Arc;
 
 /// Create test client and server with deterministic keys
@@ -51,7 +51,8 @@ fn bench_noise_ik_handshake_accept(c: &mut Criterion) {
 
     c.bench_function("noise_ik_handshake_accept", |b| {
         b.iter(|| {
-            let (hs, identity, response) = server_accept_ik(&server, black_box(&first_msg)).unwrap();
+            let (hs, identity, response) =
+                server_accept_ik(&server, black_box(&first_msg)).unwrap();
             black_box((hs, identity, response))
         })
     });
@@ -70,16 +71,8 @@ fn bench_noise_ik_handshake_complete(c: &mut Criterion) {
     c.bench_function("noise_ik_handshake_complete", |b| {
         b.iter(|| {
             // Create fresh clients for each iteration (handshake consumes state)
-            let client = NoiseClient::<_, ()>::new_direct(
-                "client",
-                b"device",
-                ring_client.clone(),
-            );
-            let server = NoiseServer::<_, ()>::new_direct(
-                "server",
-                b"device",
-                ring_server.clone(),
-            );
+            let client = NoiseClient::<_, ()>::new_direct("client", b"device", ring_client.clone());
+            let server = NoiseServer::<_, ()>::new_direct("server", b"device", ring_server.clone());
 
             // Client initiates
             let (c_hs, first_msg) = client_start_ik_direct(&client, &server_pk, None).unwrap();
@@ -224,4 +217,3 @@ criterion_group!(
 );
 
 criterion_main!(noise_benches);
-

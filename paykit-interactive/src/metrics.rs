@@ -7,6 +7,9 @@
 //!
 //! ```rust
 //! use paykit_interactive::metrics::{Metrics, MetricsSnapshot};
+
+// Allow prometheus feature check even if not defined - it's a planned feature
+#![allow(unexpected_cfgs)]
 //!
 //! let metrics = Metrics::new();
 //!
@@ -17,8 +20,8 @@
 //!
 //! // Get snapshot for monitoring
 //! let snapshot = metrics.snapshot();
-//! println!("Handshakes: {} attempts, {} successful", 
-//!     snapshot.handshake_attempts, 
+//! println!("Handshakes: {} attempts, {} successful",
+//!     snapshot.handshake_attempts,
 //!     snapshot.handshake_successes);
 //! ```
 
@@ -157,7 +160,8 @@ impl Metrics {
 
     /// Record a payment request received.
     pub fn record_payment_request_received(&self) {
-        self.payment_requests_received.fetch_add(1, Ordering::Relaxed);
+        self.payment_requests_received
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     /// Record a receipt generated.
@@ -473,4 +477,3 @@ mod tests {
         assert_eq!(snapshot.messages_sent, 0);
     }
 }
-

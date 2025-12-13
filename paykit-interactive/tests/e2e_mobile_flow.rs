@@ -144,7 +144,7 @@ async fn test_network_interruption_recovery() {
 
     let manager = create_manager();
     let (mut payer_channel, mut payee_channel) = MockNoiseChannel::pair();
-    
+
     // Clone keys for use in closures
     let payer_pk_clone = payer_pk.clone();
     let payee_pk_clone = payee_pk.clone();
@@ -194,4 +194,3 @@ async fn test_network_interruption_recovery() {
     assert_eq!(receipt.amount, Some("2000".to_string()));
     println!("✅ Network interruption recovery test passed");
 }
-

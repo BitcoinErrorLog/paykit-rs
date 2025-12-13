@@ -15,10 +15,10 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | Receipts | **Real** | Payment history with search and filtering |
 | Payment Methods | UI Only | Static list, not connected to PaykitClient |
 | Health Monitoring | UI Only | Displays mock "Healthy" status |
-| Subscriptions | UI Only | Empty state, no sample data |
-| Auto-Pay | UI Only | Basic UI state only |
+| Subscriptions | **Real** | EncryptedSharedPreferences-backed subscription storage |
+| Auto-Pay | **Real** | EncryptedSharedPreferences-backed settings, limits, and rules |
 | Payment Requests | UI Only | Sample data, not persisted |
-| Directory Operations | Not Implemented | Requires Pubky transport |
+| Directory Operations | **Mock** | DirectoryService with mock transport (real Pubky integration pending) |
 | Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
 
 ## Features
@@ -63,17 +63,25 @@ Key files:
 - Endpoint validation UI
 - Smart method selection UI
 
-### Subscriptions (UI Demo)
+### Subscriptions (Real)
 
-- Create and manage subscriptions (placeholder)
-- Proration calculator planned
-- Multiple billing frequencies
+Subscription management with EncryptedSharedPreferences persistence:
 
-### Auto-Pay (UI Demo)
+- **Create Subscriptions**: Set provider, amount, frequency, and method
+- **Proration Calculator**: Calculate charges when upgrading/downgrading
+- **Multiple Frequencies**: Daily, weekly, monthly billing
+- **Active Tracking**: Toggle subscriptions active/paused
+- **Secure Storage**: Persistent subscription data via SubscriptionStorage
 
-- Enable/disable auto-pay globally
-- Set global daily spending limits
-- Basic UI state management
+### Auto-Pay (Real)
+
+Auto-pay settings management with EncryptedSharedPreferences persistence:
+
+- **Enable/Disable**: Toggle auto-pay globally
+- **Global Daily Limits**: Set spending caps per day
+- **Per-Peer Limits**: Individual limits with usage tracking
+- **Auto-Pay Rules**: Custom conditions for automatic approval
+- **Secure Storage**: Settings, limits, and rules persist via AutoPayStorage
 
 ### Payment Requests (UI Demo)
 
@@ -236,7 +244,6 @@ Exported backups use:
 
 ### What's NOT Secure (Demo Limitations)
 
-- Auto-pay settings not persisted securely
 - No biometric authentication enforced
 - Sample data visible in production builds
 
@@ -353,9 +360,8 @@ Completed improvements:
 
 Planned improvements:
 1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
-2. **Persist Data**: Store subscriptions/auto-pay in EncryptedPrefs
-3. **Directory Lookup**: Fetch contacts from Pubky directory
-4. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Directory Lookup**: Fetch contacts from Pubky directory
+3. **Noise Integration**: Real encrypted payments via Noise protocol
 
 ## Troubleshooting
 

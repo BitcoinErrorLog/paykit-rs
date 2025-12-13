@@ -43,8 +43,8 @@ struct AutoPaySettings: Codable {
     }
 }
 
-/// A peer-specific spending limit
-struct PeerSpendingLimit: Identifiable, Codable {
+/// A peer-specific spending limit (stored in Keychain)
+struct StoredPeerLimit: Identifiable, Codable {
     let id: String
     var peerPubkey: String
     var peerName: String
@@ -94,8 +94,8 @@ struct PeerSpendingLimit: Identifiable, Codable {
     }
 }
 
-/// An auto-pay rule
-struct AutoPayRule: Identifiable, Codable {
+/// An auto-pay rule (stored in Keychain)
+struct StoredAutoPayRule: Identifiable, Codable {
     let id: String
     var name: String
     var isEnabled: Bool
@@ -153,8 +153,8 @@ class AutoPayStorage {
     
     // In-memory cache
     private var settingsCache: AutoPaySettings?
-    private var limitsCache: [PeerSpendingLimit]?
-    private var rulesCache: [AutoPayRule]?
+    private var limitsCache: [StoredPeerLimit]?
+    private var rulesCache: [StoredAutoPayRule]?
     
     init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
         self.keychain = keychain
@@ -190,7 +190,7 @@ class AutoPayStorage {
     
     // MARK: - Peer Limits
     
-    func getPeerLimits() -> [PeerSpendingLimit] {
+    func getPeerLimits() -> [StoredPeerLimit] {
         if var cached = limitsCache {
             for i in cached.indices {
                 cached[i].resetIfNeeded()
@@ -202,7 +202,7 @@ class AutoPayStorage {
             guard let data = try keychain.retrieve(key: limitsKey) else {
                 return []
             }
-            var limits = try JSONDecoder().decode([PeerSpendingLimit].self, from: data)
+            var limits = try JSONDecoder().decode([StoredPeerLimit].self, from: data)
             for i in limits.indices {
                 limits[i].resetIfNeeded()
             }
@@ -214,7 +214,7 @@ class AutoPayStorage {
         }
     }
     
-    func savePeerLimit(_ limit: PeerSpendingLimit) throws {
+    func savePeerLimit(_ limit: StoredPeerLimit) throws {
         var limits = getPeerLimits()
         if let index = limits.firstIndex(where: { $0.id == limit.id }) {
             limits[index] = limit
@@ -232,7 +232,7 @@ class AutoPayStorage {
     
     // MARK: - Rules
     
-    func getRules() -> [AutoPayRule] {
+    func getRules() -> [StoredAutoPayRule] {
         if let cached = rulesCache {
             return cached
         }
@@ -241,7 +241,7 @@ class AutoPayStorage {
             guard let data = try keychain.retrieve(key: rulesKey) else {
                 return []
             }
-            let rules = try JSONDecoder().decode([AutoPayRule].self, from: data)
+            let rules = try JSONDecoder().decode([StoredAutoPayRule].self, from: data)
             rulesCache = rules
             return rules
         } catch {
@@ -250,7 +250,7 @@ class AutoPayStorage {
         }
     }
     
-    func saveRule(_ rule: AutoPayRule) throws {
+    func saveRule(_ rule: StoredAutoPayRule) throws {
         var rules = getRules()
         if let index = rules.firstIndex(where: { $0.id == rule.id }) {
             rules[index] = rule
@@ -268,13 +268,13 @@ class AutoPayStorage {
     
     // MARK: - Private
     
-    private func persistLimits(_ limits: [PeerSpendingLimit]) throws {
+    private func persistLimits(_ limits: [StoredPeerLimit]) throws {
         let data = try JSONEncoder().encode(limits)
         try keychain.store(key: limitsKey, data: data)
         limitsCache = limits
     }
     
-    private func persistRules(_ rules: [AutoPayRule]) throws {
+    private func persistRules(_ rules: [StoredAutoPayRule]) throws {
         let data = try JSONEncoder().encode(rules)
         try keychain.store(key: rulesKey, data: data)
         rulesCache = rules

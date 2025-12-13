@@ -22,8 +22,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 use super::traits::{
-    KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageErrorCode,
-    SecureStorageResult, StoreOptions,
+    KeyMetadata, SecureKeyStorage, SecureStorageError, SecureStorageErrorCode, SecureStorageResult,
+    StoreOptions,
 };
 
 /// Desktop secure key storage.
@@ -91,29 +91,30 @@ impl DesktopKeyStorage {
 
     #[cfg(target_os = "macos")]
     fn store_native(&self, key_id: &str, data: &[u8]) -> SecureStorageResult<()> {
-        use security_framework::passwords::{set_generic_password, delete_generic_password};
-        
+        use security_framework::passwords::{delete_generic_password, set_generic_password};
+
         let service = self.service_name(key_id);
         let account = key_id;
-        
+
         // Delete existing entry if present (ignore errors)
         let _ = delete_generic_password(&service, account);
-        
+
         // Store the new password
-        set_generic_password(&service, account, data)
-            .map_err(|e| SecureStorageError::new(
+        set_generic_password(&service, account, data).map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::EncryptionFailed,
                 format!("macOS Keychain store failed: {}", e),
-            ))
+            )
+        })
     }
 
     #[cfg(target_os = "macos")]
     fn retrieve_native(&self, key_id: &str) -> SecureStorageResult<Option<Vec<u8>>> {
         use security_framework::passwords::get_generic_password;
-        
+
         let service = self.service_name(key_id);
         let account = key_id;
-        
+
         match get_generic_password(&service, account) {
             Ok(data) => Ok(Some(data.to_vec())),
             Err(e) => {
@@ -134,22 +135,21 @@ impl DesktopKeyStorage {
     #[cfg(target_os = "macos")]
     fn delete_native(&self, key_id: &str) -> SecureStorageResult<()> {
         use security_framework::passwords::delete_generic_password;
-        
+
         let service = self.service_name(key_id);
         let account = key_id;
-        
-        delete_generic_password(&service, account)
-            .map_err(|e| {
-                let err_str = e.to_string();
-                if err_str.contains("not found") || err_str.contains("-25300") {
-                    SecureStorageError::not_found(key_id)
-                } else {
-                    SecureStorageError::new(
-                        SecureStorageErrorCode::Internal,
-                        format!("macOS Keychain delete failed: {}", e),
-                    )
-                }
-            })
+
+        delete_generic_password(&service, account).map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("not found") || err_str.contains("-25300") {
+                SecureStorageError::not_found(key_id)
+            } else {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    format!("macOS Keychain delete failed: {}", e),
+                )
+            }
+        })
     }
 
     // ========================================================================
@@ -158,12 +158,12 @@ impl DesktopKeyStorage {
 
     #[cfg(target_os = "windows")]
     fn store_native(&self, key_id: &str, data: &[u8]) -> SecureStorageResult<()> {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
         use windows::core::PCWSTR;
         use windows::Win32::Security::Credentials::{
             CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
         };
-        use std::ffi::OsStr;
-        use std::os::windows::ffi::OsStrExt;
 
         let target_name: Vec<u16> = OsStr::new(&self.service_name(key_id))
             .encode_wide()
@@ -186,22 +186,21 @@ impl DesktopKeyStorage {
         };
 
         unsafe {
-            CredWriteW(&credential, 0)
-                .map_err(|e| SecureStorageError::new(
+            CredWriteW(&credential, 0).map_err(|e| {
+                SecureStorageError::new(
                     SecureStorageErrorCode::EncryptionFailed,
                     format!("Windows Credential Manager store failed: {}", e),
-                ))
+                )
+            })
         }
     }
 
     #[cfg(target_os = "windows")]
     fn retrieve_native(&self, key_id: &str) -> SecureStorageResult<Option<Vec<u8>>> {
-        use windows::core::PCWSTR;
-        use windows::Win32::Security::Credentials::{
-            CredReadW, CredFree, CRED_TYPE_GENERIC,
-        };
         use std::ffi::OsStr;
         use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Security::Credentials::{CredFree, CredReadW, CRED_TYPE_GENERIC};
 
         let target_name: Vec<u16> = OsStr::new(&self.service_name(key_id))
             .encode_wide()
@@ -210,13 +209,19 @@ impl DesktopKeyStorage {
 
         unsafe {
             let mut credential_ptr = std::ptr::null_mut();
-            match CredReadW(PCWSTR(target_name.as_ptr()), CRED_TYPE_GENERIC, 0, &mut credential_ptr) {
+            match CredReadW(
+                PCWSTR(target_name.as_ptr()),
+                CRED_TYPE_GENERIC,
+                0,
+                &mut credential_ptr,
+            ) {
                 Ok(()) => {
                     let credential = &*credential_ptr;
                     let data = std::slice::from_raw_parts(
                         credential.CredentialBlob,
                         credential.CredentialBlobSize as usize,
-                    ).to_vec();
+                    )
+                    .to_vec();
                     CredFree(credential_ptr as *const std::ffi::c_void);
                     Ok(Some(data))
                 }
@@ -237,10 +242,10 @@ impl DesktopKeyStorage {
 
     #[cfg(target_os = "windows")]
     fn delete_native(&self, key_id: &str) -> SecureStorageResult<()> {
-        use windows::core::PCWSTR;
-        use windows::Win32::Security::Credentials::{CredDeleteW, CRED_TYPE_GENERIC};
         use std::ffi::OsStr;
         use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Security::Credentials::{CredDeleteW, CRED_TYPE_GENERIC};
 
         let target_name: Vec<u16> = OsStr::new(&self.service_name(key_id))
             .encode_wide()
@@ -248,17 +253,16 @@ impl DesktopKeyStorage {
             .collect();
 
         unsafe {
-            CredDeleteW(PCWSTR(target_name.as_ptr()), CRED_TYPE_GENERIC, 0)
-                .map_err(|e| {
-                    if e.code().0 as u32 == 1168 {
-                        SecureStorageError::not_found(key_id)
-                    } else {
-                        SecureStorageError::new(
-                            SecureStorageErrorCode::Internal,
-                            format!("Windows Credential Manager delete failed: {}", e),
-                        )
-                    }
-                })
+            CredDeleteW(PCWSTR(target_name.as_ptr()), CRED_TYPE_GENERIC, 0).map_err(|e| {
+                if e.code().0 as u32 == 1168 {
+                    SecureStorageError::not_found(key_id)
+                } else {
+                    SecureStorageError::new(
+                        SecureStorageErrorCode::Internal,
+                        format!("Windows Credential Manager delete failed: {}", e),
+                    )
+                }
+            })
         }
     }
 
@@ -273,24 +277,28 @@ impl DesktopKeyStorage {
 
         let ss = SecretService::connect(EncryptionType::Dh)
             .await
-            .map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::Internal,
-                format!("Secret Service connection failed: {}", e),
-            ))?;
+            .map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    format!("Secret Service connection failed: {}", e),
+                )
+            })?;
 
-        let collection = ss.get_default_collection()
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let collection = ss.get_default_collection().await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 format!("Failed to get default collection: {}", e),
-            ))?;
+            )
+        })?;
 
         // Unlock collection if necessary
         if collection.is_locked().await.unwrap_or(true) {
-            collection.unlock().await.map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::AccessDenied,
-                format!("Failed to unlock collection: {}", e),
-            ))?;
+            collection.unlock().await.map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::AccessDenied,
+                    format!("Failed to unlock collection: {}", e),
+                )
+            })?;
         }
 
         let mut attributes: StdHashMap<&str, &str> = StdHashMap::new();
@@ -299,7 +307,8 @@ impl DesktopKeyStorage {
         attributes.insert("key_id", key_id);
 
         // Delete existing secret if present
-        let items = collection.search_items(attributes.clone())
+        let items = collection
+            .search_items(attributes.clone())
             .await
             .unwrap_or_default();
         for item in items {
@@ -307,16 +316,21 @@ impl DesktopKeyStorage {
         }
 
         // Create new secret
-        collection.create_item(
-            &service_name,
-            attributes,
-            data,
-            true, // replace if exists
-            "text/plain",
-        ).await.map_err(|e| SecureStorageError::new(
-            SecureStorageErrorCode::EncryptionFailed,
-            format!("Failed to store secret: {}", e),
-        ))?;
+        collection
+            .create_item(
+                &service_name,
+                attributes,
+                data,
+                true, // replace if exists
+                "text/plain",
+            )
+            .await
+            .map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::EncryptionFailed,
+                    format!("Failed to store secret: {}", e),
+                )
+            })?;
 
         Ok(())
     }
@@ -328,57 +342,63 @@ impl DesktopKeyStorage {
 
         let ss = SecretService::connect(EncryptionType::Dh)
             .await
-            .map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::Internal,
-                format!("Secret Service connection failed: {}", e),
-            ))?;
+            .map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    format!("Secret Service connection failed: {}", e),
+                )
+            })?;
 
-        let collection = ss.get_default_collection()
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let collection = ss.get_default_collection().await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 format!("Failed to get default collection: {}", e),
-            ))?;
+            )
+        })?;
 
         // Unlock collection if necessary
         if collection.is_locked().await.unwrap_or(true) {
-            collection.unlock().await.map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::AccessDenied,
-                format!("Failed to unlock collection: {}", e),
-            ))?;
+            collection.unlock().await.map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::AccessDenied,
+                    format!("Failed to unlock collection: {}", e),
+                )
+            })?;
         }
 
         let mut attributes: StdHashMap<&str, &str> = StdHashMap::new();
         attributes.insert("application", &self.app_id);
         attributes.insert("key_id", key_id);
 
-        let items = collection.search_items(attributes)
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let items = collection.search_items(attributes).await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 format!("Failed to search secrets: {}", e),
-            ))?;
+            )
+        })?;
 
         if items.is_empty() {
             return Ok(None);
         }
 
         let item = &items[0];
-        
+
         // Unlock item if necessary
         if item.is_locked().await.unwrap_or(true) {
-            item.unlock().await.map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::AccessDenied,
-                format!("Failed to unlock item: {}", e),
-            ))?;
+            item.unlock().await.map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::AccessDenied,
+                    format!("Failed to unlock item: {}", e),
+                )
+            })?;
         }
 
-        let secret = item.get_secret()
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let secret = item.get_secret().await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::DecryptionFailed,
                 format!("Failed to retrieve secret: {}", e),
-            ))?;
+            )
+        })?;
 
         Ok(Some(secret))
     }
@@ -390,38 +410,42 @@ impl DesktopKeyStorage {
 
         let ss = SecretService::connect(EncryptionType::Dh)
             .await
-            .map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::Internal,
-                format!("Secret Service connection failed: {}", e),
-            ))?;
+            .map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    format!("Secret Service connection failed: {}", e),
+                )
+            })?;
 
-        let collection = ss.get_default_collection()
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let collection = ss.get_default_collection().await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 format!("Failed to get default collection: {}", e),
-            ))?;
+            )
+        })?;
 
         let mut attributes: StdHashMap<&str, &str> = StdHashMap::new();
         attributes.insert("application", &self.app_id);
         attributes.insert("key_id", key_id);
 
-        let items = collection.search_items(attributes)
-            .await
-            .map_err(|e| SecureStorageError::new(
+        let items = collection.search_items(attributes).await.map_err(|e| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 format!("Failed to search secrets: {}", e),
-            ))?;
+            )
+        })?;
 
         if items.is_empty() {
             return Err(SecureStorageError::not_found(key_id));
         }
 
         for item in items {
-            item.delete().await.map_err(|e| SecureStorageError::new(
-                SecureStorageErrorCode::Internal,
-                format!("Failed to delete secret: {}", e),
-            ))?;
+            item.delete().await.map_err(|e| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    format!("Failed to delete secret: {}", e),
+                )
+            })?;
         }
 
         Ok(())
@@ -483,13 +507,12 @@ impl DesktopKeyStorage {
         data: &[u8],
         options: &StoreOptions,
     ) -> SecureStorageResult<()> {
-        let mut storage = self
-            .fallback_storage
-            .write()
-            .map_err(|_| SecureStorageError::new(
+        let mut storage = self.fallback_storage.write().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during store_fallback",
-            ))?;
+            )
+        })?;
 
         if storage.contains_key(key_id) && !options.overwrite {
             return Err(SecureStorageError::already_exists(key_id));
@@ -510,25 +533,23 @@ impl DesktopKeyStorage {
 
     /// Retrieve using fallback storage.
     fn retrieve_fallback(&self, key_id: &str) -> SecureStorageResult<Option<Vec<u8>>> {
-        let storage = self
-            .fallback_storage
-            .read()
-            .map_err(|_| SecureStorageError::new(
+        let storage = self.fallback_storage.read().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during retrieve_fallback",
-            ))?;
+            )
+        })?;
         Ok(storage.get(key_id).map(|entry| entry.data.clone()))
     }
 
     /// Delete using fallback storage.
     fn delete_fallback(&self, key_id: &str) -> SecureStorageResult<()> {
-        let mut storage = self
-            .fallback_storage
-            .write()
-            .map_err(|_| SecureStorageError::new(
+        let mut storage = self.fallback_storage.write().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during delete_fallback",
-            ))?;
+            )
+        })?;
         if storage.remove(key_id).is_some() {
             Ok(())
         } else {
@@ -537,45 +558,44 @@ impl DesktopKeyStorage {
     }
 
     fn exists_fallback(&self, key_id: &str) -> SecureStorageResult<bool> {
-        let storage = self
-            .fallback_storage
-            .read()
-            .map_err(|_| SecureStorageError::new(
+        let storage = self.fallback_storage.read().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during exists_fallback",
-            ))?;
+            )
+        })?;
         Ok(storage.contains_key(key_id))
     }
 
     fn get_metadata_fallback(&self, key_id: &str) -> SecureStorageResult<Option<KeyMetadata>> {
-        let storage = self
-            .fallback_storage
-            .read()
-            .map_err(|_| SecureStorageError::new(
+        let storage = self.fallback_storage.read().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during get_metadata_fallback",
-            ))?;
+            )
+        })?;
         Ok(storage.get(key_id).map(|e| e.metadata.clone()))
     }
 
     fn list_keys_fallback(&self) -> SecureStorageResult<Vec<String>> {
-        let storage = self
-            .fallback_storage
-            .read()
-            .map_err(|_| SecureStorageError::new(
+        let storage = self.fallback_storage.read().map_err(|_| {
+            SecureStorageError::new(
                 SecureStorageErrorCode::Internal,
                 "Lock poisoned during list_keys_fallback",
-            ))?;
+            )
+        })?;
         Ok(storage.keys().cloned().collect())
     }
 
     fn clear_all_fallback(&self) -> SecureStorageResult<()> {
         self.fallback_storage
             .write()
-            .map_err(|_| SecureStorageError::new(
-                SecureStorageErrorCode::Internal,
-                "Lock poisoned during clear_all_fallback",
-            ))?
+            .map_err(|_| {
+                SecureStorageError::new(
+                    SecureStorageErrorCode::Internal,
+                    "Lock poisoned during clear_all_fallback",
+                )
+            })?
             .clear();
         Ok(())
     }
@@ -597,7 +617,7 @@ impl SecureKeyStorage for DesktopKeyStorage {
                     Err(_) => {} // Fall through to fallback
                 }
             }
-            
+
             #[cfg(not(target_os = "linux"))]
             {
                 // Try native storage, fall through to fallback on error
@@ -621,7 +641,7 @@ impl SecureKeyStorage for DesktopKeyStorage {
                     Err(_) => {} // Fall through to fallback
                 }
             }
-            
+
             #[cfg(not(target_os = "linux"))]
             {
                 // Try native storage, fall through to fallback on error
@@ -648,7 +668,7 @@ impl SecureKeyStorage for DesktopKeyStorage {
                     Err(_) => {} // Fall through to fallback for other errors
                 }
             }
-            
+
             #[cfg(not(target_os = "linux"))]
             {
                 match self.delete_native(key_id) {
@@ -674,7 +694,7 @@ impl SecureKeyStorage for DesktopKeyStorage {
                     return Ok(true);
                 }
             }
-            
+
             #[cfg(not(target_os = "linux"))]
             {
                 if let Ok(Some(_)) = self.retrieve_native(key_id) {

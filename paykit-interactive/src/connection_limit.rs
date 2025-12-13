@@ -342,4 +342,3 @@ mod tests {
         assert!(limiter.try_acquire(ip4).is_some());
     }
 }
-

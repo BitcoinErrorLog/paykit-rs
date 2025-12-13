@@ -27,14 +27,14 @@ pub async fn run(storage_dir: &Path, name: Option<String>, verbose: bool) -> Res
     let identity_manager = IdentityManager::new(&identities_dir);
 
     // Check if identity already exists
-    if identity_manager.load(&name).is_ok() {
-        if !ui::confirm(
+    if identity_manager.load(&name).is_ok()
+        && !ui::confirm(
             &format!("Identity '{}' already exists. Overwrite?", name),
             false,
-        )? {
-            ui::info("Setup cancelled");
-            return Ok(());
-        }
+        )?
+    {
+        ui::info("Setup cancelled");
+        return Ok(());
     }
 
     // Generate new identity

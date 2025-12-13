@@ -73,8 +73,9 @@ impl SubscriptionManager {
         // Send via Noise channel
         // For now, we'll send as a special PaykitNoiseMessage
         // In a full implementation, we'd extend PaykitNoiseMessage enum
-        let _msg_json =
-            serde_json::to_string(&SubscriptionMessage::PaymentRequest(Box::new(request.clone())))?;
+        let _msg_json = serde_json::to_string(&SubscriptionMessage::PaymentRequest(Box::new(
+            request.clone(),
+        )))?;
         channel
             .send(PaykitNoiseMessage::Ack) // Placeholder - would extend enum
             .await?;
@@ -152,20 +153,20 @@ impl SubscriptionManager {
                             .await?
                             .is_none()
                         {
-                        // Convert notification to PaymentRequest
-                        let request = PaymentRequest::new(
-                            notification.from,
-                            peer.clone(),
-                            notification.amount,
-                            notification.currency,
-                            paykit_lib::MethodId("lightning".to_string()), // Default, should be in notification
-                        );
-                        // Override request_id and created_at from notification
-                        let request = PaymentRequest {
-                            request_id: notification.request_id,
-                            created_at: notification.created_at,
-                            ..request
-                        };
+                            // Convert notification to PaymentRequest
+                            let request = PaymentRequest::new(
+                                notification.from,
+                                peer.clone(),
+                                notification.amount,
+                                notification.currency,
+                                paykit_lib::MethodId("lightning".to_string()), // Default, should be in notification
+                            );
+                            // Override request_id and created_at from notification
+                            let request = PaymentRequest {
+                                request_id: notification.request_id,
+                                created_at: notification.created_at,
+                                ..request
+                            };
                             requests.push(request);
                         }
                     }

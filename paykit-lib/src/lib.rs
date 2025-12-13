@@ -436,7 +436,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn endpoint_round_trip_and_update() {
-        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
+        let setup = TestSetup::new()
+            .await
+            .expect("Failed to create test setup - network may be unavailable");
 
         let method = MethodId("onchain".into());
         let endpoint = EndpointData("{\"address\":\"bc1...\"}".into());
@@ -482,7 +484,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn missing_endpoint_returns_none() {
-        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
+        let setup = TestSetup::new()
+            .await
+            .expect("Failed to create test setup - network may be unavailable");
         let method = MethodId("bolt11".into());
 
         let missing = get_payment_endpoint(&setup.reader_transport, &setup.public_key, &method)
@@ -496,7 +500,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn list_reflects_additions_and_removals() {
-        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
+        let setup = TestSetup::new()
+            .await
+            .expect("Failed to create test setup - network may be unavailable");
 
         let onchain = MethodId("onchain".into());
         let lightning = MethodId("lightning".into());
@@ -553,7 +559,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn removing_missing_endpoint_is_error() {
-        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
+        let setup = TestSetup::new()
+            .await
+            .expect("Failed to create test setup - network may be unavailable");
         let method = MethodId("unused".into());
 
         remove_payment_endpoint(&setup.session_transport, method)
@@ -566,7 +574,9 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires network access - run with: cargo test --features integration-tests -- --ignored
     async fn lists_known_contacts() {
-        let setup = TestSetup::new().await.expect("Failed to create test setup - network may be unavailable");
+        let setup = TestSetup::new()
+            .await
+            .expect("Failed to create test setup - network may be unavailable");
 
         let contacts = get_known_contacts(&setup.reader_transport, &setup.public_key)
             .await

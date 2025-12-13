@@ -109,9 +109,10 @@ impl TaxInfo {
 }
 
 /// Shipping method.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ShippingMethod {
     /// Standard shipping.
+    #[default]
     Standard,
     /// Express shipping.
     Express,
@@ -123,12 +124,6 @@ pub enum ShippingMethod {
     Pickup,
     /// Custom shipping method.
     Custom(String),
-}
-
-impl Default for ShippingMethod {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 /// Shipping address.

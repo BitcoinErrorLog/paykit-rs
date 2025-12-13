@@ -69,6 +69,7 @@ impl WalletConfig {
     }
 
     /// Check if any executor is configured
+    #[allow(dead_code)]
     pub fn is_configured(&self) -> bool {
         self.lnd.is_some() || self.esplora.is_some()
     }

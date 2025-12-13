@@ -200,4 +200,49 @@ class PaykitClientWrapper: ObservableObject {
     func deleteSecurely(key: String) throws {
         try storage.delete(key: key)
     }
+    
+    // MARK: - Directory Operations
+    
+    /// Create a directory service for fetching contacts and payment endpoints
+    func createDirectoryService() -> DirectoryService {
+        DirectoryService()
+    }
+}
+
+// MARK: - Directory Service
+
+/// Service for interacting with the Pubky directory
+/// Provides access to contacts and payment endpoint discovery
+class DirectoryService {
+    private let directoryOps: DirectoryOperationsAsync
+    private let unauthTransport: UnauthenticatedTransportFfi
+    
+    init() {
+        // Use mock transport for demo - replace with real transport in production
+        self.unauthTransport = UnauthenticatedTransportFfi.newMock()
+        self.directoryOps = try! createDirectoryOperationsAsync()
+    }
+    
+    /// Fetch known contacts from a user's Pubky directory
+    /// - Parameter ownerPubkey: The public key of the owner (z-base32 format)
+    /// - Returns: Array of contact public keys
+    func fetchKnownContacts(ownerPubkey: String) async throws -> [String] {
+        try directoryOps.fetchKnownContacts(transport: unauthTransport, ownerPubkey: ownerPubkey)
+    }
+    
+    /// Fetch payment endpoint for a specific method
+    /// - Parameters:
+    ///   - ownerPubkey: The public key of the payee
+    ///   - methodId: The payment method ID (e.g., "lightning", "onchain")
+    /// - Returns: The endpoint data if found, nil otherwise
+    func fetchPaymentEndpoint(ownerPubkey: String, methodId: String) async throws -> String? {
+        try directoryOps.fetchPaymentEndpoint(transport: unauthTransport, ownerPubkey: ownerPubkey, methodId: methodId)
+    }
+    
+    /// Fetch all supported payment methods for a payee
+    /// - Parameter ownerPubkey: The public key of the payee
+    /// - Returns: Array of payment methods supported by the payee
+    func fetchSupportedPayments(ownerPubkey: String) async throws -> [PaymentMethod] {
+        try directoryOps.fetchSupportedPayments(transport: unauthTransport, ownerPubkey: ownerPubkey)
+    }
 }

@@ -200,16 +200,14 @@ pub fn verify_signature(
     use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
     let public_bytes = hex_to_32_bytes(&public_key_hex)?;
-    let verifying_key = VerifyingKey::from_bytes(&public_bytes).map_err(|e| {
-        PaykitMobileError::Validation {
+    let verifying_key =
+        VerifyingKey::from_bytes(&public_bytes).map_err(|e| PaykitMobileError::Validation {
             message: format!("Invalid public key: {}", e),
-        }
-    })?;
-
-    let sig_bytes =
-        hex::decode(&signature_hex).map_err(|e| PaykitMobileError::Validation {
-            message: format!("Invalid signature hex: {}", e),
         })?;
+
+    let sig_bytes = hex::decode(&signature_hex).map_err(|e| PaykitMobileError::Validation {
+        message: format!("Invalid signature hex: {}", e),
+    })?;
 
     if sig_bytes.len() != 64 {
         return Err(PaykitMobileError::Validation {
@@ -257,21 +255,21 @@ pub fn export_keypair_to_backup(secret_key_hex: String, password: String) -> Res
         })?;
 
     // Encrypt with AES-GCM
-    let cipher = Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| {
-        PaykitMobileError::Internal {
+    let cipher =
+        Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| PaykitMobileError::Internal {
             message: format!("Cipher init failed: {}", e),
-        }
-    })?;
+        })?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let encrypted = cipher.encrypt(nonce, secret_bytes.as_ref()).map_err(|e| {
-        PaykitMobileError::Internal {
-            message: format!("Encryption failed: {}", e),
-        }
-    })?;
+    let encrypted =
+        cipher
+            .encrypt(nonce, secret_bytes.as_ref())
+            .map_err(|e| PaykitMobileError::Internal {
+                message: format!("Encryption failed: {}", e),
+            })?;
 
     // Get public key for identification
     let keypair = ed25519_keypair_from_secret(secret_key_hex)?;
@@ -332,11 +330,10 @@ pub fn import_keypair_from_backup(backup: KeyBackup, password: String) -> Result
         })?;
 
     // Decrypt
-    let cipher = Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| {
-        PaykitMobileError::Internal {
+    let cipher =
+        Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| PaykitMobileError::Internal {
             message: format!("Cipher init failed: {}", e),
-        }
-    })?;
+        })?;
 
     if nonce_bytes.len() != 12 {
         return Err(PaykitMobileError::Validation {
@@ -448,12 +445,11 @@ fn z32_decode(s: &str) -> Result<[u8; 32]> {
     let mut bits = 0;
 
     for c in s.chars() {
-        let value = ALPHABET
-            .iter()
-            .position(|&x| x == c as u8)
-            .ok_or_else(|| PaykitMobileError::Validation {
+        let value = ALPHABET.iter().position(|&x| x == c as u8).ok_or_else(|| {
+            PaykitMobileError::Validation {
                 message: format!("Invalid z-base32 character: {}", c),
-            })? as u64;
+            }
+        })? as u64;
 
         buffer = (buffer << 5) | value;
         bits += 5;
@@ -466,7 +462,10 @@ fn z32_decode(s: &str) -> Result<[u8; 32]> {
 
     if result.len() != 32 {
         return Err(PaykitMobileError::Validation {
-            message: format!("Invalid z-base32 length: expected 32 bytes, got {}", result.len()),
+            message: format!(
+                "Invalid z-base32 length: expected 32 bytes, got {}",
+                result.len()
+            ),
         });
     }
 
@@ -545,12 +544,8 @@ mod tests {
         assert_eq!(x_keypair.epoch, 0);
 
         // Same inputs should produce same outputs
-        let x_keypair2 = derive_x25519_keypair(
-            ed_keypair.secret_key_hex,
-            "test-device".to_string(),
-            0,
-        )
-        .unwrap();
+        let x_keypair2 =
+            derive_x25519_keypair(ed_keypair.secret_key_hex, "test-device".to_string(), 0).unwrap();
 
         assert_eq!(x_keypair.secret_key_hex, x_keypair2.secret_key_hex);
         assert_eq!(x_keypair.public_key_hex, x_keypair2.public_key_hex);
@@ -567,12 +562,8 @@ mod tests {
         )
         .unwrap();
 
-        let x_keypair1 = derive_x25519_keypair(
-            ed_keypair.secret_key_hex,
-            "test-device".to_string(),
-            1,
-        )
-        .unwrap();
+        let x_keypair1 =
+            derive_x25519_keypair(ed_keypair.secret_key_hex, "test-device".to_string(), 1).unwrap();
 
         assert_ne!(x_keypair0.secret_key_hex, x_keypair1.secret_key_hex);
         assert_ne!(x_keypair0.public_key_hex, x_keypair1.public_key_hex);
@@ -594,7 +585,8 @@ mod tests {
         let keypair = generate_ed25519_keypair().unwrap();
         let password = "test-password-123".to_string();
 
-        let backup = export_keypair_to_backup(keypair.secret_key_hex.clone(), password.clone()).unwrap();
+        let backup =
+            export_keypair_to_backup(keypair.secret_key_hex.clone(), password.clone()).unwrap();
 
         assert_eq!(backup.version, 1);
         assert_eq!(backup.public_key_z32, keypair.public_key_z32);
@@ -609,7 +601,8 @@ mod tests {
     #[test]
     fn test_wrong_password_fails() {
         let keypair = generate_ed25519_keypair().unwrap();
-        let backup = export_keypair_to_backup(keypair.secret_key_hex, "correct".to_string()).unwrap();
+        let backup =
+            export_keypair_to_backup(keypair.secret_key_hex, "correct".to_string()).unwrap();
 
         let result = import_keypair_from_backup(backup, "wrong".to_string());
         assert!(result.is_err());
@@ -624,4 +617,3 @@ mod tests {
         assert_eq!(hex, keypair.public_key_hex);
     }
 }
-

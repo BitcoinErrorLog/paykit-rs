@@ -95,9 +95,9 @@ pub trait PaykitNoiseChannel {
     async fn recv(&mut self) -> Result<PaykitNoiseMessage>;
 }
 
+pub mod connection_limit;
 pub mod manager;
 pub mod metadata;
-pub mod connection_limit;
 pub mod metrics;
 pub mod proof;
 pub mod rate_limit;

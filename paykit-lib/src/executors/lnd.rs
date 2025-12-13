@@ -32,6 +32,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "http-executor")]
 use std::time::Duration;
 
 use super::config::LndConfig;
@@ -101,6 +102,13 @@ impl LndExecutor {
     }
 
     /// Build the full URL for an API endpoint.
+    #[cfg(feature = "http-executor")]
+    fn url(&self, path: &str) -> String {
+        format!("{}/v1/{}", self.config.rest_url.trim_end_matches('/'), path)
+    }
+
+    /// Build the full URL for an API endpoint (for tests).
+    #[cfg(all(not(feature = "http-executor"), test))]
     fn url(&self, path: &str) -> String {
         format!("{}/v1/{}", self.config.rest_url.trim_end_matches('/'), path)
     }

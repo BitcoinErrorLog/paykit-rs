@@ -40,6 +40,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "http-executor")]
 use std::time::Duration;
 
 use super::config::EsploraConfig;
@@ -110,6 +111,7 @@ impl EsploraExecutor {
     }
 
     /// Build the full URL for an API endpoint.
+    #[cfg(any(feature = "http-executor", test))]
     fn url(&self, path: &str) -> String {
         format!("{}/{}", self.config.api_url.trim_end_matches('/'), path)
     }

@@ -1,7 +1,7 @@
 # Paykit Demo Apps Comprehensive Review & Feature Parity Plan
 
 **Date**: December 2024  
-**Status**: Phase 4 Complete - Web Real Publishing
+**Status**: Phase 5 Complete - Mobile Payment Requests
 
 ---
 
@@ -15,7 +15,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 - **Phase 2**: ✅ Complete - Android Payment Methods, Health Monitoring, and Method Selection now use real FFI
 - **Phase 3**: ✅ Complete - Mobile Directory Operations now support configurable mock/callback transport
 - **Phase 4**: ✅ Complete - Web Real Publishing with Mock/Direct/Proxy modes
-- **Phase 5**: Pending - Mobile Payment Requests & Receipts
+- **Phase 5**: ✅ Complete - Mobile Payment Requests with persistent storage
 - **Phase 6**: Pending - Documentation & Final Verification
 
 ### Key Findings
@@ -99,7 +99,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 | Health Monitoring | ❌ UI Only | Displays mock "Healthy" status |
 | Subscriptions | ✅ Real | Keychain-backed subscription storage |
 | Auto-Pay | ✅ Real | Keychain-backed settings, limits, rules |
-| Payment Requests | ❌ UI Only | Sample data, not persisted |
+| Payment Requests | ✅ Real | Keychain-backed storage with FFI integration |
 | Directory Operations | ✅ Configurable | DirectoryService supports mock or callback transport |
 | Noise Payments | ❌ Not Implemented | Requires WebSocket/TCP transport |
 
@@ -109,6 +109,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 1. ✅ `PaykitClient` now used from UI for Payment Methods, Health, Selection
 2. ✅ `list_methods()`, `validate_endpoint()`, `select_method()`, `check_health()` now called
 3. ✅ Directory transport now configurable for real Pubky integration
+4. ✅ Payment requests now persisted to Keychain via `PaymentRequestStorage`
 4. Directory operations use mock transport instead of real Pubky integration
 5. Payment method UI shows static data instead of real FFI calls
 
@@ -129,7 +130,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 | Health Monitoring | ❌ UI Only | Displays mock "Healthy" status |
 | Subscriptions | ✅ Real | EncryptedSharedPreferences-backed storage |
 | Auto-Pay | ✅ Real | EncryptedSharedPreferences-backed settings |
-| Payment Requests | ❌ UI Only | Sample data, not persisted |
+| Payment Requests | ✅ Real | EncryptedSharedPreferences storage with FFI integration |
 | Directory Operations | ✅ Configurable | DirectoryService supports mock or callback transport |
 | Noise Payments | ❌ Not Implemented | Requires WebSocket/TCP transport |
 
@@ -139,6 +140,7 @@ This document provides a thorough review of all Paykit demo applications (CLI, W
 1. ✅ `PaykitClient` now used from UI for Payment Methods, Health, Selection
 2. ✅ `listMethods()`, `validateEndpoint()`, `selectMethod()`, `checkHealth()` now called
 3. ✅ Directory transport now configurable for real Pubky integration
+4. ✅ Payment requests now persisted to EncryptedSharedPreferences via `PaymentRequestStorage`
 4. Directory operations use mock transport instead of real Pubky integration
 5. Payment method UI shows static data instead of real FFI calls
 

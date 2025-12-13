@@ -10,7 +10,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.paykit.demo.PaykitClientWrapper
+import com.paykit.demo.storage.PaymentRequestStorage
+import com.paykit.demo.storage.PaymentRequestStatus
+import com.paykit.demo.storage.RequestDirection
+import com.paykit.demo.storage.StoredPaymentRequest
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -19,60 +25,85 @@ import java.util.*
  *
  * Displays and manages payment requests including:
  * - Pending requests (accept/decline)
- * - Create new requests
+ * - Create new requests (persisted to EncryptedSharedPreferences)
  * - Request history
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PaymentRequestsScreen() {
+fun PaymentRequestsScreen(
+    paykitClient: PaykitClientWrapper? = null
+) {
+    val context = LocalContext.current
+    val storage = remember { PaymentRequestStorage(context) }
+    
     var recipientPubkey by remember { mutableStateOf("") }
     var requestAmount by remember { mutableStateOf(1000L) }
     var requestDescription by remember { mutableStateOf("") }
     var selectedMethod by remember { mutableStateOf("lightning") }
     var hasExpiry by remember { mutableStateOf(true) }
     var expiryHours by remember { mutableStateOf(24) }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
 
-    val pendingRequests = remember {
-        mutableStateListOf(
-            PaymentRequestData(
-                id = "1",
-                fromName = "Alice",
-                fromPubkey = "pk1alice...",
-                amountSats = 5000,
-                methodId = "lightning",
-                description = "Split dinner bill",
-                createdAt = Date(System.currentTimeMillis() - 3600000),
-                expiresAt = Date(System.currentTimeMillis() + 86400000),
-                status = RequestStatus.PENDING
-            ),
-            PaymentRequestData(
-                id = "2",
-                fromName = "Bob",
-                fromPubkey = "pk1bob...",
-                amountSats = 2500,
-                methodId = "lightning",
-                description = "Concert tickets",
-                createdAt = Date(System.currentTimeMillis() - 7200000),
-                expiresAt = null,
-                status = RequestStatus.PENDING
-            )
-        )
+    // Load requests from storage
+    var allRequests by remember { mutableStateOf(storage.listRequests()) }
+    val pendingRequests = allRequests.filter { it.status == PaymentRequestStatus.PENDING }
+    val requestHistory = allRequests.filter { it.status != PaymentRequestStatus.PENDING }
+    
+    // Check for expired requests on load
+    LaunchedEffect(Unit) {
+        storage.checkExpirations()
+        allRequests = storage.listRequests()
     }
-
-    val requestHistory = remember {
-        listOf(
-            PaymentRequestData(
-                id = "3",
-                fromName = "Charlie",
-                fromPubkey = "pk1charlie...",
-                amountSats = 1000,
-                methodId = "lightning",
-                description = "Coffee",
-                createdAt = Date(System.currentTimeMillis() - 86400000),
-                expiresAt = null,
-                status = RequestStatus.PAID
-            )
+    
+    fun refreshRequests() {
+        storage.checkExpirations()
+        allRequests = storage.listRequests()
+    }
+    
+    fun createRequest() {
+        val client = paykitClient ?: return
+        val myPubkey = "pk1demo..." // TODO: Get from KeyManager
+        
+        val expirySeconds = if (hasExpiry) expiryHours.toLong() * 3600 else null
+        
+        val ffiRequest = client.createPaymentRequest(
+            fromPubkey = myPubkey,
+            toPubkey = recipientPubkey,
+            amountSats = requestAmount,
+            currency = "SAT",
+            methodId = selectedMethod,
+            description = requestDescription,
+            expiresInSecs = expirySeconds?.toULong()
         )
+        
+        if (ffiRequest != null) {
+            val storedRequest = StoredPaymentRequest.fromFFI(ffiRequest, RequestDirection.OUTGOING)
+            storage.addRequest(storedRequest)
+            refreshRequests()
+            
+            // Reset form
+            recipientPubkey = ""
+            requestDescription = ""
+        } else {
+            errorMessage = "Failed to create payment request"
+            showError = true
+        }
+    }
+    
+    fun handleAccept(request: StoredPaymentRequest) {
+        storage.updateStatus(request.id, PaymentRequestStatus.ACCEPTED)
+        refreshRequests()
+    }
+    
+    fun handleDecline(request: StoredPaymentRequest) {
+        storage.updateStatus(request.id, PaymentRequestStatus.DECLINED)
+        refreshRequests()
+    }
+    
+    fun deleteRequest(id: String) {
+        storage.deleteRequest(id)
+        refreshRequests()
     }
 
     Scaffold(
@@ -80,11 +111,24 @@ fun PaymentRequestsScreen() {
             TopAppBar(
                 title = { Text("Payment Requests") },
                 actions = {
-                    IconButton(onClick = { /* Refresh */ }) {
+                    IconButton(onClick = { refreshRequests() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
             )
+        },
+        snackbarHost = {
+            if (showError) {
+                Snackbar(
+                    action = {
+                        TextButton(onClick = { showError = false }) {
+                            Text("Dismiss")
+                        }
+                    }
+                ) {
+                    Text(errorMessage)
+                }
+            }
         }
     ) { paddingValues ->
         LazyColumn(
@@ -97,21 +141,17 @@ fun PaymentRequestsScreen() {
             // Pending Requests Section
             item {
                 Text(
-                    text = "Pending Requests",
+                    text = "Pending Requests (${pendingRequests.size})",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 16.dp)
                 )
             }
 
-            items(pendingRequests) { request ->
+            items(pendingRequests, key = { it.id }) { request ->
                 PendingRequestCard(
                     request = request,
-                    onAccept = {
-                        pendingRequests.remove(request)
-                    },
-                    onDecline = {
-                        pendingRequests.remove(request)
-                    }
+                    onAccept = { handleAccept(request) },
+                    onDecline = { handleDecline(request) }
                 )
             }
 
@@ -212,9 +252,9 @@ fun PaymentRequestsScreen() {
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
-                            onClick = { /* Create request */ },
+                            onClick = { createRequest() },
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = recipientPubkey.isNotEmpty()
+                            enabled = recipientPubkey.isNotEmpty() && paykitClient != null
                         ) {
                             Text("Create Request")
                         }
@@ -231,7 +271,7 @@ fun PaymentRequestsScreen() {
                 )
             }
 
-            items(requestHistory) { request ->
+            items(requestHistory, key = { it.id }) { request ->
                 RequestHistoryCard(request)
             }
 
@@ -242,7 +282,7 @@ fun PaymentRequestsScreen() {
 
 @Composable
 fun PendingRequestCard(
-    request: PaymentRequestData,
+    request: StoredPaymentRequest,
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
@@ -261,10 +301,27 @@ fun PendingRequestCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(
-                        text = request.fromName,
-                        style = MaterialTheme.typography.titleSmall
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (request.direction == RequestDirection.INCOMING) 
+                                Icons.Default.ArrowDownward 
+                            else 
+                                Icons.Default.ArrowUpward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (request.direction == RequestDirection.INCOMING) 
+                                Color(0xFF4CAF50) 
+                            else 
+                                Color(0xFF2196F3)
+                        )
+                        Text(
+                            text = request.counterpartyName,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                    }
                     Text(
                         text = request.description,
                         style = MaterialTheme.typography.bodySmall,
@@ -284,7 +341,7 @@ fun PendingRequestCard(
                 }
             }
 
-            request.expiresAt?.let { expires ->
+            request.expiresAtDate?.let { expires ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -334,7 +391,7 @@ fun PendingRequestCard(
 }
 
 @Composable
-fun RequestHistoryCard(request: PaymentRequestData) {
+fun RequestHistoryCard(request: StoredPaymentRequest) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -346,10 +403,27 @@ fun RequestHistoryCard(request: PaymentRequestData) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(
-                    text = request.fromName,
-                    style = MaterialTheme.typography.titleSmall
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        if (request.direction == RequestDirection.INCOMING) 
+                            Icons.Default.ArrowDownward 
+                        else 
+                            Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (request.direction == RequestDirection.INCOMING) 
+                            Color(0xFF4CAF50) 
+                        else 
+                            Color(0xFF2196F3)
+                    )
+                    Text(
+                        text = request.counterpartyName,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
                 Text(
                     text = request.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -368,13 +442,13 @@ fun RequestHistoryCard(request: PaymentRequestData) {
 }
 
 @Composable
-fun StatusChip(status: RequestStatus) {
+fun StatusChip(status: PaymentRequestStatus) {
     val (color, text) = when (status) {
-        RequestStatus.PENDING -> Color(0xFFFFA500) to "Pending"
-        RequestStatus.ACCEPTED -> Color(0xFF4CAF50) to "Accepted"
-        RequestStatus.DECLINED -> Color.Red to "Declined"
-        RequestStatus.EXPIRED -> Color.Gray to "Expired"
-        RequestStatus.PAID -> Color(0xFF2196F3) to "Paid"
+        PaymentRequestStatus.PENDING -> Color(0xFFFFA500) to "Pending"
+        PaymentRequestStatus.ACCEPTED -> Color(0xFF4CAF50) to "Accepted"
+        PaymentRequestStatus.DECLINED -> Color.Red to "Declined"
+        PaymentRequestStatus.EXPIRED -> Color.Gray to "Expired"
+        PaymentRequestStatus.PAID -> Color(0xFF2196F3) to "Paid"
     }
 
     Surface(
@@ -388,24 +462,4 @@ fun StatusChip(status: RequestStatus) {
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
-}
-
-data class PaymentRequestData(
-    val id: String,
-    val fromName: String,
-    val fromPubkey: String,
-    val amountSats: Long,
-    val methodId: String,
-    val description: String,
-    val createdAt: Date,
-    val expiresAt: Date?,
-    val status: RequestStatus
-)
-
-enum class RequestStatus {
-    PENDING,
-    ACCEPTED,
-    DECLINED,
-    EXPIRED,
-    PAID
 }

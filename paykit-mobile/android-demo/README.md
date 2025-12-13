@@ -59,6 +59,14 @@ Key files:
 - Accept/decline incoming requests
 - Request history with status tracking
 
+### Contacts (NEW - Real Implementation)
+- Add and manage payment recipients
+- Persistent storage using EncryptedSharedPreferences
+- Search contacts by name or public key
+- Copy public keys to clipboard
+- Payment history tracking per contact
+- Notes and metadata support
+
 ### Settings
 
 - Network selection (Mainnet/Testnet/Regtest)

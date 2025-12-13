@@ -18,6 +18,12 @@ struct ContentView: View {
                     Label("Methods", systemImage: "creditcard")
                 }
             
+            // Contacts Tab
+            ContactsView()
+                .tabItem {
+                    Label("Contacts", systemImage: "person.2")
+                }
+            
             // Subscriptions Tab
             SubscriptionsView()
                 .tabItem {

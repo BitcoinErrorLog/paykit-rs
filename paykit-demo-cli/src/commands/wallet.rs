@@ -317,6 +317,112 @@ pub async fn clear(storage_dir: &Path, _verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// Check health of configured payment methods
+pub async fn health(storage_dir: &Path, method: Option<String>, verbose: bool) -> Result<()> {
+    use paykit_lib::health::{HealthMonitor, LightningHealthChecker, OnchainHealthChecker};
+    use paykit_lib::MethodId;
+
+    ui::header("Payment Method Health Check");
+
+    let config = WalletConfig::load(storage_dir)?;
+
+    if config.is_none() {
+        ui::warning("No wallet configured");
+        ui::info("Configure a wallet first with 'paykit-demo wallet configure-lnd' or 'configure-esplora'");
+        return Ok(());
+    }
+
+    let config = config.unwrap();
+
+    // Create health monitor with configured checkers
+    let mut monitor = HealthMonitor::new();
+
+    if config.lnd.is_some() {
+        let lnd_url = config.lnd.as_ref().map(|c| c.url.clone());
+        monitor.register(Box::new(LightningHealthChecker::new(lnd_url)));
+    }
+
+    if config.esplora.is_some() {
+        let esplora_url = config.esplora.as_ref().map(|c| c.url.clone());
+        monitor.register(Box::new(OnchainHealthChecker::new(esplora_url)));
+    }
+
+    // Check specific method or all
+    if let Some(method_id) = method {
+        let method = MethodId(method_id.clone());
+        let spinner = ui::spinner(&format!("Checking {} health...", method_id));
+
+        if let Some(result) = monitor.check(&method).await {
+            spinner.finish_and_clear();
+            display_health_result(&result, verbose);
+        } else {
+            spinner.finish_and_clear();
+            ui::warning(&format!("No health checker for method: {}", method_id));
+        }
+    } else {
+        let spinner = ui::spinner("Checking all payment methods...");
+        let results = monitor.check_all().await;
+        spinner.finish_and_clear();
+
+        if results.is_empty() {
+            ui::warning("No payment methods configured to check");
+            return Ok(());
+        }
+
+        for result in &results {
+            display_health_result(result, verbose);
+            println!();
+        }
+
+        // Summary
+        ui::separator();
+        let healthy = results.iter().filter(|r| r.status.is_healthy()).count();
+        let usable = results.iter().filter(|r| r.status.is_usable()).count();
+        let total = results.len();
+
+        if healthy == total {
+            ui::success(&format!("All {} methods are healthy", total));
+        } else if usable == total {
+            ui::warning(&format!(
+                "{}/{} methods healthy, all usable",
+                healthy, total
+            ));
+        } else {
+            ui::error(&format!(
+                "{}/{} methods healthy, {}/{} usable",
+                healthy, total, usable, total
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn display_health_result(result: &paykit_lib::health::HealthCheckResult, verbose: bool) {
+    use paykit_lib::health::HealthStatus;
+
+    let status_str = match result.status {
+        HealthStatus::Healthy => "✅ Healthy".to_string(),
+        HealthStatus::Degraded => "⚠️ Degraded".to_string(),
+        HealthStatus::Unavailable => "❌ Unavailable".to_string(),
+        HealthStatus::Unknown => "❓ Unknown".to_string(),
+    };
+
+    ui::key_value(&result.method_id.0, &status_str);
+
+    if let Some(latency) = result.latency_ms {
+        ui::info(&format!("  Latency: {}ms", latency));
+    }
+
+    if let Some(error) = &result.error {
+        ui::error(&format!("  Error: {}", error));
+    }
+
+    if verbose && !result.details.is_null() {
+        ui::info(&format!("  Details: {}", result.details));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

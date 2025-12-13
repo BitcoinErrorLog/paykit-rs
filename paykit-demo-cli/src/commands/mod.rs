@@ -1,10 +1,12 @@
 //! CLI command implementations
 
 pub mod contacts;
+pub mod dashboard;
 pub mod discover;
 pub mod list;
 pub mod pay;
 pub mod publish;
+pub mod qr;
 pub mod receipts;
 pub mod receive;
 pub mod setup;

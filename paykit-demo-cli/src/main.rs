@@ -115,6 +115,15 @@ enum Commands {
     /// Show payment receipts
     Receipts,
 
+    /// QR code operations - display and parse
+    Qr {
+        #[command(subcommand)]
+        action: QrAction,
+    },
+
+    /// Show dashboard with summary statistics
+    Dashboard,
+
     /// Manage payment requests and subscriptions
     Subscriptions {
         #[command(subcommand)]
@@ -316,12 +325,42 @@ enum SubscriptionAction {
         #[arg(short, long, default_value = "10")]
         count: usize,
     },
+
+    /// Calculate proration for subscription changes
+    Prorate {
+        /// Current amount per period (sats)
+        #[arg(long)]
+        current_amount: i64,
+
+        /// New amount per period (sats)
+        #[arg(long)]
+        new_amount: i64,
+
+        /// Period start timestamp (unix seconds)
+        #[arg(long)]
+        period_start: i64,
+
+        /// Period end timestamp (unix seconds)
+        #[arg(long)]
+        period_end: i64,
+
+        /// Change date timestamp (unix seconds, defaults to now)
+        #[arg(long)]
+        change_date: Option<i64>,
+    },
 }
 
 #[derive(Subcommand)]
 enum WalletAction {
     /// Show wallet configuration status
     Status,
+
+    /// Check health of all configured payment methods
+    Health {
+        /// Specific method to check (lightning, onchain)
+        #[arg(short, long)]
+        method: Option<String>,
+    },
 
     /// Configure LND for Lightning payments
     ConfigureLnd {
@@ -368,6 +407,39 @@ enum WalletAction {
 }
 
 #[derive(Subcommand)]
+enum QrAction {
+    /// Display a QR code for your identity
+    Identity,
+
+    /// Display a QR code for a contact
+    Contact {
+        /// Contact name
+        name: String,
+    },
+
+    /// Display a QR code for a payment request
+    Request {
+        /// Amount in sats
+        #[arg(short, long)]
+        amount: Option<String>,
+
+        /// Description
+        #[arg(short, long)]
+        description: Option<String>,
+
+        /// Payment method (lightning, onchain)
+        #[arg(short, long, default_value = "lightning")]
+        method: String,
+    },
+
+    /// Parse a scanned QR code or URI
+    Parse {
+        /// The URI or QR data to parse
+        data: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum ContactAction {
     /// Add a new contact
     Add {
@@ -395,6 +467,17 @@ enum ContactAction {
     Show {
         /// Contact name
         name: String,
+    },
+
+    /// Discover contacts from Pubky follows directory
+    Discover {
+        /// Auto-import discovered contacts
+        #[arg(short, long)]
+        import: bool,
+
+        /// Homeserver for discovery
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
     },
 }
 
@@ -439,6 +522,9 @@ async fn main() -> Result<()> {
         Commands::Wallet { action } => match action {
             WalletAction::Status => {
                 commands::wallet::status(&storage_dir, cli.verbose).await?;
+            }
+            WalletAction::Health { method } => {
+                commands::wallet::health(&storage_dir, method, cli.verbose).await?;
             }
             WalletAction::ConfigureLnd {
                 url,
@@ -503,6 +589,10 @@ async fn main() -> Result<()> {
             ContactAction::Show { name } => {
                 commands::contacts::show(&storage_dir, &name, cli.verbose).await?;
             }
+            ContactAction::Discover { import, homeserver } => {
+                commands::contacts::discover(&storage_dir, import, &homeserver, cli.verbose)
+                    .await?;
+            }
         },
         Commands::Receive { port } => {
             commands::receive::run(&storage_dir, port, cli.verbose).await?;
@@ -527,6 +617,28 @@ async fn main() -> Result<()> {
         }
         Commands::Receipts => {
             commands::receipts::run(&storage_dir, cli.verbose).await?;
+        }
+        Commands::Qr { action } => match action {
+            QrAction::Identity => {
+                commands::qr::identity(&storage_dir, cli.verbose).await?;
+            }
+            QrAction::Contact { name } => {
+                commands::qr::contact(&storage_dir, &name, cli.verbose).await?;
+            }
+            QrAction::Request {
+                amount,
+                description,
+                method,
+            } => {
+                commands::qr::request(&storage_dir, amount, description, &method, cli.verbose)
+                    .await?;
+            }
+            QrAction::Parse { data } => {
+                commands::qr::parse(&data, cli.verbose).await?;
+            }
+        },
+        Commands::Dashboard => {
+            commands::dashboard::run(&storage_dir, cli.verbose).await?;
         }
         Commands::Subscriptions { action } => match action {
             SubscriptionAction::Request {
@@ -668,6 +780,22 @@ async fn main() -> Result<()> {
 
             SubscriptionAction::RecentPayments { count } => {
                 commands::subscriptions::show_recent_autopayments(&storage_dir, count).await?;
+            }
+            SubscriptionAction::Prorate {
+                current_amount,
+                new_amount,
+                period_start,
+                period_end,
+                change_date,
+            } => {
+                commands::subscriptions::calculate_proration(
+                    current_amount,
+                    new_amount,
+                    period_start,
+                    period_end,
+                    change_date,
+                )
+                .await?;
             }
         },
     }

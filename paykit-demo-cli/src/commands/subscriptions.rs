@@ -1,6 +1,6 @@
 //! Subscription and payment request commands
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use paykit_lib::{MethodId, PublicKey};
 use paykit_subscriptions::{
     request::{PaymentRequest, RequestStatus},
@@ -1278,6 +1278,137 @@ pub async fn show_recent_autopayments(storage_dir: &Path, count: usize) -> Resul
         std::cmp::min(count, records.len()),
         records.len()
     ));
+
+    Ok(())
+}
+
+/// Calculate proration for subscription changes
+pub async fn calculate_proration(
+    current_amount: i64,
+    new_amount: i64,
+    period_start: i64,
+    period_end: i64,
+    change_date: Option<i64>,
+) -> Result<()> {
+    use paykit_subscriptions::proration::ProrationCalculator;
+    use paykit_subscriptions::Amount;
+
+    ui::header("Subscription Proration Calculator");
+
+    // Default to current time if no change date specified
+    let change_at = change_date.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+    });
+
+    // Validate inputs
+    if period_end <= period_start {
+        anyhow::bail!("Period end must be after period start");
+    }
+
+    if change_at < period_start || change_at > period_end {
+        ui::warning("Change date is outside the billing period");
+    }
+
+    // Display inputs
+    ui::info("Input:");
+    ui::key_value(
+        "  Current Amount",
+        &format!("{} sats/period", current_amount),
+    );
+    ui::key_value("  New Amount", &format!("{} sats/period", new_amount));
+    ui::key_value(
+        "  Period Start",
+        &chrono::DateTime::from_timestamp(period_start, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| format!("{}", period_start)),
+    );
+    ui::key_value(
+        "  Period End",
+        &chrono::DateTime::from_timestamp(period_end, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| format!("{}", period_end)),
+    );
+    ui::key_value(
+        "  Change Date",
+        &chrono::DateTime::from_timestamp(change_at, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| format!("{}", change_at)),
+    );
+
+    ui::separator();
+
+    // Calculate proration using the library
+    let calculator = ProrationCalculator::new();
+    let old_amount = Amount::from_sats(current_amount);
+    let new_amount_obj = Amount::from_sats(new_amount);
+
+    let result = calculator
+        .calculate(
+            &old_amount,
+            &new_amount_obj,
+            period_start,
+            period_end,
+            change_at,
+            "SAT",
+        )
+        .context("Proration calculation failed")?;
+
+    // Display results
+    ui::success("Proration Result:");
+    ui::key_value(
+        "  Credit Amount",
+        &format!("{} sats", result.credit.as_sats()),
+    );
+    ui::key_value(
+        "  Charge Amount",
+        &format!("{} sats", result.charge.as_sats()),
+    );
+    ui::key_value(
+        "  Net Adjustment",
+        &format!("{} sats", result.net_amount.as_sats()),
+    );
+    ui::key_value(
+        "  Days at Old Rate",
+        &format!("{}", result.details.days_at_old_rate),
+    );
+    ui::key_value(
+        "  Days at New Rate",
+        &format!("{}", result.details.days_at_new_rate),
+    );
+
+    ui::separator();
+
+    // Explain the result
+    let net_sats = result.net_amount.as_sats();
+    if net_sats > 0 {
+        ui::info(&format!(
+            "Customer owes an additional {} sats for the upgrade",
+            net_sats
+        ));
+    } else if net_sats < 0 {
+        ui::info(&format!(
+            "Customer receives a credit of {} sats for the downgrade",
+            -net_sats
+        ));
+    } else {
+        ui::info("No adjustment needed - amounts balance out");
+    }
+
+    // Calculate days remaining (from now until period end)
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let remaining_seconds = period_end - now;
+    let days_remaining = if remaining_seconds > 0 {
+        remaining_seconds / 86400
+    } else {
+        0
+    };
+    ui::key_value("  Days Remaining", &format!("{} days", days_remaining));
 
     Ok(())
 }

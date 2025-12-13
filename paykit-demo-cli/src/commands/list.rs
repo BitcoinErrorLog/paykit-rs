@@ -10,10 +10,18 @@ use crate::ui;
 pub async fn run(storage_dir: &Path, _verbose: bool) -> Result<()> {
     ui::header("Saved Identities");
 
-    let identities_dir = storage_dir.join("identities");
-    let identity_manager = IdentityManager::new(&identities_dir);
+    // Try secure storage first
+    let metadata_path = storage_dir.join("identities_metadata.json");
+    let using_secure_storage = metadata_path.exists();
 
-    let identities = identity_manager.list()?;
+    let identities = if using_secure_storage {
+        let secure_manager = paykit_demo_core::SecureIdentityManager::new(storage_dir);
+        secure_manager.list()?
+    } else {
+        let identities_dir = storage_dir.join("identities");
+        let identity_manager = IdentityManager::new(&identities_dir);
+        identity_manager.list()?
+    };
 
     if identities.is_empty() {
         ui::info("No identities found");
@@ -25,7 +33,16 @@ pub async fn run(storage_dir: &Path, _verbose: bool) -> Result<()> {
 
     for name in identities {
         // Load to get details
-        match identity_manager.load(&name) {
+        let load_result = if using_secure_storage {
+            let secure_manager = paykit_demo_core::SecureIdentityManager::new(storage_dir);
+            secure_manager.load(&name).await
+        } else {
+            let identities_dir = storage_dir.join("identities");
+            let identity_manager = IdentityManager::new(&identities_dir);
+            identity_manager.load(&name)
+        };
+        
+        match load_result {
             Ok(identity) => {
                 let marker = if current.as_ref() == Some(&name) {
                     "→ ".to_string()

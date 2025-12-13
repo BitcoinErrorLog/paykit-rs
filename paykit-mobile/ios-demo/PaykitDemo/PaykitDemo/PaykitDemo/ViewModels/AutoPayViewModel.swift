@@ -32,12 +32,31 @@ class AutoPayViewModel: ObservableObject {
     
     // MARK: - Private Properties
     
-    private let autoPayStorage = AutoPayStorage()
+    private let keyManager = KeyManager()
+    private var autoPayStorage: AutoPayStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return AutoPayStorage(identityName: identityName)
+    }
     
     // MARK: - Initialization
     
     init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
         loadFromStorage()
+    }
+    
+    @objc private func identityDidChange() {
+        loadFromStorage()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Peer Limits

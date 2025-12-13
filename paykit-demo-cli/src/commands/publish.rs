@@ -18,7 +18,7 @@ pub async fn run(
 
     tracing::debug!("Loading identity for publishing");
     // Load current identity
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     if verbose {
         ui::info(&format!("Using identity: {}", identity.pubky_uri()));

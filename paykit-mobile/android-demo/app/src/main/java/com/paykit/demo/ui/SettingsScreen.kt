@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.paykit.mobile.KeyManager
 import java.util.UUID
 
 /**
@@ -36,7 +37,13 @@ fun SettingsScreen() {
     var showResetDialog by remember { mutableStateOf(false) }
     var showKeyManagement by remember { mutableStateOf(false) }
     var showDeveloperOptions by remember { mutableStateOf(false) }
+    var showIdentityList by remember { mutableStateOf(false) }
 
+    if (showIdentityList) {
+        IdentityListScreen(onNavigateBack = { showIdentityList = false })
+        return
+    }
+    
     if (showKeyManagement) {
         KeyManagementScreen(onBack = { showKeyManagement = false })
     } else if (showDeveloperOptions) {
@@ -96,6 +103,28 @@ fun SettingsScreen() {
                     }
                 }
 
+                item { HorizontalDivider() }
+
+                // Identity Section
+                item { SettingsSectionHeader("Identity") }
+                
+                item {
+                    val keyManager = remember { KeyManager(LocalContext.current) }
+                    val currentIdentityName by keyManager.currentIdentityName.collectAsState()
+                    
+                    SettingsItem(
+                        title = "Current Identity",
+                        subtitle = currentIdentityName ?: "None"
+                    )
+                }
+                
+                item {
+                    SettingsItem(
+                        title = "Manage Identities",
+                        onClick = { showIdentityList = true }
+                    )
+                }
+                
                 item { HorizontalDivider() }
 
                 // Network Section

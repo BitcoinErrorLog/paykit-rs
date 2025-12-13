@@ -137,7 +137,7 @@ pub async fn discover(
     ui::header("Discover Contacts");
 
     // Load current identity
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     ui::info(&format!(
         "Discovering contacts for: {}",

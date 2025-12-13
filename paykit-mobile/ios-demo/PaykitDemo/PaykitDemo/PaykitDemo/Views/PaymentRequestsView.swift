@@ -250,10 +250,29 @@ class PaymentRequestsViewModel: ObservableObject {
     @Published var hasExpiry = true
     @Published var expiryHours = 24
     
-    private let storage = PaymentRequestStorage()
+    private let keyManager = KeyManager()
+    private var storage: PaymentRequestStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return PaymentRequestStorage(identityName: identityName)
+    }
     
     init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
         loadRequests()
+    }
+    
+    @objc private func identityDidChange() {
+        loadRequests()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     func loadRequests() {

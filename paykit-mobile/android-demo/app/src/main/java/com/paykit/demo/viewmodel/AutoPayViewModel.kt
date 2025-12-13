@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import com.paykit.demo.model.AutoPayRule
 import com.paykit.demo.model.PeerSpendingLimit
 import com.paykit.demo.storage.AutoPayStorage
+import com.paykit.mobile.KeyManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +18,12 @@ import kotlinx.coroutines.flow.update
  */
 class AutoPayViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val storage = AutoPayStorage(application)
+    private val keyManager = KeyManager(application)
+    private val storage: AutoPayStorage
+        get() {
+            val identityName = keyManager.currentIdentityName.value ?: "default"
+            return AutoPayStorage(application, identityName)
+        }
     
     private val _uiState = MutableStateFlow(AutoPayUiState())
     val uiState: StateFlow<AutoPayUiState> = _uiState.asStateFlow()

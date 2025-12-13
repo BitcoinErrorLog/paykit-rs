@@ -23,6 +23,7 @@ import com.paykit.demo.model.PaymentStatus
 import com.paykit.demo.model.Receipt
 import com.paykit.demo.storage.ContactStorage
 import com.paykit.demo.storage.ReceiptStorage
+import com.paykit.mobile.KeyManager
 import java.text.NumberFormat
 
 class DashboardViewModel : ViewModel() {
@@ -61,8 +62,15 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val receiptStorage = remember { ReceiptStorage(context) }
-    val contactStorage = remember { ContactStorage(context) }
+    val keyManager = remember { KeyManager(context) }
+    val currentIdentityName by keyManager.currentIdentityName.collectAsState()
+    val receiptStorage = remember(currentIdentityName) {
+        ReceiptStorage(context, currentIdentityName ?: "default")
+    }
+    val contactStorage = remember(currentIdentityName) {
+        ContactStorage(context, currentIdentityName ?: "default")
+    }
+    var showQRScanner by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         viewModel.loadDashboard(receiptStorage, contactStorage)
@@ -187,11 +195,23 @@ fun DashboardScreen(
                         title = "Scan",
                         icon = Icons.Default.QrCodeScanner,
                         color = Color(0xFF9C27B0),
-                        onClick = { /* TODO */ }
+                        onClick = { showQRScanner = true }
                     )
                 }
             }
         }
+    }
+    
+    // QR Scanner
+    if (showQRScanner) {
+        QRScannerScreen(
+            onDismiss = { showQRScanner = false },
+            onScanned = { result ->
+                // Handle scanned result
+                // TODO: Navigate to appropriate flow based on result type
+                showQRScanner = false
+            }
+        )
     }
 }
 

@@ -12,7 +12,7 @@ pub mod storage;
 pub mod subscription;
 
 pub use directory::DirectoryClient;
-pub use identity::{Identity, IdentityManager};
+pub use identity::{Identity, IdentityManager, SecureIdentityManager};
 pub use models::{Contact, PaymentMethod, Receipt};
 pub use payment::PaymentCoordinator;
 pub use storage::DemoStorage;

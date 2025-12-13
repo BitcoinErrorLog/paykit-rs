@@ -13,15 +13,16 @@ import kotlinx.serialization.json.Json
 /**
  * Manages persistent storage of auto-pay settings using EncryptedSharedPreferences.
  */
-class AutoPayStorage(context: Context) {
+class AutoPayStorage(context: Context, private val identityName: String) {
     
     companion object {
         private const val TAG = "AutoPayStorage"
-        private const val PREFS_NAME = "paykit_autopay"
-        private const val SETTINGS_KEY = "autopay_settings"
-        private const val LIMITS_KEY = "autopay_limits"
-        private const val RULES_KEY = "autopay_rules"
     }
+    
+    private val PREFS_NAME = "paykit_autopay_$identityName"
+    private val SETTINGS_KEY = "autopay_settings"
+    private val LIMITS_KEY = "autopay_limits"
+    private val RULES_KEY = "autopay_rules"
     
     private val json = Json { 
         ignoreUnknownKeys = true 

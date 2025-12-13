@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.paykit.demo.PaykitClientWrapper
 import com.paykit.demo.storage.PaymentRequestStorage
 import com.paykit.demo.storage.PaymentRequestStatus
+import com.paykit.mobile.KeyManager
 import com.paykit.demo.storage.RequestDirection
 import com.paykit.demo.storage.StoredPaymentRequest
 import java.text.SimpleDateFormat
@@ -34,7 +35,11 @@ fun PaymentRequestsScreen(
     paykitClient: PaykitClientWrapper? = null
 ) {
     val context = LocalContext.current
-    val storage = remember { PaymentRequestStorage(context) }
+    val keyManager = remember { KeyManager(context) }
+    val currentIdentityName by keyManager.currentIdentityName.collectAsState()
+    val storage = remember(currentIdentityName) {
+        PaymentRequestStorage(context, currentIdentityName ?: "default")
+    }
     
     var recipientPubkey by remember { mutableStateOf("") }
     var requestAmount by remember { mutableStateOf(1000L) }

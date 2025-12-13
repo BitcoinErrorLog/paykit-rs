@@ -11,6 +11,7 @@ import Combine
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = SettingsViewModel()
+    @StateObject private var keyManager = KeyManager()
     
     var body: some View {
         NavigationView {
@@ -59,6 +60,22 @@ struct SettingsView: View {
                     Text("Network")
                 } footer: {
                     Text("Testnet uses test Bitcoin with no real value")
+                }
+                
+                // Identity Settings
+                Section {
+                    HStack {
+                        Text("Current Identity")
+                        Spacer()
+                        Text(keyManager.currentIdentityName ?? "None")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    NavigationLink("Manage Identities") {
+                        IdentityListView()
+                    }
+                } header: {
+                    Text("Identity")
                 }
                 
                 // Security Settings

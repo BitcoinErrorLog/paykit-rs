@@ -125,7 +125,7 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
     tracing::info!("Starting payment receiver on port {}", port);
 
     // Load current identity
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
     let my_pubkey = identity.public_key();
 
     ui::info(&format!("Identity: {}", identity.pubky_uri()));

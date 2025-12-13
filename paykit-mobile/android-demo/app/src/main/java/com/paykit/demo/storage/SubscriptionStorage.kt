@@ -11,13 +11,14 @@ import kotlinx.serialization.json.Json
 /**
  * Manages persistent storage of subscriptions using EncryptedSharedPreferences.
  */
-class SubscriptionStorage(context: Context) {
+class SubscriptionStorage(context: Context, private val identityName: String) {
     
     companion object {
         private const val TAG = "SubscriptionStorage"
-        private const val PREFS_NAME = "paykit_subscriptions"
-        private const val SUBSCRIPTIONS_KEY = "subscriptions_list"
     }
+    
+    private val PREFS_NAME = "paykit_subscriptions_$identityName"
+    private val SUBSCRIPTIONS_KEY = "subscriptions_list"
     
     private val json = Json { 
         ignoreUnknownKeys = true 

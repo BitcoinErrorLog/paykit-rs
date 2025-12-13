@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::ui;
 
 pub async fn run(storage_dir: &Path, _verbose: bool) -> Result<()> {
-    match super::load_current_identity(storage_dir) {
+    match super::load_current_identity(storage_dir).await {
         Ok(identity) => {
             ui::header("Current Identity");
             if let Some(nickname) = &identity.nickname {

@@ -22,7 +22,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.paykit.demo.model.Contact
+import com.paykit.demo.PaykitDemoApp
+import com.paykit.demo.PaykitClientWrapper
+import com.paykit.demo.DirectoryService
+import com.paykit.mobile.KeyManager
 import com.paykit.demo.storage.ContactStorage
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -36,12 +41,24 @@ import java.util.*
 fun ContactsScreen() {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val storage = remember { ContactStorage(context) }
+    val keyManager = remember { KeyManager(context) }
+    val currentIdentityName by keyManager.currentIdentityName.collectAsState()
+    val storage = remember(currentIdentityName) {
+        ContactStorage(context, currentIdentityName ?: "default")
+    }
     
     var contacts by remember { mutableStateOf(storage.listContacts()) }
     var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedContact by remember { mutableStateOf<Contact?>(null) }
+    var showDiscoveryDialog by remember { mutableStateOf(false) }
+    var discoveredContacts by remember { mutableStateOf<List<DiscoveredContact>>(emptyList()) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discoveryError by remember { mutableStateOf<String?>(null) }
+    
+    val paykitClient = remember { PaykitDemoApp.paykitClient }
+    val directoryService = remember { paykitClient.createDirectoryService() }
+    val scope = rememberCoroutineScope()
     
     val filteredContacts = remember(contacts, searchQuery) {
         if (searchQuery.isEmpty()) contacts
@@ -52,11 +69,78 @@ fun ContactsScreen() {
         contacts = storage.listContacts()
     }
     
+    fun discoverContacts() {
+        isDiscovering = true
+        discoveryError = null
+        
+        scope.launch {
+            try {
+                // Get current identity's public key
+                val currentIdentityName = currentIdentityName ?: "default"
+                val publicKey = keyManager.publicKey(currentIdentityName) ?: run {
+                    discoveryError = "No active identity found"
+                    isDiscovering = false
+                    return@launch
+                }
+                
+                // Fetch known contacts from Pubky follows
+                val contactPubkeys = directoryService.fetchKnownContacts(publicKey)
+                
+                // Fetch supported payments for each contact to get more info
+                val discovered = mutableListOf<DiscoveredContact>()
+                for (pubkey in contactPubkeys) {
+                    // Check if contact already exists locally
+                    val existingContact = contacts.firstOrNull { it.publicKeyZ32 == pubkey }
+                    if (existingContact != null) {
+                        continue // Skip contacts we already have
+                    }
+                    
+                    // Try to fetch supported payments to see if they have payment methods
+                    val supportedPayments = directoryService.fetchSupportedPayments(pubkey)
+                    val hasPaymentMethods = supportedPayments.isNotEmpty()
+                    
+                    // Create a discovered contact
+                    val discoveredContact = DiscoveredContact(
+                        publicKeyZ32 = pubkey,
+                        hasPaymentMethods = hasPaymentMethods,
+                        supportedMethods = supportedPayments.map { it.methodId }
+                    )
+                    discovered.add(discoveredContact)
+                }
+                
+                discoveredContacts = discovered
+                showDiscoveryDialog = true
+                isDiscovering = false
+            } catch (e: Exception) {
+                discoveryError = "Failed to discover contacts: ${e.message}"
+                isDiscovering = false
+            }
+        }
+    }
+    
+    fun importDiscovered(contactsToImport: List<DiscoveredContact>) {
+        for (discovered in contactsToImport) {
+            // Generate a default name from the public key
+            val name = "Contact ${discovered.publicKeyZ32.take(8)}"
+            val contact = Contact.create(
+                discovered.publicKeyZ32,
+                name,
+                if (discovered.hasPaymentMethods) "Discovered from follows" else null
+            )
+            storage.saveContact(contact)
+        }
+        refreshContacts()
+        showDiscoveryDialog = false
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Contacts") },
                 actions = {
+                    IconButton(onClick = { discoverContacts() }) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = "Discover Contacts")
+                    }
                     IconButton(onClick = { showAddDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Add Contact")
                     }
@@ -178,6 +262,194 @@ fun ContactsScreen() {
                 Toast.makeText(context, "Public key copied", Toast.LENGTH_SHORT).show()
             }
         )
+    }
+    
+    // Discovery dialog
+    if (showDiscoveryDialog) {
+        DiscoverContactsDialog(
+            contacts = discoveredContacts,
+            isDiscovering = isDiscovering,
+            error = discoveryError,
+            onDismiss = { showDiscoveryDialog = false },
+            onImport = { contactsToImport -> importDiscovered(contactsToImport) }
+        )
+    }
+}
+
+/**
+ * A discovered contact from Pubky follows
+ */
+data class DiscoveredContact(
+    val id: String,
+    val publicKeyZ32: String,
+    val hasPaymentMethods: Boolean,
+    val supportedMethods: List<String>
+) {
+    constructor(
+        publicKeyZ32: String,
+        hasPaymentMethods: Boolean,
+        supportedMethods: List<String>
+    ) : this(
+        id = publicKeyZ32,
+        publicKeyZ32 = publicKeyZ32,
+        hasPaymentMethods = hasPaymentMethods,
+        supportedMethods = supportedMethods
+    )
+    
+    val abbreviatedKey: String
+        get() {
+            return if (publicKeyZ32.length > 16) {
+                val prefix = publicKeyZ32.take(8)
+                val suffix = publicKeyZ32.takeLast(8)
+                "$prefix...$suffix"
+            } else {
+                publicKeyZ32
+            }
+        }
+}
+
+@Composable
+fun DiscoverContactsDialog(
+    contacts: List<DiscoveredContact>,
+    isDiscovering: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onImport: (List<DiscoveredContact>) -> Unit
+) {
+    var selectedContacts by remember { mutableStateOf<Set<String>>(emptySet()) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Discovered Contacts") },
+        text = {
+            Column {
+                if (isDiscovering) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Discovering contacts...")
+                } else if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else if (contacts.isEmpty()) {
+                    Text("No new contacts found in your follows list.\nAll contacts may already be imported.")
+                } else {
+                    Text("Select contacts to import:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 400.dp)
+                    ) {
+                        items(contacts) { contact ->
+                            DiscoveredContactItem(
+                                contact = contact,
+                                isSelected = selectedContacts.contains(contact.id),
+                                onToggle = {
+                                    selectedContacts = if (selectedContacts.contains(contact.id)) {
+                                        selectedContacts - contact.id
+                                    } else {
+                                        selectedContacts + contact.id
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val toImport = contacts.filter { selectedContacts.contains(it.id) }
+                    onImport(toImport)
+                },
+                enabled = selectedContacts.isNotEmpty() && !isDiscovering && error == null
+            ) {
+                Text("Import (${selectedContacts.size})")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun DiscoveredContactItem(
+    contact: DiscoveredContact,
+    isSelected: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = isSelected,
+            onCheckedChange = { onToggle() }
+        )
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.PersonAdd,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = contact.abbreviatedKey,
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = FontFamily.Monospace
+            )
+            
+            if (contact.hasPaymentMethods) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Has payment methods",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                if (contact.supportedMethods.isNotEmpty()) {
+                    Text(
+                        text = contact.supportedMethods.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Text(
+                    text = "No payment methods",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFF9800)
+                )
+            }
+        }
     }
 }
 

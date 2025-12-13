@@ -74,12 +74,17 @@ struct StoredSubscription: Identifiable, Codable {
 class SubscriptionStorage {
     
     private let keychain: KeychainStorage
-    private let storageKey = "paykit.subscriptions.list"
+    private let identityName: String
     
     // In-memory cache
     private var subscriptionsCache: [StoredSubscription]?
     
-    init(keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+    private var storageKey: String {
+        "paykit.subscriptions.\(identityName)"
+    }
+    
+    init(identityName: String, keychain: KeychainStorage = KeychainStorage(serviceIdentifier: "com.paykit.demo")) {
+        self.identityName = identityName
         self.keychain = keychain
     }
     

@@ -33,7 +33,7 @@ pub async fn run(
 
     tracing::debug!("Loading current identity");
     // Load current identity
-    let identity = super::load_current_identity(storage_dir)?;
+    let identity = super::load_current_identity(storage_dir).await?;
 
     if verbose {
         ui::info(&format!("Payer: {}", identity.pubky_uri()));

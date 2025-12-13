@@ -15,8 +15,33 @@ class DashboardViewModel: ObservableObject {
     @Published var pendingCount: Int = 0
     @Published var isLoading = true
     
-    private let receiptStorage = ReceiptStorage()
-    private let contactStorage = ContactStorage()
+    private let keyManager = KeyManager()
+    private var receiptStorage: ReceiptStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return ReceiptStorage(identityName: identityName)
+    }
+    private var contactStorage: ContactStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return ContactStorage(identityName: identityName)
+    }
+    
+    init() {
+        // Observe identity changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(identityDidChange),
+            name: .identityDidChange,
+            object: nil
+        )
+    }
+    
+    @objc private func identityDidChange() {
+        loadDashboard()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     func loadDashboard() {
         isLoading = true
@@ -36,6 +61,7 @@ class DashboardViewModel: ObservableObject {
 
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
+    @State private var showingQRScanner = false
     
     var body: some View {
         NavigationView {
@@ -58,6 +84,9 @@ struct DashboardView: View {
             }
             .refreshable {
                 viewModel.loadDashboard()
+            }
+            .sheet(isPresented: $showingQRScanner) {
+                QRScannerView()
             }
         }
     }
@@ -187,7 +216,7 @@ struct DashboardView: View {
                     icon: "qrcode.viewfinder",
                     color: .purple
                 ) {
-                    // TODO: Navigate to scanner
+                    showingQRScanner = true
                 }
             }
         }

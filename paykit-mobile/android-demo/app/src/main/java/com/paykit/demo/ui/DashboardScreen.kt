@@ -71,6 +71,7 @@ fun DashboardScreen(
         ContactStorage(context, currentIdentityName ?: "default")
     }
     var showQRScanner by remember { mutableStateOf(false) }
+    var showPaymentScreen by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         viewModel.loadDashboard(receiptStorage, contactStorage)
@@ -181,7 +182,7 @@ fun DashboardScreen(
                         title = "Send",
                         icon = Icons.Default.Send,
                         color = MaterialTheme.colorScheme.primary,
-                        onClick = { /* TODO */ }
+                        onClick = { showPaymentScreen = true }
                     )
                     QuickActionCard(
                         modifier = Modifier.weight(1f),
@@ -210,6 +211,17 @@ fun DashboardScreen(
                 // Handle scanned result
                 // TODO: Navigate to appropriate flow based on result type
                 showQRScanner = false
+            }
+        )
+    }
+    
+    // Payment Screen
+    if (showPaymentScreen) {
+        PaymentScreen(
+            keyManager = keyManager,
+            onPaymentComplete = { 
+                showPaymentScreen = false
+                viewModel.loadDashboard(receiptStorage, contactStorage)
             }
         )
     }

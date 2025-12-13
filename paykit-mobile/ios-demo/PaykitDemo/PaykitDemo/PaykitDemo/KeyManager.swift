@@ -425,6 +425,29 @@ public final class KeyManager: ObservableObject {
         )
     }
     
+    /// Get the secret key as raw bytes (for Noise protocol)
+    ///
+    /// - Returns: 32-byte secret key data, or nil if no identity
+    public func getSecretKeyData() -> Data? {
+        guard let name = getCurrentIdentityName() else { return nil }
+        
+        let secretKey = Keys.secretKey(name: name)
+        guard let secretHex = try? keychain.retrieveString(key: secretKey) else { return nil }
+        
+        // Convert hex to bytes
+        var data = Data(capacity: secretHex.count / 2)
+        var index = secretHex.startIndex
+        for _ in 0..<secretHex.count / 2 {
+            let nextIndex = secretHex.index(index, offsetBy: 2)
+            if let byte = UInt8(secretHex[index..<nextIndex], radix: 16) {
+                data.append(byte)
+            }
+            index = nextIndex
+        }
+        
+        return data.count == 32 ? data : nil
+    }
+    
     // MARK: - Backup & Restore
     
     /// Export identity to encrypted backup

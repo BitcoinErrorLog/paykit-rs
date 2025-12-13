@@ -62,6 +62,7 @@ class DashboardViewModel: ObservableObject {
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var showingQRScanner = false
+    @State private var showingPaymentView = false
     
     var body: some View {
         NavigationView {
@@ -87,6 +88,9 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView()
+            }
+            .sheet(isPresented: $showingPaymentView) {
+                PaymentView()
             }
         }
     }
@@ -200,7 +204,7 @@ struct DashboardView: View {
                     icon: "paperplane.fill",
                     color: .blue
                 ) {
-                    // TODO: Navigate to send flow
+                    showingPaymentView = true
                 }
                 
                 QuickActionButton(

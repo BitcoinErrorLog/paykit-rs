@@ -209,17 +209,56 @@ class PaykitClientWrapper: ObservableObject {
     }
 }
 
+// MARK: - Directory Service Configuration
+
+/// Configuration for directory service transport
+enum DirectoryTransportMode {
+    /// Use mock transport (for development/testing)
+    case mock
+    /// Use callback-based transport with Pubky SDK
+    case callback(PubkyUnauthenticatedStorageCallback)
+}
+
 // MARK: - Directory Service
 
 /// Service for interacting with the Pubky directory
 /// Provides access to contacts and payment endpoint discovery
+///
+/// ## Usage
+///
+/// ### Development/Testing (Mock Transport)
+/// ```swift
+/// let service = DirectoryService(mode: .mock)
+/// ```
+///
+/// ### Production (Real Pubky Transport)
+/// ```swift
+/// let pubkyCallback = MyPubkyStorageCallback(pubkyClient: myPubkyClient)
+/// let service = DirectoryService(mode: .callback(pubkyCallback))
+/// ```
 class DirectoryService {
     private let directoryOps: DirectoryOperationsAsync
     private let unauthTransport: UnauthenticatedTransportFfi
     
-    init() {
-        // Use mock transport for demo - replace with real transport in production
-        self.unauthTransport = UnauthenticatedTransportFfi.newMock()
+    /// Whether this service is using mock transport
+    let isMockMode: Bool
+    
+    /// Initialize with mock transport (default for demo)
+    convenience init() {
+        self.init(mode: .mock)
+    }
+    
+    /// Initialize with specified transport mode
+    /// - Parameter mode: Transport mode (mock or callback)
+    init(mode: DirectoryTransportMode) {
+        switch mode {
+        case .mock:
+            self.unauthTransport = UnauthenticatedTransportFfi.newMock()
+            self.isMockMode = true
+        case .callback(let callback):
+            self.unauthTransport = UnauthenticatedTransportFfi.fromCallback(callback: callback)
+            self.isMockMode = false
+        }
         self.directoryOps = try! createDirectoryOperationsAsync()
     }
     
@@ -246,3 +285,35 @@ class DirectoryService {
         try directoryOps.fetchSupportedPayments(transport: unauthTransport, ownerPubkey: ownerPubkey)
     }
 }
+
+// MARK: - Example Pubky Storage Callback
+
+/// Example implementation of PubkyUnauthenticatedStorageCallback
+/// 
+/// Implement this protocol to integrate with the real Pubky SDK.
+/// This example shows the interface - you need to replace the implementation
+/// with actual Pubky SDK calls.
+///
+/// ```swift
+/// class MyPubkyStorage: PubkyUnauthenticatedStorageCallback {
+///     let pubkyClient: PubkyClient // Your Pubky SDK client
+///     
+///     func get(ownerPubkey: String, path: String) -> StorageGetResult {
+///         do {
+///             let content = try pubkyClient.publicGet(owner: ownerPubkey, path: path)
+///             return StorageGetResult(success: true, content: content, error: nil)
+///         } catch {
+///             return StorageGetResult(success: false, content: nil, error: error.localizedDescription)
+///         }
+///     }
+///     
+///     func list(ownerPubkey: String, prefix: String) -> StorageListResult {
+///         do {
+///             let entries = try pubkyClient.publicList(owner: ownerPubkey, prefix: prefix)
+///             return StorageListResult(success: true, entries: entries, error: nil)
+///         } catch {
+///             return StorageListResult(success: false, entries: [], error: error.localizedDescription)
+///         }
+///     }
+/// }
+/// ```

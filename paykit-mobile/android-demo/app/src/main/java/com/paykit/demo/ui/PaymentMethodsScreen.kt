@@ -11,35 +11,66 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.paykit.demo.PaykitDemoApp
+import com.paykit.mobile.HealthCheckResult
+import com.paykit.mobile.HealthStatus
+import com.paykit.mobile.PaymentMethod
+import com.paykit.mobile.SelectionPreferences
+import com.paykit.mobile.SelectionStrategy
 
 /**
  * Payment Methods Screen
  *
  * Displays available payment methods, health status,
  * endpoint validation, and method selection testing.
+ * 
+ * This screen uses real PaykitClient FFI calls when available.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaymentMethodsScreen() {
+    val paykitClient = remember { PaykitDemoApp.paykitClient }
+    
     var testAmount by remember { mutableStateOf(10000L) }
     var validationEndpoint by remember { mutableStateOf("") }
     var selectedMethod by remember { mutableStateOf("lightning") }
     var validationResult by remember { mutableStateOf<Boolean?>(null) }
     var selectionResult by remember { mutableStateOf<String?>(null) }
+    var selectionReason by remember { mutableStateOf<String?>(null) }
 
-    val methods = remember {
-        listOf(
-            PaymentMethodInfo("lightning", "Lightning Network", "Fast, low-fee payments", true),
-            PaymentMethodInfo("onchain", "Bitcoin On-Chain", "Standard Bitcoin transactions", true)
-        )
+    // Load methods from FFI
+    val methodIds = remember { paykitClient.listMethods() }
+    
+    val methods = remember(methodIds) {
+        if (methodIds.isEmpty()) {
+            // Fallback to static data when FFI unavailable
+            listOf(
+                PaymentMethodInfo("lightning", "Lightning Network", "Fast, low-fee payments", true),
+                PaymentMethodInfo("onchain", "Bitcoin On-Chain", "Standard Bitcoin transactions", true)
+            )
+        } else {
+            methodIds.map { id ->
+                PaymentMethodInfo(
+                    id = id,
+                    name = when (id) {
+                        "lightning" -> "Lightning Network"
+                        "onchain" -> "Bitcoin On-Chain"
+                        else -> id.replaceFirstChar { it.uppercase() }
+                    },
+                    description = when (id) {
+                        "lightning" -> "Fast, low-fee payments"
+                        "onchain" -> "Standard Bitcoin transactions"
+                        else -> "Payment method"
+                    },
+                    isUsable = paykitClient.isMethodUsable(id)
+                )
+            }
+        }
     }
 
-    val healthResults = remember {
-        listOf(
-            HealthResult("lightning", HealthStatus.HEALTHY, 45),
-            HealthResult("onchain", HealthStatus.HEALTHY, 120)
-        )
-    }
+    // Health results - loaded on demand
+    var healthResults by remember { mutableStateOf<List<HealthCheckResult>>(emptyList()) }
+    var isLoadingHealth by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -55,6 +86,34 @@ fun PaymentMethodsScreen() {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // SDK Status
+            item {
+                if (!paykitClient.isAvailable) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "PaykitClient unavailable - using fallback mode",
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+            
             // Available Methods Section
             item {
                 Text(
@@ -77,8 +136,38 @@ fun PaymentMethodsScreen() {
                 )
             }
 
+            if (healthResults.isEmpty() && !isLoadingHealth) {
+                item {
+                    Button(
+                        onClick = {
+                            isLoadingHealth = true
+                            healthResults = paykitClient.checkHealth()
+                            isLoadingHealth = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Check Health Status")
+                    }
+                }
+            }
+
             items(healthResults) { result ->
                 HealthStatusCard(result)
+            }
+
+            if (healthResults.isNotEmpty()) {
+                item {
+                    TextButton(
+                        onClick = {
+                            isLoadingHealth = true
+                            healthResults = paykitClient.checkHealth()
+                            isLoadingHealth = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Refresh Health")
+                    }
+                }
             }
 
             // Method Selection Section
@@ -109,8 +198,38 @@ fun PaymentMethodsScreen() {
 
                         Button(
                             onClick = {
-                                // Simulate selection - prefer Lightning for small amounts
-                                selectionResult = if (testAmount < 100000) "lightning" else "onchain"
+                                // Use real FFI method selection
+                                val paymentMethods = methods.map { m ->
+                                    PaymentMethod(
+                                        methodId = m.id,
+                                        endpoint = when (m.id) {
+                                            "lightning" -> "lnbc..."
+                                            else -> "bc1q..."
+                                        }
+                                    )
+                                }
+                                
+                                val prefs = SelectionPreferences(
+                                    strategy = SelectionStrategy.BALANCED,
+                                    excludedMethods = emptyList(),
+                                    maxFeeSats = null,
+                                    maxConfirmationTimeSecs = null
+                                )
+                                
+                                val result = paykitClient.selectMethod(
+                                    paymentMethods,
+                                    testAmount.toULong(),
+                                    prefs
+                                )
+                                
+                                if (result != null) {
+                                    selectionResult = result.primaryMethod
+                                    selectionReason = result.reason
+                                } else {
+                                    // Fallback simulation
+                                    selectionResult = if (testAmount < 100000) "lightning" else "onchain"
+                                    selectionReason = "Fallback: FFI unavailable"
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -127,6 +246,13 @@ fun PaymentMethodsScreen() {
                                     text = result,
                                     color = Color(0xFF4CAF50),
                                     style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                            selectionReason?.let { reason ->
+                                Text(
+                                    text = reason,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -184,14 +310,11 @@ fun PaymentMethodsScreen() {
                         ) {
                             Button(
                                 onClick = {
-                                    // Simple validation simulation
-                                    validationResult = when (selectedMethod) {
-                                        "lightning" -> validationEndpoint.startsWith("lnbc")
-                                        "onchain" -> validationEndpoint.startsWith("bc1") ||
-                                                validationEndpoint.startsWith("1") ||
-                                                validationEndpoint.startsWith("3")
-                                        else -> false
-                                    }
+                                    // Use real FFI validation
+                                    validationResult = paykitClient.validateEndpoint(
+                                        selectedMethod,
+                                        validationEndpoint
+                                    )
                                 }
                             ) {
                                 Text("Validate")
@@ -258,7 +381,7 @@ fun PaymentMethodCard(method: PaymentMethodInfo) {
 }
 
 @Composable
-fun HealthStatusCard(result: HealthResult) {
+fun HealthStatusCard(result: HealthCheckResult) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -278,17 +401,20 @@ fun HealthStatusCard(result: HealthResult) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "${result.latencyMs}ms",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                result.latencyMs?.let { latency ->
+                    Text(
+                        text = "${latency}ms",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 Surface(
                     color = when (result.status) {
                         HealthStatus.HEALTHY -> Color(0xFF4CAF50)
                         HealthStatus.DEGRADED -> Color(0xFFFFA500)
                         HealthStatus.UNAVAILABLE -> Color.Red
+                        HealthStatus.UNKNOWN -> Color.Gray
                     },
                     shape = MaterialTheme.shapes.small
                 ) {
@@ -310,15 +436,3 @@ data class PaymentMethodInfo(
     val description: String,
     val isUsable: Boolean
 )
-
-data class HealthResult(
-    val methodId: String,
-    val status: HealthStatus,
-    val latencyMs: Int
-)
-
-enum class HealthStatus {
-    HEALTHY,
-    DEGRADED,
-    UNAVAILABLE
-}

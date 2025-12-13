@@ -12,6 +12,12 @@ struct ContentView: View {
     
     var body: some View {
         TabView {
+            // Dashboard Tab
+            DashboardView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "house.fill")
+                }
+            
             // Payment Methods Tab
             PaymentMethodsView()
                 .tabItem {
@@ -22,6 +28,12 @@ struct ContentView: View {
             ContactsView()
                 .tabItem {
                     Label("Contacts", systemImage: "person.2")
+                }
+            
+            // Receipts Tab
+            ReceiptsView()
+                .tabItem {
+                    Label("Receipts", systemImage: "doc.text.fill")
                 }
             
             // Subscriptions Tab

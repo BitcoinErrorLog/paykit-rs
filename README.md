@@ -594,11 +594,9 @@ cd paykit-mobile && cargo test --lib
 
 ### Project Documentation
 - [Architecture Guide](docs/ARCHITECTURE.md) - System architecture and component relationships
-- [Paykit Roadmap](PAYKIT_ROADMAP.md) - Development roadmap and integration plan
 - [Security Guide](SECURITY.md) - Security considerations and best practices
 - [Deployment Guide](DEPLOYMENT.md) - Deployment instructions
 - [Build Instructions](BUILD.md) - Build and development setup
-- [Demo Apps Comprehensive Plan](DEMO_APPS_COMPREHENSIVE_PLAN.md) - Feature parity analysis
 
 ## Security Considerations
 

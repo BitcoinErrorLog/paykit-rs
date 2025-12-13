@@ -184,6 +184,5 @@ Subscriber              paykit-subscriptions          Provider
 
 - [Repository Root README](../README.md)
 - [Component READMEs](../README.md#documentation)
-- [Paykit Roadmap](../PAYKIT_ROADMAP.md)
 - [Security Guide](../SECURITY.md)
 

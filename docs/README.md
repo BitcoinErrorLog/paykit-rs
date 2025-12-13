@@ -7,7 +7,6 @@ This directory contains additional documentation for the Paykit project.
 ### Root Documentation
 - **[README.md](../README.md)** - Main project overview and quick start
 - **[CHANGELOG.md](../CHANGELOG.md)** - Project changelog and version history
-- **[PAYKIT_ROADMAP.md](../PAYKIT_ROADMAP.md)** - Development roadmap and integration plan
 - **[SECURITY.md](../SECURITY.md)** - Security considerations and best practices
 - **[DEPLOYMENT.md](../DEPLOYMENT.md)** - Deployment instructions
 - **[RELEASING.md](../RELEASING.md)** - Release process documentation

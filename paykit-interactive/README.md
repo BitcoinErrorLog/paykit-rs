@@ -98,12 +98,10 @@ This crate extends the functionality of other Paykit components:
 
 ## Integration Plan
 
-This crate is part of the **Paykit Roadmap** (Phase 2 & 3 - ✅ Complete). It is designed to be integrated into Bitkit (via `bitkit-core`) and other Pubky apps to enable:
+This crate implements the interactive payment protocol for Paykit, designed to be integrated into Bitkit (via `bitkit-core`) and other Pubky apps to enable:
 - Private payment negotiation.
 - Interactive checkout flows.
 - Standardized transaction history.
-
-See [PAYKIT_ROADMAP.md](../PAYKIT_ROADMAP.md) for the full integration plan.
 
 ## Testing
 
@@ -227,5 +225,4 @@ The crate supports multiple transport backends:
 - [Build Instructions](BUILD.md)
 - [Noise Integration Guide](../docs/NOISE_INTEGRATION.md)
 - [Repository Root README](../README.md)
-- [Paykit Roadmap](../PAYKIT_ROADMAP.md)
 

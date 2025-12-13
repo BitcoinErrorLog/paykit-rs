@@ -13,8 +13,9 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
 | Contacts | **Real** | Keychain-backed contact storage |
 | Receipts | **Real** | Payment history with search and filtering |
-| Payment Methods | UI Only | Static list, not connected to PaykitClient |
-| Health Monitoring | UI Only | Displays mock "Healthy" status |
+| Payment Methods | **Real** | Lists methods via PaykitClient FFI, validates endpoints |
+| Health Monitoring | **Real** | Real health checks via PaykitClient.checkHealth() |
+| Method Selection | **Real** | Smart method selection with strategy options |
 | Subscriptions | **Real** | Keychain-backed subscription storage |
 | Auto-Pay | **Real** | Keychain-backed settings, limits, and rules |
 | Payment Requests | UI Only | Sample data, not persisted |
@@ -57,12 +58,15 @@ Key files:
 - `KeychainStorage.swift` - iOS Keychain wrapper
 - `PaykitMobile.swift` - UniFFI generated bindings
 
-### Payment Methods (UI Demo)
+### Payment Methods (Real)
 
-- View available payment methods (Lightning, On-Chain)
-- Health status monitoring (mock data)
-- Endpoint validation UI
-- Smart method selection UI
+Full payment method management via Rust FFI:
+
+- **Method Listing**: Real-time list from `PaykitClient.listMethods()`
+- **Health Monitoring**: Live health checks via `PaykitClient.checkHealth()`
+- **Endpoint Validation**: Validate addresses/invoices via `PaykitClient.validateEndpoint()`
+- **Smart Selection**: Strategy-based method selection (Balanced, Cost, Speed, Privacy)
+- **Usability Check**: Verify method availability via `PaykitClient.isMethodUsable()`
 
 ### Subscriptions (Real)
 
@@ -293,10 +297,10 @@ Test the key management features:
 ### Demo Features
 
 The following use sample data for UI demonstration:
-- Payment Methods: Shows 2 hardcoded methods
 - Subscriptions: Shows sample subscriptions
 - Auto-Pay: Shows sample rules and limits
 - Payment Requests: Shows sample requests
+- Directory Operations: Uses mock transport (not connected to real Pubky homeserver)
 
 ## Roadmap
 
@@ -304,10 +308,13 @@ Completed improvements:
 - ✅ **Contacts**: Contact management with Keychain persistence
 - ✅ **Dashboard**: Overview with statistics and recent activity
 - ✅ **Receipts**: Payment history with search and filtering
+- ✅ **Payment Methods**: Real FFI integration with PaykitClient
+- ✅ **Health Monitoring**: Real health checks via PaykitClient.checkHealth()
+- ✅ **Method Selection**: Smart method selection with strategy options
 
 Planned improvements:
-1. **Wire PaykitClient**: Connect Payment Methods UI to real FFI calls
-2. **Directory Lookup**: Fetch contacts from Pubky directory
+1. **Directory Lookup**: Fetch contacts from Pubky directory (replace mock transport)
+2. **Payment Request Persistence**: Store payment requests in Keychain
 3. **Noise Integration**: Real encrypted payments via Noise protocol
 
 ## Related Documentation

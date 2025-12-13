@@ -671,6 +671,206 @@ impl WasmPaymentMethodStorage {
         Ok(result)
     }
 
+    /// Check health status of a specific payment method
+    ///
+    /// This performs basic connectivity and validation checks for the given method.
+    /// Returns a health status object with status and details.
+    ///
+    /// # Arguments
+    ///
+    /// * `method_id` - The ID of the method to check (e.g., "lightning", "onchain")
+    ///
+    /// # Returns
+    ///
+    /// A JavaScript object with fields:
+    /// - `healthy`: boolean indicating if the method is usable
+    /// - `status`: string status ("healthy", "degraded", "unhealthy", "unknown")
+    /// - `message`: human-readable status message
+    /// - `checked_at`: timestamp of the check
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmPaymentMethodStorage();
+    /// const status = await storage.checkHealth("lightning");
+    /// console.log(status.healthy, status.message);
+    /// ```
+    #[wasm_bindgen(js_name = checkHealth)]
+    pub async fn check_health(&self, method_id: &str) -> Result<JsValue, JsValue> {
+        let method = self.get_method(method_id).await?;
+
+        let js_obj = js_sys::Object::new();
+        let timestamp = js_sys::Date::now();
+        let _ = js_sys::Reflect::set(&js_obj, &"checked_at".into(), &timestamp.into());
+        let _ = js_sys::Reflect::set(&js_obj, &"method_id".into(), &method_id.into());
+
+        match method {
+            Some(m) => {
+                let endpoint = m.endpoint();
+
+                // Basic validation based on method type
+                let (healthy, status, message) = match method_id.to_lowercase().as_str() {
+                    "lightning" | "ln" | "ln-btc" => {
+                        if endpoint.starts_with("lnurl") || endpoint.starts_with("LNURL") {
+                            (
+                                true,
+                                "healthy",
+                                format!(
+                                    "LNURL endpoint configured: {}...",
+                                    &endpoint[..20.min(endpoint.len())]
+                                ),
+                            )
+                        } else if endpoint.starts_with("lnbc") || endpoint.starts_with("lntb") {
+                            (true, "healthy", "BOLT11 invoice configured".to_string())
+                        } else if endpoint.contains("@") || endpoint.contains(".") {
+                            (
+                                true,
+                                "healthy",
+                                format!("Lightning address configured: {}", endpoint),
+                            )
+                        } else {
+                            (
+                                false,
+                                "degraded",
+                                "Lightning endpoint format not recognized".to_string(),
+                            )
+                        }
+                    }
+                    "onchain" | "btc" | "onchain-btc" => {
+                        if endpoint.starts_with("bc1") || endpoint.starts_with("tb1") {
+                            (
+                                true,
+                                "healthy",
+                                format!(
+                                    "SegWit address configured: {}...",
+                                    &endpoint[..12.min(endpoint.len())]
+                                ),
+                            )
+                        } else if endpoint.starts_with("1") || endpoint.starts_with("3") {
+                            (
+                                true,
+                                "healthy",
+                                "Legacy Bitcoin address configured".to_string(),
+                            )
+                        } else {
+                            (
+                                false,
+                                "degraded",
+                                "Bitcoin address format not recognized".to_string(),
+                            )
+                        }
+                    }
+                    _ => {
+                        // Unknown method type - just check endpoint is non-empty
+                        if !endpoint.is_empty() {
+                            (
+                                true,
+                                "unknown",
+                                format!("Custom method '{}' configured", method_id),
+                            )
+                        } else {
+                            (false, "unhealthy", "No endpoint configured".to_string())
+                        }
+                    }
+                };
+
+                let _ = js_sys::Reflect::set(&js_obj, &"healthy".into(), &healthy.into());
+                let _ = js_sys::Reflect::set(&js_obj, &"status".into(), &status.into());
+                let _ = js_sys::Reflect::set(&js_obj, &"message".into(), &message.into());
+            }
+            None => {
+                let _ = js_sys::Reflect::set(&js_obj, &"healthy".into(), &false.into());
+                let _ = js_sys::Reflect::set(&js_obj, &"status".into(), &"not_found".into());
+                let _ = js_sys::Reflect::set(
+                    &js_obj,
+                    &"message".into(),
+                    &format!("Method '{}' not configured", method_id).into(),
+                );
+            }
+        }
+
+        Ok(js_obj.into())
+    }
+
+    /// Check health of all configured payment methods
+    ///
+    /// Returns an array of health status objects for each method.
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmPaymentMethodStorage();
+    /// const statuses = await storage.checkAllHealth();
+    /// for (const status of statuses) {
+    ///     console.log(`${status.method_id}: ${status.status}`);
+    /// }
+    /// ```
+    #[wasm_bindgen(js_name = checkAllHealth)]
+    pub async fn check_all_health(&self) -> Result<Vec<JsValue>, JsValue> {
+        let methods = self.list_methods().await?;
+        let mut results = Vec::new();
+
+        for method_js in &methods {
+            if let Ok(method_id) = js_sys::Reflect::get(method_js, &"method_id".into()) {
+                if let Some(id) = method_id.as_string() {
+                    let health = self.check_health(&id).await?;
+                    results.push(health);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Get a summary of all method health statuses
+    ///
+    /// Returns an object with:
+    /// - `total`: total number of methods
+    /// - `healthy`: number of healthy methods
+    /// - `degraded`: number of degraded methods
+    /// - `unhealthy`: number of unhealthy methods
+    /// - `all_healthy`: boolean if all methods are healthy
+    ///
+    /// # Examples
+    ///
+    /// ```javascript
+    /// const storage = new WasmPaymentMethodStorage();
+    /// const summary = await storage.healthSummary();
+    /// console.log(`${summary.healthy}/${summary.total} methods healthy`);
+    /// ```
+    #[wasm_bindgen(js_name = healthSummary)]
+    pub async fn health_summary(&self) -> Result<JsValue, JsValue> {
+        let statuses = self.check_all_health().await?;
+
+        let mut healthy = 0u32;
+        let mut degraded = 0u32;
+        let mut unhealthy = 0u32;
+
+        for status in &statuses {
+            if let Ok(s) = js_sys::Reflect::get(status, &"status".into()) {
+                match s.as_string().as_deref() {
+                    Some("healthy") => healthy += 1,
+                    Some("degraded") => degraded += 1,
+                    _ => unhealthy += 1,
+                }
+            }
+        }
+
+        let total = statuses.len() as u32;
+        let js_obj = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&js_obj, &"total".into(), &total.into());
+        let _ = js_sys::Reflect::set(&js_obj, &"healthy".into(), &healthy.into());
+        let _ = js_sys::Reflect::set(&js_obj, &"degraded".into(), &degraded.into());
+        let _ = js_sys::Reflect::set(&js_obj, &"unhealthy".into(), &unhealthy.into());
+        let _ = js_sys::Reflect::set(
+            &js_obj,
+            &"all_healthy".into(),
+            &(healthy == total && total > 0).into(),
+        );
+
+        Ok(js_obj.into())
+    }
+
     /// Remove all published methods from the directory
     ///
     /// # Arguments

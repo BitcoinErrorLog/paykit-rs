@@ -26,6 +26,7 @@ pub use payment_methods::*;
 pub use storage::*;
 pub use subscriptions::*;
 pub use types::*;
+pub use utils::{is_valid_public_key, parse_uri, to_paykit_uri, to_pubky_uri, ParsedUri};
 pub use websocket_transport::*;
 
 /// Initialize the WASM module

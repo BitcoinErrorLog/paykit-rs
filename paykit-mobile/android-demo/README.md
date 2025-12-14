@@ -23,7 +23,7 @@ A comprehensive Android demo application showcasing Paykit features including ke
 | QR Scanner | **Real** | QR code scanning with Paykit URI parsing (manual input for testing) |
 | Multiple Identities | **Real** | Create, switch, and manage multiple identities |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
-| Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
+| Noise Payments | **Real** | Send/receive payments over encrypted Noise protocol channels |
 
 ## Features
 
@@ -109,6 +109,44 @@ Auto-pay settings management with EncryptedSharedPreferences persistence:
   - Multi-select import with one tap
   - Automatically filters out contacts you already have
 
+### Noise Payments (Real Implementation)
+
+Send and receive payments over encrypted Noise protocol channels:
+
+- **Key Architecture**: "Cold pkarr, hot noise" - Ed25519 keys managed by Pubky Ring, X25519 keys cached locally
+- **Secure Channel**: Full Noise_IK handshake over TCP (Socket)
+- **Receipt Exchange**: Cryptographic receipts for payment proof
+- **Server Mode**: Receive payments by listening for incoming connections
+- **Private Endpoints**: Fresh payment addresses exchanged over encrypted channel
+- **StateFlow Integration**: Reactive state management with Kotlin Coroutines
+
+Key files:
+- `services/NoisePaymentService.kt` - Core Noise payment coordination
+- `services/NoiseKeyCache.kt` - Secure X25519 key caching
+- `services/PubkyRingIntegration.kt` - Integration with remote key manager
+- `services/MockPubkyRingService.kt` - Demo/testing key derivation
+- `services/DirectoryService.kt` - Endpoint discovery and publishing
+- `viewmodel/NoisePaymentViewModel.kt` - Payment flow state management
+- `ui/ReceivePaymentScreen.kt` - Server mode UI
+
+#### Sending Payments
+
+1. Navigate to Send tab
+2. Enter recipient (pubky:// URI or contact name)
+3. Enter amount and select payment method
+4. Tap "Send Payment"
+5. App discovers recipient's Noise endpoint
+6. Establishes encrypted connection
+7. Exchanges payment request and receipt
+
+#### Receiving Payments
+
+1. Navigate to Receive tab
+2. Tap "Start Listening"
+3. Share connection info (QR code or copy)
+4. Accept incoming payment requests
+5. Receipts stored automatically
+
 ### Directory Operations (Configurable Transport)
 
 The DirectoryService supports both mock and real Pubky transport:
@@ -193,33 +231,48 @@ android-demo/
 │       ├── AndroidManifest.xml
 │       ├── jniLibs/              # Native libraries (.so files)
 │       │   ├── arm64-v8a/
+│       │   │   ├── libpaykit_mobile.so
+│       │   │   └── libpubky_noise.so
 │       │   └── x86_64/
+│       │       ├── libpaykit_mobile.so
+│       │       └── libpubky_noise.so
 │       └── java/com/paykit/
 │           ├── demo/
 │           │   ├── PaykitDemoApp.kt      # Application class
-│           │   ├── MainActivity.kt       # Main activity with navigation
+│           │   ├── MainActivity.kt       # Main activity (Send/Receive tabs)
 │           │   ├── model/
 │           │   │   ├── Contact.kt        # Contact data model
 │           │   │   └── Receipt.kt        # Receipt data model
+│           │   ├── services/
+│           │   │   ├── NoisePaymentService.kt   # Core Noise payment service
+│           │   │   ├── NoiseKeyCache.kt         # X25519 key caching
+│           │   │   ├── PubkyRingIntegration.kt  # Remote key manager
+│           │   │   ├── MockPubkyRingService.kt  # Demo key derivation
+│           │   │   └── DirectoryService.kt      # Endpoint discovery
 │           │   ├── storage/
 │           │   │   ├── ContactStorage.kt # Encrypted contact storage
 │           │   │   └── ReceiptStorage.kt # Encrypted receipt storage
 │           │   ├── ui/
-│           │   │   ├── DashboardScreen.kt    # Dashboard with stats
-│           │   │   ├── AutoPayScreen.kt      # Auto-pay settings UI
-│           │   │   ├── PaymentMethodsScreen.kt # Methods UI (static)
-│           │   │   ├── ContactsScreen.kt     # Contact management
-│           │   │   ├── ReceiptsScreen.kt     # Receipt history
-│           │   │   ├── SubscriptionsScreen.kt  # Subscriptions UI
+│           │   │   ├── DashboardScreen.kt       # Dashboard with stats
+│           │   │   ├── PaymentScreen.kt         # Send payment UI
+│           │   │   ├── ReceivePaymentScreen.kt  # Receive payment UI
+│           │   │   ├── AutoPayScreen.kt         # Auto-pay settings UI
+│           │   │   ├── PaymentMethodsScreen.kt  # Methods UI
+│           │   │   ├── ContactsScreen.kt        # Contact management
+│           │   │   ├── ReceiptsScreen.kt        # Receipt history
+│           │   │   ├── SubscriptionsScreen.kt   # Subscriptions UI
 │           │   │   ├── PaymentRequestsScreen.kt # Requests UI
-│           │   │   ├── SettingsScreen.kt       # Settings with key management
+│           │   │   ├── SettingsScreen.kt        # Settings UI
 │           │   │   └── theme/
-│           │   │       └── Theme.kt          # Material 3 theme
+│           │   │       └── Theme.kt             # Material 3 theme
 │           │   └── viewmodel/
-│           │       └── AutoPayViewModel.kt   # Auto-pay logic (stub)
+│           │       ├── AutoPayViewModel.kt      # Auto-pay logic
+│           │       └── NoisePaymentViewModel.kt # Payment flow state
 │           └── mobile/
 │               ├── KeyManager.kt         # Real key management
 │               └── paykit_mobile.kt      # UniFFI bindings
+│           └── pubky/noise/
+│               └── pubky_noise.kt        # Noise protocol bindings
 ├── build.gradle.kts            # Root build configuration
 └── settings.gradle.kts         # Project settings
 ```
@@ -448,9 +501,15 @@ Completed improvements:
 - ✅ **Subscription Storage**: Identity-scoped subscription management
 - ✅ **Auto-Pay Storage**: Identity-scoped auto-pay settings and rules
 
+Recent additions:
+- ✅ **Noise Payments**: Send and receive payments over encrypted Noise protocol channels
+- ✅ **Key Architecture**: "Cold pkarr, hot noise" key model with Pubky Ring integration
+- ✅ **Server Mode**: Receive payments by listening for incoming connections
+- ✅ **Private Endpoint Exchange**: Fresh payment addresses over encrypted channel
+
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
-2. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Real Pubky Ring Integration**: Connect to actual Pubky Ring app for key management
 3. **QR Scanner Camera Preview**: Integrate camera preview with QR scanning library (ML Kit or ZXing)
 4. **QR Scanner Navigation**: Add navigation flows for scanned QR codes (payment flows, contact addition, etc.)
 

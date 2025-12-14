@@ -6,6 +6,8 @@ Mobile FFI bindings for Paykit, enabling integration with iOS (Swift) and Androi
 
 This crate provides UniFFI-based bindings that expose Paykit functionality to mobile platforms:
 
+- **Noise Protocol Payments**: Send and receive payments over encrypted Noise channels
+- **Key Management**: "Cold pkarr, hot noise" architecture with Pubky Ring integration
 - **Directory Operations**: Publish and discover payment endpoints
 - **Payment Method Selection**: Automatic selection of optimal payment methods
 - **Subscription Management**: Create, modify, and manage subscriptions
@@ -344,6 +346,132 @@ Use the provided `EncryptedPreferencesStorage.kt` adapter:
 ```kotlin
 val storage = EncryptedPreferencesStorage.create(context)
 storage.store("private_key", keyBytes)
+```
+
+## Noise Protocol Payments
+
+The mobile library provides full support for encrypted payments over Noise protocol channels.
+
+### Key Architecture: "Cold Pkarr, Hot Noise"
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Key Management Flow                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌──────────────┐         ┌──────────────┐                 │
+│   │  Pubky Ring  │         │  Paykit App  │                 │
+│   │  (Remote)    │         │  (Local)     │                 │
+│   └──────────────┘         └──────────────┘                 │
+│          │                        │                          │
+│   Ed25519 Seed             X25519 Keys                      │
+│   (Cold Storage)           (Hot Cache)                       │
+│          │                        │                          │
+│          └───── Derivation ───────┘                         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Ed25519 (pkarr) keys**: "Cold" - managed remotely by Pubky Ring app
+- **X25519 (Noise) keys**: "Hot" - derived on-demand and cached locally
+- **Key Derivation**: HKDF-SHA512 from Ed25519 seed with device_id + epoch
+
+### Noise Endpoint Discovery
+
+```swift
+// Swift
+// Discover recipient's Noise endpoint
+let endpoint = try! discoverNoiseEndpoint(
+    transport: unauthTransport,
+    ownerPubkey: recipientPubkey
+)
+
+// Publish your Noise endpoint
+try! publishNoiseEndpoint(
+    transport: authTransport,
+    host: "192.168.1.100",
+    port: 8888,
+    noisePubkey: myNoisePubkeyHex,
+    metadata: "Mobile wallet"
+)
+
+// Remove endpoint when stopping server
+try! removeNoiseEndpoint(transport: authTransport)
+```
+
+```kotlin
+// Kotlin
+// Discover recipient's Noise endpoint
+val endpoint = discoverNoiseEndpoint(
+    transport = unauthTransport,
+    ownerPubkey = recipientPubkey
+)
+
+// Publish your Noise endpoint
+publishNoiseEndpoint(
+    transport = authTransport,
+    host = "192.168.1.100",
+    port = 8888,
+    noisePubkey = myNoisePubkeyHex,
+    metadata = "Mobile wallet"
+)
+```
+
+### Noise Payment Messages
+
+```swift
+// Swift
+// Create receipt request
+let request = try! createReceiptRequestMessage(
+    receiptId: "rcpt_123",
+    payerPubkey: myPubkey,
+    payeePubkey: recipientPubkey,
+    methodId: "lightning",
+    amount: "1000",
+    currency: "SAT"
+)
+
+// Create confirmation
+let confirmation = try! createReceiptConfirmationMessage(
+    receiptId: "rcpt_123",
+    payerPubkey: myPubkey,
+    payeePubkey: recipientPubkey,
+    methodId: "lightning",
+    amount: "1000",
+    currency: "SAT",
+    notes: nil
+)
+
+// Create private endpoint offer
+let offer = try! createPrivateEndpointOfferMessage(
+    methodId: "lightning",
+    endpoint: "lnbc1000n1...",
+    expirySeconds: 600
+)
+
+// Parse incoming message
+let parsed = try! parsePaymentMessage(jsonString: receivedJson)
+switch parsed.messageType {
+case .receiptRequest:
+    // Handle request
+case .receiptConfirmation:
+    // Handle confirmation
+case .privateEndpointOffer:
+    // Handle offer
+case .error:
+    // Handle error
+}
+```
+
+### Server Configuration
+
+```swift
+// Swift
+// Create default server config
+let config = createNoiseServerConfig()
+
+// Create with specific port
+let config = createNoiseServerConfigWithPort(port: 8888)
 ```
 
 ## Integration with pubky-noise

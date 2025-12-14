@@ -3281,6 +3281,7 @@ dependencies = [
  "aes-gcm",
  "anyhow",
  "argon2",
+ "async-trait",
  "clap",
  "curve25519-dalek",
  "ed25519-dalek",

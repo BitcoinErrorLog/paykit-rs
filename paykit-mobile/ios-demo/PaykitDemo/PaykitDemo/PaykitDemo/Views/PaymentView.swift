@@ -454,6 +454,13 @@ class PaymentViewModel: ObservableObject {
         methodHealth = nil
     }
     
+    func checkMethodHealth() async {
+        // Check health status of selected payment method
+        // This would use PaykitClient.checkMethodHealth() in a real implementation
+        // For demo, we'll show a placeholder
+        methodHealth = ("checkmark.circle.fill", .green, "Available")
+    }
+    
     // MARK: - Helper Methods
     
     private func resolveRecipient(_ uri: String) throws -> String {

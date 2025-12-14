@@ -85,6 +85,7 @@ sealed class NoisePaymentException(message: String) : Exception(message) {
     object Timeout : NoisePaymentException("Connection timed out.")
     object Cancelled : NoisePaymentException("Operation was cancelled.")
     class ServerError(code: String, message: String) : NoisePaymentException("Server error [$code]: $message")
+    class ConfigurationError(msg: String) : NoisePaymentException("Configuration error: $msg")
 }
 
 /**
@@ -633,7 +634,7 @@ class NoisePaymentService private constructor(private val context: Context) {
             val messageJson = String(plaintext, Charsets.UTF_8)
             
             // Get our public key (payee)
-            val myPubkey = keyManager.getPublicKeyZ32() ?: "unknown"
+            val myPubkey = keyManager.getCurrentPublicKeyZ32() ?: "unknown"
             val peerPubkey = serverConnection.clientPubkeyHex ?: "unknown"
             
             // Handle message using interactive manager

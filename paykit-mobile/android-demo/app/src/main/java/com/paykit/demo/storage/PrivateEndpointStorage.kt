@@ -98,7 +98,7 @@ class PrivateEndpointStorage(context: Context, private val identityName: String)
         
         peerEndpoints.removeAll { it.methodId == methodId }
         
-        if (peerEndpoints.isEmpty) {
+        if (peerEndpoints.isEmpty()) {
             all.remove(peerPubkey)
         } else {
             all[peerPubkey] = peerEndpoints

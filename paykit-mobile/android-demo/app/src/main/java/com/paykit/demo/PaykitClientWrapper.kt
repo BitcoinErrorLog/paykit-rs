@@ -1,5 +1,6 @@
 package com.paykit.demo
 
+import android.content.Context
 import android.util.Log
 import com.paykit.mobile.*
 
@@ -221,7 +222,7 @@ class PaykitClientWrapper private constructor(
      * Set "paykit.useRealDirectoryTransport" in SharedPreferences to true and implement
      * a PubkyUnauthenticatedStorageCallback to enable real Pubky directory operations.
      */
-    fun createDirectoryService(): DirectoryService {
+    fun createDirectoryService(context: Context): DirectoryService {
         val prefs = context.getSharedPreferences("paykit_settings", Context.MODE_PRIVATE)
         val useRealTransport = prefs.getBoolean("useRealDirectoryTransport", false)
         

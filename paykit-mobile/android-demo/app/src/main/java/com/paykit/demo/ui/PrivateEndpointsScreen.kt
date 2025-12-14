@@ -18,8 +18,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.paykit.demo.PaykitApplication
 import com.paykit.demo.storage.PrivateEndpointStorage
+import com.paykit.mobile.KeyManager
 import com.paykit.mobile.PrivateEndpointOffer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,8 +28,8 @@ fun PrivateEndpointsScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as PaykitApplication
-    val identityName = app.currentIdentityName
+    val keyManager = remember { KeyManager(context) }
+    val identityName by keyManager.currentIdentityName.collectAsState()
     
     var peers by remember { mutableStateOf<List<String>>(emptyList()) }
     var endpoints by remember { mutableStateOf<Map<String, List<PrivateEndpointOffer>>>(emptyMap()) }
@@ -37,15 +37,14 @@ fun PrivateEndpointsScreen(
     var showClearDialog by remember { mutableStateOf(false) }
     
     val storage = remember(identityName) {
-        identityName?.let { PrivateEndpointStorage(context, it) }
+        val name = identityName ?: "default"
+        PrivateEndpointStorage(context, name)
     }
     
     fun refresh() {
         isLoading = true
-        storage?.let {
-            peers = it.listPeers()
-            endpoints = peers.associateWith { peer -> it.listForPeer(peer) }
-        }
+        peers = storage.listPeers()
+        endpoints = peers.associateWith { peer -> storage.listForPeer(peer) }
         isLoading = false
     }
     

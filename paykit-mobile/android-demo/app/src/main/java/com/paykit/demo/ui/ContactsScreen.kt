@@ -57,7 +57,7 @@ fun ContactsScreen() {
     var discoveryError by remember { mutableStateOf<String?>(null) }
     
     val paykitClient = remember { PaykitDemoApp.paykitClient }
-    val directoryService = remember { paykitClient.createDirectoryService() }
+    val directoryService = remember { paykitClient.createDirectoryService(context) }
     val scope = rememberCoroutineScope()
     
     val filteredContacts = remember(contacts, searchQuery) {
@@ -77,7 +77,7 @@ fun ContactsScreen() {
             try {
                 // Get current identity's public key
                 val currentIdentityName = currentIdentityName ?: "default"
-                val publicKey = keyManager.publicKey(currentIdentityName) ?: run {
+                val publicKey = keyManager.getCurrentPublicKeyZ32() ?: run {
                     discoveryError = "No active identity found"
                     isDiscovering = false
                     return@launch

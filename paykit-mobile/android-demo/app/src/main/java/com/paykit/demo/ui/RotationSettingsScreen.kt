@@ -13,11 +13,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.paykit.demo.PaykitApplication
 import com.paykit.demo.storage.MethodRotationSettings
 import com.paykit.demo.storage.RotationEvent
 import com.paykit.demo.storage.RotationPolicy
 import com.paykit.demo.storage.RotationSettingsStorage
+import com.paykit.mobile.KeyManager
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -27,8 +27,8 @@ fun RotationSettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as PaykitApplication
-    val identityName = app.currentIdentityName
+    val keyManager = remember { KeyManager(context) }
+    val identityName by keyManager.currentIdentityName.collectAsState()
     
     var autoRotateEnabled by remember { mutableStateOf(true) }
     var defaultPolicy by remember { mutableStateOf(RotationPolicy.ON_USE) }
@@ -41,7 +41,8 @@ fun RotationSettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     
     val storage = remember(identityName) {
-        if (identityName != null) RotationSettingsStorage(context, identityName) else null
+        val name = identityName ?: return@remember null
+        RotationSettingsStorage(context, name)
     }
     
     fun load() {

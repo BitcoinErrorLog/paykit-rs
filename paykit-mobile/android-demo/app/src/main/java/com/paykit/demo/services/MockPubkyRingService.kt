@@ -213,7 +213,7 @@ class MockPubkyRingService private constructor(context: Context) {
      */
     fun signMessage(message: ByteArray): String {
         val seedHex = cachedSeedHex ?: throw MockPubkyRingException.NoSeedAvailable
-        return com.paykit.mobile.signMessage(seedHex, message.toList())
+        return com.paykit.mobile.signMessage(seedHex, message)
     }
     
     /**

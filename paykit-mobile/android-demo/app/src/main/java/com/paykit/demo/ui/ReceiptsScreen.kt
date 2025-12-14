@@ -163,8 +163,7 @@ class ReceiptsViewModel : ViewModel() {
                 "direction" to receipt.direction.name,
                 "counterparty" to receipt.counterpartyKey,
                 "displayName" to receipt.displayName,
-                "amount" to receipt.amount,
-                "currency" to receipt.currency,
+                "amountSats" to receipt.amountSats,
                 "paymentMethod" to receipt.paymentMethod,
                 "status" to receipt.status.name,
                 "createdAt" to receipt.createdAt,
@@ -180,15 +179,14 @@ class ReceiptsViewModel : ViewModel() {
      * Export receipts to CSV format
      */
     fun exportToCSV(): String {
-        val header = "ID,Direction,Counterparty,Display Name,Amount,Currency,Payment Method,Status,Created At,Completed At,Memo,Transaction ID\n"
+        val header = "ID,Direction,Counterparty,Display Name,Amount (sats),Payment Method,Status,Created At,Completed At,Memo,Transaction ID\n"
         val rows = filteredReceipts.joinToString("\n") { receipt ->
             listOf(
                 receipt.id,
                 receipt.direction.name,
                 receipt.counterpartyKey,
                 receipt.displayName.replace(",", ";"),
-                receipt.amount.toString(),
-                receipt.currency,
+                receipt.amountSats.toString(),
                 receipt.paymentMethod,
                 receipt.status.name,
                 DateFormat.getDateTimeInstance().format(Date(receipt.createdAt)),

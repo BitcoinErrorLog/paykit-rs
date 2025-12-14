@@ -17,6 +17,7 @@ import com.paykit.demo.storage.ContactStorage
 import com.paykit.demo.storage.ReceiptStorage
 import com.paykit.demo.storage.StoredReceipt
 import com.paykit.mobile.KeyManager
+import com.paykit.mobile.NoiseEndpointInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -267,9 +268,10 @@ class NoisePaymentViewModel(application: Application) : AndroidViewModel(applica
         val pubkey = System.getenv("PAYKIT_TEST_PUBKEY") ?: return null
         
         return NoiseEndpointInfo(
+            recipientPubkey = "", // Unknown from test environment
             host = host,
-            port = port,
-            serverPubkeyHex = pubkey,
+            port = port.toUShort(),
+            serverNoisePubkey = pubkey,
             metadata = null
         )
     }

@@ -42,6 +42,16 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "Dashboard",
         { Icon(Icons.Default.Home, contentDescription = "Dashboard") }
     )
+    object Send : Screen(
+        "send",
+        "Send",
+        { Icon(Icons.Default.Send, contentDescription = "Send") }
+    )
+    object Receive : Screen(
+        "receive",
+        "Receive",
+        { Icon(Icons.Default.CallReceived, contentDescription = "Receive") }
+    )
     object Methods : Screen(
         "methods",
         "Methods",
@@ -56,21 +66,6 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "receipts",
         "Receipts",
         { Icon(Icons.Default.ReceiptLong, contentDescription = "Receipts") }
-    )
-    object Subscriptions : Screen(
-        "subscriptions",
-        "Subscriptions",
-        { Icon(Icons.Default.Repeat, contentDescription = "Subscriptions") }
-    )
-    object AutoPay : Screen(
-        "autopay",
-        "Auto-Pay",
-        { Icon(Icons.Default.FlashOn, contentDescription = "Auto-Pay") }
-    )
-    object Requests : Screen(
-        "requests",
-        "Requests",
-        { Icon(Icons.Default.SwapHoriz, contentDescription = "Requests") }
     )
     object Settings : Screen(
         "settings",
@@ -97,12 +92,11 @@ fun PaykitDemoContent() {
     val navController = rememberNavController()
     val screens = listOf(
         Screen.Dashboard,
+        Screen.Send,
+        Screen.Receive,
         Screen.Methods,
         Screen.Contacts,
         Screen.Receipts,
-        Screen.Subscriptions,
-        Screen.AutoPay,
-        Screen.Requests,
         Screen.Settings
     )
 
@@ -141,6 +135,13 @@ fun PaykitDemoContent() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Send.route) { 
+                PaymentScreen(
+                    keyManager = com.paykit.mobile.KeyManager(navController.context),
+                    onPaymentComplete = { }
+                )
+            }
+            composable(Screen.Receive.route) { ReceivePaymentScreen() }
             composable(Screen.Methods.route) { 
                 PaymentMethodsScreen(
                     onNavigateToPrivateEndpoints = {
@@ -153,9 +154,6 @@ fun PaykitDemoContent() {
             }
             composable(Screen.Contacts.route) { ContactsScreen() }
             composable(Screen.Receipts.route) { ReceiptsScreen() }
-            composable(Screen.Subscriptions.route) { SubscriptionsScreen() }
-            composable(Screen.AutoPay.route) { AutoPayScreen() }
-            composable(Screen.Requests.route) { PaymentRequestsScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
             
             // Privacy feature screens

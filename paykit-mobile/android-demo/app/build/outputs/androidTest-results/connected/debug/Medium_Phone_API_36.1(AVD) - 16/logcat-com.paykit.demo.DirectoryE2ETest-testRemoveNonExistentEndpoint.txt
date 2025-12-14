@@ -1,0 +1,2 @@
+12-14 14:20:13.935  9089  9104 I TestRunner: started: testRemoveNonExistentEndpoint(com.paykit.demo.DirectoryE2ETest)
+12-14 14:20:13.936  9089  9104 I TestRunner: finished: testRemoveNonExistentEndpoint(com.paykit.demo.DirectoryE2ETest)

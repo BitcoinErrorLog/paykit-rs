@@ -1,0 +1,2 @@
+12-14 14:20:14.040  9089  9104 I TestRunner: started: testProcessInvalidMessage(com.paykit.demo.ServerModeE2ETest)
+12-14 14:20:14.041  9089  9104 I TestRunner: finished: testProcessInvalidMessage(com.paykit.demo.ServerModeE2ETest)

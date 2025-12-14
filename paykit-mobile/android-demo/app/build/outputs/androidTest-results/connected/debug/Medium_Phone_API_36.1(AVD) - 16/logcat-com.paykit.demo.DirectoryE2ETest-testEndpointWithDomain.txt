@@ -1,0 +1,2 @@
+12-14 14:20:13.840  9089  9104 I TestRunner: started: testEndpointWithDomain(com.paykit.demo.DirectoryE2ETest)
+12-14 14:20:13.842  9089  9104 I TestRunner: finished: testEndpointWithDomain(com.paykit.demo.DirectoryE2ETest)

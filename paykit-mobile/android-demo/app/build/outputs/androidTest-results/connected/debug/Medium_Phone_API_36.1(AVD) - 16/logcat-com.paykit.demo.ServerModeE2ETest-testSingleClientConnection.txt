@@ -1,0 +1,2 @@
+12-14 14:20:14.048  9089  9104 I TestRunner: started: testSingleClientConnection(com.paykit.demo.ServerModeE2ETest)
+12-14 14:20:14.049  9089  9104 I TestRunner: finished: testSingleClientConnection(com.paykit.demo.ServerModeE2ETest)

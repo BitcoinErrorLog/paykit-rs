@@ -1,0 +1,2 @@
+12-14 14:20:13.939  9089  9104 I TestRunner: started: testEndpointWithIPv6(com.paykit.demo.DirectoryE2ETest)
+12-14 14:20:13.941  9089  9104 I TestRunner: finished: testEndpointWithIPv6(com.paykit.demo.DirectoryE2ETest)

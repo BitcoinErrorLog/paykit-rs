@@ -1,0 +1,2 @@
+12-14 14:20:13.989  9089  9104 I TestRunner: started: testNoiseKeyDerivation(com.paykit.demo.KeyManagementE2ETest)
+12-14 14:20:13.990  9089  9104 I TestRunner: finished: testNoiseKeyDerivation(com.paykit.demo.KeyManagementE2ETest)

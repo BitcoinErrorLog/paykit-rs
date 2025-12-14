@@ -1,0 +1,2 @@
+12-14 14:20:13.924  9089  9104 I TestRunner: started: testDiscoverMultipleEndpoints(com.paykit.demo.DirectoryE2ETest)
+12-14 14:20:13.927  9089  9104 I TestRunner: finished: testDiscoverMultipleEndpoints(com.paykit.demo.DirectoryE2ETest)

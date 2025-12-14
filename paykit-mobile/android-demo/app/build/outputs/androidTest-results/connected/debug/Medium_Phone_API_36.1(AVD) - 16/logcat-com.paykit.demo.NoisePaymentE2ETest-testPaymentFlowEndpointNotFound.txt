@@ -1,0 +1,2 @@
+12-14 14:20:14.014  9089  9104 I TestRunner: started: testPaymentFlowEndpointNotFound(com.paykit.demo.NoisePaymentE2ETest)
+12-14 14:20:14.015  9089  9104 I TestRunner: finished: testPaymentFlowEndpointNotFound(com.paykit.demo.NoisePaymentE2ETest)

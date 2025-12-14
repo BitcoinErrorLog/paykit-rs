@@ -95,7 +95,7 @@ fn test_parse_android_intent_action() {
 #[test]
 fn test_parse_android_intent_extras() {
     // Test Intent extras format
-    let extras = vec![
+    let extras = [
         ("deviceId", "test-device"),
         ("epoch", "0"),
         ("callbackPackage", "com.paykit.demo"),
@@ -111,7 +111,7 @@ fn test_parse_android_intent_extras() {
 #[test]
 fn test_parse_android_result_intent() {
     // Test result Intent format
-    let result_data = vec![("secret_key_hex", "abc123"), ("public_key_hex", "def456")];
+    let result_data = [("secret_key_hex", "abc123"), ("public_key_hex", "def456")];
 
     assert_eq!(result_data[0].0, "secret_key_hex");
     assert_eq!(result_data[0].1, "abc123");
@@ -172,7 +172,7 @@ fn test_fallback_when_ring_unavailable() {
 fn test_mock_service_key_derivation() {
     // Test that mock service can derive keys
     // This would test MockPubkyRingService functionality
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 // ============================================================================
@@ -202,14 +202,14 @@ fn test_error_code_mapping() {
 fn test_timeout_handling() {
     // Test timeout handling for key derivation requests
     // This would test that timeouts are handled gracefully
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[test]
 fn test_user_cancellation() {
     // Test handling of user cancellation
     // This would test that cancellation is detected and handled
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 // ============================================================================
@@ -225,19 +225,19 @@ fn test_full_integration_flow() {
     // 4. Use key for Noise protocol
 
     // This would be an integration test that exercises the full flow
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[test]
 fn test_key_caching() {
     // Test that derived keys are cached correctly
     // This would test NoiseKeyCache functionality
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[test]
 fn test_key_rotation() {
     // Test key rotation by incrementing epoch
     // This would test that new keys are derived when epoch changes
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }

@@ -2172,6 +2172,52 @@ input:checked + .toggle-slider:before {
     color: var(--text-dim);
 }
 
+/* Rotation Settings */
+.rotation-status {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.rotation-status h4 {
+    margin-bottom: 0.75rem;
+    color: var(--text);
+}
+
+.rotation-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.rotation-method-status {
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+}
+
+.rotation-method-status .method-name {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    text-transform: capitalize;
+}
+
+.rotation-method-status .method-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.rotation-method-status .method-stats span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .autopay-toggle-row {

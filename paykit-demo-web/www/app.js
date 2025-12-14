@@ -757,6 +757,9 @@ async function initiatePayment() {
         
         showNotification('Payment completed successfully!', 'success');
         
+        // Handle automatic rotation if enabled
+        await handleAutomaticRotation(method);
+        
         // Update dashboard
         await updateDashboard();
         
@@ -1741,6 +1744,253 @@ window.deletePeerLimit = deletePeerLimit;
 // Global auto-pay settings storage key
 const AUTOPAY_GLOBAL_SETTINGS_KEY = 'paykit_autopay_global_settings';
 const AUTOPAY_RECENT_PAYMENTS_KEY = 'paykit_autopay_recent_payments';
+
+// Rotation settings storage key
+const ROTATION_SETTINGS_KEY = 'paykit_rotation_settings';
+const ROTATION_STATE_KEY = 'paykit_rotation_state';
+
+// Load rotation settings from localStorage
+function loadRotationSettings() {
+    try {
+        const settingsJson = localStorage.getItem(ROTATION_SETTINGS_KEY);
+        if (settingsJson) {
+            return JSON.parse(settingsJson);
+        }
+    } catch (e) {
+        console.warn('Failed to load rotation settings:', e);
+    }
+    return {
+        autoRotateOnPayment: true,
+        defaultPolicy: 'on-use',
+        methodPolicies: {}
+    };
+}
+
+// Save rotation settings to localStorage
+function saveRotationSettings(settings) {
+    try {
+        localStorage.setItem(ROTATION_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Failed to save rotation settings:', e);
+    }
+}
+
+// Load rotation state (history)
+function loadRotationState() {
+    try {
+        const stateJson = localStorage.getItem(ROTATION_STATE_KEY);
+        if (stateJson) {
+            return JSON.parse(stateJson);
+        }
+    } catch (e) {
+        console.warn('Failed to load rotation state:', e);
+    }
+    return {};
+}
+
+// Save rotation state
+function saveRotationState(state) {
+    try {
+        localStorage.setItem(ROTATION_STATE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.warn('Failed to save rotation state:', e);
+    }
+}
+
+// Record a rotation event
+function recordRotationEvent(methodId, oldEndpoint, newEndpoint) {
+    const state = loadRotationState();
+    if (!state[methodId]) {
+        state[methodId] = {
+            rotations: 0,
+            lastRotated: null,
+            history: []
+        };
+    }
+    state[methodId].rotations++;
+    state[methodId].lastRotated = Date.now();
+    state[methodId].history.push({
+        timestamp: Date.now(),
+        oldEndpoint: oldEndpoint ? oldEndpoint.substring(0, 20) + '...' : 'N/A',
+        newEndpoint: newEndpoint ? newEndpoint.substring(0, 20) + '...' : 'N/A'
+    });
+    // Keep only last 10 rotations per method
+    if (state[methodId].history.length > 10) {
+        state[methodId].history = state[methodId].history.slice(-10);
+    }
+    saveRotationState(state);
+}
+
+// Update rotation settings UI
+function updateRotationSettingsUI() {
+    const settings = loadRotationSettings();
+    const state = loadRotationState();
+    
+    // Auto-rotate toggle
+    const autoRotateToggle = document.getElementById('auto-rotate-toggle');
+    if (autoRotateToggle) {
+        autoRotateToggle.checked = settings.autoRotateOnPayment;
+    }
+    
+    // Default policy
+    const defaultPolicySelect = document.getElementById('default-rotation-policy');
+    if (defaultPolicySelect) {
+        defaultPolicySelect.value = settings.defaultPolicy;
+    }
+    
+    // Rotation status
+    const statusContent = document.getElementById('rotation-status-content');
+    if (statusContent) {
+        const methods = Object.keys(state);
+        if (methods.length === 0) {
+            statusContent.innerHTML = '<p class="empty-state">No rotation history yet</p>';
+        } else {
+            let html = '<div class="rotation-status-list">';
+            for (const method of methods) {
+                const methodState = state[method];
+                const lastRotated = methodState.lastRotated 
+                    ? new Date(methodState.lastRotated).toLocaleString()
+                    : 'Never';
+                const policy = settings.methodPolicies[method] || 'default';
+                
+                html += `
+                    <div class="rotation-method-status">
+                        <div class="method-name">${method}</div>
+                        <div class="method-stats">
+                            <span>Rotations: ${methodState.rotations}</span>
+                            <span>Last: ${lastRotated}</span>
+                            <span>Policy: ${formatPolicy(policy)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            statusContent.innerHTML = html;
+        }
+    }
+}
+
+function formatPolicy(policy) {
+    if (policy === 'on-use') return 'Every use';
+    if (policy === 'manual') return 'Manual';
+    if (policy === 'default') return 'Default';
+    if (policy.startsWith('after:')) {
+        const count = policy.split(':')[1];
+        return `After ${count} uses`;
+    }
+    return policy;
+}
+
+// Initialize rotation settings UI
+function initRotationSettingsUI() {
+    // Save settings button
+    const saveBtn = document.getElementById('save-rotation-settings-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const settings = loadRotationSettings();
+            
+            const autoRotateToggle = document.getElementById('auto-rotate-toggle');
+            const defaultPolicySelect = document.getElementById('default-rotation-policy');
+            
+            if (autoRotateToggle) {
+                settings.autoRotateOnPayment = autoRotateToggle.checked;
+            }
+            if (defaultPolicySelect) {
+                settings.defaultPolicy = defaultPolicySelect.value;
+            }
+            
+            saveRotationSettings(settings);
+            showNotification('Rotation settings saved', 'success');
+            updateRotationSettingsUI();
+        });
+    }
+    
+    // Set method policy button
+    const setMethodBtn = document.getElementById('set-method-rotation-btn');
+    if (setMethodBtn) {
+        setMethodBtn.addEventListener('click', () => {
+            const settings = loadRotationSettings();
+            
+            const methodSelect = document.getElementById('rotation-method-select');
+            const policySelect = document.getElementById('rotation-method-policy');
+            
+            if (methodSelect && policySelect) {
+                const method = methodSelect.value;
+                const policy = policySelect.value;
+                
+                if (policy === 'default') {
+                    delete settings.methodPolicies[method];
+                } else {
+                    settings.methodPolicies[method] = policy;
+                }
+                
+                saveRotationSettings(settings);
+                showNotification(`Rotation policy for ${method} updated`, 'success');
+                updateRotationSettingsUI();
+            }
+        });
+    }
+    
+    // Initial UI update
+    updateRotationSettingsUI();
+}
+
+// Handle automatic rotation after payment
+async function handleAutomaticRotation(methodId) {
+    const settings = loadRotationSettings();
+    
+    if (!settings.autoRotateOnPayment) {
+        console.log('Auto-rotation disabled, skipping');
+        return;
+    }
+    
+    const policy = settings.methodPolicies[methodId] || settings.defaultPolicy;
+    
+    // Get or initialize method state
+    let state = loadRotationState();
+    if (!state[methodId]) {
+        state[methodId] = {
+            rotations: 0,
+            useCount: 0,
+            lastRotated: null,
+            history: []
+        };
+    }
+    
+    // Increment use count
+    state[methodId].useCount = (state[methodId].useCount || 0) + 1;
+    
+    // Check if rotation is needed based on policy
+    let needsRotation = false;
+    
+    if (policy === 'on-use') {
+        needsRotation = true;
+    } else if (policy === 'manual') {
+        needsRotation = false;
+    } else if (policy.startsWith('after:')) {
+        const threshold = parseInt(policy.split(':')[1], 10);
+        needsRotation = state[methodId].useCount >= threshold;
+    }
+    
+    if (needsRotation) {
+        console.log(`Rotating endpoint for method: ${methodId}`);
+        
+        // Record the rotation
+        recordRotationEvent(methodId, null, null);
+        
+        // Reset use count
+        state[methodId].useCount = 0;
+        saveRotationState(state);
+        
+        // Show notification to user
+        showNotification(`Endpoint rotated for ${methodId} (privacy mode)`, 'info');
+        
+        // Update the rotation UI
+        updateRotationSettingsUI();
+    } else {
+        saveRotationState(state);
+    }
+}
 
 // Load global auto-pay settings from localStorage
 function loadGlobalAutoPaySettings() {
@@ -3308,6 +3558,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }).finally(() => {
         // Initialize enhanced auto-pay tab after WASM is ready
         initEnhancedAutoPayTab();
+        // Initialize rotation settings UI
+        initRotationSettingsUI();
     });
     
     // Ensure tab navigation works even if initialization fails

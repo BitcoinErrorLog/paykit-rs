@@ -13,6 +13,9 @@ This crate provides UniFFI-based bindings that expose Paykit functionality to mo
 - **Interactive Protocol**: Message building and receipt storage for Noise channels
 - **Health Monitoring**: Check payment method availability
 - **QR Code Scanning**: Parse Paykit URIs from scanned QR codes
+- **Private Endpoints**: Per-peer dedicated addresses with secure storage
+- **Endpoint Rotation**: Configurable rotation policies for enhanced privacy
+- **Secure Storage**: Platform-native encryption (Keychain/EncryptedSharedPreferences)
 
 ## Building
 

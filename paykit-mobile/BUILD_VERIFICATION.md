@@ -9,8 +9,48 @@ across iOS and Android mobile platforms.
 |-----------|--------|-------|-------|
 | paykit-mobile (Rust) | ✅ Pass | 166/166 | All unit, integration, and new tests pass |
 | paykit-interactive | ✅ Pass | 58/58 | All tests pass including E2E server mode |
-| iOS Demo | ✅ Build | N/A | All Swift files compile successfully |
-| Android Demo | ✅ Build | N/A | All Kotlin files compile successfully |
+| iOS Demo | ✅ Build | N/A | Builds successfully for iOS Simulator |
+| Android Demo | ✅ Build | N/A | Builds successfully (assembleDebug) |
+
+## Build Verification (December 14, 2025)
+
+### iOS Build Verification ✅
+
+**Command**:
+```bash
+cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
+xcodebuild clean build \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+**Result**: `** BUILD SUCCEEDED **`
+
+**Environment**:
+- Xcode 26.1.1 (Build 17B100)
+- Target: iPhone 17 Pro Simulator (iOS 26.1)
+- Minimum Deployment: iOS 16.6
+
+### Android Build Verification ✅
+
+**Command**:
+```bash
+cd paykit-mobile/android-demo
+./gradlew clean assembleDebug
+```
+
+**Result**: `BUILD SUCCESSFUL in 20s` (34 actionable tasks)
+
+**Environment**:
+- Gradle 9.0-milestone-1
+- Native libraries: ARM64 and x86_64
+
+**Warnings (Non-blocking)**:
+- Deprecated icon usage (Send, ArrowBack, ReceiptLong)
+- Deprecated LinearProgressIndicator/Divider APIs
+- Some unused parameter warnings
 
 ## Test Results
 
@@ -59,15 +99,15 @@ test result: ok. 47 passed; 0 failed
 - ✅ `test_server_creates_confirmation_for_valid_request` - Confirmations work
 - ✅ `test_server_handles_multiple_client_requests` - Concurrent handling works
 
-## iOS Build Verification
+## iOS Build Details
 
 ### Build Command
 ```bash
-cd paykit-mobile/ios-demo/PaykitDemo
+cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
 xcodebuild build \
   -project PaykitDemo.xcodeproj \
   -scheme PaykitDemo \
-  -destination 'platform=iOS Simulator,name=iPhone 15'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
 ### Required Files Present
@@ -87,7 +127,7 @@ xcodebuild build \
 - ✅ `ViewModels/NoisePaymentViewModel.swift` - Payment state with server event callbacks
 - ✅ `Views/ReceivePaymentView.swift` - Server mode UI
 
-## Android Build Verification
+## Android Build Details
 
 ### Build Command
 ```bash
@@ -151,6 +191,7 @@ cd paykit-mobile/android-demo
 | SERVER_MODE_GUIDE.md | ✅ Created | Server mode implementation guide |
 | DIRECTORY_INTEGRATION.md | ✅ Created | Pubky directory integration guide |
 | BUILD_VERIFICATION.md | ✅ Updated | Build and test verification |
+| BUILD_STATUS_FOR_TESTING.md | ✅ Updated | Local testing status |
 | LOOSE_ENDS_RESOLUTION.md | ✅ Created | Loose ends resolution summary |
 
 ## Phase Implementation Status
@@ -171,13 +212,16 @@ cd paykit-mobile/android-demo
 - ✅ directory_service_real_transport.rs (14 tests)
 - ✅ e2e_server_mode.rs (4 tests)
 - ✅ pubky_ring_integration.rs (17 tests)
-- ✅ All tests compile and are ready for execution
+- ✅ All tests compile and pass
 
 ### Phase 4: Build and Verification ✅
 - ✅ All Rust components build successfully
 - ✅ All 166 paykit-mobile tests pass
 - ✅ All 58 paykit-interactive tests pass
+- ✅ iOS app builds successfully for simulator
+- ✅ Android app builds successfully (debug APK)
 - ✅ BUILD_VERIFICATION.md updated
+- ✅ BUILD_STATUS_FOR_TESTING.md updated
 
 ## Verification Date
 
@@ -216,4 +260,3 @@ cd paykit-mobile/android-demo
    - Measure handshake latency
    - Optimize message serialization
    - Profile memory usage
-

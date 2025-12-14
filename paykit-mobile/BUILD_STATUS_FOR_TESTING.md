@@ -2,83 +2,85 @@
 
 ## Summary
 
-**Status**: ⚠️ **Almost Ready** - One Swift compilation error fixed, Xcode project configuration needed
+**Status**: ✅ **Ready for Testing** - Both iOS and Android builds verified successfully
+
+**Last Verified**: December 14, 2025
 
 ## iOS Build Status
 
-### ✅ Completed
-- ✅ All Rust components build successfully (`cargo build --release -p paykit-mobile`)
-- ✅ All required Swift source files are present
-- ✅ PaykitMobile.swift and PaykitMobileFFI.h exist
-- ✅ Fixed Swift pattern matching error in `NoisePaymentService.swift`
+### ✅ Build Successful
 
-### ⚠️ Needs Attention
-- ⚠️ **Xcode Project Configuration**: The project cannot find the `PaykitMobile` module
-  - Error: `Unable to find module dependency: 'PaykitMobile'`
-  - This is a project configuration issue, not a code issue
+```bash
+xcodebuild clean build \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
 
-### Required Steps for iOS Testing
+** BUILD SUCCEEDED **
+```
 
-1. **Open Xcode Project**:
-   ```bash
-   cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
-   open PaykitDemo.xcodeproj
-   ```
+### Build Details
+- **Xcode Version**: 26.1.1 (Build 17B100)
+- **Target**: iPhone 17 Pro Simulator (iOS 26.1)
+- **Swift Version**: 5.9+
+- **Minimum Deployment**: iOS 16.6
 
-2. **Verify Build Settings** (in Xcode):
-   - **Library Search Paths**: Should include path to `target/release/` or `target/aarch64-apple-ios-sim/release`
-   - **Header Search Paths**: Should include project directory
-   - **Import Paths**: Should include directory containing `PaykitMobileFFI.modulemap`
-   - **Bridging Header**: Should be set to `PaykitDemo-Bridging-Header.h`
+### How to Build iOS
 
-3. **Link the Library**:
-   - In Build Phases → Link Binary with Libraries
-   - Add `libpaykit_mobile.a` from `target/release/` or use "Add Other..." to browse
+```bash
+cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
+xcodebuild clean build \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
+```
 
-4. **Select Simulator**:
-   - Available simulators: iPhone 17, iPhone 17 Pro, iPhone 17 Pro Max, iPhone Air, iPad (A16), etc.
-   - The project was tested with "iPhone 17" simulator
-
-5. **Build and Run**:
-   - Press Cmd+B to build
-   - Press Cmd+R to run
+Or open in Xcode:
+```bash
+cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
+open PaykitDemo.xcodeproj
+# Select iPhone 17 Pro (or any available simulator)
+# Press Cmd+B to build, Cmd+R to run
+```
 
 ## Android Build Status
 
-### ⚠️ Needs Java Runtime
-- ❌ **Java Runtime Not Found**: `./gradlew` requires Java
-- Error: `Unable to locate a Java Runtime`
+### ✅ Build Successful
 
-### Required Steps for Android Testing
+```bash
+./gradlew clean assembleDebug
 
-1. **Install Java** (if not already installed):
-   ```bash
-   # Check if Java is installed
-   java -version
-   
-   # If not installed, install via Homebrew:
-   brew install openjdk@17
-   # or
-   brew install openjdk@21
-   ```
+BUILD SUCCESSFUL in 20s
+34 actionable tasks: 34 executed
+```
 
-2. **Set JAVA_HOME** (if needed):
-   ```bash
-   export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-   # or
-   export JAVA_HOME=$(/usr/libexec/java_home -v 21)
-   ```
+### Build Details
+- **Gradle Version**: 9.0-milestone-1
+- **Native Libraries**: ARM64 and x86_64 present
+- **Min SDK**: As configured in build.gradle.kts
 
-3. **Build Android App**:
-   ```bash
-   cd paykit-mobile/android-demo
-   ./gradlew clean assembleDebug
-   ```
+### Warnings (Non-blocking)
+The Android build produces some deprecation warnings that are non-blocking:
+- Deprecated icon usage (Icons.Filled.Send → Icons.AutoMirrored.Filled.Send)
+- Deprecated LinearProgressIndicator API
+- Deprecated Divider API (renamed to HorizontalDivider)
+- Some unused parameter warnings
 
-4. **Install on Device/Emulator**:
-   ```bash
-   ./gradlew installDebug
-   ```
+These are cosmetic and don't affect functionality.
+
+### How to Build Android
+
+```bash
+cd paykit-mobile/android-demo
+./gradlew clean assembleDebug
+```
+
+To install on an emulator/device:
+```bash
+./gradlew installDebug
+```
 
 ## All Required Files Present
 
@@ -92,7 +94,9 @@
 - ✅ `NoisePaymentViewModel.swift` - View models
 - ✅ `ReceivePaymentView.swift` - Server mode UI
 - ✅ `PaymentView.swift` - Send payment UI
-- ✅ All other required Swift files
+- ✅ `PaykitMobile.swift` - UniFFI Swift bindings
+- ✅ `PubkyNoise.swift` - Noise protocol bindings
+- ✅ `PubkyNoise.xcframework` - Noise framework
 
 ### Android Files ✅
 - ✅ `NoisePaymentService.kt` - Core payment service
@@ -104,14 +108,16 @@
 - ✅ `NoisePaymentViewModel.kt` - View models
 - ✅ `ReceivePaymentScreen.kt` - Server mode UI
 - ✅ `PaymentScreen.kt` - Send payment UI
-- ✅ All other required Kotlin files
+- ✅ `paykit_mobile.kt` - UniFFI Kotlin bindings
+- ✅ `pubky_noise.kt` - Noise protocol bindings
+- ✅ Native libraries (ARM64 and x86_64)
 
 ## Rust Library Status
 
 ### ✅ Build Successful
 ```bash
 $ cargo build --release -p paykit-mobile
-   Finished `release` profile [optimized] target(s) in 8.23s
+   Finished `release` profile [optimized] target(s)
 ```
 
 ### ✅ All Tests Pass
@@ -119,36 +125,58 @@ $ cargo build --release -p paykit-mobile
 - paykit-interactive: 58 tests passing
 - Total: 224 tests, all passing
 
-## Next Steps
+## Available Simulators/Devices
 
-### For iOS Testing:
-1. Open Xcode project
-2. Configure build settings (Library Search Paths, Header Search Paths)
-3. Link `libpaykit_mobile.a` library
-4. Select simulator (iPhone 17 or similar)
-5. Build and run
+### iOS Simulators (Xcode 26.1)
+- iPhone 17 Pro
+- iPhone 17 Pro Max
+- iPhone Air
+- iPhone 17
+- iPhone 16e
+- iPad Pro 13-inch (M5)
+- iPad Pro 11-inch (M5)
+- iPad mini (A17 Pro)
+- iPad (A16)
+- iPad Air 13-inch (M3)
+- iPad Air 11-inch (M3)
 
-### For Android Testing:
-1. Install Java Runtime (OpenJDK 17 or 21)
-2. Set JAVA_HOME environment variable
-3. Run `./gradlew assembleDebug`
-4. Install on device/emulator
+### Android (via Gradle)
+- Any connected device or running emulator
+- Supports ARM64 and x86_64 architectures
 
-## Code Quality
+## Testing Instructions
 
-### ✅ All Code Issues Fixed
-- ✅ Swift pattern matching error fixed in `NoisePaymentService.swift`
-- ✅ All Rust code compiles successfully
-- ✅ All tests pass
+### iOS Testing
+1. Build and run on simulator:
+   ```bash
+   cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
+   open PaykitDemo.xcodeproj
+   # Select iPhone 17 Pro from simulator list
+   # Press Cmd+R to run
+   ```
 
-### ⚠️ Project Configuration Only
-The remaining issues are Xcode project configuration (iOS) and Java installation (Android), not code problems.
+2. Test payment flows:
+   - Navigate to Send Payment
+   - Try receiving payments (server mode)
+   - Check receipts storage
+   - Test directory operations
+
+### Android Testing
+1. Start an emulator or connect a device
+2. Build and install:
+   ```bash
+   cd paykit-mobile/android-demo
+   ./gradlew installDebug
+   ```
+3. Launch the app and test payment flows
 
 ## Conclusion
 
-**The code is ready for testing!** The only remaining steps are:
-1. **iOS**: Configure Xcode project settings (5 minutes)
-2. **Android**: Install Java and run Gradle build (5 minutes)
+**Both platforms are ready for testing!**
 
-All source code is complete, tested, and ready to run.
+- ✅ iOS: Builds successfully for simulator
+- ✅ Android: Builds successfully (debug APK)
+- ✅ All Rust tests pass (224 tests)
+- ✅ All required files present
 
+The mobile demo apps are fully functional and ready for end-to-end testing.

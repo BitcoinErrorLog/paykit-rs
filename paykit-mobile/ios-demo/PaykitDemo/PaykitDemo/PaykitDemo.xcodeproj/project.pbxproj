@@ -8,11 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		6C69626275696C6466696C65 /* libpaykit_mobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C69627061796B69745F6D6F62696C65 /* libpaykit_mobile.a */; };
+		7075626B796E6F697365 /* libpubky_noise.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C696270756279926E6F697365 /* libpubky_noise.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		5224F5F52EED89A600A4DEB4 /* PaykitDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PaykitDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C69627061796B69745F6D6F62696C65 /* libpaykit_mobile.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpaykit_mobile.a; path = "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/aarch64-apple-ios-sim/release/libpaykit_mobile.a"; sourceTree = "<absolute>"; };
+		6C696270756279926E6F697365 /* libpubky_noise.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpubky_noise.a; path = "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/aarch64-apple-ios-sim/release/libpubky_noise.a"; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -29,6 +31,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6C69626275696C6466696C65 /* libpaykit_mobile.a in Frameworks */,
+				7075626B796E6F697365 /* libpubky_noise.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -56,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				6C69627061796B69745F6D6F62696C65 /* libpaykit_mobile.a */,
+				6C696270756279926E6F697365 /* libpubky_noise.a */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";

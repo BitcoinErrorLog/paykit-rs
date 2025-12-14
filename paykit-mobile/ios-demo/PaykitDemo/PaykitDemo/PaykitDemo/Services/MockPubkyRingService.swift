@@ -75,7 +75,8 @@ public final class MockPubkyRingService {
     // MARK: - Properties
     
     private let keychain: KeychainStorage
-    private var cachedSeedHex: String?
+    /// Internal cached seed (made internal for server mode to access)
+    internal var cachedSeedHex: String?
     
     // MARK: - Initialization
     

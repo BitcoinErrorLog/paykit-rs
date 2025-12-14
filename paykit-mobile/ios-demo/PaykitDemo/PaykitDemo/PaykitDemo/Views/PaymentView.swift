@@ -9,6 +9,53 @@ import SwiftUI
 import Network
 import Combine
 
+// MARK: - Payment Flow Status
+
+/// Status of the payment flow (different from PaymentReceiptStatus)
+enum PaymentFlowStatus: Equatable {
+    case idle
+    case resolvingRecipient
+    case discoveringEndpoint
+    case connecting
+    case handshaking
+    case sendingRequest
+    case awaitingConfirmation
+    case completed
+    case failed(String)
+    case cancelled
+    
+    /// Progress as a percentage (0.0 - 1.0)
+    var progress: Double {
+        switch self {
+        case .idle: return 0.0
+        case .resolvingRecipient: return 0.15
+        case .discoveringEndpoint: return 0.30
+        case .connecting: return 0.45
+        case .handshaking: return 0.60
+        case .sendingRequest: return 0.75
+        case .awaitingConfirmation: return 0.90
+        case .completed: return 1.0
+        case .failed, .cancelled: return 0.0
+        }
+    }
+    
+    /// Human-readable description
+    var description: String {
+        switch self {
+        case .idle: return "Ready"
+        case .resolvingRecipient: return "Resolving recipient..."
+        case .discoveringEndpoint: return "Discovering endpoint..."
+        case .connecting: return "Connecting..."
+        case .handshaking: return "Handshaking..."
+        case .sendingRequest: return "Sending request..."
+        case .awaitingConfirmation: return "Awaiting confirmation..."
+        case .completed: return "Payment completed!"
+        case .failed(let msg): return "Failed: \(msg)"
+        case .cancelled: return "Cancelled"
+        }
+    }
+}
+
 // MARK: - Payment View
 
 struct PaymentView: View {
@@ -234,7 +281,7 @@ class PaymentViewModel: ObservableObject {
     @Published var description: String = ""
     
     // State
-    @Published var paymentStatus: PaymentReceiptStatus = .idle
+    @Published var paymentStatus: PaymentFlowStatus = .idle
     @Published var isProcessing: Bool = false
     @Published var showError: Bool = false
     @Published var showSuccess: Bool = false
@@ -338,14 +385,14 @@ class PaymentViewModel: ObservableObject {
             let receipt = try await receiveConfirmation()
             
             // Step 7: Store receipt and complete
-            confirmedReceiptId = receipt.receiptId
+            confirmedReceiptId = receipt.id
             paymentStatus = .completed
             showSuccess = true
             
         } catch PaymentError.cancelled {
             paymentStatus = .cancelled
         } catch {
-            paymentStatus = .failed
+            paymentStatus = .failed(error.localizedDescription)
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -384,7 +431,7 @@ class PaymentViewModel: ObservableObject {
         let contacts = storage.listContacts()
         
         if let contact = contacts.first(where: { $0.name.lowercased() == uri.lowercased() }) {
-            return contact.publicKey
+            return contact.publicKeyZ32
         }
         
         // Assume it's a raw public key
@@ -400,7 +447,7 @@ class PaymentViewModel: ObservableObject {
             
             // Look for Noise endpoint
             if let noiseEndpoint = try await directoryService.discoverNoiseEndpoint(recipientPubkey: payeePubkey) {
-                return "noise://\(noiseEndpoint.host):\(noiseEndpoint.port)@\(noiseEndpoint.serverPubkeyHex)"
+                return "noise://\(noiseEndpoint.host):\(noiseEndpoint.port)@\(noiseEndpoint.serverNoisePubkey)"
             }
             
             // If no Noise endpoint, check for other methods
@@ -513,8 +560,7 @@ class PaymentViewModel: ObservableObject {
         }
         
         // Create payment request using PaykitMessageBuilder
-        let builder = createMessageBuilder()
-        let requestJson = builder.createReceiptRequest(
+        let message = try createReceiptRequestMessage(
             receiptId: UUID().uuidString,
             payerPubkey: KeyManager().publicKeyZ32 ?? "",
             payeePubkey: payeePubkey,
@@ -522,21 +568,22 @@ class PaymentViewModel: ObservableObject {
             amount: amount,
             currency: currency
         )
+        let requestJson = message.payloadJson
         
         // Encrypt and send
         let plaintext = requestJson.data(using: .utf8)!
         let ciphertext = try manager.encrypt(sessionId: sessionId, plaintext: plaintext)
         
         // Send with length prefix
-        var message = Data()
+        var outboundData = Data()
         var length = UInt32(ciphertext.count).bigEndian
-        message.append(Data(bytes: &length, count: 4))
-        message.append(ciphertext)
+        outboundData.append(Data(bytes: &length, count: 4))
+        outboundData.append(ciphertext)
         
-        try await sendData(message)
+        try await sendData(outboundData)
     }
     
-    private func receiveConfirmation() async throws -> StoredReceipt {
+    private func receiveConfirmation() async throws -> PaymentReceipt {
         guard let sessionId = currentSessionId, let manager = noiseManager else {
             throw PaymentError.notConnected
         }
@@ -554,28 +601,26 @@ class PaymentViewModel: ObservableObject {
         
         // Parse response
         let builder = createMessageBuilder()
-        let parsed = builder.parseMessage(messageJson: json)
+        let parsed = try builder.parseMessage(messageJson: json)
         
-        guard parsed.messageType == .confirmReceipt,
-              let receiptJson = parsed.receiptRequest?.receiptId else {
+        guard case .confirmReceipt(let receiptRequest) = parsed else {
             throw PaymentError.invalidResponse
         }
         
         // Store receipt
         let keyManager = KeyManager()
         let storage = ReceiptStorage(identityName: keyManager.currentIdentityName ?? "default")
-        let receipt = StoredPaymentReceipt(
-            id: receiptJson,
-            payer: KeyManager().publicKeyZ32 ?? "",
-            payee: "",
-            amount: Int64(amount) ?? 0,
-            currency: currency,
-            method: paymentMethod,
-            timestamp: Date(),
-            status: .completed,
-            notes: description.isEmpty ? nil : description
+        var receipt = PaymentReceipt(
+            direction: .sent,
+            counterpartyKey: recipientUri,
+            counterpartyName: nil,
+            amountSats: UInt64(amount) ?? 0,
+            paymentMethod: paymentMethod,
+            memo: description.isEmpty ? nil : description
         )
-        storage.savePaymentReceipt(receipt)
+        receipt.status = .completed
+        receipt.completedAt = Date()
+        try? storage.addPaymentReceipt(receipt)
         
         return receipt
     }

@@ -75,7 +75,7 @@ mod types;
 #[cfg(feature = "file-storage")]
 pub mod encryption;
 
-pub use storage::{InMemoryStore, PrivateEndpointStore};
+pub use storage::{InMemoryStore, PrivateEndpointStore, StorageError, StorageResult};
 pub use types::{EndpointPolicy, ExpirationPolicy, PrivateEndpoint};
 
 #[cfg(feature = "file-storage")]

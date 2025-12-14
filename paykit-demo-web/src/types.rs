@@ -241,7 +241,6 @@ impl SignedSubscription {
 
 /// A cryptographic receipt for payment coordination
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaykitReceipt {
     pub receipt_id: String,
     pub payer: PublicKey,
@@ -315,9 +314,22 @@ impl PaykitReceipt {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum PaykitNoiseMessage {
+    /// @deprecated: Use OfferPrivateEndpoints for multiple methods
     OfferPrivateEndpoint {
         method_id: MethodId,
         endpoint: String,
+    },
+    /// Offer multiple private endpoints for different payment methods
+    OfferPrivateEndpoints {
+        methods: Vec<PrivateEndpointOffer>,
+    },
+    /// Accept specific private endpoints from an offer
+    AcceptPrivateEndpoints {
+        method_ids: Vec<MethodId>,
+    },
+    /// Decline private endpoint offer with a reason
+    DeclinePrivateEndpoints {
+        reason: String,
     },
     RequestReceipt {
         provisional_receipt: PaykitReceipt,
@@ -330,4 +342,12 @@ pub enum PaykitNoiseMessage {
         code: String,
         message: String,
     },
+}
+
+/// Private endpoint offer with optional expiration
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrivateEndpointOffer {
+    pub method_id: MethodId,
+    pub endpoint: String,
+    pub expires_at: Option<i64>,
 }

@@ -4,6 +4,7 @@
 
 use crate::identity::{Identity, WasmKeyProvider};
 use crate::types::{PaykitNoiseMessage, PaykitReceipt};
+use crate::utils;
 use crate::websocket_transport::WebSocketNoiseChannel;
 use paykit_lib::{MethodId, PublicKey};
 use pubky_noise::NoiseClient;
@@ -313,7 +314,8 @@ impl WasmReceiptStorage {
     /// let result = storage.verify_proof("receipt_123").await?;
     /// ```
     pub async fn verify_proof(&self, receipt_id: &str) -> Result<JsValue, JsValue> {
-        use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
+        use paykit_interactive::proof::{PaymentProof, ProofType};
+        #[cfg(feature = "http-executor")]
         use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
         
         // Get receipt
@@ -324,6 +326,7 @@ impl WasmReceiptStorage {
             .map_err(|e| utils::js_error(&format!("Failed to parse receipt: {}", e)))?;
         
         let proof_json = receipt.proof
+            .as_ref()
             .ok_or_else(|| utils::js_error("Receipt has no proof"))?;
         
         // Parse proof
@@ -331,10 +334,30 @@ impl WasmReceiptStorage {
             .map_err(|e| utils::js_error(&format!("Failed to parse proof: {}", e)))?;
         
         // Verify based on proof type
+        // For WASM, we can only do basic Lightning verification (SHA256 check)
+        // Bitcoin verification requires server-side Esplora API
         let verification_result = match proof.proof_type {
-            ProofType::LightningPreimage { .. } => {
-                let verifier = RealLightningProofVerifier::new();
-                verifier.verify(&proof).await
+            ProofType::LightningPreimage { preimage, payment_hash } => {
+                // Basic cryptographic verification: SHA256(preimage) == payment_hash
+                use sha2::{Digest, Sha256};
+                use hex;
+                
+                let preimage_bytes = hex::decode(preimage)
+                    .map_err(|e| utils::js_error(&format!("Invalid preimage hex: {}", e)))?;
+                let hash_bytes = hex::decode(payment_hash)
+                    .map_err(|e| utils::js_error(&format!("Invalid payment_hash hex: {}", e)))?;
+                
+                let mut hasher = Sha256::new();
+                hasher.update(&preimage_bytes);
+                let computed = hasher.finalize();
+                
+                if computed.as_slice() == hash_bytes.as_slice() {
+                    paykit_interactive::proof::VerificationResult::valid()
+                } else {
+                    paykit_interactive::proof::VerificationResult::invalid(vec![
+                        "Preimage hash mismatch".to_string()
+                    ])
+                }
             }
             ProofType::BitcoinTxid { .. } => {
                 // Bitcoin verification requires Esplora API - not available in WASM

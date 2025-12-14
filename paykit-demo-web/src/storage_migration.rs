@@ -1,9 +1,11 @@
 //! Migration from localStorage to WebCryptoStorage
 
-use paykit_lib::secure_storage::{SecureKeyStorage, StoreOptions, WebCryptoStorage};
 use wasm_bindgen::prelude::*;
 
 use crate::utils;
+
+#[cfg(target_arch = "wasm32")]
+use paykit_lib::secure_storage::{SecureKeyStorage, StoreOptions, WebCryptoStorage};
 
 /// Migration status
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -78,8 +80,12 @@ impl StorageMigration {
             .ok_or_else(|| utils::js_error("No localStorage"))?;
 
         // Create WebCryptoStorage
-        let secure_storage = WebCryptoStorage::new("paykit_secure");
-        secure_storage.set_password(password.as_bytes().to_vec());
+        #[cfg(target_arch = "wasm32")]
+        let secure_storage = {
+            let storage = WebCryptoStorage::new("paykit_secure");
+            storage.set_password(password.as_bytes().to_vec());
+            storage
+        };
 
         // Collect all Paykit keys from localStorage
         let length = storage
@@ -107,10 +113,42 @@ impl StorageMigration {
         for (key, value) in keys_to_migrate {
             // Store in secure storage
             let key_data = value.as_bytes();
+            #[cfg(target_arch = "wasm32")]
+            {
+                secure_storage
+                    .store(
+                        &key,
+                        key_data,
+                        StoreOptions {
+                            overwrite: true,
+                            require_auth: false,
+                            tags: vec![],
+                        },
+                    )
+                    .await
+                    .map_err(|e| utils::js_error(&format!("Failed to store {}: {:?}", key, e)))?;
+            }
+
+            migrated_count += 1;
+        }
+
+        // Clear localStorage after successful migration
+        #[cfg(target_arch = "wasm32")]
+        {
+            for (key, _) in &keys_to_migrate {
+                storage
+                    .remove_item(key)
+                    .map_err(|_| utils::js_error(&format!("Failed to remove {}", key)))?;
+            }
+        }
+
+        // Mark migration as complete in secure storage
+        #[cfg(target_arch = "wasm32")]
+        {
             secure_storage
                 .store(
-                    &key,
-                    key_data,
+                    "paykit_migration_complete",
+                    b"true",
                     StoreOptions {
                         overwrite: true,
                         require_auth: false,
@@ -118,31 +156,8 @@ impl StorageMigration {
                     },
                 )
                 .await
-                .map_err(|e| utils::js_error(&format!("Failed to store {}: {:?}", key, e)))?;
-
-            migrated_count += 1;
+                .map_err(|e| utils::js_error(&format!("Failed to mark migration complete: {:?}", e)))?;
         }
-
-        // Clear localStorage after successful migration
-        for (key, _) in keys_to_migrate {
-            storage
-                .remove_item(&key)
-                .map_err(|_| utils::js_error(&format!("Failed to remove {}", key)))?;
-        }
-
-        // Mark migration as complete in secure storage
-        secure_storage
-            .store(
-                "paykit_migration_complete",
-                b"true",
-                StoreOptions {
-                    overwrite: true,
-                    require_auth: false,
-                    tags: vec![],
-                },
-            )
-            .await
-            .map_err(|e| utils::js_error(&format!("Failed to mark migration complete: {:?}", e)))?;
 
         self.status = MigrationStatus::Completed;
         Ok(migrated_count)

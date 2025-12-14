@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 use paykit_demo_core::{DemoStorage, DirectoryClient};
 use paykit_interactive::{PaykitNoiseMessage, PaykitReceipt};
 use paykit_lib::MethodId;
+use paykit_lib::rotation::{EndpointRotationManager, RotationConfig};
+use paykit_lib::prelude::*;
 use std::str::FromStr;
 use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
 use pubky_noise::{DummyRing, NoiseClient};
@@ -274,27 +276,139 @@ async fn execute_noise_payment(
         return Ok(());
     }
 
-    // First, discover the payee's endpoints
-    let spinner = ui::spinner("Discovering recipient endpoints...");
-    let client = DirectoryClient::new("8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo");
-    let endpoints = client.query_methods(&payee_pk).await;
+    // Use smart checkout to resolve endpoint (private → public fallback)
+    let spinner = ui::spinner("Resolving payment endpoint...");
+    
+    // Create storage adapter for private endpoint lookup
+    let demo_storage = DemoStorage::new(storage_dir.join("data"));
+    let endpoint_manager = {
+        use paykit_lib::private_endpoints::{FileStore, PrivateEndpointManager, encryption};
+        let endpoints_dir = storage_dir.join("private_endpoints");
+        let key_path = storage_dir.join(".endpoint_key");
+
+        let key = if key_path.exists() {
+            // Load existing key
+            let key_bytes = std::fs::read(&key_path)
+                .context("Failed to read endpoint encryption key")?;
+            if key_bytes.len() != 32 {
+                anyhow::bail!("Invalid endpoint encryption key size");
+            }
+            let mut key = [0u8; 32];
+            key.copy_from_slice(&key_bytes);
+            key
+        } else {
+            // Generate new key and save
+            let key = encryption::generate_key();
+            std::fs::write(&key_path, &*key).context("Failed to save endpoint encryption key")?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600)).ok();
+            }
+            *key // Dereference Zeroizing
+        };
+
+        let store = FileStore::new_encrypted(&endpoints_dir, key)
+            .context("Failed to create encrypted endpoint store")?;
+        Some(PrivateEndpointManager::new(store))
+    };
+
+    struct PayStorageAdapter {
+        storage: DemoStorage,
+        endpoint_manager: Option<paykit_lib::private_endpoints::PrivateEndpointManager<paykit_lib::private_endpoints::FileStore>>,
+    }
+
+    #[async_trait::async_trait]
+    impl paykit_interactive::PaykitStorage for PayStorageAdapter {
+        async fn save_receipt(&self, _receipt: &paykit_interactive::PaykitReceipt) -> paykit_interactive::Result<()> {
+            Ok(()) // Not used in this context
+        }
+
+        async fn get_receipt(&self, _receipt_id: &str) -> paykit_interactive::Result<Option<paykit_interactive::PaykitReceipt>> {
+            Ok(None) // Not used in this context
+        }
+
+        async fn list_receipts(&self) -> paykit_interactive::Result<Vec<paykit_interactive::PaykitReceipt>> {
+            Ok(vec![]) // Not used in this context
+        }
+
+        async fn save_private_endpoint(
+            &self,
+            _peer: &paykit_lib::PublicKey,
+            _method: &paykit_lib::MethodId,
+            _endpoint: &str,
+        ) -> paykit_interactive::Result<()> {
+            Ok(()) // Not used in this context
+        }
+
+        async fn get_private_endpoint(
+            &self,
+            peer: &paykit_lib::PublicKey,
+            method: &paykit_lib::MethodId,
+        ) -> paykit_interactive::Result<Option<String>> {
+            if let Some(ref manager) = self.endpoint_manager {
+                if let Some(endpoint) = manager.get_endpoint(peer, method).await
+                    .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))? {
+                    return Ok(Some(endpoint.0));
+                }
+            }
+            Ok(None)
+        }
+
+        async fn list_private_endpoints_for_peer(
+            &self,
+            peer: &paykit_lib::PublicKey,
+        ) -> paykit_interactive::Result<Vec<(paykit_lib::MethodId, String)>> {
+            if let Some(ref manager) = self.endpoint_manager {
+                let endpoints = manager.get_endpoints_for_peer(peer).await
+                    .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))?;
+                return Ok(endpoints.into_iter().map(|e| (e.method_id, e.endpoint.0)).collect());
+            }
+            Ok(vec![])
+        }
+
+        async fn remove_private_endpoint(
+            &self,
+            _peer: &paykit_lib::PublicKey,
+            _method: &paykit_lib::MethodId,
+        ) -> paykit_interactive::Result<()> {
+            Ok(()) // Not used in this context
+        }
+    }
+
+    let storage_adapter = PayStorageAdapter {
+        storage: demo_storage,
+        endpoint_manager,
+    };
+
+    // Use smart checkout to resolve endpoint
+    let method_id = MethodId::new(method);
+    let storage = pubky::PublicStorage::new().context("Failed to create PublicStorage")?;
+    let transport = paykit_lib::PubkyUnauthenticatedTransport::new(storage);
+    
+    let checkout_result = paykit_interactive::smart_checkout_detailed(
+        &storage_adapter,
+        &transport,
+        &payee_pk,
+        &method_id,
+    )
+    .await
+    .context("Failed to resolve payment endpoint")?;
+
     spinner.finish_and_clear();
 
-    match endpoints {
-        Ok(methods) if !methods.is_empty() => {
-            ui::info(&format!("Found {} endpoint(s)", methods.len()));
-            for m in &methods {
-                ui::key_value(&format!("  {}", m.method_id), &m.endpoint);
-            }
-        }
-        Ok(_) => {
-            ui::warning("No public endpoints found for recipient");
-            ui::info("The recipient may use private endpoints via Noise negotiation");
-        }
-        Err(e) => {
+    match checkout_result {
+        Some(result) => {
+            let source = if result.is_private { "private" } else { "public" };
+            ui::info(&format!("Resolved {} endpoint (source: {})", method, source));
+            ui::key_value("  Endpoint", &result.endpoint.0);
             if verbose {
-                ui::warning(&format!("Directory query failed: {}", e));
+                ui::info(&format!("  Source: {} directory", source));
             }
+        }
+        None => {
+            ui::warning(&format!("No endpoint found for method: {}", method));
+            ui::info("The recipient may need to publish endpoints or share private endpoints");
         }
     }
 
@@ -422,6 +536,9 @@ async fn execute_noise_payment(
                 demo_storage.save_receipt(core_receipt)?;
 
                 ui::info("Receipt saved locally");
+
+                // Handle endpoint rotation after successful payment
+                handle_endpoint_rotation(storage_dir, &receipt.method_id, verbose).await?;
 
                 // Log payment
                 log_payment_attempt(
@@ -719,6 +836,91 @@ fn resolve_recipient(storage_dir: &Path, recipient: &str) -> Result<String> {
 
     // If not found, assume it's a public key
     Ok(format!("pubky://{}", recipient))
+}
+
+/// Handle endpoint rotation after payment execution
+async fn handle_endpoint_rotation(
+    storage_dir: &Path,
+    method_id: &MethodId,
+    verbose: bool,
+) -> Result<()> {
+    // Load or create rotation manager with default config
+    let rotation_config = load_rotation_config(storage_dir)?;
+    let registry = default_registry();
+    let rotation_manager = EndpointRotationManager::new(rotation_config, registry);
+    
+    // Record payment execution and check if rotation is needed
+    if let Some(new_endpoint) = rotation_manager.on_payment_executed(method_id).await {
+        ui::separator();
+        ui::info(&format!("Endpoint rotated for method: {}", method_id.0));
+        if verbose {
+            ui::key_value("New endpoint", &new_endpoint.0);
+        }
+        ui::warning("New endpoint generated but not yet published to directory");
+        ui::info("Run 'paykit-demo publish' to update the directory with the new endpoint");
+        
+        // Save rotation state for future reference
+        save_rotation_state(storage_dir, method_id, &new_endpoint)?;
+    } else if verbose {
+        ui::info(&format!("No rotation needed for method: {} (policy check)", method_id.0));
+    }
+    
+    Ok(())
+}
+
+/// Load rotation configuration from storage or return default
+fn load_rotation_config(storage_dir: &Path) -> Result<RotationConfig> {
+    let config_path = storage_dir.join("rotation_config.json");
+    
+    if config_path.exists() {
+        let config_str = std::fs::read_to_string(&config_path)
+            .context("Failed to read rotation config")?;
+        serde_json::from_str(&config_str)
+            .context("Failed to parse rotation config")
+    } else {
+        // Return default config (rotate on use for privacy)
+        Ok(RotationConfig::default())
+    }
+}
+
+/// Save rotation state for tracking
+fn save_rotation_state(
+    storage_dir: &Path,
+    method_id: &MethodId,
+    new_endpoint: &paykit_lib::EndpointData,
+) -> Result<()> {
+    let state_path = storage_dir.join("rotation_state.json");
+    
+    // Load existing state or create new
+    let mut state: serde_json::Value = if state_path.exists() {
+        let state_str = std::fs::read_to_string(&state_path)
+            .context("Failed to read rotation state")?;
+        serde_json::from_str(&state_str)
+            .unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    
+    // Update state for this method
+    let method_key = &method_id.0;
+    if !state[method_key].is_object() {
+        state[method_key] = serde_json::json!({
+            "last_rotated": chrono::Utc::now().timestamp(),
+            "rotations": 0,
+        });
+    }
+    
+    state[method_key]["last_rotated"] = serde_json::json!(chrono::Utc::now().timestamp());
+    state[method_key]["rotations"] = serde_json::json!(state[method_key]["rotations"].as_u64().unwrap_or(0) + 1);
+    state[method_key]["pending_endpoint"] = serde_json::json!(new_endpoint.0);
+    
+    // Save updated state
+    let state_str = serde_json::to_string_pretty(&state)
+        .context("Failed to serialize rotation state")?;
+    std::fs::write(&state_path, state_str)
+        .context("Failed to save rotation state")?;
+    
+    Ok(())
 }
 
 fn log_payment_attempt(

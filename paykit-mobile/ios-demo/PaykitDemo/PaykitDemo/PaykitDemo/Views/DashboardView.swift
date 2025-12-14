@@ -20,6 +20,15 @@ class DashboardViewModel: ObservableObject {
     @Published var hasPaymentMethods: Bool = false
     @Published var hasPublishedMethods: Bool = false
     
+    // Quick Access properties
+    @Published var autoPayEnabled: Bool = false
+    @Published var activeSubscriptions: Int = 0
+    @Published var pendingRequests: Int = 0
+    
+    // Directory and Health status
+    @Published var publishedMethodsCount: Int = 0
+    @Published var overallHealthStatus: String = "Unknown"
+    
     var isSetupComplete: Bool {
         contactCount > 0 && hasPaymentMethods && hasPublishedMethods
     }
@@ -40,6 +49,18 @@ class DashboardViewModel: ObservableObject {
     private var contactStorage: ContactStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
         return ContactStorage(identityName: identityName)
+    }
+    private var autoPayStorage: AutoPayStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return AutoPayStorage(identityName: identityName)
+    }
+    private var subscriptionStorage: SubscriptionStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return SubscriptionStorage(identityName: identityName)
+    }
+    private var paymentRequestStorage: PaymentRequestStorage {
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        return PaymentRequestStorage(identityName: identityName)
     }
     
     init() {
@@ -78,6 +99,17 @@ class DashboardViewModel: ObservableObject {
         let methods = methodStorage.listMethods()
         hasPaymentMethods = !methods.isEmpty
         hasPublishedMethods = methods.contains { $0.isPublic }
+        publishedMethodsCount = methods.filter { $0.isPublic }.count
+        
+        // Load Auto-Pay status
+        let autoPaySettings = autoPayStorage.getSettings()
+        autoPayEnabled = autoPaySettings.isEnabled
+        
+        // Load Subscriptions count
+        activeSubscriptions = subscriptionStorage.listSubscriptions().count
+        
+        // Load Payment Requests count
+        pendingRequests = paymentRequestStorage.pendingRequests().count
         
         isLoading = false
     }
@@ -88,6 +120,10 @@ struct DashboardView: View {
     @State private var showingQRScanner = false
     @State private var showingPaymentView = false
     @State private var showingReceiveView = false
+    @State private var showingAutoPay = false
+    @State private var showingSubscriptions = false
+    @State private var showingPaymentRequests = false
+    @State private var showingContactDiscovery = false
     
     var body: some View {
         NavigationView {
@@ -98,8 +134,14 @@ struct DashboardView: View {
                         setupChecklistSection
                     }
                     
+                    // Quick Access Section
+                    quickAccessSection
+                    
                     // Quick Stats
                     statsSection
+                    
+                    // Directory Status Section
+                    directoryStatusSection
                     
                     // Recent Activity
                     recentActivitySection
@@ -124,6 +166,18 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingReceiveView) {
                 ReceivePaymentView()
+            }
+            .sheet(isPresented: $showingAutoPay) {
+                AutoPayView()
+            }
+            .sheet(isPresented: $showingSubscriptions) {
+                SubscriptionsView()
+            }
+            .sheet(isPresented: $showingPaymentRequests) {
+                PaymentRequestsView()
+            }
+            .sheet(isPresented: $showingContactDiscovery) {
+                ContactDiscoveryView()
             }
         }
     }
@@ -269,6 +323,92 @@ struct DashboardView: View {
             .padding()
             .background(Color(.systemBackground))
             .cornerRadius(12)
+        }
+    }
+    
+    // MARK: - Quick Access Section
+    
+    private var quickAccessSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Access")
+                .font(.headline)
+                .foregroundColor(.secondary)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                QuickAccessCard(
+                    title: "Auto-Pay",
+                    icon: "arrow.clockwise.circle.fill",
+                    color: .orange,
+                    badge: viewModel.autoPayEnabled ? "ON" : nil,
+                    action: { showingAutoPay = true }
+                )
+                
+                QuickAccessCard(
+                    title: "Subscriptions",
+                    icon: "repeat.circle.fill",
+                    color: .blue,
+                    badge: viewModel.activeSubscriptions > 0 ? "\(viewModel.activeSubscriptions)" : nil,
+                    action: { showingSubscriptions = true }
+                )
+                
+                QuickAccessCard(
+                    title: "Requests",
+                    icon: "envelope.circle.fill",
+                    color: .purple,
+                    badge: viewModel.pendingRequests > 0 ? "\(viewModel.pendingRequests)" : nil,
+                    action: { showingPaymentRequests = true }
+                )
+                
+                QuickAccessCard(
+                    title: "Discover",
+                    icon: "person.2.badge.plus",
+                    color: .green,
+                    badge: nil,
+                    action: { showingContactDiscovery = true }
+                )
+            }
+        }
+    }
+    
+    // MARK: - Directory Status Section
+    
+    private var directoryStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Directory Status")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                NavigationLink(destination: PaymentMethodsView()) {
+                    Text("Manage")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                }
+            }
+            
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: viewModel.hasPublishedMethods ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(viewModel.hasPublishedMethods ? .green : .orange)
+                        Text(viewModel.hasPublishedMethods ? "Published" : "Not Published")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                    Text("\(viewModel.publishedMethodsCount) method(s) public")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         }
     }
     
@@ -454,6 +594,107 @@ struct SetupCheckItem: View {
             if isComplete {
                 Image(systemName: "checkmark")
                     .foregroundColor(.green)
+            }
+        }
+    }
+}
+
+struct QuickAccessCard: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let badge: String?
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: icon)
+                        .foregroundColor(color)
+                        .font(.title3)
+                    Spacer()
+                    if let badge = badge {
+                        Text(badge)
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(color)
+                            .cornerRadius(8)
+                    }
+                }
+                
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+        }
+    }
+}
+
+struct ContactDiscoveryView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState
+    @StateObject private var contactsViewModel = ContactsViewModel()
+    @State private var isDiscovering = false
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                if isDiscovering {
+                    ProgressView("Discovering contacts...")
+                        .padding()
+                } else if contactsViewModel.showingDiscoveryResults {
+                    DiscoveryResultsView(
+                        contacts: contactsViewModel.discoveredContacts,
+                        onImport: { contacts in
+                            contactsViewModel.importDiscovered(contacts)
+                            dismiss()
+                        },
+                        onDismiss: {
+                            contactsViewModel.showingDiscoveryResults = false
+                            dismiss()
+                        }
+                    )
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 60))
+                            .foregroundColor(.secondary)
+                        Text("Discover Contacts")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("Find contacts from Pubky follows directory")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Start Discovery") {
+                            Task {
+                                isDiscovering = true
+                                await contactsViewModel.discoverContacts(directoryService: appState.paykitClient.createDirectoryService())
+                                isDiscovering = false
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isDiscovering)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Discover Contacts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
             }
         }
     }

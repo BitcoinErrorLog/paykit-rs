@@ -84,6 +84,21 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "Rotation Settings",
         { Icon(Icons.Default.Refresh, contentDescription = "Rotation Settings") }
     )
+    object AutoPay : Screen(
+        "autopay",
+        "Auto-Pay",
+        { Icon(Icons.Default.Repeat, contentDescription = "Auto-Pay") }
+    )
+    object Subscriptions : Screen(
+        "subscriptions",
+        "Subscriptions",
+        { Icon(Icons.Default.Repeat, contentDescription = "Subscriptions") }
+    )
+    object PaymentRequests : Screen(
+        "payment_requests",
+        "Payment Requests",
+        { Icon(Icons.Default.Mail, contentDescription = "Payment Requests") }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,13 +143,31 @@ fun PaykitDemoContent() {
                 }
             }
         }
-    ) { innerPadding ->
+        ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Dashboard.route) {
+                DashboardScreen(
+                    onNavigateToAutoPay = {
+                        navController.navigate(Screen.AutoPay.route)
+                    },
+                    onNavigateToSubscriptions = {
+                        navController.navigate(Screen.Subscriptions.route)
+                    },
+                    onNavigateToPaymentRequests = {
+                        navController.navigate(Screen.PaymentRequests.route)
+                    },
+                    onNavigateToContactDiscovery = {
+                        navController.navigate(Screen.Contacts.route)
+                    },
+                    onNavigateToPaymentMethods = {
+                        navController.navigate(Screen.Methods.route)
+                    }
+                )
+            }
             composable(Screen.Send.route) { 
                 PaymentScreen(
                     keyManager = com.paykit.mobile.KeyManager(navController.context),
@@ -166,6 +199,17 @@ fun PaykitDemoContent() {
                 RotationSettingsScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
+            }
+            
+            // Feature screens
+            composable(Screen.AutoPay.route) {
+                AutoPayScreen()
+            }
+            composable(Screen.Subscriptions.route) {
+                SubscriptionsScreen()
+            }
+            composable(Screen.PaymentRequests.route) {
+                PaymentRequestsScreen()
             }
         }
     }

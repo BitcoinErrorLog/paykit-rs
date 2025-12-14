@@ -55,9 +55,14 @@ echo "2. Checking required files..."
 REQUIRED_FILES=(
     "paykit-mobile/src/executor_ffi.rs"
     "paykit-mobile/src/lib.rs"
+    "paykit-mobile/src/async_bridge.rs"
     "paykit-mobile/tests/executor_integration.rs"
+    "paykit-mobile/tests/payment_execution_e2e.rs"
+    "paykit-mobile/tests/backward_compat.rs"
     "paykit-mobile/API_REFERENCE.md"
+    "paykit-mobile/FFI_API_REFERENCE.md"
     "paykit-mobile/BITKIT_INTEGRATION_GUIDE.md"
+    "paykit-mobile/PRODUCTION_CHECKLIST.md"
     "paykit-mobile/CHANGELOG.md"
     "paykit-mobile/swift/BitkitExecutorExample.swift"
     "paykit-mobile/kotlin/BitkitExecutorExample.kt"
@@ -120,21 +125,47 @@ echo ""
 echo "7. Running integration tests..."
 INTEGRATION_TEST_COUNT=$(cargo test -p paykit-mobile --test executor_integration -- --list 2>&1 | grep -c "test$" || echo "0")
 if [ "$INTEGRATION_TEST_COUNT" -ge 25 ]; then
-    echo -e "${GREEN}✓${NC} Integration tests: $INTEGRATION_TEST_COUNT (expected: ≥25)"
+    echo -e "${GREEN}✓${NC} Executor integration tests: $INTEGRATION_TEST_COUNT (expected: ≥25)"
 else
-    echo -e "${YELLOW}⚠${NC} Integration tests: $INTEGRATION_TEST_COUNT (expected: ≥25)"
+    echo -e "${YELLOW}⚠${NC} Executor integration tests: $INTEGRATION_TEST_COUNT (expected: ≥25)"
     WARNINGS=$((WARNINGS + 1))
 fi
 
 if cargo test -p paykit-mobile --test executor_integration > /dev/null 2>&1; then
-    echo -e "${GREEN}✓${NC} All integration tests pass"
+    echo -e "${GREEN}✓${NC} Executor integration tests pass"
 else
-    echo -e "${RED}✗${NC} Some integration tests fail"
+    echo -e "${RED}✗${NC} Some executor integration tests fail"
     ERRORS=$((ERRORS + 1))
 fi
 echo ""
 
-echo "8. Documentation check..."
+echo "8. Running E2E tests..."
+E2E_TEST_COUNT=$(cargo test -p paykit-mobile --test payment_execution_e2e -- --list 2>&1 | grep -c "test$" || echo "0")
+if [ "$E2E_TEST_COUNT" -ge 10 ]; then
+    echo -e "${GREEN}✓${NC} E2E tests: $E2E_TEST_COUNT (expected: ≥10)"
+else
+    echo -e "${YELLOW}⚠${NC} E2E tests: $E2E_TEST_COUNT (expected: ≥10)"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+if cargo test -p paykit-mobile --test payment_execution_e2e > /dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} E2E tests pass"
+else
+    echo -e "${RED}✗${NC} Some E2E tests fail"
+    ERRORS=$((ERRORS + 1))
+fi
+echo ""
+
+echo "9. Running backward compatibility tests..."
+if cargo test -p paykit-mobile --test backward_compat > /dev/null 2>&1; then
+    echo -e "${GREEN}✓${NC} Backward compatibility tests pass"
+else
+    echo -e "${RED}✗${NC} Some backward compatibility tests fail"
+    ERRORS=$((ERRORS + 1))
+fi
+echo ""
+
+echo "10. Documentation check..."
 if cargo doc -p paykit-mobile --no-deps --all-features > /dev/null 2>&1; then
     echo -e "${GREEN}✓${NC} Documentation builds"
 else

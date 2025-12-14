@@ -395,16 +395,46 @@ do {
 
 ## Testing
 
-### Real Features
+### Running Tests
 
-Test the key management features:
+The iOS demo includes comprehensive E2E tests for all major features.
+
+**From Xcode**:
+1. Open `PaykitDemo.xcodeproj`
+2. Select the `PaykitDemo` scheme
+3. Press `Cmd+U` to run all tests
+4. Or select specific test classes/functions and run
+
+**From Command Line**:
+```bash
+cd PaykitDemo/PaykitDemo
+xcodebuild test \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+**Test Suites**:
+- `NoisePaymentE2ETests` - End-to-end Noise payment flows (send/receive)
+- `KeyManagementE2ETests` - Key generation, backup, restore operations
+- `DirectoryE2ETests` - Directory service operations (discover, publish)
+- `ServerModeE2ETests` - Server mode functionality (listening, accepting payments)
+
+**Test Infrastructure**:
+- Test target: `PaykitDemoTests`
+- Test helpers: `TestHelpers.swift` provides mock services and utilities
+- All tests use async/await for asynchronous operations
+
+### Manual Testing
+
+**Real Features**:
 1. Go to Settings → Key Management
 2. Generate a new keypair
 3. Export with password
 4. Delete and re-import
 
-### Demo Features
-
+**Demo Features**:
 The following use sample data for UI demonstration:
 - Subscriptions: Shows sample subscriptions
 - Auto-Pay: Shows sample rules and limits

@@ -11,7 +11,8 @@
 		7075626B796E6F697365 /* libpubky_noise.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C696270756279926E6F697365 /* libpubky_noise.a */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
+/* Begin PBXFileReference section */		8948A106FA094006860254E7 /* PaykitDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PaykitDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+
 		5224F5F52EED89A600A4DEB4 /* PaykitDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PaykitDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C69627061796B69745F6D6F62696C65 /* libpaykit_mobile.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpaykit_mobile.a; path = "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/aarch64-apple-ios-sim/release/libpaykit_mobile.a"; sourceTree = "<absolute>"; };
 		6C696270756279926E6F697365 /* libpubky_noise.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpubky_noise.a; path = "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/target/aarch64-apple-ios-sim/release/libpubky_noise.a"; sourceTree = "<absolute>"; };
@@ -21,6 +22,11 @@
 		5224F5F72EED89A600A4DEB4 /* PaykitDemo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PaykitDemo;
+			sourceTree = "<group>";
+		};
+		9B6793AE75E247E6A469A1BE /* PaykitDemoTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PaykitDemoTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,12 +41,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		056470547B3844B19B05058C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		5224F5EC2EED89A600A4DEB4 = {
 			isa = PBXGroup;
-			children = (
+			children = (				9B6793AE75E247E6A469A1BE /* PaykitDemoTests */,
+
 				5224F5F72EED89A600A4DEB4 /* PaykitDemo */,
 				5224F5F62EED89A600A4DEB4 /* Products */,
 				52B6545B2EED901200FDE4FF /* Recovered References */,
@@ -49,7 +63,8 @@
 		};
 		5224F5F62EED89A600A4DEB4 /* Products */ = {
 			isa = PBXGroup;
-			children = (
+			children = (				8948A106FA094006860254E7 /* PaykitDemoTests.xctest */,
+
 				5224F5F52EED89A600A4DEB4 /* PaykitDemo.app */,
 			);
 			name = Products;
@@ -89,7 +104,36 @@
 			productReference = 5224F5F52EED89A600A4DEB4 /* PaykitDemo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		6A6BAB17F73440CB946D63E5 /* PaykitDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 38F0BE8F42DD4B4696E6627E /* Build configuration list for PBXNativeTarget "PaykitDemoTests" */;
+			buildPhases = (
+				718133ACA5DB416A947B3B44 /* Sources */,
+				056470547B3844B19B05058C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F1BECCB82257417FB55FCD34 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9B6793AE75E247E6A469A1BE /* PaykitDemoTests */,
+			);
+			name = PaykitDemoTests;
+			packageProductDependencies = (
+			);
+			productName = PaykitDemoTests;
+			productReference = 8948A106FA094006860254E7 /* PaykitDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXTargetDependency section */
+		F1BECCB82257417FB55FCD34 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5224F5F42EED89A600A4DEB4 /* PaykitDemo */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		5224F5ED2EED89A600A4DEB4 /* Project object */ = {
@@ -98,7 +142,11 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2610;
 				LastUpgradeCheck = 2610;
-				TargetAttributes = {
+				TargetAttributes = {				6A6BAB17F73440CB946D63E5 = {
+					CreatedOnToolsVersion = 26.1.1;
+					TestTargetID = 5224F5F42EED89A600A4DEB4;
+				};
+
 					5224F5F42EED89A600A4DEB4 = {
 						CreatedOnToolsVersion = 26.1.1;
 					};
@@ -117,7 +165,8 @@
 			productRefGroup = 5224F5F62EED89A600A4DEB4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (
+			targets = (				6A6BAB17F73440CB946D63E5 /* PaykitDemoTests */,
+
 				5224F5F42EED89A600A4DEB4 /* PaykitDemo */,
 			);
 		};
@@ -135,6 +184,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		5224F5F12EED89A600A4DEB4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		718133ACA5DB416A947B3B44 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -374,6 +430,81 @@
 			buildConfigurations = (
 				5224F6012EED89A700A4DEB4 /* Debug */,
 				5224F6022EED89A700A4DEB4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		24D912162EAD406480F8BF6F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/PaykitDemo",
+					"$(inherited)",
+				);
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../../../target/aarch64-apple-ios-sim/release",
+					"$(inherited)",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = synonym.PaykitDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/PaykitDemo";
+				SWIFT_OBJC_BRIDGING_HEADER = "$(PROJECT_DIR)/PaykitDemo/PaykitDemo-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PaykitDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PaykitDemo";
+			};
+			name = Debug;
+		};
+		E8A3CBA410CF46CD8B41375E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/PaykitDemo",
+					"$(inherited)",
+				);
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../../../target/aarch64-apple-ios-sim/release",
+					"$(inherited)",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = synonym.PaykitDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/PaykitDemo";
+				SWIFT_OBJC_BRIDGING_HEADER = "$(PROJECT_DIR)/PaykitDemo/PaykitDemo-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PaykitDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PaykitDemo";
+			};
+			name = Release;
+		};
+		38F0BE8F42DD4B4696E6627E /* Build configuration list for PBXNativeTarget "PaykitDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				24D912162EAD406480F8BF6F /* Debug */,
+				E8A3CBA410CF46CD8B41375E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

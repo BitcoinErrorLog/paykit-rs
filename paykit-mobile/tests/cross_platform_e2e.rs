@@ -10,7 +10,6 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 // ============================================================================
 // Test Infrastructure
@@ -176,7 +175,12 @@ fn generate_pubkey(platform: Platform) -> String {
     format!(
         "z32_{}_{}",
         platform.name().to_lowercase(),
-        uuid::Uuid::new_v4().to_string().replace("-", "").chars().take(40).collect::<String>()
+        uuid::Uuid::new_v4()
+            .to_string()
+            .replace("-", "")
+            .chars()
+            .take(40)
+            .collect::<String>()
     )
 }
 

@@ -436,11 +436,21 @@ fn test_connection_status_enum_values() {
 
     for status in statuses {
         match status {
-            NoiseConnectionStatus::Disconnected => assert!(true),
-            NoiseConnectionStatus::Connecting => assert!(true),
-            NoiseConnectionStatus::Handshaking => assert!(true),
-            NoiseConnectionStatus::Connected => assert!(true),
-            NoiseConnectionStatus::Failed => assert!(true),
+            NoiseConnectionStatus::Disconnected => {
+                // Placeholder: verify disconnected state handling
+            }
+            NoiseConnectionStatus::Connecting => {
+                // Placeholder: verify connecting state handling
+            }
+            NoiseConnectionStatus::Handshaking => {
+                // Placeholder: verify handshaking state handling
+            }
+            NoiseConnectionStatus::Connected => {
+                // Placeholder: verify connected state handling
+            }
+            NoiseConnectionStatus::Failed => {
+                // Placeholder: verify failed state handling
+            }
         }
     }
 }
@@ -472,4 +482,3 @@ fn test_handshake_result_failure() {
     assert!(result.session_id.is_none());
     assert_eq!(result.error, Some("Connection refused".to_string()));
 }
-

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.paykit.demo.storage.StoredReceipt
@@ -44,6 +45,7 @@ fun ReceivePaymentScreen(
     val recentReceipts by viewModel.recentReceipts.collectAsState()
     
     var showQRDialog by remember { mutableStateOf(false) }
+    var isPublishedToDirectory by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         viewModel.loadRecentReceipts()
@@ -128,6 +130,7 @@ fun ReceivePaymentScreen(
                 onToggle = {
                     if (isListening) {
                         viewModel.stopListening()
+                        isPublishedToDirectory = false
                     } else {
                         viewModel.startListening()
                     }
@@ -145,6 +148,15 @@ fun ReceivePaymentScreen(
                     onCopy = { info ->
                         copyToClipboard(context, info)
                     }
+                )
+            }
+            
+            // Directory Publishing Card
+            item {
+                DirectoryPublishingCard(
+                    isPublished = isPublishedToDirectory,
+                    onToggle = { isPublishedToDirectory = it },
+                    onUnpublish = { isPublishedToDirectory = false }
                 )
             }
         }
@@ -191,6 +203,71 @@ fun ReceivePaymentScreen(
         } else {
             items(recentReceipts) { receipt ->
                 ReceiptCard(receipt = receipt)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectoryPublishingCard(
+    isPublished: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onUnpublish: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Publish to Directory",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Switch(
+                    checked = isPublished,
+                    onCheckedChange = onToggle
+                )
+            }
+            
+            if (isPublished) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Text(
+                        "Noise endpoint is publicly discoverable",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                
+                OutlinedButton(
+                    onClick = onUnpublish,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Unpublish")
+                }
+            } else {
+                Text(
+                    "Endpoint is not publicly discoverable",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

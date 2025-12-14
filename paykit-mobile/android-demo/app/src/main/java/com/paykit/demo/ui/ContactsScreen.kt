@@ -204,10 +204,28 @@ fun ContactsScreen() {
                     )
                     if (searchQuery.isEmpty()) {
                         Spacer(modifier = Modifier.height(24.dp))
-                        Button(onClick = { showAddDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Add Contact")
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = { discoverContacts() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Discover from Pubky")
+                            }
+                            
+                            OutlinedButton(
+                                onClick = { showAddDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Add Contact Manually")
+                            }
                         }
                     }
                 }

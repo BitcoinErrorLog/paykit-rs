@@ -16,6 +16,128 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                // Quick Access Section
+                Section {
+                    NavigationLink {
+                        AutoPayView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .foregroundColor(.orange)
+                                .frame(width: 30)
+                            Text("Auto-Pay")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        SubscriptionsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "repeat.circle.fill")
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
+                            Text("Subscriptions")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        PaymentRequestsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "envelope.circle.fill")
+                                .foregroundColor(.purple)
+                                .frame(width: 30)
+                            Text("Payment Requests")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        PaymentMethodsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "globe")
+                                .foregroundColor(.green)
+                                .frame(width: 30)
+                            Text("Directory Publishing")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        PrivateEndpointsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundColor(.green)
+                                .frame(width: 30)
+                            Text("Private Endpoints")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        RotationSettingsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
+                            Text("Rotation Settings")
+                        }
+                    }
+                } header: {
+                    Text("Quick Access")
+                }
+                
+                // Features Section
+                Section {
+                    NavigationLink {
+                        AutoPayView()
+                    } label: {
+                        Text("Auto-Pay")
+                    }
+                    
+                    NavigationLink {
+                        SubscriptionsView()
+                    } label: {
+                        Text("Subscriptions")
+                    }
+                    
+                    NavigationLink {
+                        PaymentRequestsView()
+                    } label: {
+                        Text("Payment Requests")
+                    }
+                } header: {
+                    Text("Features")
+                }
+                
+                // Privacy Section
+                Section {
+                    NavigationLink {
+                        PrivateEndpointsView()
+                    } label: {
+                        Text("Private Endpoints")
+                    }
+                    
+                    NavigationLink {
+                        RotationSettingsView()
+                    } label: {
+                        Text("Rotation Settings")
+                    }
+                } header: {
+                    Text("Privacy")
+                }
+                
+                // Network Section
+                Section {
+                    NavigationLink {
+                        PaymentMethodsView()
+                    } label: {
+                        Text("Directory Publishing")
+                    }
+                } header: {
+                    Text("Network")
+                }
+                
                 // App Info Section
                 Section {
                     HStack {

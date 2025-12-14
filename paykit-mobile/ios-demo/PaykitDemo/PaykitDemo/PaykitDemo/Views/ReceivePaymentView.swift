@@ -73,6 +73,42 @@ struct ReceivePaymentView: View {
                 }
             }
             
+            // Directory Publishing Toggle
+            if viewModel.isListening {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Publish to Directory")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Spacer()
+                        Toggle("", isOn: $viewModel.isPublishedToDirectory)
+                    }
+                    
+                    if viewModel.isPublishedToDirectory {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Noise endpoint is publicly discoverable")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Button("Unpublish") {
+                            viewModel.unpublishFromDirectory()
+                        }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Endpoint is not publicly discoverable")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+            }
+            
             // Control Button
             Button(action: {
                 Task {

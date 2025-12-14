@@ -39,8 +39,10 @@ fun PaymentScreen(
     var recipientUri by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("1000") }
     var currency by remember { mutableStateOf("SAT") }
+    var selectionStrategy by remember { mutableStateOf(com.paykit.mobile.SelectionStrategy.BALANCED) }
     var paymentMethod by remember { mutableStateOf("lightning") }
     var description by remember { mutableStateOf("") }
+    var methodHealth by remember { mutableStateOf<String?>(null) }
     
     var paymentStatus by remember { mutableStateOf(PaymentStatus.IDLE) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -183,8 +185,68 @@ fun PaymentScreen(
                     }
                 }
                 
+                // Selection Strategy
+                Text("Selection Strategy", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilterChip(
+                        selected = selectionStrategy == com.paykit.mobile.SelectionStrategy.BALANCED,
+                        onClick = { selectionStrategy = com.paykit.mobile.SelectionStrategy.BALANCED },
+                        label = { Text("Balanced") },
+                        enabled = !isProcessing,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = selectionStrategy == com.paykit.mobile.SelectionStrategy.COST_OPTIMIZED,
+                        onClick = { selectionStrategy = com.paykit.mobile.SelectionStrategy.COST_OPTIMIZED },
+                        label = { Text("Cost") },
+                        enabled = !isProcessing,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = selectionStrategy == com.paykit.mobile.SelectionStrategy.SPEED_OPTIMIZED,
+                        onClick = { selectionStrategy = com.paykit.mobile.SelectionStrategy.SPEED_OPTIMIZED },
+                        label = { Text("Speed") },
+                        enabled = !isProcessing,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = selectionStrategy == com.paykit.mobile.SelectionStrategy.PRIVACY_OPTIMIZED,
+                        onClick = { selectionStrategy = com.paykit.mobile.SelectionStrategy.PRIVACY_OPTIMIZED },
+                        label = { Text("Privacy") },
+                        enabled = !isProcessing,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                
                 // Payment Method
-                Text("Payment Method", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Payment Method", style = MaterialTheme.typography.labelLarge)
+                    methodHealth?.let {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color(0xFF4CAF50)
+                            )
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {

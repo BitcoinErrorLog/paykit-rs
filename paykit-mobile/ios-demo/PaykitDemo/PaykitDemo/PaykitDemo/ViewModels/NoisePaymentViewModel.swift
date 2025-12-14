@@ -360,6 +360,7 @@ public final class NoiseReceiveViewModel: ObservableObject {
     @Published public private(set) var pendingRequests: [PendingPaymentRequest] = []
     @Published public private(set) var recentReceipts: [PaymentReceipt] = []
     @Published public private(set) var activeConnections = 0
+    @Published public var isPublishedToDirectory: Bool = false
     
     // MARK: - Models
     
@@ -425,6 +426,9 @@ public final class NoiseReceiveViewModel: ObservableObject {
             noisePubkeyHex = status.noisePubkeyHex
             activeConnections = status.activeConnections
             
+            // Check if already published
+            checkPublishingStatus()
+            
         } catch {
             print("Failed to start server: \(error)")
         }
@@ -436,6 +440,22 @@ public final class NoiseReceiveViewModel: ObservableObject {
         isListening = false
         listeningPort = nil
         activeConnections = 0
+        if isPublishedToDirectory {
+            unpublishFromDirectory()
+        }
+    }
+    
+    /// Check publishing status
+    public func checkPublishingStatus() {
+        // Check if Noise endpoint is published to directory
+        // This would query the directory service
+        isPublishedToDirectory = false // Placeholder
+    }
+    
+    /// Unpublish from directory
+    public func unpublishFromDirectory() {
+        // Unpublish Noise endpoint from directory
+        isPublishedToDirectory = false
     }
     
     /// Refresh server status

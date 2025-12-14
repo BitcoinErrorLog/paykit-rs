@@ -8,10 +8,10 @@
 import SwiftUI
 
 class ReceiptsViewModel: ObservableObject {
-    @Published var receipts: [Receipt] = []
+    @Published var receipts: [PaymentReceipt] = []
     @Published var searchText = ""
     @Published var filterDirection: PaymentDirection?
-    @Published var filterStatus: PaymentStatus?
+    @Published var filterStatus: PaymentReceiptStatus?
     @Published var isLoading = true
     @Published var errorMessage: String?
     @Published var showError = false
@@ -19,7 +19,7 @@ class ReceiptsViewModel: ObservableObject {
     @Published var showExportSheet = false
     
     private let keyManager = KeyManager()
-    private var storage: ReceiptStorage {
+    private var storage: PaymentReceiptStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
         return ReceiptStorage(identityName: identityName)
     }
@@ -42,7 +42,7 @@ class ReceiptsViewModel: ObservableObject {
         NotificationCenter.default.removeObserver(self)
     }
     
-    var filteredReceipts: [Receipt] {
+    var filteredReceipts: [PaymentReceipt] {
         var result = receipts
         
         // Apply direction filter
@@ -85,7 +85,7 @@ class ReceiptsViewModel: ObservableObject {
     ///   - memo: Optional memo/note
     /// - Returns: The created receipt, or nil if failed
     @discardableResult
-    func createReceipt(
+    func createPaymentReceipt(
         client: PaykitClientWrapper,
         direction: PaymentDirection,
         counterpartyKey: String,
@@ -97,7 +97,7 @@ class ReceiptsViewModel: ObservableObject {
         let payer = direction == .sent ? "self" : counterpartyKey
         let payee = direction == .sent ? counterpartyKey : "self"
         
-        guard let ffiReceipt = client.createReceipt(
+        guard let ffiReceipt = client.createPaymentReceipt(
             payer: payer,
             payee: payee,
             methodId: methodId,
@@ -113,7 +113,7 @@ class ReceiptsViewModel: ObservableObject {
         localReceipt.memo = memo
         
         do {
-            try storage.addReceipt(localReceipt)
+            try storage.addPaymentReceipt(localReceipt)
             loadReceipts()
             return localReceipt
         } catch {
@@ -123,11 +123,11 @@ class ReceiptsViewModel: ObservableObject {
     }
     
     /// Mark a receipt as completed
-    func completeReceipt(id: String, txId: String? = nil) {
-        guard var receipt = storage.getReceipt(id: id) else { return }
+    func completePaymentReceipt(id: String, txId: String? = nil) {
+        guard var receipt = storage.getPaymentReceipt(id: id) else { return }
         receipt.complete(txId: txId)
         do {
-            try storage.updateReceipt(receipt)
+            try storage.updatePaymentReceipt(receipt)
             loadReceipts()
         } catch {
             showErrorMessage("Failed to update receipt: \(error.localizedDescription)")
@@ -135,20 +135,20 @@ class ReceiptsViewModel: ObservableObject {
     }
     
     /// Mark a receipt as failed
-    func failReceipt(id: String) {
-        guard var receipt = storage.getReceipt(id: id) else { return }
+    func failPaymentReceipt(id: String) {
+        guard var receipt = storage.getPaymentReceipt(id: id) else { return }
         receipt.fail()
         do {
-            try storage.updateReceipt(receipt)
+            try storage.updatePaymentReceipt(receipt)
             loadReceipts()
         } catch {
             showErrorMessage("Failed to update receipt: \(error.localizedDescription)")
         }
     }
     
-    func deleteReceipt(_ receipt: Receipt) {
+    func deletePaymentReceipt(_ receipt: PaymentReceipt) {
         do {
-            try storage.deleteReceipt(id: receipt.id)
+            try storage.deletePaymentReceipt(id: receipt.id)
             loadReceipts()
         } catch {
             showErrorMessage("Failed to delete receipt: \(error.localizedDescription)")
@@ -362,14 +362,14 @@ struct ReceiptsView: View {
     private var receiptsList: some View {
         List {
             ForEach(viewModel.filteredReceipts) { receipt in
-                NavigationLink(destination: ReceiptDetailView(receipt: receipt)) {
+                NavigationLink(destination: PaymentReceiptDetailView(receipt: receipt)) {
                     ReceiptRowView(receipt: receipt)
                 }
             }
             .onDelete { indexSet in
                 for index in indexSet {
                     let receipt = viewModel.filteredReceipts[index]
-                    viewModel.deleteReceipt(receipt)
+                    viewModel.deletePaymentReceipt(receipt)
                 }
             }
         }
@@ -411,7 +411,7 @@ struct ReceiptsView: View {
 // MARK: - Receipt Row View
 
 struct ReceiptRowView: View {
-    let receipt: Receipt
+    let receipt: PaymentReceipt
     
     var body: some View {
         HStack {
@@ -468,7 +468,7 @@ struct ReceiptRowView: View {
 // MARK: - Status Badge
 
 struct StatusBadge: View {
-    let status: PaymentStatus
+    let status: PaymentReceiptStatus
     
     var body: some View {
         Text(status.rawValue.capitalized)
@@ -519,7 +519,7 @@ struct FilterChip: View {
 // MARK: - Filter Sheet
 
 struct FilterSheet: View {
-    @ObservedObject var viewModel: ReceiptsViewModel
+    @ObservedObject var viewModel: PaymentReceiptsViewModel
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -536,11 +536,11 @@ struct FilterSheet: View {
                 
                 Section("Status") {
                     Picker("Status", selection: $viewModel.filterStatus) {
-                        Text("All").tag(PaymentStatus?.none)
-                        Text("Pending").tag(PaymentStatus?.some(.pending))
-                        Text("Completed").tag(PaymentStatus?.some(.completed))
-                        Text("Failed").tag(PaymentStatus?.some(.failed))
-                        Text("Refunded").tag(PaymentStatus?.some(.refunded))
+                        Text("All").tag(PaymentReceiptStatus?.none)
+                        Text("Pending").tag(PaymentReceiptStatus?.some(.pending))
+                        Text("Completed").tag(PaymentReceiptStatus?.some(.completed))
+                        Text("Failed").tag(PaymentReceiptStatus?.some(.failed))
+                        Text("Refunded").tag(PaymentReceiptStatus?.some(.refunded))
                     }
                     .pickerStyle(MenuPickerStyle())
                 }
@@ -568,7 +568,7 @@ struct FilterSheet: View {
 // MARK: - Receipt Detail View
 
 struct ReceiptDetailView: View {
-    let receipt: Receipt
+    let receipt: PaymentReceipt
     
     var body: some View {
         ScrollView {

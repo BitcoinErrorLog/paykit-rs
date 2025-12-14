@@ -15,7 +15,7 @@ class ReceiptStorage {
     private let maxReceiptsToKeep = 500  // Limit stored receipts
     
     // In-memory cache
-    private var receiptsCache: [Receipt]?
+    private var receiptsCache: [PaymentReceipt]?
     
     private var receiptsKey: String {
         "paykit.receipts.\(identityName)"
@@ -29,7 +29,7 @@ class ReceiptStorage {
     // MARK: - CRUD Operations
     
     /// Get all receipts (newest first)
-    func listReceipts() -> [Receipt] {
+    func listReceipts() -> [PaymentReceipt] {
         if let cached = receiptsCache {
             return cached
         }
@@ -38,7 +38,7 @@ class ReceiptStorage {
             guard let data = try keychain.retrieve(key: receiptsKey) else {
                 return []
             }
-            var receipts = try JSONDecoder().decode([Receipt].self, from: data)
+            var receipts = try JSONDecoder().decode([PaymentReceipt].self, from: data)
             // Sort by date, newest first
             receipts.sort { $0.createdAt > $1.createdAt }
             receiptsCache = receipts
@@ -50,27 +50,27 @@ class ReceiptStorage {
     }
     
     /// Get receipts filtered by status
-    func listReceipts(status: PaymentStatus) -> [Receipt] {
+    func listReceipts(status: PaymentReceiptStatus) -> [PaymentReceipt] {
         return listReceipts().filter { $0.status == status }
     }
     
     /// Get receipts filtered by direction
-    func listReceipts(direction: PaymentDirection) -> [Receipt] {
+    func listReceipts(direction: PaymentDirection) -> [PaymentReceipt] {
         return listReceipts().filter { $0.direction == direction }
     }
     
     /// Get recent receipts (limited count)
-    func recentReceipts(limit: Int = 10) -> [Receipt] {
+    func recentReceipts(limit: Int = 10) -> [PaymentReceipt] {
         return Array(listReceipts().prefix(limit))
     }
     
     /// Get a specific receipt
-    func getReceipt(id: String) -> Receipt? {
+    func getPaymentReceipt(id: String) -> PaymentReceipt? {
         return listReceipts().first { $0.id == id }
     }
     
     /// Add a new receipt
-    func addReceipt(_ receipt: Receipt) throws {
+    func addPaymentReceipt(_ receipt: PaymentReceipt) throws {
         var receipts = listReceipts()
         
         // Add new receipt at the beginning (newest first)
@@ -85,7 +85,7 @@ class ReceiptStorage {
     }
     
     /// Update an existing receipt
-    func updateReceipt(_ receipt: Receipt) throws {
+    func updatePaymentReceipt(_ receipt: PaymentReceipt) throws {
         var receipts = listReceipts()
         
         guard let index = receipts.firstIndex(where: { $0.id == receipt.id }) else {
@@ -97,14 +97,14 @@ class ReceiptStorage {
     }
     
     /// Delete a receipt
-    func deleteReceipt(id: String) throws {
+    func deletePaymentReceipt(id: String) throws {
         var receipts = listReceipts()
         receipts.removeAll { $0.id == id }
         try persistReceipts(receipts)
     }
     
     /// Search receipts by counterparty or memo
-    func searchReceipts(query: String) -> [Receipt] {
+    func searchReceipts(query: String) -> [PaymentReceipt] {
         let query = query.lowercased()
         return listReceipts().filter { receipt in
             receipt.displayName.lowercased().contains(query) ||
@@ -114,7 +114,7 @@ class ReceiptStorage {
     }
     
     /// Get receipts for a specific counterparty
-    func receiptsForCounterparty(publicKey: String) -> [Receipt] {
+    func receiptsForCounterparty(publicKey: String) -> [PaymentReceipt] {
         return listReceipts().filter { $0.counterpartyKey == publicKey }
     }
     
@@ -151,7 +151,7 @@ class ReceiptStorage {
     
     // MARK: - Private
     
-    private func persistReceipts(_ receipts: [Receipt]) throws {
+    private func persistReceipts(_ receipts: [PaymentReceipt]) throws {
         let data = try JSONEncoder().encode(receipts)
         try keychain.store(key: receiptsKey, data: data)
         receiptsCache = receipts

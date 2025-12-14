@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import Combine
 
 struct QRScannerView: View {
     @Environment(\.dismiss) private var dismiss
@@ -131,7 +132,7 @@ struct QRScannerView: View {
 class QRScannerViewModel: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate {
     @Published var scannedCode: String?
     
-    private var captureSession: AVCaptureSession?
+    var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
     
     func startScanning() {
@@ -223,7 +224,7 @@ class QRScannerViewController: UIViewController {
         guard let captureSession = scanner?.captureSession else { return }
         
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.videoGravity = AVLayerVideoGravity.resizeAspectFill
         self.previewLayer = previewLayer
         
         view.layer.addSublayer(previewLayer)

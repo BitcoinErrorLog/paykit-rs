@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKey
 import com.paykit.demo.model.PaymentDirection
 import com.paykit.demo.model.PaymentStatus
 import com.paykit.demo.model.Receipt
+import com.paykit.demo.storage.StoredReceipt
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -163,6 +164,33 @@ class ReceiptStorage(context: Context, private val identityName: String) {
      */
     fun clearAll() {
         persistReceipts(emptyList())
+    }
+    
+    /**
+     * Save a StoredReceipt (converts to Receipt and saves)
+     */
+    fun saveReceipt(stored: StoredReceipt) {
+        val receipt = Receipt(
+            id = stored.id,
+            direction = if (stored.payer == stored.payee) {
+                PaymentDirection.SENT // Determine based on context
+            } else {
+                PaymentDirection.SENT // Default, should be determined by caller
+            },
+            counterpartyKey = if (stored.payer == stored.payee) stored.payee else stored.payee,
+            amountSats = stored.amount,
+            paymentMethod = stored.method,
+            status = when (stored.status) {
+                "completed" -> PaymentStatus.COMPLETED
+                "pending" -> PaymentStatus.PENDING
+                "failed" -> PaymentStatus.FAILED
+                else -> PaymentStatus.PENDING
+            },
+            createdAt = stored.timestamp,
+            completedAt = if (stored.status == "completed") stored.timestamp else null,
+            memo = stored.notes
+        )
+        addReceipt(receipt)
     }
     
     // MARK: - Statistics

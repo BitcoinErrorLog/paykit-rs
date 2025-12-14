@@ -134,13 +134,21 @@ RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_calculate_proration(void*
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_check_health(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_noise_error_message(void*_Nonnull ptr, RustBuffer code, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_payment_request(void*_Nonnull ptr, RustBuffer from_pubkey, RustBuffer to_pubkey, int64_t amount_sats, RustBuffer currency, RustBuffer method_id, RustBuffer description, RustBuffer expires_in_secs, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_receipt(void*_Nonnull ptr, RustBuffer payer, RustBuffer payee, RustBuffer method_id, RustBuffer amount, RustBuffer currency, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_confirmation_message(void*_Nonnull ptr, RustBuffer receipt_id, RustBuffer payer_pubkey, RustBuffer payee_pubkey, RustBuffer method_id, RustBuffer amount, RustBuffer currency, RustBuffer signature, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_request_message(void*_Nonnull ptr, RustBuffer receipt_id, RustBuffer payer_pubkey, RustBuffer payee_pubkey, RustBuffer method_id, RustBuffer amount, RustBuffer currency, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_create_subscription(void*_Nonnull ptr, RustBuffer subscriber, RustBuffer provider, RustBuffer terms, RustCallStatus *_Nonnull out_status
 );
 uint32_t uniffi_paykit_mobile_fn_method_paykitclient_days_remaining_in_period(void*_Nonnull ptr, int64_t period_end, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer recipient_pubkey, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_extract_key_from_qr(void*_Nonnull ptr, RustBuffer scanned_data, RustCallStatus *_Nonnull out_status
 );
@@ -166,13 +174,19 @@ RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_list_contacts(void*_Nonnu
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_list_methods(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_parse_noise_payment_message(void*_Nonnull ptr, RustBuffer json, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_parse_receipt_metadata(void*_Nonnull ptr, RustBuffer metadata_json, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_parse_scanned_qr(void*_Nonnull ptr, RustBuffer scanned_data, RustCallStatus *_Nonnull out_status
 );
+void uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer host, uint16_t port, RustBuffer noise_pubkey, RustBuffer metadata, RustCallStatus *_Nonnull out_status
+);
 void uniffi_paykit_mobile_fn_method_paykitclient_publish_payment_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer method_id, RustBuffer endpoint_data, RustCallStatus *_Nonnull out_status
 );
 void uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer contact_pubkey, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_method_paykitclient_remove_noise_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustCallStatus *_Nonnull out_status
 );
 void uniffi_paykit_mobile_fn_method_paykitclient_remove_payment_endpoint_from_directory(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer method_id, RustCallStatus *_Nonnull out_status
 );
@@ -285,18 +299,33 @@ void*_Nonnull uniffi_paykit_mobile_fn_func_create_contact_cache(RustCallStatus *
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_directory_operations_async(RustCallStatus *_Nonnull out_status
     
 );
+RustBuffer uniffi_paykit_mobile_fn_func_create_error_message(RustBuffer code, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_interactive_manager(void*_Nonnull store, RustCallStatus *_Nonnull out_status
 );
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_message_builder(RustCallStatus *_Nonnull out_status
     
 );
+RustBuffer uniffi_paykit_mobile_fn_func_create_noise_server_config(RustCallStatus *_Nonnull out_status
+    
+);
+RustBuffer uniffi_paykit_mobile_fn_func_create_noise_server_config_with_port(uint16_t port, RustCallStatus *_Nonnull out_status
+);
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_paykit_client(RustCallStatus *_Nonnull out_status
     
+);
+RustBuffer uniffi_paykit_mobile_fn_func_create_private_endpoint_offer_message(RustBuffer method_id, RustBuffer endpoint, RustBuffer expires_in_secs, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_create_receipt_confirmation_message(RustBuffer receipt_id, RustBuffer payer_pubkey, RustBuffer payee_pubkey, RustBuffer method_id, RustBuffer amount, RustBuffer currency, RustBuffer signature, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_create_receipt_request_message(RustBuffer receipt_id, RustBuffer payer_pubkey, RustBuffer payee_pubkey, RustBuffer method_id, RustBuffer amount, RustBuffer currency, RustCallStatus *_Nonnull out_status
 );
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_receipt_store(RustCallStatus *_Nonnull out_status
     
 );
 RustBuffer uniffi_paykit_mobile_fn_func_derive_x25519_keypair(RustBuffer ed25519_secret_hex, RustBuffer device_id, uint32_t epoch, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_func_discover_noise_endpoint(void*_Nonnull transport, RustBuffer recipient_pubkey, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(RustBuffer secret_key_hex, RustCallStatus *_Nonnull out_status
 );
@@ -315,7 +344,13 @@ RustBuffer uniffi_paykit_mobile_fn_func_get_version(RustCallStatus *_Nonnull out
 );
 RustBuffer uniffi_paykit_mobile_fn_func_import_keypair_from_backup(RustBuffer backup, RustBuffer password, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_func_parse_payment_message(RustBuffer json, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_func_parse_public_key_z32(RustBuffer public_key_z32, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_func_publish_noise_endpoint(void*_Nonnull transport, RustBuffer host, uint16_t port, RustBuffer noise_pubkey, RustBuffer metadata, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_func_remove_noise_endpoint(void*_Nonnull transport, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_func_sign_message(RustBuffer secret_key_hex, RustBuffer message, RustCallStatus *_Nonnull out_status
 );
@@ -439,19 +474,40 @@ uint16_t uniffi_paykit_mobile_checksum_func_create_contact_cache(void
 uint16_t uniffi_paykit_mobile_checksum_func_create_directory_operations_async(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_func_create_error_message(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_func_create_interactive_manager(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_func_create_message_builder(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_func_create_noise_server_config(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_create_noise_server_config_with_port(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_func_create_paykit_client(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_create_private_endpoint_offer_message(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_create_receipt_confirmation_message(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_create_receipt_request_message(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_func_create_receipt_store(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_func_derive_x25519_keypair(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_discover_noise_endpoint(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret(void
@@ -475,7 +531,16 @@ uint16_t uniffi_paykit_mobile_checksum_func_get_version(void
 uint16_t uniffi_paykit_mobile_checksum_func_import_keypair_from_backup(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_func_parse_payment_message(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_func_parse_public_key_z32(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_publish_noise_endpoint(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_remove_noise_endpoint(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_func_sign_message(void
@@ -562,16 +627,28 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_calculate_proration(v
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_check_health(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_noise_error_message(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_payment_request(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_confirmation_message(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_request_message(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_create_subscription(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_period(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr(void
@@ -610,16 +687,25 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_list_contacts(void
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_list_methods(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_parse_noise_payment_message(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_parse_receipt_metadata(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_parse_scanned_qr(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoint(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_remove_noise_endpoint(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_remove_payment_endpoint_from_directory(void

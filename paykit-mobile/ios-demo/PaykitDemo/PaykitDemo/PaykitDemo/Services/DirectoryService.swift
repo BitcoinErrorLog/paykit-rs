@@ -100,7 +100,7 @@ public final class DirectoryService {
     
     // MARK: - Initialization
     
-    private init() {
+    public init() {
         // Initialize PaykitClient
         do {
             self.paykitClient = try PaykitClient()
@@ -161,9 +161,10 @@ public final class DirectoryService {
         }
         
         return NoiseEndpointInfo(
+            recipientPubkey: recipientPubkey,
             host: entry.host,
             port: entry.port,
-            serverPubkeyHex: entry.pubkey,
+            serverNoisePubkey: entry.pubkey,
             metadata: entry.metadata
         )
     }
@@ -186,7 +187,8 @@ public final class DirectoryService {
         }
         
         do {
-            return try await client.discoverNoiseEndpoint(transport: transport, recipientPubkey: recipientPubkey)
+            // Use PaykitClient method (no await needed, it's sync)
+            return try client.discoverNoiseEndpoint(transport: transport, recipientPubkey: recipientPubkey)
         } catch {
             throw DirectoryError.networkError(error.localizedDescription)
         }
@@ -218,7 +220,8 @@ public final class DirectoryService {
     /// Mock implementation
     private func publishNoiseEndpointMock(entry: DirectoryNoiseEndpoint) async throws {
         let keyManager = KeyManager()
-        guard let ownerPubkey = keyManager.publicKeyZ32 else {
+        let ownerPubkey = keyManager.publicKeyZ32
+        guard !ownerPubkey.isEmpty else {
             throw DirectoryError.notConfigured
         }
         
@@ -242,7 +245,8 @@ public final class DirectoryService {
         }
         
         do {
-            try await client.publishNoiseEndpoint(
+            // Use PaykitClient method (no await needed, it's sync)
+            try client.publishNoiseEndpoint(
                 transport: transport,
                 host: entry.host,
                 port: entry.port,
@@ -258,7 +262,8 @@ public final class DirectoryService {
     public func removeNoiseEndpoint() async throws {
         if useMockMode {
             let keyManager = KeyManager()
-            guard let ownerPubkey = keyManager.publicKeyZ32 else {
+            let ownerPubkey = keyManager.publicKeyZ32
+            guard !ownerPubkey.isEmpty else {
                 throw DirectoryError.notConfigured
             }
             mockStorage[ownerPubkey]?.removeValue(forKey: Self.noiseEndpointPath)
@@ -269,7 +274,8 @@ public final class DirectoryService {
             }
             
             do {
-                try await client.removeNoiseEndpoint(transport: transport)
+                // Use PaykitClient method (no await needed, it's sync)
+                try client.removeNoiseEndpoint(transport: transport)
             } catch {
                 throw DirectoryError.publishFailed(error.localizedDescription)
             }
@@ -322,9 +328,9 @@ public final class DirectoryService {
         }
         
         do {
-            let supportedPayments = try await client.fetchSupportedPayments(transport: transport, payeePubkey: recipientPubkey)
-            return supportedPayments.entries.map { entry in
-                DirectoryPaymentMethod(methodId: entry.methodId, endpoint: entry.endpoint)
+            let supportedPayments = try await client.fetchSupportedPayments(transport: transport, ownerPubkey: recipientPubkey)
+            return supportedPayments.map { method in
+                DirectoryPaymentMethod(methodId: method.methodId, endpoint: method.endpoint)
             }
         } catch {
             throw DirectoryError.networkError(error.localizedDescription)
@@ -337,7 +343,8 @@ public final class DirectoryService {
     public func publishPaymentMethod(methodId: String, endpoint: String) async throws {
         if useMockMode {
             let keyManager = KeyManager()
-            guard let ownerPubkey = keyManager.publicKeyZ32 else {
+            let ownerPubkey = keyManager.publicKeyZ32
+            guard !ownerPubkey.isEmpty else {
                 throw DirectoryError.notConfigured
             }
             
@@ -353,14 +360,11 @@ public final class DirectoryService {
                 throw DirectoryError.notConfigured
             }
             
-            let methodIdObj = MethodId(methodId: methodId)
-            let endpointData = EndpointData(data: endpoint)
-            
             do {
                 try await client.publishPaymentEndpoint(
                     transport: transport,
-                    method: methodIdObj,
-                    endpoint: endpointData
+                    methodId: methodId,
+                    endpointData: endpoint
                 )
             } catch {
                 throw DirectoryError.publishFailed(error.localizedDescription)
@@ -372,7 +376,8 @@ public final class DirectoryService {
     public func removePaymentMethod(methodId: String) async throws {
         if useMockMode {
             let keyManager = KeyManager()
-            guard let ownerPubkey = keyManager.publicKeyZ32 else {
+            let ownerPubkey = keyManager.publicKeyZ32
+            guard !ownerPubkey.isEmpty else {
                 throw DirectoryError.notConfigured
             }
             
@@ -384,10 +389,8 @@ public final class DirectoryService {
                 throw DirectoryError.notConfigured
             }
             
-            let methodIdObj = MethodId(methodId: methodId)
-            
             do {
-                try await client.removePaymentEndpoint(transport: transport, method: methodIdObj)
+                try await client.removePaymentEndpointFromDirectory(transport: transport, methodId: methodId)
             } catch {
                 throw DirectoryError.publishFailed(error.localizedDescription)
             }

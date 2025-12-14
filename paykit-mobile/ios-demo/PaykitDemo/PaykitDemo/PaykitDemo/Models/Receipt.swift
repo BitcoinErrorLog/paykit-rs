@@ -8,7 +8,7 @@
 import Foundation
 
 /// Payment status
-enum PaymentStatus: String, Codable {
+enum PaymentReceiptStatus: String, Codable {
     case pending = "pending"
     case completed = "completed"
     case failed = "failed"
@@ -21,8 +21,8 @@ enum PaymentDirection: String, Codable {
     case received = "received"
 }
 
-/// A payment receipt
-struct Receipt: Identifiable, Codable, Equatable {
+/// A payment receipt (local model, different from PaykitMobile.Receipt)
+struct PaymentReceipt: Identifiable, Codable, Equatable {
     /// Unique identifier
     let id: String
     /// Direction of payment
@@ -34,7 +34,7 @@ struct Receipt: Identifiable, Codable, Equatable {
     /// Amount in satoshis
     let amountSats: UInt64
     /// Payment status
-    var status: PaymentStatus
+    var status: PaymentReceiptStatus
     /// Payment method used
     let paymentMethod: String
     /// When the payment was initiated
@@ -89,7 +89,7 @@ struct Receipt: Identifiable, Codable, Equatable {
     }
 }
 
-extension Receipt {
+extension PaymentReceipt {
     /// Abbreviated counterparty key for display
     var abbreviatedCounterparty: String {
         guard counterpartyKey.count > 16 else { return counterpartyKey }
@@ -120,21 +120,21 @@ extension Receipt {
         }
     }
     
-    /// Create a local Receipt from an FFI Receipt
+    /// Create a local PaymentReceipt from an FFI Receipt
     /// - Parameters:
     ///   - ffiReceipt: The FFI Receipt from PaykitClient.createReceipt()
     ///   - direction: Whether this is a sent or received payment
     ///   - counterpartyName: Optional display name for the counterparty
-    /// - Returns: A local Receipt for storage
+    /// - Returns: A local PaymentReceipt for storage
     static func fromFFI(
-        _ ffiReceipt: PaykitMobile.Receipt,
+        _ ffiReceipt: Receipt,
         direction: PaymentDirection,
         counterpartyName: String? = nil
-    ) -> Receipt {
+    ) -> PaymentReceipt {
         let counterpartyKey = direction == .sent ? ffiReceipt.payee : ffiReceipt.payer
         let amountSats = UInt64(ffiReceipt.amount ?? "0") ?? 0
         
-        var receipt = Receipt(
+        var receipt = PaymentReceipt(
             direction: direction,
             counterpartyKey: counterpartyKey,
             counterpartyName: counterpartyName,
@@ -144,7 +144,7 @@ extension Receipt {
         
         // Override the auto-generated ID with the FFI receipt ID
         // We need to use a different initializer approach
-        return Receipt(
+        return PaymentReceipt(
             id: ffiReceipt.receiptId,
             direction: direction,
             counterpartyKey: counterpartyKey,
@@ -171,7 +171,7 @@ extension Receipt {
 
 // MARK: - Full Initializer for FFI Integration
 
-extension Receipt {
+extension PaymentReceipt {
     /// Full initializer for creating receipts with all fields
     init(
         id: String,
@@ -179,7 +179,7 @@ extension Receipt {
         counterpartyKey: String,
         counterpartyName: String?,
         amountSats: UInt64,
-        status: PaymentStatus,
+        status: PaymentReceiptStatus,
         paymentMethod: String,
         createdAt: Date,
         completedAt: Date?,

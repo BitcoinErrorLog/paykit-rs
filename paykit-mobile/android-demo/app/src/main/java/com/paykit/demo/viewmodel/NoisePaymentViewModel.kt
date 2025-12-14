@@ -12,6 +12,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.paykit.demo.services.*
+import com.paykit.demo.model.PaymentStatus
 import com.paykit.demo.storage.ContactStorage
 import com.paykit.demo.storage.ReceiptStorage
 import com.paykit.demo.storage.StoredReceipt
@@ -455,11 +456,32 @@ class NoiseReceiveViewModel(application: Application) : AndroidViewModel(applica
      * Load recent receipts
      */
     fun loadRecentReceipts() {
-        val identityName = keyManager.currentIdentityName.value ?: "default"
-        val storage = ReceiptStorage(context, identityName)
-        _recentReceipts.value = storage.listReceipts()
-            .sortedByDescending { it.timestamp }
-            .take(10)
+        viewModelScope.launch {
+            val identityName = keyManager.currentIdentityName.value ?: "default"
+            val storage = ReceiptStorage(context, identityName)
+            // Convert Receipt to StoredReceipt for compatibility
+            _recentReceipts.value = storage.listReceipts()
+                .map { receipt ->
+                    StoredReceipt(
+                        id = receipt.id,
+                        payer = receipt.counterpartyKey, // Approximate - should track payer/payee separately
+                        payee = receipt.counterpartyKey,
+                        amount = receipt.amountSats,
+                        currency = "SAT", // Default
+                        method = receipt.paymentMethod,
+                        timestamp = receipt.createdAt,
+                        status = when (receipt.status) {
+                            PaymentStatus.COMPLETED -> "completed"
+                            PaymentStatus.PENDING -> "pending"
+                            PaymentStatus.FAILED -> "failed"
+                            PaymentStatus.REFUNDED -> "refunded"
+                        },
+                        notes = receipt.memo
+                    )
+                }
+                .sortedByDescending { it.timestamp }
+                .take(10)
+        }
     }
     
     private fun getLocalIPAddress(): String? {

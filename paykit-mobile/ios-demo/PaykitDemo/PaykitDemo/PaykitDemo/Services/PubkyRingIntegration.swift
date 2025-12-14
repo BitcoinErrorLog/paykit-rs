@@ -295,7 +295,7 @@ public final class PubkyRingIntegration {
             try mock.initializeWithNewSeed()
         }
         
-        return try mock.deriveX25519Keypair(deviceId: deviceId, epoch: epoch)
+        return try mock.deriveKeypair(deviceId: deviceId, epoch: epoch)
     }
     
     private func mapErrorCode(_ code: String, message: String) -> PubkyRingError {

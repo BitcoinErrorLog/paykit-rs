@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import PaykitMobile
+// PaykitMobile types are in the same module, no import needed
 
 /// Manages persistent storage of private payment endpoints
 class PrivateEndpointStorage {

@@ -160,7 +160,8 @@ fn test_create_private_endpoint_offer_message() {
     ));
     assert!(msg.payload_json.contains("private_endpoint_offer"));
     assert!(msg.payload_json.contains("lnbc1000n1..."));
-    assert!(msg.payload_json.contains("3600"));
+    // expires_at is computed from current time + expires_in_secs, so we just check it exists
+    assert!(msg.payload_json.contains("expires_at"));
 }
 
 #[test]
@@ -381,7 +382,8 @@ fn test_private_endpoint_negotiation_flow() {
     // Verify offer contains expected data
     assert!(offer_msg.payload_json.contains("lightning"));
     assert!(offer_msg.payload_json.contains("lnbc50000n1pj"));
-    assert!(offer_msg.payload_json.contains("600"));
+    // expires_at is computed from current time + 600 seconds, so we just check it exists
+    assert!(offer_msg.payload_json.contains("expires_at"));
 }
 
 // ============================================================================

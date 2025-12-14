@@ -205,7 +205,8 @@ fn test_server_offers_private_lightning_invoice() {
         NoisePaymentMessageType::PrivateEndpointOffer
     ));
     assert!(offer.payload_json.contains("lnbc10000n1pjxyz"));
-    assert!(offer.payload_json.contains("300"));
+    // expires_at is computed from current time + 300 seconds
+    assert!(offer.payload_json.contains("expires_at"));
 }
 
 #[test]

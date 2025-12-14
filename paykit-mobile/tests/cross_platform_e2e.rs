@@ -596,3 +596,294 @@ fn test_high_volume_cross_platform_payments() {
     let receipts = service.get_all_receipts();
     assert_eq!(receipts.len(), 50);
 }
+
+// ============================================================================
+// Executor Cross-Platform Tests
+// ============================================================================
+
+use paykit_mobile::executor_ffi::*;
+use paykit_mobile::*;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// Mock executor that simulates platform-specific behavior
+struct CrossPlatformMockBitcoinExecutor {
+    platform: Platform,
+    call_count: AtomicU32,
+}
+
+impl CrossPlatformMockBitcoinExecutor {
+    fn new(platform: Platform) -> Self {
+        Self {
+            platform,
+            call_count: AtomicU32::new(0),
+        }
+    }
+}
+
+impl BitcoinExecutorFFI for CrossPlatformMockBitcoinExecutor {
+    fn send_to_address(
+        &self,
+        _address: String,
+        _amount_sats: u64,
+        _fee_rate: Option<f64>,
+    ) -> Result<BitcoinTxResultFFI> {
+        let count = self.call_count.fetch_add(1, Ordering::SeqCst);
+        Ok(BitcoinTxResultFFI {
+            txid: format!("xplat_{}_txid_{:08x}", self.platform.name().to_lowercase(), count),
+            raw_tx: None,
+            vout: 0,
+            fee_sats: 210,
+            fee_rate: 1.5,
+            block_height: None,
+            confirmations: 0,
+        })
+    }
+
+    fn estimate_fee(&self, _address: String, _amount_sats: u64, _target_blocks: u32) -> Result<u64> {
+        Ok(210)
+    }
+
+    fn get_transaction(&self, _txid: String) -> Result<Option<BitcoinTxResultFFI>> {
+        Ok(None)
+    }
+
+    fn verify_transaction(&self, _txid: String, _address: String, _amount_sats: u64) -> Result<bool> {
+        Ok(true)
+    }
+}
+
+/// Mock Lightning executor for cross-platform tests
+struct CrossPlatformMockLightningExecutor {
+    platform: Platform,
+    call_count: AtomicU32,
+}
+
+impl CrossPlatformMockLightningExecutor {
+    fn new(platform: Platform) -> Self {
+        Self {
+            platform,
+            call_count: AtomicU32::new(0),
+        }
+    }
+}
+
+impl LightningExecutorFFI for CrossPlatformMockLightningExecutor {
+    fn pay_invoice(
+        &self,
+        _invoice: String,
+        amount_msat: Option<u64>,
+        _max_fee_msat: Option<u64>,
+    ) -> Result<LightningPaymentResultFFI> {
+        let count = self.call_count.fetch_add(1, Ordering::SeqCst);
+        Ok(LightningPaymentResultFFI {
+            preimage: format!("{:064x}", count + 1),
+            payment_hash: format!("{:064x}", count + 1000),
+            amount_msat: amount_msat.unwrap_or(1000000),
+            fee_msat: 100,
+            hops: 3,
+            status: LightningPaymentStatusFFI::Succeeded,
+        })
+    }
+
+    fn decode_invoice(&self, _invoice: String) -> Result<DecodedInvoiceFFI> {
+        Ok(DecodedInvoiceFFI {
+            payment_hash: format!("{:064x}", 1),
+            amount_msat: Some(1000000),
+            description: Some(format!("{} invoice", self.platform.name())),
+            description_hash: None,
+            payee: format!("{:066x}", 1),
+            expiry: 3600,
+            timestamp: 1700000000,
+            expired: false,
+        })
+    }
+
+    fn estimate_fee(&self, _invoice: String) -> Result<u64> {
+        Ok(100)
+    }
+
+    fn get_payment(&self, _payment_hash: String) -> Result<Option<LightningPaymentResultFFI>> {
+        Ok(None)
+    }
+
+    fn verify_preimage(&self, preimage: String, payment_hash: String) -> bool {
+        preimage.len() == 64 && payment_hash.len() == 64
+    }
+}
+
+#[test]
+fn test_executor_cross_platform_ios_simulation() {
+    // Simulate iOS client with executor
+    let client = PaykitClient::new_with_network(
+        BitcoinNetworkFFI::Testnet,
+        LightningNetworkFFI::Testnet,
+    )
+    .unwrap();
+
+    client
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Ios)))
+        .unwrap();
+    client
+        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(Platform::Ios)))
+        .unwrap();
+
+    // Execute payment
+    let result = client
+        .execute_payment(
+            "onchain".to_string(),
+            "tb1qtest123456789012345678901234567890".to_string(),
+            50000,
+            None,
+        )
+        .unwrap();
+
+    assert!(result.success);
+    assert!(result.execution_data_json.contains("xplat_ios_txid"));
+}
+
+#[test]
+fn test_executor_cross_platform_android_simulation() {
+    // Simulate Android client with executor
+    let client = PaykitClient::new_with_network(
+        BitcoinNetworkFFI::Testnet,
+        LightningNetworkFFI::Testnet,
+    )
+    .unwrap();
+
+    client
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Android)))
+        .unwrap();
+    client
+        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(Platform::Android)))
+        .unwrap();
+
+    // Execute payment
+    let result = client
+        .execute_payment(
+            "onchain".to_string(),
+            "tb1qtest123456789012345678901234567890".to_string(),
+            50000,
+            None,
+        )
+        .unwrap();
+
+    assert!(result.success);
+    assert!(result.execution_data_json.contains("xplat_android_txid"));
+}
+
+#[test]
+fn test_executor_payment_proof_format_consistency() {
+    // Test that proof format is consistent across platforms
+    let ios_client = PaykitClient::new_with_network(
+        BitcoinNetworkFFI::Testnet,
+        LightningNetworkFFI::Testnet,
+    )
+    .unwrap();
+
+    let android_client = PaykitClient::new_with_network(
+        BitcoinNetworkFFI::Testnet,
+        LightningNetworkFFI::Testnet,
+    )
+    .unwrap();
+
+    ios_client
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Ios)))
+        .unwrap();
+    android_client
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Android)))
+        .unwrap();
+
+    // Execute payments
+    let ios_result = ios_client
+        .execute_payment(
+            "onchain".to_string(),
+            "tb1qtest123456789012345678901234567890".to_string(),
+            10000,
+            None,
+        )
+        .unwrap();
+
+    let android_result = android_client
+        .execute_payment(
+            "onchain".to_string(),
+            "tb1qtest123456789012345678901234567890".to_string(),
+            10000,
+            None,
+        )
+        .unwrap();
+
+    // Generate proofs
+    let ios_proof = ios_client
+        .generate_payment_proof("onchain".to_string(), ios_result.execution_data_json)
+        .unwrap();
+
+    let android_proof = android_client
+        .generate_payment_proof("onchain".to_string(), android_result.execution_data_json)
+        .unwrap();
+
+    // Proof types should be consistent
+    assert_eq!(ios_proof.proof_type, "bitcoin_txid");
+    assert_eq!(android_proof.proof_type, "bitcoin_txid");
+
+    // Both should have valid JSON
+    let ios_proof_data: serde_json::Value =
+        serde_json::from_str(&ios_proof.proof_data_json).unwrap();
+    let android_proof_data: serde_json::Value =
+        serde_json::from_str(&android_proof.proof_data_json).unwrap();
+
+    // Both should have txid field
+    assert!(ios_proof_data.get("txid").is_some() || ios_proof_data.get("Txid").is_some());
+    assert!(android_proof_data.get("txid").is_some() || android_proof_data.get("Txid").is_some());
+}
+
+#[test]
+fn test_executor_concurrent_cross_platform_payments() {
+    use std::thread;
+
+    // Simulate multiple platforms making payments concurrently
+    let mut handles = vec![];
+
+    for platform in [Platform::Ios, Platform::Android, Platform::Cli] {
+        handles.push(thread::spawn(move || {
+            let client = PaykitClient::new_with_network(
+                BitcoinNetworkFFI::Testnet,
+                LightningNetworkFFI::Testnet,
+            )
+            .unwrap();
+
+            client
+                .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(platform)))
+                .unwrap();
+
+            let result = client
+                .execute_payment(
+                    "onchain".to_string(),
+                    "tb1qtest123456789012345678901234567890".to_string(),
+                    10000,
+                    None,
+                )
+                .unwrap();
+
+            (platform, result)
+        }));
+    }
+
+    // Collect results
+    let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
+    // All should succeed
+    for (platform, result) in &results {
+        assert!(result.success, "{} payment should succeed", platform.name());
+    }
+
+    // Each should have platform-specific txid
+    assert!(results
+        .iter()
+        .any(|(p, r)| *p == Platform::Ios && r.execution_data_json.contains("xplat_ios")));
+    assert!(results
+        .iter()
+        .any(|(p, r)| *p == Platform::Android && r.execution_data_json.contains("xplat_android")));
+    assert!(results
+        .iter()
+        .any(|(p, r)| *p == Platform::Cli && r.execution_data_json.contains("xplat_cli")));
+}

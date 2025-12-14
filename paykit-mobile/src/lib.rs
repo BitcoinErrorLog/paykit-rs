@@ -55,7 +55,7 @@ pub use executor_ffi::{
     LightningPaymentResultFFI, LightningPaymentStatusFFI,
 };
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 // UniFFI scaffolding
 uniffi::setup_scaffolding!();
@@ -325,6 +325,46 @@ pub struct PaymentStatusInfo {
 }
 
 // ============================================================================
+// Payment Execution Types
+// ============================================================================
+
+/// Result of a payment execution.
+///
+/// Returned by `PaykitClient::execute_payment()` after attempting to
+/// send a payment via the registered wallet executor.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PaymentExecutionResult {
+    /// Unique execution ID.
+    pub execution_id: String,
+    /// Payment method used.
+    pub method_id: String,
+    /// Payment destination.
+    pub endpoint: String,
+    /// Amount sent in satoshis.
+    pub amount_sats: u64,
+    /// Whether the payment succeeded.
+    pub success: bool,
+    /// Unix timestamp of execution.
+    pub executed_at: i64,
+    /// Execution details as JSON (contains txid, preimage, fees, etc.).
+    pub execution_data_json: String,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Result of generating a payment proof.
+///
+/// Returned by `PaykitClient::generate_payment_proof()` after
+/// extracting proof data from a successful payment execution.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PaymentProofResult {
+    /// Type of proof ("bitcoin_txid", "lightning_preimage", "custom").
+    pub proof_type: String,
+    /// Proof data as JSON.
+    pub proof_data_json: String,
+}
+
+// ============================================================================
 // Health Types
 // ============================================================================
 
@@ -522,36 +562,81 @@ pub struct PrivateEndpoint {
 /// Main Paykit client for mobile applications.
 #[derive(uniffi::Object)]
 pub struct PaykitClient {
-    /// Plugin registry.
-    registry: paykit_lib::methods::PaymentMethodRegistry,
+    /// Plugin registry (thread-safe for concurrent access).
+    registry: Arc<std::sync::RwLock<paykit_lib::methods::PaymentMethodRegistry>>,
     /// Health monitor.
     health_monitor: Arc<paykit_lib::health::HealthMonitor>,
     /// Status tracker.
     status_tracker: Arc<paykit_interactive::PaymentStatusTracker>,
     /// Tokio runtime for async operations.
     runtime: tokio::runtime::Runtime,
+    /// Configured Bitcoin network.
+    bitcoin_network: executor_ffi::BitcoinNetworkFFI,
+    /// Configured Lightning network.
+    lightning_network: executor_ffi::LightningNetworkFFI,
 }
 
 #[uniffi::export]
 impl PaykitClient {
-    /// Create a new Paykit client.
+    /// Create a new Paykit client with default (mainnet) network configuration.
     #[uniffi::constructor]
     pub fn new() -> Result<Arc<Self>> {
+        Self::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Mainnet,
+            executor_ffi::LightningNetworkFFI::Mainnet,
+        )
+    }
+
+    /// Create a new Paykit client with specific network configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `bitcoin_network` - Bitcoin network to use (Mainnet, Testnet, or Regtest)
+    /// * `lightning_network` - Lightning network to use (Mainnet, Testnet, or Regtest)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // For testnet development
+    /// let client = PaykitClient::new_with_network(
+    ///     BitcoinNetworkFFI::Testnet,
+    ///     LightningNetworkFFI::Testnet,
+    /// )?;
+    /// ```
+    #[uniffi::constructor]
+    pub fn new_with_network(
+        bitcoin_network: executor_ffi::BitcoinNetworkFFI,
+        lightning_network: executor_ffi::LightningNetworkFFI,
+    ) -> Result<Arc<Self>> {
         let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
             message: e.to_string(),
         })?;
 
         Ok(Arc::new(Self {
-            registry: paykit_lib::methods::default_registry(),
+            registry: Arc::new(RwLock::new(paykit_lib::methods::default_registry())),
             health_monitor: Arc::new(paykit_lib::health::HealthMonitor::with_defaults()),
             status_tracker: Arc::new(paykit_interactive::PaymentStatusTracker::new()),
             runtime,
+            bitcoin_network,
+            lightning_network,
         }))
+    }
+
+    /// Get the configured Bitcoin network.
+    pub fn bitcoin_network(&self) -> executor_ffi::BitcoinNetworkFFI {
+        self.bitcoin_network
+    }
+
+    /// Get the configured Lightning network.
+    pub fn lightning_network(&self) -> executor_ffi::LightningNetworkFFI {
+        self.lightning_network
     }
 
     /// Get the list of registered payment methods.
     pub fn list_methods(&self) -> Vec<String> {
         self.registry
+            .read()
+            .unwrap()
             .list_methods()
             .into_iter()
             .map(|m| m.0)
@@ -565,6 +650,8 @@ impl PaykitClient {
 
         let plugin = self
             .registry
+            .read()
+            .unwrap()
             .get(&method)
             .ok_or(PaykitMobileError::NotFound {
                 message: format!("Method not found: {}", method.0),
@@ -620,7 +707,7 @@ impl PaykitClient {
             })
             .unwrap_or_default();
 
-        let selector = PaymentMethodSelector::new(self.registry.clone());
+        let selector = PaymentMethodSelector::new(self.registry.read().unwrap().clone());
         let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
             PaykitMobileError::Validation {
                 message: e.to_string(),
@@ -720,6 +807,284 @@ impl PaykitClient {
                 error: info.error,
             })
             .collect()
+    }
+
+    // ========================================================================
+    // Executor Registration Methods (Bitkit Integration)
+    // ========================================================================
+
+    /// Register a Bitcoin executor for on-chain payments.
+    ///
+    /// This allows Bitkit or other wallets to provide their wallet implementation
+    /// as the executor for on-chain Bitcoin payments. The executor handles:
+    /// - Sending payments to addresses
+    /// - Estimating fees
+    /// - Verifying transactions
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - Implementation of `BitcoinExecutorFFI` from the wallet
+    ///
+    /// # Example (Swift)
+    ///
+    /// ```swift
+    /// class BitkitBitcoinExecutor: BitcoinExecutorFFI {
+    ///     func sendToAddress(address: String, amountSats: UInt64, feeRate: Double?) throws -> BitcoinTxResultFFI {
+    ///         // Implement using Bitkit wallet
+    ///     }
+    ///     // ... other methods
+    /// }
+    ///
+    /// let client = PaykitClient.newWithNetwork(
+    ///     bitcoinNetwork: .mainnet,
+    ///     lightningNetwork: .mainnet
+    /// )
+    /// try client.registerBitcoinExecutor(executor: BitkitBitcoinExecutor())
+    /// ```
+    pub fn register_bitcoin_executor(
+        &self,
+        executor: Box<dyn executor_ffi::BitcoinExecutorFFI>,
+    ) -> Result<()> {
+        // Create a bridge that wraps the FFI executor
+        let bridge = executor_ffi::BitcoinExecutorBridge::new(Arc::from(executor));
+
+        // Create a new OnchainPlugin with the executor and network
+        let plugin = paykit_lib::methods::OnchainPlugin::with_network_and_executor(
+            self.bitcoin_network.into(),
+            Arc::new(bridge),
+        );
+
+        // Register the plugin (replaces the default one)
+        self.registry.write().unwrap().register(Box::new(plugin));
+
+        Ok(())
+    }
+
+    /// Register a Lightning executor for Lightning Network payments.
+    ///
+    /// This allows Bitkit or other wallets to provide their Lightning node
+    /// implementation as the executor for Lightning payments. The executor handles:
+    /// - Paying BOLT11 invoices
+    /// - Decoding invoices
+    /// - Estimating routing fees
+    /// - Verifying payments via preimage
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - Implementation of `LightningExecutorFFI` from the wallet
+    ///
+    /// # Example (Swift)
+    ///
+    /// ```swift
+    /// class BitkitLightningExecutor: LightningExecutorFFI {
+    ///     func payInvoice(invoice: String, amountMsat: UInt64?, maxFeeMsat: UInt64?) throws -> LightningPaymentResultFFI {
+    ///         // Implement using Bitkit Lightning node
+    ///     }
+    ///     // ... other methods
+    /// }
+    ///
+    /// try client.registerLightningExecutor(executor: BitkitLightningExecutor())
+    /// ```
+    pub fn register_lightning_executor(
+        &self,
+        executor: Box<dyn executor_ffi::LightningExecutorFFI>,
+    ) -> Result<()> {
+        // Create a bridge that wraps the FFI executor
+        let bridge = executor_ffi::LightningExecutorBridge::new(Arc::from(executor));
+
+        // Create a new LightningPlugin with the executor and network
+        let plugin = paykit_lib::methods::LightningPlugin::with_network_and_executor(
+            self.lightning_network.into(),
+            Arc::new(bridge),
+        );
+
+        // Register the plugin (replaces the default one)
+        self.registry.write().unwrap().register(Box::new(plugin));
+
+        Ok(())
+    }
+
+    /// Check if a Bitcoin executor has been registered.
+    ///
+    /// Note: This checks if the onchain method is registered. After calling
+    /// `register_bitcoin_executor`, this will return true.
+    pub fn has_bitcoin_executor(&self) -> bool {
+        self.registry
+            .read()
+            .unwrap()
+            .get(&paykit_lib::MethodId("onchain".to_string()))
+            .is_some()
+    }
+
+    /// Check if a Lightning executor has been registered.
+    ///
+    /// Note: This checks if the lightning method is registered. After calling
+    /// `register_lightning_executor`, this will return true.
+    pub fn has_lightning_executor(&self) -> bool {
+        self.registry
+            .read()
+            .unwrap()
+            .get(&paykit_lib::MethodId("lightning".to_string()))
+            .is_some()
+    }
+
+    // ========================================================================
+    // Payment Execution Methods
+    // ========================================================================
+
+    /// Execute a payment using the registered executor.
+    ///
+    /// This method executes a real payment using the wallet executor that was
+    /// registered via `register_bitcoin_executor` or `register_lightning_executor`.
+    ///
+    /// # Arguments
+    ///
+    /// * `method_id` - Payment method ("onchain" or "lightning")
+    /// * `endpoint` - Payment destination (Bitcoin address or Lightning invoice)
+    /// * `amount_sats` - Amount to send in satoshis
+    /// * `metadata_json` - Optional JSON metadata (e.g., fee rate preferences)
+    ///
+    /// # Returns
+    ///
+    /// `PaymentExecutionResult` with success/failure status and execution details.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // After registering executors
+    /// let result = client.execute_payment(
+    ///     "lightning",
+    ///     "lnbc1000n1...",
+    ///     1000,
+    ///     None
+    /// )?;
+    ///
+    /// if result.success {
+    ///     println!("Payment succeeded: {}", result.execution_id);
+    /// }
+    /// ```
+    pub fn execute_payment(
+        &self,
+        method_id: String,
+        endpoint: String,
+        amount_sats: u64,
+        metadata_json: Option<String>,
+    ) -> Result<PaymentExecutionResult> {
+        let plugin = self
+            .registry
+            .read()
+            .unwrap()
+            .get(&paykit_lib::MethodId(method_id.clone()))
+            .ok_or(PaykitMobileError::NotFound {
+                message: format!("Payment method not registered: {}", method_id),
+            })?;
+
+        let endpoint_data = paykit_lib::EndpointData(endpoint.clone());
+        let amount = paykit_lib::methods::Amount::sats(amount_sats);
+
+        let metadata: serde_json::Value = metadata_json
+            .as_ref()
+            .map(|s| serde_json::from_str(s).unwrap_or(serde_json::json!({})))
+            .unwrap_or(serde_json::json!({}));
+
+        // Execute payment asynchronously
+        let execution = self.runtime.block_on(async {
+            plugin
+                .execute_payment(&endpoint_data, &amount, &metadata)
+                .await
+        })?;
+
+        Ok(PaymentExecutionResult {
+            execution_id: format!("exec_{}", rand_suffix()),
+            method_id,
+            endpoint,
+            amount_sats,
+            success: execution.success,
+            executed_at: execution.executed_at,
+            execution_data_json: serde_json::to_string(&execution.execution_data)
+                .unwrap_or_default(),
+            error: execution.error,
+        })
+    }
+
+    /// Generate a payment proof from an execution result.
+    ///
+    /// After a successful payment, call this to generate cryptographic proof
+    /// of payment (e.g., transaction ID for on-chain, preimage for Lightning).
+    ///
+    /// # Arguments
+    ///
+    /// * `method_id` - Payment method used
+    /// * `execution_data_json` - The execution data from `execute_payment` result
+    ///
+    /// # Returns
+    ///
+    /// `PaymentProofResult` containing the proof type and data.
+    pub fn generate_payment_proof(
+        &self,
+        method_id: String,
+        execution_data_json: String,
+    ) -> Result<PaymentProofResult> {
+        let plugin = self
+            .registry
+            .read()
+            .unwrap()
+            .get(&paykit_lib::MethodId(method_id.clone()))
+            .ok_or(PaykitMobileError::NotFound {
+                message: format!("Payment method not registered: {}", method_id),
+            })?;
+
+        // Parse execution data
+        let execution_data: serde_json::Value = serde_json::from_str(&execution_data_json)
+            .map_err(|e| PaykitMobileError::Serialization {
+                message: e.to_string(),
+            })?;
+
+        // Extract amount - try amount_sats first, then convert from amount_msat
+        let amount_sats = execution_data
+            .get("amount_sats")
+            .and_then(|v| v.as_u64())
+            .or_else(|| {
+                execution_data
+                    .get("amount_msat")
+                    .and_then(|v| v.as_u64())
+                    .map(|msat| msat / 1000)
+            })
+            .unwrap_or(0);
+
+        // Create a PaymentExecution from the data
+        let execution = paykit_lib::methods::PaymentExecution {
+            method_id: paykit_lib::MethodId(method_id.clone()),
+            endpoint: paykit_lib::EndpointData(
+                execution_data
+                    .get("address")
+                    .or_else(|| execution_data.get("invoice"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            ),
+            amount: paykit_lib::methods::Amount::sats(amount_sats),
+            success: true,
+            executed_at: execution_data
+                .get("executed_at")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0),
+            execution_data: execution_data.clone(),
+            error: None,
+        };
+
+        let proof = plugin.generate_proof(&execution)?;
+
+        Ok(PaymentProofResult {
+            proof_type: match &proof {
+                paykit_lib::methods::PaymentProof::BitcoinTxid { .. } => "bitcoin_txid".to_string(),
+                paykit_lib::methods::PaymentProof::LightningPreimage { .. } => {
+                    "lightning_preimage".to_string()
+                }
+                paykit_lib::methods::PaymentProof::Custom { .. } => "custom".to_string(),
+            },
+            proof_data_json: serde_json::to_string(&proof).unwrap_or_default(),
+        })
     }
 
     // ========================================================================
@@ -1690,5 +2055,408 @@ mod tests {
 
         assert!(matches!(msg.message_type, NoisePaymentMessageType::Error));
         assert!(msg.payload_json.contains("payment_rejected"));
+    }
+
+    // ========================================================================
+    // Phase 2: Executor Registration and Payment Execution Tests
+    // ========================================================================
+
+    #[test]
+    fn test_new_with_network() {
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        assert_eq!(
+            client.bitcoin_network(),
+            executor_ffi::BitcoinNetworkFFI::Testnet
+        );
+        assert_eq!(
+            client.lightning_network(),
+            executor_ffi::LightningNetworkFFI::Testnet
+        );
+    }
+
+    #[test]
+    fn test_new_defaults_to_mainnet() {
+        let client = PaykitClient::new().unwrap();
+
+        assert_eq!(
+            client.bitcoin_network(),
+            executor_ffi::BitcoinNetworkFFI::Mainnet
+        );
+        assert_eq!(
+            client.lightning_network(),
+            executor_ffi::LightningNetworkFFI::Mainnet
+        );
+    }
+
+    #[test]
+    fn test_has_executors_default() {
+        let client = PaykitClient::new().unwrap();
+
+        // Default client has onchain and lightning methods registered
+        assert!(client.has_bitcoin_executor());
+        assert!(client.has_lightning_executor());
+    }
+
+    #[test]
+    fn test_register_bitcoin_executor() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        struct MockBitcoinExecutor {
+            call_count: AtomicU32,
+        }
+
+        impl executor_ffi::BitcoinExecutorFFI for MockBitcoinExecutor {
+            fn send_to_address(
+                &self,
+                _address: String,
+                _amount_sats: u64,
+                _fee_rate: Option<f64>,
+            ) -> Result<executor_ffi::BitcoinTxResultFFI> {
+                self.call_count.fetch_add(1, Ordering::SeqCst);
+                Ok(executor_ffi::BitcoinTxResultFFI::new(
+                    "test_txid_123".to_string(),
+                    0,
+                    210,
+                    1.5,
+                ))
+            }
+
+            fn estimate_fee(
+                &self,
+                _address: String,
+                _amount_sats: u64,
+                _target_blocks: u32,
+            ) -> Result<u64> {
+                Ok(210)
+            }
+
+            fn get_transaction(
+                &self,
+                _txid: String,
+            ) -> Result<Option<executor_ffi::BitcoinTxResultFFI>> {
+                Ok(None)
+            }
+
+            fn verify_transaction(
+                &self,
+                _txid: String,
+                _address: String,
+                _amount_sats: u64,
+            ) -> Result<bool> {
+                Ok(true)
+            }
+        }
+
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        let executor = Box::new(MockBitcoinExecutor {
+            call_count: AtomicU32::new(0),
+        });
+
+        // Register the executor
+        client.register_bitcoin_executor(executor).unwrap();
+
+        // Verify it's registered
+        assert!(client.has_bitcoin_executor());
+    }
+
+    #[test]
+    fn test_register_lightning_executor() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        struct MockLightningExecutor {
+            call_count: AtomicU32,
+        }
+
+        impl executor_ffi::LightningExecutorFFI for MockLightningExecutor {
+            fn pay_invoice(
+                &self,
+                _invoice: String,
+                amount_msat: Option<u64>,
+                _max_fee_msat: Option<u64>,
+            ) -> Result<executor_ffi::LightningPaymentResultFFI> {
+                self.call_count.fetch_add(1, Ordering::SeqCst);
+                Ok(executor_ffi::LightningPaymentResultFFI::success(
+                    "test_preimage".to_string(),
+                    "test_hash".to_string(),
+                    amount_msat.unwrap_or(1000000),
+                    100,
+                ))
+            }
+
+            fn decode_invoice(&self, _invoice: String) -> Result<executor_ffi::DecodedInvoiceFFI> {
+                Ok(executor_ffi::DecodedInvoiceFFI {
+                    payment_hash: "test_hash".to_string(),
+                    amount_msat: Some(1000000),
+                    description: Some("Test".to_string()),
+                    description_hash: None,
+                    payee: "test_payee".to_string(),
+                    expiry: 3600,
+                    timestamp: 1700000000,
+                    expired: false,
+                })
+            }
+
+            fn estimate_fee(&self, _invoice: String) -> Result<u64> {
+                Ok(100)
+            }
+
+            fn get_payment(
+                &self,
+                _payment_hash: String,
+            ) -> Result<Option<executor_ffi::LightningPaymentResultFFI>> {
+                Ok(None)
+            }
+
+            fn verify_preimage(&self, _preimage: String, _payment_hash: String) -> bool {
+                true
+            }
+        }
+
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        let executor = Box::new(MockLightningExecutor {
+            call_count: AtomicU32::new(0),
+        });
+
+        // Register the executor
+        client.register_lightning_executor(executor).unwrap();
+
+        // Verify it's registered
+        assert!(client.has_lightning_executor());
+    }
+
+    #[test]
+    fn test_execute_payment_onchain() {
+        struct MockBitcoinExecutor;
+
+        impl executor_ffi::BitcoinExecutorFFI for MockBitcoinExecutor {
+            fn send_to_address(
+                &self,
+                _address: String,
+                _amount_sats: u64,
+                _fee_rate: Option<f64>,
+            ) -> Result<executor_ffi::BitcoinTxResultFFI> {
+                Ok(executor_ffi::BitcoinTxResultFFI {
+                    txid: "abc123def456".to_string(),
+                    raw_tx: None,
+                    vout: 0,
+                    fee_sats: 210,
+                    fee_rate: 1.5,
+                    block_height: None,
+                    confirmations: 0,
+                })
+            }
+
+            fn estimate_fee(
+                &self,
+                _address: String,
+                _amount_sats: u64,
+                _target_blocks: u32,
+            ) -> Result<u64> {
+                Ok(210)
+            }
+
+            fn get_transaction(
+                &self,
+                _txid: String,
+            ) -> Result<Option<executor_ffi::BitcoinTxResultFFI>> {
+                Ok(None)
+            }
+
+            fn verify_transaction(
+                &self,
+                _txid: String,
+                _address: String,
+                _amount_sats: u64,
+            ) -> Result<bool> {
+                Ok(true)
+            }
+        }
+
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        client
+            .register_bitcoin_executor(Box::new(MockBitcoinExecutor))
+            .unwrap();
+
+        // Execute a payment
+        let result = client
+            .execute_payment(
+                "onchain".to_string(),
+                "tb1qtest123".to_string(),
+                10000,
+                None,
+            )
+            .unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.method_id, "onchain");
+        assert_eq!(result.amount_sats, 10000);
+        assert!(result.execution_data_json.contains("abc123def456"));
+    }
+
+    #[test]
+    fn test_execute_payment_lightning() {
+        struct MockLightningExecutor;
+
+        impl executor_ffi::LightningExecutorFFI for MockLightningExecutor {
+            fn pay_invoice(
+                &self,
+                _invoice: String,
+                _amount_msat: Option<u64>,
+                _max_fee_msat: Option<u64>,
+            ) -> Result<executor_ffi::LightningPaymentResultFFI> {
+                Ok(executor_ffi::LightningPaymentResultFFI::success(
+                    "preimage_abc123".to_string(),
+                    "hash_def456".to_string(),
+                    1000000,
+                    100,
+                ))
+            }
+
+            fn decode_invoice(&self, _invoice: String) -> Result<executor_ffi::DecodedInvoiceFFI> {
+                Ok(executor_ffi::DecodedInvoiceFFI {
+                    payment_hash: "hash_def456".to_string(),
+                    amount_msat: Some(1000000),
+                    description: Some("Test payment".to_string()),
+                    description_hash: None,
+                    payee: "test_payee".to_string(),
+                    expiry: 3600,
+                    timestamp: 1700000000,
+                    expired: false,
+                })
+            }
+
+            fn estimate_fee(&self, _invoice: String) -> Result<u64> {
+                Ok(100)
+            }
+
+            fn get_payment(
+                &self,
+                _payment_hash: String,
+            ) -> Result<Option<executor_ffi::LightningPaymentResultFFI>> {
+                Ok(None)
+            }
+
+            fn verify_preimage(&self, _preimage: String, _payment_hash: String) -> bool {
+                true
+            }
+        }
+
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        client
+            .register_lightning_executor(Box::new(MockLightningExecutor))
+            .unwrap();
+
+        // Execute a payment with a realistic-length invoice
+        // Real BOLT11 invoices are typically 200+ characters
+        let mock_invoice = format!(
+            "lntb1000n1p{}",
+            "0".repeat(200) // Pad to make it look like a real invoice
+        );
+
+        let result = client
+            .execute_payment("lightning".to_string(), mock_invoice, 1000, None)
+            .unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.method_id, "lightning");
+        assert!(result.execution_data_json.contains("preimage_abc123"));
+    }
+
+    #[test]
+    fn test_execute_payment_method_not_found() {
+        let client = PaykitClient::new().unwrap();
+
+        let result = client.execute_payment(
+            "unknown_method".to_string(),
+            "some_endpoint".to_string(),
+            1000,
+            None,
+        );
+
+        assert!(result.is_err());
+        match result {
+            Err(PaykitMobileError::NotFound { message }) => {
+                assert!(message.contains("unknown_method"));
+            }
+            _ => panic!("Expected NotFound error"),
+        }
+    }
+
+    #[test]
+    fn test_generate_payment_proof() {
+        let client = PaykitClient::new().unwrap();
+
+        // Mock execution data for on-chain
+        let execution_data = serde_json::json!({
+            "txid": "abc123def456",
+            "address": "bc1qtest",
+            "amount_sats": 10000,
+            "vout": 0,
+            "fee_sats": 210
+        });
+
+        let result = client
+            .generate_payment_proof(
+                "onchain".to_string(),
+                serde_json::to_string(&execution_data).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(result.proof_type, "bitcoin_txid");
+        assert!(result.proof_data_json.contains("abc123def456"));
+    }
+
+    #[test]
+    fn test_payment_execution_result_fields() {
+        let result = PaymentExecutionResult {
+            execution_id: "exec_123".to_string(),
+            method_id: "lightning".to_string(),
+            endpoint: "lnbc...".to_string(),
+            amount_sats: 1000,
+            success: true,
+            executed_at: 1700000000,
+            execution_data_json: "{}".to_string(),
+            error: None,
+        };
+
+        assert_eq!(result.execution_id, "exec_123");
+        assert!(result.success);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn test_payment_proof_result_fields() {
+        let result = PaymentProofResult {
+            proof_type: "lightning_preimage".to_string(),
+            proof_data_json: r#"{"preimage":"abc123"}"#.to_string(),
+        };
+
+        assert_eq!(result.proof_type, "lightning_preimage");
+        assert!(result.proof_data_json.contains("abc123"));
     }
 }

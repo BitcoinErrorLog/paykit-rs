@@ -19,6 +19,7 @@
 pub mod async_bridge;
 pub mod interactive_ffi;
 pub mod keys;
+pub mod noise_ffi;
 pub mod scanner;
 pub mod storage;
 pub mod transport_ffi;
@@ -39,6 +40,12 @@ pub use interactive_ffi::{
 
 // Re-export key management types for easier access
 pub use keys::{Ed25519Keypair, KeyBackup, X25519Keypair};
+
+// Re-export noise FFI types for easier access
+pub use noise_ffi::{
+    NoiseConnectionStatus, NoiseEndpointInfo, NoiseHandshakeResult, NoisePaymentMessage,
+    NoisePaymentMessageType, NoiseServerConfig, NoiseServerStatus, NoiseSessionInfo,
+};
 
 use std::sync::Arc;
 
@@ -1119,6 +1126,157 @@ impl PaykitClient {
     pub fn list_contacts(&self, transport: Arc<AuthenticatedTransportFFI>) -> Result<Vec<String>> {
         transport_ffi::list_contacts(&transport)
     }
+
+    // ========================================================================
+    // Noise Protocol Operations
+    // ========================================================================
+
+    /// Discover a Noise endpoint for a recipient.
+    ///
+    /// Queries the recipient's public directory for their Noise server information.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Unauthenticated transport for reading
+    /// * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+    ///
+    /// # Returns
+    ///
+    /// The noise endpoint info if found, None otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let transport = UnauthenticatedTransportFFI::new_mock();
+    /// if let Some(endpoint) = client.discover_noise_endpoint(transport, "8pinxxgqs41...")? {
+    ///     println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+    /// }
+    /// ```
+    pub fn discover_noise_endpoint(
+        &self,
+        transport: Arc<UnauthenticatedTransportFFI>,
+        recipient_pubkey: String,
+    ) -> Result<Option<NoiseEndpointInfo>> {
+        noise_ffi::discover_noise_endpoint(transport, recipient_pubkey)
+    }
+
+    /// Publish a Noise endpoint to the directory.
+    ///
+    /// Makes this device discoverable for receiving payments via Noise protocol.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for writing
+    /// * `host` - Host address where the Noise server is listening
+    /// * `port` - Port number where the Noise server is listening
+    /// * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+    /// * `metadata` - Optional metadata about the endpoint
+    pub fn publish_noise_endpoint(
+        &self,
+        transport: Arc<AuthenticatedTransportFFI>,
+        host: String,
+        port: u16,
+        noise_pubkey: String,
+        metadata: Option<String>,
+    ) -> Result<()> {
+        noise_ffi::publish_noise_endpoint(transport, host, port, noise_pubkey, metadata)
+    }
+
+    /// Remove the Noise endpoint from the directory.
+    ///
+    /// Makes this device no longer discoverable for Noise payments.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for writing
+    pub fn remove_noise_endpoint(&self, transport: Arc<AuthenticatedTransportFFI>) -> Result<()> {
+        noise_ffi::remove_noise_endpoint(transport)
+    }
+
+    /// Create a receipt request message for Noise channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `receipt_id` - Unique identifier for this receipt
+    /// * `payer_pubkey` - Payer's public key (z-base32)
+    /// * `payee_pubkey` - Payee's public key (z-base32)
+    /// * `method_id` - Payment method identifier
+    /// * `amount` - Optional payment amount
+    /// * `currency` - Optional currency code
+    pub fn create_receipt_request_message(
+        &self,
+        receipt_id: String,
+        payer_pubkey: String,
+        payee_pubkey: String,
+        method_id: String,
+        amount: Option<String>,
+        currency: Option<String>,
+    ) -> Result<NoisePaymentMessage> {
+        noise_ffi::create_receipt_request_message(
+            receipt_id,
+            payer_pubkey,
+            payee_pubkey,
+            method_id,
+            amount,
+            currency,
+        )
+    }
+
+    /// Create a receipt confirmation message for Noise channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `receipt_id` - The receipt ID being confirmed
+    /// * `payer_pubkey` - Payer's public key
+    /// * `payee_pubkey` - Payee's public key
+    /// * `method_id` - Payment method used
+    /// * `amount` - Payment amount
+    /// * `currency` - Currency code
+    /// * `signature` - Optional signature from payee
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_receipt_confirmation_message(
+        &self,
+        receipt_id: String,
+        payer_pubkey: String,
+        payee_pubkey: String,
+        method_id: String,
+        amount: Option<String>,
+        currency: Option<String>,
+        signature: Option<String>,
+    ) -> Result<NoisePaymentMessage> {
+        noise_ffi::create_receipt_confirmation_message(
+            receipt_id,
+            payer_pubkey,
+            payee_pubkey,
+            method_id,
+            amount,
+            currency,
+            signature,
+        )
+    }
+
+    /// Create an error message for Noise channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `code` - Error code
+    /// * `message` - Error description
+    pub fn create_noise_error_message(
+        &self,
+        code: String,
+        message: String,
+    ) -> Result<NoisePaymentMessage> {
+        noise_ffi::create_error_message(code, message)
+    }
+
+    /// Parse a payment message from JSON.
+    ///
+    /// # Arguments
+    ///
+    /// * `json` - The JSON string to parse
+    pub fn parse_noise_payment_message(&self, json: String) -> Result<NoisePaymentMessage> {
+        noise_ffi::parse_payment_message(json)
+    }
 }
 
 // ============================================================================
@@ -1391,5 +1549,138 @@ mod tests {
         let contacts = client.list_contacts(auth.clone()).unwrap();
         assert_eq!(contacts.len(), 1);
         assert!(contacts.contains(&"contact2".to_string()));
+    }
+
+    // ========================================================================
+    // Noise Protocol Tests
+    // ========================================================================
+
+    #[test]
+    fn test_publish_and_discover_noise_endpoint() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
+
+        // Publish noise endpoint
+        client
+            .publish_noise_endpoint(
+                auth.clone(),
+                "127.0.0.1".to_string(),
+                8888,
+                "abcd1234".to_string(),
+                Some("Test server".to_string()),
+            )
+            .unwrap();
+
+        // Discover noise endpoint
+        let result = client
+            .discover_noise_endpoint(unauth.clone(), "test_owner".to_string())
+            .unwrap();
+
+        assert!(result.is_some());
+        let endpoint = result.unwrap();
+        assert_eq!(endpoint.host, "127.0.0.1");
+        assert_eq!(endpoint.port, 8888);
+        assert_eq!(endpoint.server_noise_pubkey, "abcd1234");
+    }
+
+    #[test]
+    fn test_remove_noise_endpoint() {
+        let client = PaykitClient::new().unwrap();
+        let auth = AuthenticatedTransportFFI::new_mock("test_owner".to_string());
+        let unauth = UnauthenticatedTransportFFI::from_authenticated(auth.clone()).unwrap();
+
+        // Publish and remove
+        client
+            .publish_noise_endpoint(
+                auth.clone(),
+                "127.0.0.1".to_string(),
+                8888,
+                "abcd1234".to_string(),
+                None,
+            )
+            .unwrap();
+
+        client.remove_noise_endpoint(auth.clone()).unwrap();
+
+        // Verify removed
+        let result = client
+            .discover_noise_endpoint(unauth, "test_owner".to_string())
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_create_receipt_request_message() {
+        let client = PaykitClient::new().unwrap();
+
+        let msg = client
+            .create_receipt_request_message(
+                "rcpt_123".to_string(),
+                "payer_pk".to_string(),
+                "payee_pk".to_string(),
+                "lightning".to_string(),
+                Some("1000".to_string()),
+                Some("SAT".to_string()),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            msg.message_type,
+            NoisePaymentMessageType::ReceiptRequest
+        ));
+        assert!(msg.payload_json.contains("rcpt_123"));
+    }
+
+    #[test]
+    fn test_create_receipt_confirmation_message() {
+        let client = PaykitClient::new().unwrap();
+
+        let msg = client
+            .create_receipt_confirmation_message(
+                "rcpt_123".to_string(),
+                "payer_pk".to_string(),
+                "payee_pk".to_string(),
+                "lightning".to_string(),
+                Some("1000".to_string()),
+                Some("SAT".to_string()),
+                None,
+            )
+            .unwrap();
+
+        assert!(matches!(
+            msg.message_type,
+            NoisePaymentMessageType::ReceiptConfirmation
+        ));
+    }
+
+    #[test]
+    fn test_parse_noise_payment_message() {
+        let client = PaykitClient::new().unwrap();
+
+        let json = r#"{"type":"request_receipt","receipt_id":"rcpt_123"}"#;
+        let msg = client
+            .parse_noise_payment_message(json.to_string())
+            .unwrap();
+
+        assert!(matches!(
+            msg.message_type,
+            NoisePaymentMessageType::ReceiptRequest
+        ));
+    }
+
+    #[test]
+    fn test_create_noise_error_message() {
+        let client = PaykitClient::new().unwrap();
+
+        let msg = client
+            .create_noise_error_message(
+                "payment_rejected".to_string(),
+                "Insufficient funds".to_string(),
+            )
+            .unwrap();
+
+        assert!(matches!(msg.message_type, NoisePaymentMessageType::Error));
+        assert!(msg.payload_json.contains("payment_rejected"));
     }
 }

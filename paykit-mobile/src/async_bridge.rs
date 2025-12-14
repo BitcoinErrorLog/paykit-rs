@@ -439,6 +439,204 @@ pub fn create_directory_operations_async(
     DirectoryOperationsAsync::new()
 }
 
+// ============================================================================
+// Executor Async Bridge
+// ============================================================================
+
+/// Async bridge for executor operations.
+///
+/// Provides async wrappers for Bitcoin and Lightning executor operations
+/// with timeout handling and cancellation support. This is useful when
+/// you need to wrap synchronous wallet operations with timeout handling.
+///
+/// # Usage
+///
+/// ```ignore
+/// let bridge = ExecutorAsyncBridge::new()?;
+///
+/// // Execute with default 30s timeout
+/// let result = bridge.execute_bitcoin_operation(|| {
+///     // Your wallet operation here
+///     wallet.send_to_address(address, amount)
+/// }, None)?;
+///
+/// // Execute with custom 60s timeout
+/// let result = bridge.execute_lightning_operation(|| {
+///     // Your node operation here
+///     node.pay_invoice(invoice)
+/// }, Some(60000))?;
+/// ```
+///
+/// # Timeout Handling
+///
+/// If an operation exceeds the timeout, a `PaykitMobileError::Transport`
+/// error is returned with message "Bitcoin/Lightning operation timed out".
+///
+/// # Thread Safety
+///
+/// The bridge manages its own Tokio runtime and is safe to use from any thread.
+/// Operations are executed on the runtime's thread pool.
+///
+/// # Cancellation
+///
+/// Use `execute_with_cancellation()` to get an `AsyncHandle` that can be used
+/// to cancel long-running operations.
+#[derive(uniffi::Object)]
+pub struct ExecutorAsyncBridge {
+    runtime: tokio::runtime::Runtime,
+    /// Default timeout for executor operations in milliseconds.
+    default_timeout_ms: u64,
+}
+
+// UniFFI-exported constructors and simple methods
+#[uniffi::export]
+impl ExecutorAsyncBridge {
+    /// Create a new executor async bridge.
+    #[uniffi::constructor]
+    pub fn new() -> Result<Arc<Self>, PaykitMobileError> {
+        Self::with_timeout_internal(30000) // 30 second default timeout
+    }
+
+    /// Create with custom timeout.
+    #[uniffi::constructor]
+    pub fn with_timeout(timeout_ms: u64) -> Result<Arc<Self>, PaykitMobileError> {
+        Self::with_timeout_internal(timeout_ms)
+    }
+
+    /// Get the default timeout in milliseconds.
+    pub fn default_timeout_ms(&self) -> u64 {
+        self.default_timeout_ms
+    }
+}
+
+// Non-exported generic methods (used internally by Rust code)
+impl ExecutorAsyncBridge {
+    fn with_timeout_internal(timeout_ms: u64) -> Result<Arc<Self>, PaykitMobileError> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
+            message: format!("Failed to create runtime: {}", e),
+        })?;
+        Ok(Arc::new(Self {
+            runtime,
+            default_timeout_ms: timeout_ms,
+        }))
+    }
+
+    /// Execute a Bitcoin operation with timeout.
+    ///
+    /// Wraps a Bitcoin executor operation with timeout handling.
+    /// Returns an error if the operation times out.
+    pub fn execute_bitcoin_operation<F, T>(
+        &self,
+        operation: F,
+        timeout_ms: Option<u64>,
+    ) -> Result<T, PaykitMobileError>
+    where
+        F: FnOnce() -> Result<T, PaykitMobileError> + Send + 'static,
+        T: Send + 'static,
+    {
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+
+        self.runtime.block_on(async {
+            tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(operation).await
+            })
+            .await
+            .map_err(|_| PaykitMobileError::Transport {
+                message: "Bitcoin operation timed out".to_string(),
+            })?
+            .map_err(|e| PaykitMobileError::Internal {
+                message: format!("Task join error: {}", e),
+            })?
+        })
+    }
+
+    /// Execute a Lightning operation with timeout.
+    ///
+    /// Wraps a Lightning executor operation with timeout handling.
+    /// Returns an error if the operation times out.
+    pub fn execute_lightning_operation<F, T>(
+        &self,
+        operation: F,
+        timeout_ms: Option<u64>,
+    ) -> Result<T, PaykitMobileError>
+    where
+        F: FnOnce() -> Result<T, PaykitMobileError> + Send + 'static,
+        T: Send + 'static,
+    {
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+
+        self.runtime.block_on(async {
+            tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(operation).await
+            })
+            .await
+            .map_err(|_| PaykitMobileError::Transport {
+                message: "Lightning operation timed out".to_string(),
+            })?
+            .map_err(|e| PaykitMobileError::Internal {
+                message: format!("Task join error: {}", e),
+            })?
+        })
+    }
+
+    /// Execute an operation with cancellation support.
+    ///
+    /// Returns an AsyncHandle that can be used to cancel the operation.
+    pub fn execute_with_cancellation<F, T, C>(
+        &self,
+        operation: F,
+        callback: Arc<C>,
+        timeout_ms: Option<u64>,
+    ) -> AsyncHandle
+    where
+        F: FnOnce() -> Result<T, PaykitMobileError> + Send + 'static,
+        T: Send + 'static,
+        C: ResultCallback<T> + 'static,
+    {
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+
+        self.runtime.spawn(async move {
+            tokio::select! {
+                _ = cancel_rx => {
+                    // Operation was cancelled
+                }
+                result = async {
+                    tokio::time::timeout(timeout, async move {
+                        tokio::task::spawn_blocking(operation).await
+                    }).await
+                } => {
+                    match result {
+                        Ok(Ok(Ok(value))) => callback.on_success(value),
+                        Ok(Ok(Err(e))) => callback.on_error(e.to_string()),
+                        Ok(Err(e)) => callback.on_error(format!("Task join error: {}", e)),
+                        Err(_) => callback.on_error("Operation timed out".to_string()),
+                    }
+                }
+            }
+        });
+
+        AsyncHandle::new(cancel_tx)
+    }
+}
+
+/// Create a new executor async bridge.
+#[uniffi::export]
+pub fn create_executor_async_bridge() -> Result<Arc<ExecutorAsyncBridge>, PaykitMobileError> {
+    ExecutorAsyncBridge::new()
+}
+
+/// Create an executor async bridge with custom timeout.
+#[uniffi::export]
+pub fn create_executor_async_bridge_with_timeout(
+    timeout_ms: u64,
+) -> Result<Arc<ExecutorAsyncBridge>, PaykitMobileError> {
+    ExecutorAsyncBridge::with_timeout(timeout_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,5 +729,74 @@ mod tests {
 
         assert_eq!(result, Ok(42));
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn test_executor_async_bridge_creation() {
+        let bridge = ExecutorAsyncBridge::new();
+        assert!(bridge.is_ok());
+        let bridge = bridge.unwrap();
+        assert_eq!(bridge.default_timeout_ms(), 30000);
+    }
+
+    #[test]
+    fn test_executor_async_bridge_with_timeout() {
+        let bridge = ExecutorAsyncBridge::with_timeout(5000);
+        assert!(bridge.is_ok());
+        let bridge = bridge.unwrap();
+        assert_eq!(bridge.default_timeout_ms(), 5000);
+    }
+
+    #[test]
+    fn test_execute_bitcoin_operation_success() {
+        let bridge = ExecutorAsyncBridge::new().unwrap();
+        let result = bridge.execute_bitcoin_operation(|| Ok(42i32), None);
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[test]
+    fn test_execute_lightning_operation_success() {
+        let bridge = ExecutorAsyncBridge::new().unwrap();
+        let result = bridge.execute_lightning_operation(|| Ok("preimage".to_string()), None);
+        assert_eq!(result.unwrap(), "preimage");
+    }
+
+    #[test]
+    fn test_execute_bitcoin_operation_error() {
+        let bridge = ExecutorAsyncBridge::new().unwrap();
+        let result: Result<i32, _> = bridge.execute_bitcoin_operation(
+            || {
+                Err(PaykitMobileError::Transport {
+                    message: "Network error".to_string(),
+                })
+            },
+            None,
+        );
+        assert!(result.is_err());
+        match result {
+            Err(PaykitMobileError::Transport { message }) => {
+                assert!(message.contains("Network error"));
+            }
+            _ => panic!("Expected Transport error"),
+        }
+    }
+
+    #[test]
+    fn test_execute_lightning_operation_timeout() {
+        let bridge = ExecutorAsyncBridge::with_timeout(10).unwrap(); // 10ms timeout
+        let result: Result<i32, _> = bridge.execute_lightning_operation(
+            || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                Ok(42)
+            },
+            None,
+        );
+        assert!(result.is_err());
+        match result {
+            Err(PaykitMobileError::Transport { message }) => {
+                assert!(message.contains("timed out"));
+            }
+            _ => panic!("Expected timeout error"),
+        }
     }
 }

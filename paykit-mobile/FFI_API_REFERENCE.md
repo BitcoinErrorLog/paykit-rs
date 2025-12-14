@@ -7,13 +7,14 @@ exported via UniFFI for iOS (Swift) and Android (Kotlin) integration.
 
 1. [Core Types](#core-types)
 2. [PaykitClient](#paykitclient)
-3. [Transport Layer](#transport-layer)
-4. [Interactive Protocol](#interactive-protocol)
-5. [Noise Protocol](#noise-protocol)
-6. [Key Management](#key-management)
-7. [Scanner](#scanner)
-8. [Storage](#storage)
-9. [Async Bridge](#async-bridge)
+3. [Executor FFI (Bitkit Integration)](#executor-ffi-bitkit-integration)
+4. [Transport Layer](#transport-layer)
+5. [Interactive Protocol](#interactive-protocol)
+6. [Noise Protocol](#noise-protocol)
+7. [Key Management](#key-management)
+8. [Scanner](#scanner)
+9. [Storage](#storage)
+10. [Async Bridge](#async-bridge)
 
 ---
 
@@ -198,6 +199,381 @@ val client = PaykitClient()
 | `createReceiptConfirmationMessage(...)` | `String, String, String, String, String?, String?, String?` | `NoisePaymentMessage` | Create confirmation |
 | `createNoiseErrorMessage(code:message:)` | `String, String` | `NoisePaymentMessage` | Create error message |
 | `parseNoisePaymentMessage(json:)` | `String` | `NoisePaymentMessage` | Parse payment message |
+
+---
+
+## Executor FFI (Bitkit Integration)
+
+This section documents the executor callback interfaces for integrating external wallet
+implementations (like Bitkit) with Paykit.
+
+### Network Enums
+
+| Rust Type | Swift Type | Kotlin Type | Description |
+|-----------|------------|-------------|-------------|
+| `BitcoinNetworkFFI` | `BitcoinNetworkFfi` | `BitcoinNetworkFfi` | Bitcoin network enum |
+| `LightningNetworkFFI` | `LightningNetworkFfi` | `LightningNetworkFfi` | Lightning network enum |
+
+**BitcoinNetworkFFI Variants:**
+- `Mainnet` (default)
+- `Testnet`
+- `Regtest`
+
+**LightningNetworkFFI Variants:**
+- `Mainnet` (default)
+- `Testnet`
+- `Regtest`
+
+### Executor Callback Interfaces
+
+#### BitcoinExecutorFFI
+
+Mobile apps implement this protocol to provide Bitcoin wallet functionality:
+
+```swift
+// Swift
+protocol BitcoinExecutorFfi {
+    func sendToAddress(
+        address: String,
+        amountSats: UInt64,
+        feeRate: Double?
+    ) throws -> BitcoinTxResultFfi
+    
+    func estimateFee(
+        address: String,
+        amountSats: UInt64,
+        targetBlocks: UInt32
+    ) throws -> UInt64
+    
+    func getTransaction(txid: String) throws -> BitcoinTxResultFfi?
+    
+    func verifyTransaction(
+        txid: String,
+        address: String,
+        amountSats: UInt64
+    ) throws -> Bool
+}
+```
+
+```kotlin
+// Kotlin
+interface BitcoinExecutorFfi {
+    fun sendToAddress(
+        address: String,
+        amountSats: ULong,
+        feeRate: Double?
+    ): BitcoinTxResultFfi
+    
+    fun estimateFee(
+        address: String,
+        amountSats: ULong,
+        targetBlocks: UInt
+    ): ULong
+    
+    fun getTransaction(txid: String): BitcoinTxResultFfi?
+    
+    fun verifyTransaction(
+        txid: String,
+        address: String,
+        amountSats: ULong
+    ): Boolean
+}
+```
+
+#### LightningExecutorFFI
+
+Mobile apps implement this protocol to provide Lightning wallet functionality:
+
+```swift
+// Swift
+protocol LightningExecutorFfi {
+    func payInvoice(
+        invoice: String,
+        amountMsat: UInt64?,
+        maxFeeMsat: UInt64?
+    ) throws -> LightningPaymentResultFfi
+    
+    func decodeInvoice(invoice: String) throws -> DecodedInvoiceFfi
+    
+    func estimateFee(invoice: String) throws -> UInt64
+    
+    func getPayment(paymentHash: String) throws -> LightningPaymentResultFfi?
+    
+    func verifyPreimage(preimage: String, paymentHash: String) -> Bool
+}
+```
+
+```kotlin
+// Kotlin
+interface LightningExecutorFfi {
+    fun payInvoice(
+        invoice: String,
+        amountMsat: ULong?,
+        maxFeeMsat: ULong?
+    ): LightningPaymentResultFfi
+    
+    fun decodeInvoice(invoice: String): DecodedInvoiceFfi
+    
+    fun estimateFee(invoice: String): ULong
+    
+    fun getPayment(paymentHash: String): LightningPaymentResultFfi?
+    
+    fun verifyPreimage(preimage: String, paymentHash: String): Boolean
+}
+```
+
+### Executor Result Types
+
+| Rust Type | Swift Type | Kotlin Type | Description |
+|-----------|------------|-------------|-------------|
+| `BitcoinTxResultFFI` | `BitcoinTxResultFfi` | `BitcoinTxResultFfi` | Bitcoin transaction result |
+| `LightningPaymentResultFFI` | `LightningPaymentResultFfi` | `LightningPaymentResultFfi` | Lightning payment result |
+| `DecodedInvoiceFFI` | `DecodedInvoiceFfi` | `DecodedInvoiceFfi` | Decoded invoice info |
+| `LightningPaymentStatusFFI` | `LightningPaymentStatusFfi` | `LightningPaymentStatusFfi` | Payment status enum |
+
+**BitcoinTxResultFFI Fields:**
+```rust
+pub struct BitcoinTxResultFFI {
+    pub txid: String,           // Transaction ID
+    pub raw_tx: Option<String>, // Raw transaction hex
+    pub vout: u32,              // Output index
+    pub fee_sats: u64,          // Fee in satoshis
+    pub fee_rate: f64,          // Fee rate (sat/vB)
+    pub block_height: Option<u64>, // Confirmation height
+    pub confirmations: u64,     // Number of confirmations
+}
+```
+
+**LightningPaymentResultFFI Fields:**
+```rust
+pub struct LightningPaymentResultFFI {
+    pub preimage: String,       // Payment preimage (hex)
+    pub payment_hash: String,   // Payment hash (hex)
+    pub amount_msat: u64,       // Amount in millisatoshis
+    pub fee_msat: u64,          // Fee in millisatoshis
+    pub hops: u32,              // Number of hops
+    pub status: LightningPaymentStatusFFI,
+}
+```
+
+**DecodedInvoiceFFI Fields:**
+```rust
+pub struct DecodedInvoiceFFI {
+    pub payment_hash: String,   // Payment hash (hex)
+    pub amount_msat: Option<u64>, // Amount if specified
+    pub description: Option<String>,
+    pub description_hash: Option<String>,
+    pub payee: String,          // Payee pubkey
+    pub expiry: u64,            // Expiry in seconds
+    pub timestamp: u64,         // Creation timestamp
+    pub expired: bool,          // Whether expired
+}
+```
+
+**LightningPaymentStatusFFI Variants:**
+- `Pending`
+- `Succeeded`
+- `Failed`
+
+### PaykitClient Executor Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `newWithNetwork(bitcoinNetwork:lightningNetwork:)` | `BitcoinNetworkFfi, LightningNetworkFfi` | `PaykitClient` | Create client with network |
+| `registerBitcoinExecutor(executor:)` | `BitcoinExecutorFfi` | - | Register Bitcoin executor |
+| `registerLightningExecutor(executor:)` | `LightningExecutorFfi` | - | Register Lightning executor |
+| `hasBitcoinExecutor()` | - | `Bool` | Check if Bitcoin executor registered |
+| `hasLightningExecutor()` | - | `Bool` | Check if Lightning executor registered |
+| `bitcoinNetwork()` | - | `BitcoinNetworkFfi` | Get configured Bitcoin network |
+| `lightningNetwork()` | - | `LightningNetworkFfi` | Get configured Lightning network |
+
+### Payment Execution Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `executePayment(methodId:endpoint:amountSats:metadata:)` | `String, String, UInt64, String?` | `PaymentExecutionResult` | Execute payment |
+| `generatePaymentProof(methodId:executionDataJson:)` | `String, String` | `PaymentProofResult` | Generate proof |
+
+**PaymentExecutionResult Fields:**
+```rust
+pub struct PaymentExecutionResult {
+    pub execution_id: String,
+    pub method_id: String,
+    pub endpoint: String,
+    pub amount_sats: u64,
+    pub success: bool,
+    pub executed_at: i64,
+    pub execution_data_json: String,
+    pub error: Option<String>,
+}
+```
+
+**PaymentProofResult Fields:**
+```rust
+pub struct PaymentProofResult {
+    pub proof_type: String,      // "bitcoin_txid" or "lightning_preimage"
+    pub proof_data_json: String, // JSON with proof details
+}
+```
+
+### Executor Async Bridge
+
+| Rust Type | Swift Type | Kotlin Type | Description |
+|-----------|------------|-------------|-------------|
+| `ExecutorAsyncBridge` | `ExecutorAsyncBridge` | `ExecutorAsyncBridge` | Async executor wrapper |
+
+**ExecutorAsyncBridge Methods:**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `new()` | - | `ExecutorAsyncBridge` | Create with 30s timeout |
+| `withTimeout(timeoutMs:)` | `UInt64` | `ExecutorAsyncBridge` | Create with custom timeout |
+| `defaultTimeoutMs()` | - | `UInt64` | Get default timeout |
+
+### Bitkit Integration Example
+
+```swift
+// Swift - Implementing BitcoinExecutorFfi with Bitkit wallet
+class BitkitBitcoinExecutor: BitcoinExecutorFfi {
+    private let wallet: BitkitWallet
+    
+    init(wallet: BitkitWallet) {
+        self.wallet = wallet
+    }
+    
+    func sendToAddress(address: String, amountSats: UInt64, feeRate: Double?) throws -> BitcoinTxResultFfi {
+        let tx = try wallet.send(to: address, amount: amountSats, feeRate: feeRate ?? 1.0)
+        return BitcoinTxResultFfi(
+            txid: tx.txid,
+            rawTx: tx.rawHex,
+            vout: 0,
+            feeSats: tx.fee,
+            feeRate: tx.feeRate,
+            blockHeight: nil,
+            confirmations: 0
+        )
+    }
+    
+    func estimateFee(address: String, amountSats: UInt64, targetBlocks: UInt32) throws -> UInt64 {
+        return try wallet.estimateFee(amount: amountSats, target: targetBlocks)
+    }
+    
+    func getTransaction(txid: String) throws -> BitcoinTxResultFfi? {
+        guard let tx = try wallet.getTransaction(txid: txid) else { return nil }
+        return BitcoinTxResultFfi(
+            txid: tx.txid,
+            rawTx: nil,
+            vout: 0,
+            feeSats: tx.fee,
+            feeRate: tx.feeRate,
+            blockHeight: tx.blockHeight,
+            confirmations: tx.confirmations
+        )
+    }
+    
+    func verifyTransaction(txid: String, address: String, amountSats: UInt64) throws -> Bool {
+        return try wallet.verifyPayment(txid: txid, to: address, amount: amountSats)
+    }
+}
+
+// Register with PaykitClient
+let client = try PaykitClient.newWithNetwork(
+    bitcoinNetwork: .mainnet,
+    lightningNetwork: .mainnet
+)
+let executor = BitkitBitcoinExecutor(wallet: bitkitWallet)
+try client.registerBitcoinExecutor(executor: executor)
+
+// Execute payment
+let result = try client.executePayment(
+    methodId: "onchain",
+    endpoint: "bc1q...",
+    amountSats: 50000,
+    metadata: nil
+)
+
+if result.success {
+    let proof = try client.generatePaymentProof(
+        methodId: "onchain",
+        executionDataJson: result.executionDataJson
+    )
+    print("Payment proof: \(proof.proofDataJson)")
+}
+```
+
+```kotlin
+// Kotlin - Implementing BitcoinExecutorFfi with Bitkit wallet
+class BitkitBitcoinExecutor(
+    private val wallet: BitkitWallet
+) : BitcoinExecutorFfi {
+    
+    override fun sendToAddress(
+        address: String,
+        amountSats: ULong,
+        feeRate: Double?
+    ): BitcoinTxResultFfi {
+        val tx = wallet.send(address, amountSats, feeRate ?: 1.0)
+        return BitcoinTxResultFfi(
+            txid = tx.txid,
+            rawTx = tx.rawHex,
+            vout = 0u,
+            feeSats = tx.fee,
+            feeRate = tx.feeRate,
+            blockHeight = null,
+            confirmations = 0u
+        )
+    }
+    
+    override fun estimateFee(
+        address: String,
+        amountSats: ULong,
+        targetBlocks: UInt
+    ): ULong = wallet.estimateFee(amountSats, targetBlocks)
+    
+    override fun getTransaction(txid: String): BitcoinTxResultFfi? {
+        val tx = wallet.getTransaction(txid) ?: return null
+        return BitcoinTxResultFfi(
+            txid = tx.txid,
+            rawTx = null,
+            vout = 0u,
+            feeSats = tx.fee,
+            feeRate = tx.feeRate,
+            blockHeight = tx.blockHeight,
+            confirmations = tx.confirmations
+        )
+    }
+    
+    override fun verifyTransaction(
+        txid: String,
+        address: String,
+        amountSats: ULong
+    ): Boolean = wallet.verifyPayment(txid, address, amountSats)
+}
+
+// Register with PaykitClient
+val client = PaykitClient.newWithNetwork(
+    bitcoinNetwork = BitcoinNetworkFfi.MAINNET,
+    lightningNetwork = LightningNetworkFfi.MAINNET
+)
+val executor = BitkitBitcoinExecutor(bitkitWallet)
+client.registerBitcoinExecutor(executor)
+
+// Execute payment
+val result = client.executePayment(
+    methodId = "onchain",
+    endpoint = "bc1q...",
+    amountSats = 50000u,
+    metadata = null
+)
+
+if (result.success) {
+    val proof = client.generatePaymentProof(
+        methodId = "onchain",
+        executionDataJson = result.executionDataJson
+    )
+    println("Payment proof: ${proof.proofDataJson}")
+}
+```
 
 ---
 

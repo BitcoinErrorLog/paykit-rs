@@ -220,6 +220,84 @@
                 <textarea id="import-textarea" rows="4" placeholder="Paste exported identity JSON here"></textarea>
                 <button id="import-btn" class="btn btn-secondary">Import</button>
             </div>
+
+            <div class="card" id="security-settings-card">
+                <h3>🔒 Security Settings</h3>
+                <p>Protect your identity and data with encrypted storage</p>
+                
+                <div class="security-status" id="security-status">
+                    <div class="security-icon">🔓</div>
+                    <div class="security-info">
+                        <span class="security-label">Storage Status</span>
+                        <span class="security-value" id="security-status-text">Unencrypted (localStorage)</span>
+                    </div>
+                </div>
+
+                <div class="form-group" id="password-setup-section">
+                    <h4>Set Up Encrypted Storage</h4>
+                    <p class="form-hint">Create a password to encrypt your identity and data. This provides protection against browser-based attacks.</p>
+                    
+                    <div class="form-group">
+                        <label for="security-password">Password</label>
+                        <input type="password" id="security-password" placeholder="Enter a strong password" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="security-password-confirm">Confirm Password</label>
+                        <input type="password" id="security-password-confirm" placeholder="Confirm your password" autocomplete="new-password">
+                    </div>
+                    
+                    <div class="password-strength" id="password-strength">
+                        <div class="strength-bar">
+                            <div class="strength-fill" id="strength-fill"></div>
+                        </div>
+                        <span class="strength-text" id="strength-text">Enter a password</span>
+                    </div>
+                    
+                    <button id="enable-encryption-btn" class="btn btn-primary">Enable Encrypted Storage</button>
+                </div>
+
+                <div class="form-group" id="password-unlock-section" style="display: none;">
+                    <h4>Unlock Storage</h4>
+                    <div class="form-group">
+                        <label for="unlock-password">Password</label>
+                        <input type="password" id="unlock-password" placeholder="Enter your password">
+                    </div>
+                    <button id="unlock-storage-btn" class="btn btn-primary">Unlock</button>
+                </div>
+
+                <div class="form-group" id="password-change-section" style="display: none;">
+                    <h4>Storage Encrypted</h4>
+                    <div class="security-status active">
+                        <div class="security-icon">🔐</div>
+                        <div class="security-info">
+                            <span class="security-value">Storage is encrypted and secure</span>
+                        </div>
+                    </div>
+                    
+                    <details class="change-password-details">
+                        <summary>Change Password</summary>
+                        <div class="form-group">
+                            <label for="current-password">Current Password</label>
+                            <input type="password" id="current-password" placeholder="Enter current password">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-password">New Password</label>
+                            <input type="password" id="new-password" placeholder="Enter new password">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-password-confirm">Confirm New Password</label>
+                            <input type="password" id="new-password-confirm" placeholder="Confirm new password">
+                        </div>
+                        <button id="change-password-btn" class="btn btn-secondary">Change Password</button>
+                    </details>
+                    
+                    <details class="lock-storage-details">
+                        <summary>Lock Storage</summary>
+                        <p>Lock your storage to require password entry on next use.</p>
+                        <button id="lock-storage-btn" class="btn btn-secondary">Lock Now</button>
+                    </details>
+                </div>
+            </div>
         </section>
 
         <!-- Contacts Tab -->

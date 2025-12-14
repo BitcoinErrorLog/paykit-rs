@@ -77,6 +77,18 @@ sealed class Screen(val route: String, val title: String, val icon: @Composable 
         "Settings",
         { Icon(Icons.Default.Settings, contentDescription = "Settings") }
     )
+    
+    // Sub-screens (not shown in bottom nav)
+    object PrivateEndpoints : Screen(
+        "private_endpoints",
+        "Private Endpoints",
+        { Icon(Icons.Default.Lock, contentDescription = "Private Endpoints") }
+    )
+    object RotationSettings : Screen(
+        "rotation_settings",
+        "Rotation Settings",
+        { Icon(Icons.Default.Refresh, contentDescription = "Rotation Settings") }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,13 +141,34 @@ fun PaykitDemoContent() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen() }
-            composable(Screen.Methods.route) { PaymentMethodsScreen() }
+            composable(Screen.Methods.route) { 
+                PaymentMethodsScreen(
+                    onNavigateToPrivateEndpoints = {
+                        navController.navigate(Screen.PrivateEndpoints.route)
+                    },
+                    onNavigateToRotationSettings = {
+                        navController.navigate(Screen.RotationSettings.route)
+                    }
+                )
+            }
             composable(Screen.Contacts.route) { ContactsScreen() }
             composable(Screen.Receipts.route) { ReceiptsScreen() }
             composable(Screen.Subscriptions.route) { SubscriptionsScreen() }
             composable(Screen.AutoPay.route) { AutoPayScreen() }
             composable(Screen.Requests.route) { PaymentRequestsScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
+            
+            // Privacy feature screens
+            composable(Screen.PrivateEndpoints.route) {
+                PrivateEndpointsScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.RotationSettings.route) {
+                RotationSettingsScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

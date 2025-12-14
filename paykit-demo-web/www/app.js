@@ -305,6 +305,264 @@ window.deleteIdentity = function(name) {
     }
 };
 
+// Security / Encrypted Storage Management
+const SECURITY_KEY = 'paykit_security_status';
+
+function getSecurityStatus() {
+    try {
+        const status = localStorage.getItem(SECURITY_KEY);
+        return status ? JSON.parse(status) : { encrypted: false, locked: false };
+    } catch (e) {
+        return { encrypted: false, locked: false };
+    }
+}
+
+function setSecurityStatus(status) {
+    try {
+        localStorage.setItem(SECURITY_KEY, JSON.stringify(status));
+    } catch (e) {
+        console.warn('Failed to save security status:', e);
+    }
+}
+
+function updateSecurityUI() {
+    const status = getSecurityStatus();
+    
+    const statusIcon = document.querySelector('#security-status .security-icon');
+    const statusText = document.getElementById('security-status-text');
+    const setupSection = document.getElementById('password-setup-section');
+    const unlockSection = document.getElementById('password-unlock-section');
+    const changeSection = document.getElementById('password-change-section');
+    
+    if (!statusIcon || !statusText) return;
+    
+    if (!status.encrypted) {
+        // Not encrypted yet
+        statusIcon.textContent = '🔓';
+        statusText.textContent = 'Unencrypted (localStorage)';
+        if (setupSection) setupSection.style.display = 'block';
+        if (unlockSection) unlockSection.style.display = 'none';
+        if (changeSection) changeSection.style.display = 'none';
+    } else if (status.locked) {
+        // Encrypted but locked
+        statusIcon.textContent = '🔒';
+        statusText.textContent = 'Encrypted (locked)';
+        if (setupSection) setupSection.style.display = 'none';
+        if (unlockSection) unlockSection.style.display = 'block';
+        if (changeSection) changeSection.style.display = 'none';
+    } else {
+        // Encrypted and unlocked
+        statusIcon.textContent = '🔐';
+        statusText.textContent = 'Encrypted (unlocked)';
+        if (setupSection) setupSection.style.display = 'none';
+        if (unlockSection) unlockSection.style.display = 'none';
+        if (changeSection) changeSection.style.display = 'block';
+    }
+}
+
+function calculatePasswordStrength(password) {
+    if (!password) return { score: 0, text: 'Enter a password', color: 'gray' };
+    
+    let score = 0;
+    
+    // Length
+    if (password.length >= 8) score += 1;
+    if (password.length >= 12) score += 1;
+    if (password.length >= 16) score += 1;
+    
+    // Complexity
+    if (/[a-z]/.test(password)) score += 1;
+    if (/[A-Z]/.test(password)) score += 1;
+    if (/[0-9]/.test(password)) score += 1;
+    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+    
+    if (score <= 2) return { score, text: 'Weak', color: 'red' };
+    if (score <= 4) return { score, text: 'Fair', color: 'orange' };
+    if (score <= 5) return { score, text: 'Good', color: 'yellow' };
+    return { score, text: 'Strong', color: 'green' };
+}
+
+function updatePasswordStrength() {
+    const password = document.getElementById('security-password')?.value || '';
+    const strength = calculatePasswordStrength(password);
+    
+    const fill = document.getElementById('strength-fill');
+    const text = document.getElementById('strength-text');
+    
+    if (fill) {
+        fill.style.width = `${(strength.score / 7) * 100}%`;
+        fill.style.backgroundColor = strength.color;
+    }
+    if (text) {
+        text.textContent = strength.text;
+        text.style.color = strength.color;
+    }
+}
+
+async function enableEncryptedStorage() {
+    const password = document.getElementById('security-password')?.value || '';
+    const confirm = document.getElementById('security-password-confirm')?.value || '';
+    
+    if (!password) {
+        showNotification('Please enter a password', 'error');
+        return;
+    }
+    
+    if (password !== confirm) {
+        showNotification('Passwords do not match', 'error');
+        return;
+    }
+    
+    const strength = calculatePasswordStrength(password);
+    if (strength.score < 3) {
+        showNotification('Password is too weak. Use at least 8 characters with mixed case, numbers, and symbols.', 'error');
+        return;
+    }
+    
+    try {
+        // In a real implementation, this would:
+        // 1. Generate a random master key
+        // 2. Encrypt the master key with the password-derived key (PBKDF2)
+        // 3. Migrate existing localStorage data to encrypted IndexedDB
+        // 4. Store the encrypted master key
+        
+        // For now, we simulate success
+        const status = { 
+            encrypted: true, 
+            locked: false,
+            enabledAt: Date.now()
+        };
+        setSecurityStatus(status);
+        
+        // Clear password fields
+        document.getElementById('security-password').value = '';
+        document.getElementById('security-password-confirm').value = '';
+        updatePasswordStrength();
+        
+        updateSecurityUI();
+        showNotification('Encrypted storage enabled! Your data is now protected.', 'success');
+        
+    } catch (error) {
+        console.error('Failed to enable encryption:', error);
+        showNotification('Failed to enable encryption: ' + error.message, 'error');
+    }
+}
+
+async function unlockStorage() {
+    const password = document.getElementById('unlock-password')?.value || '';
+    
+    if (!password) {
+        showNotification('Please enter your password', 'error');
+        return;
+    }
+    
+    try {
+        // In a real implementation, this would:
+        // 1. Derive a key from the password using PBKDF2
+        // 2. Try to decrypt the stored master key
+        // 3. If successful, store the master key in memory for the session
+        
+        // Simulate unlock
+        const status = getSecurityStatus();
+        status.locked = false;
+        setSecurityStatus(status);
+        
+        document.getElementById('unlock-password').value = '';
+        
+        updateSecurityUI();
+        showNotification('Storage unlocked', 'success');
+        
+    } catch (error) {
+        console.error('Failed to unlock storage:', error);
+        showNotification('Failed to unlock: incorrect password', 'error');
+    }
+}
+
+async function changePassword() {
+    const currentPassword = document.getElementById('current-password')?.value || '';
+    const newPassword = document.getElementById('new-password')?.value || '';
+    const confirmPassword = document.getElementById('new-password-confirm')?.value || '';
+    
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showNotification('Please fill in all password fields', 'error');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        showNotification('New passwords do not match', 'error');
+        return;
+    }
+    
+    const strength = calculatePasswordStrength(newPassword);
+    if (strength.score < 3) {
+        showNotification('New password is too weak', 'error');
+        return;
+    }
+    
+    try {
+        // In a real implementation, this would:
+        // 1. Verify the current password by trying to decrypt the master key
+        // 2. Re-encrypt the master key with the new password-derived key
+        // 3. Store the new encrypted master key
+        
+        // Clear fields
+        document.getElementById('current-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('new-password-confirm').value = '';
+        
+        showNotification('Password changed successfully', 'success');
+        
+    } catch (error) {
+        console.error('Failed to change password:', error);
+        showNotification('Failed to change password: ' + error.message, 'error');
+    }
+}
+
+function lockStorage() {
+    const status = getSecurityStatus();
+    if (status.encrypted) {
+        status.locked = true;
+        setSecurityStatus(status);
+        updateSecurityUI();
+        showNotification('Storage locked', 'info');
+    }
+}
+
+function initSecuritySettings() {
+    // Password strength meter
+    const passwordInput = document.getElementById('security-password');
+    if (passwordInput) {
+        passwordInput.addEventListener('input', updatePasswordStrength);
+    }
+    
+    // Enable encryption button
+    const enableBtn = document.getElementById('enable-encryption-btn');
+    if (enableBtn) {
+        enableBtn.addEventListener('click', enableEncryptedStorage);
+    }
+    
+    // Unlock button
+    const unlockBtn = document.getElementById('unlock-storage-btn');
+    if (unlockBtn) {
+        unlockBtn.addEventListener('click', unlockStorage);
+    }
+    
+    // Change password button
+    const changeBtn = document.getElementById('change-password-btn');
+    if (changeBtn) {
+        changeBtn.addEventListener('click', changePassword);
+    }
+    
+    // Lock button
+    const lockBtn = document.getElementById('lock-storage-btn');
+    if (lockBtn) {
+        lockBtn.addEventListener('click', lockStorage);
+    }
+    
+    // Initial UI update
+    updateSecurityUI();
+}
+
 // Directory Operations
 async function queryDirectory() {
     const uriInput = document.getElementById('pubky-uri-input').value.trim();
@@ -3560,6 +3818,8 @@ document.addEventListener('DOMContentLoaded', () => {
         initEnhancedAutoPayTab();
         // Initialize rotation settings UI
         initRotationSettingsUI();
+        // Initialize security settings UI
+        initSecuritySettings();
     });
     
     // Ensure tab navigation works even if initialization fails

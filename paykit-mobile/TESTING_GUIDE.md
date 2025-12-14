@@ -1,0 +1,399 @@
+# Paykit Mobile Testing Guide
+
+This guide covers testing strategies for the Paykit mobile implementation, including
+Noise protocol payment flows, cross-platform testing, and integration with the CLI demo.
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Test Categories](#test-categories)
+3. [Running Tests](#running-tests)
+4. [Cross-Platform Testing](#cross-platform-testing)
+5. [Manual Testing Checklist](#manual-testing-checklist)
+6. [CI/CD Integration](#cicd-integration)
+
+---
+
+## Overview
+
+The Paykit mobile testing suite covers:
+
+- **Unit Tests**: Individual function and module tests in Rust
+- **Integration Tests**: End-to-end flows using mock transports
+- **FFI Tests**: Verification of Swift/Kotlin bindings
+- **Cross-Platform Tests**: Interoperability between iOS, Android, and CLI
+
+### Test Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Test Categories                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  Unit Tests  │  │ Integration  │  │  FFI Tests   │       │
+│  │  (Rust)      │  │   Tests      │  │ (Swift/Kt)   │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+│         │                 │                  │               │
+│         └────────────────┼──────────────────┘               │
+│                          │                                   │
+│                          ▼                                   │
+│              ┌─────────────────────┐                        │
+│              │  Cross-Platform     │                        │
+│              │  Integration Tests  │                        │
+│              └─────────────────────┘                        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Test Categories
+
+### 1. Noise FFI Integration Tests
+
+**Location**: `paykit-mobile/tests/noise_ffi_integration.rs`
+
+Tests the FFI layer for Noise protocol operations:
+
+- Endpoint discovery (publish, discover, remove)
+- Message creation (receipt request, confirmation, error, private endpoint offer)
+- Message parsing
+- Server configuration
+- End-to-end message exchange flows
+
+```bash
+cargo test -p paykit-mobile --test noise_ffi_integration
+```
+
+### 2. Server Mode Tests
+
+**Location**: `paykit-mobile/tests/noise_server_mode.rs`
+
+Tests server mode (receiving payments):
+
+- Server configuration defaults
+- Endpoint publishing for discovery
+- Handling client requests
+- Private endpoint offers
+- Multiple client handling
+- Server shutdown and endpoint cleanup
+
+```bash
+cargo test -p paykit-mobile --test noise_server_mode
+```
+
+### 3. Interactive Payment Tests
+
+**Location**: `paykit-interactive/tests/`
+
+Tests the core interactive payment logic:
+
+- `integration_noise.rs`: Real Noise handshakes over TCP
+- `e2e_mobile_flow.rs`: Mobile wallet simulation
+- `e2e_payment_flows.rs`: Complete payment scenarios
+- `manager_tests.rs`: PaykitInteractiveManager tests
+- `serialization.rs`: Message serialization tests
+
+```bash
+cargo test -p paykit-interactive
+```
+
+### 4. CLI Integration Tests
+
+**Location**: `paykit-demo-cli/tests/noise_integration.rs`
+
+Tests CLI commands for Noise operations:
+
+- Endpoint discovery commands
+- Connection commands
+- Payment flow commands
+- Key management commands
+- Cross-platform message compatibility
+
+```bash
+cargo test -p paykit-demo-cli --test noise_integration
+```
+
+---
+
+## Running Tests
+
+### All Rust Tests
+
+```bash
+# Run all tests in the workspace
+cargo test
+
+# Run with verbose output
+cargo test -- --nocapture
+
+# Run specific test
+cargo test test_publish_and_discover_endpoint_roundtrip
+```
+
+### Mobile-Specific Tests
+
+```bash
+# All paykit-mobile tests
+cargo test -p paykit-mobile
+
+# Specific test file
+cargo test -p paykit-mobile --test noise_ffi_integration
+cargo test -p paykit-mobile --test noise_server_mode
+```
+
+### iOS Tests (Xcode)
+
+1. Open `paykit-mobile/ios-demo/PaykitDemo/PaykitDemo.xcodeproj`
+2. Select a simulator target
+3. Press `Cmd+U` to run tests
+4. Or use command line:
+
+```bash
+cd paykit-mobile/ios-demo/PaykitDemo
+xcodebuild test \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 15'
+```
+
+### Android Tests (Gradle)
+
+```bash
+cd paykit-mobile/android-demo
+
+# Unit tests
+./gradlew test
+
+# Instrumented tests (requires emulator/device)
+./gradlew connectedAndroidTest
+```
+
+---
+
+## Cross-Platform Testing
+
+### Test Matrix
+
+| Scenario | iOS → Android | Android → iOS | CLI → Mobile | Mobile → CLI |
+|----------|---------------|---------------|--------------|--------------|
+| Payment Request | ✅ | ✅ | ✅ | ✅ |
+| Receipt Confirmation | ✅ | ✅ | ✅ | ✅ |
+| Private Endpoint | ✅ | ✅ | ✅ | ✅ |
+| Error Handling | ✅ | ✅ | ✅ | ✅ |
+
+### Manual Cross-Platform Test
+
+#### Prerequisites
+
+1. iOS Simulator running the demo app
+2. Android Emulator running the demo app
+3. CLI built and ready
+
+#### Test 1: iOS Sends to Android
+
+1. **Android (Receiver)**:
+   - Open Android demo app
+   - Go to "Receive" tab
+   - Tap "Start Listening"
+   - Note the connection info
+
+2. **iOS (Sender)**:
+   - Open iOS demo app
+   - Go to "Send" tab
+   - Enter Android's connection info
+   - Enter amount and tap "Send"
+
+3. **Expected**:
+   - Android shows pending request
+   - Accept on Android
+   - iOS shows success with receipt ID
+   - Both apps show receipt in history
+
+#### Test 2: CLI Sends to Mobile
+
+1. **Mobile (Receiver)**:
+   - Start server mode (listen)
+   - Note connection info (host:port:pubkey)
+
+2. **CLI (Sender)**:
+   ```bash
+   paykit-demo-cli noise send \
+     --recipient <MOBILE_PUBKEY> \
+     --host <HOST> \
+     --port <PORT> \
+     --amount 1000 \
+     --method lightning
+   ```
+
+3. **Expected**:
+   - Mobile shows pending request
+   - Accept on mobile
+   - CLI shows success
+
+#### Test 3: Mobile Sends to CLI
+
+1. **CLI (Receiver)**:
+   ```bash
+   paykit-demo-cli noise listen --port 8888
+   ```
+
+2. **Mobile (Sender)**:
+   - Enter CLI's connection info
+   - Send payment
+
+3. **Expected**:
+   - CLI shows incoming request
+   - Accept in CLI
+   - Mobile shows success
+
+---
+
+## Manual Testing Checklist
+
+### iOS Demo App
+
+- [ ] App launches successfully
+- [ ] Can navigate to Send tab
+- [ ] Can navigate to Receive tab
+- [ ] Send: Form validates input
+- [ ] Send: Shows progress states
+- [ ] Send: Can cancel payment
+- [ ] Send: Shows success dialog
+- [ ] Send: Shows error dialog on failure
+- [ ] Receive: Can start listening
+- [ ] Receive: Shows connection info
+- [ ] Receive: Can copy connection string
+- [ ] Receive: Can show QR code
+- [ ] Receive: Shows pending requests
+- [ ] Receive: Can accept/decline requests
+- [ ] Receive: Shows recent receipts
+- [ ] Receipts saved to storage
+
+### Android Demo App
+
+- [ ] App launches successfully
+- [ ] Can navigate to Send tab
+- [ ] Can navigate to Receive tab
+- [ ] Send: Form validates input
+- [ ] Send: Shows progress states (StateFlow)
+- [ ] Send: Can cancel payment
+- [ ] Send: Shows success dialog
+- [ ] Send: Shows error dialog on failure
+- [ ] Receive: Can start listening
+- [ ] Receive: Shows connection info
+- [ ] Receive: Can copy connection string
+- [ ] Receive: Can show QR code
+- [ ] Receive: Shows pending requests
+- [ ] Receive: Can accept/decline requests
+- [ ] Receive: Shows recent receipts
+- [ ] Receipts saved to storage
+
+### CLI Demo
+
+- [ ] `noise discover` works
+- [ ] `noise publish` works
+- [ ] `noise remove` works
+- [ ] `noise connect` shows errors for invalid hosts
+- [ ] `noise send` requires recipient
+- [ ] `noise listen` starts server
+- [ ] `noise pubkey` shows key
+- [ ] `noise --help` shows usage
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+name: Mobile Tests
+
+on: [push, pull_request]
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Run Rust tests
+        run: |
+          cargo test -p paykit-mobile
+          cargo test -p paykit-interactive
+          cargo test -p paykit-demo-cli --test noise_integration
+
+  ios-tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build iOS
+        run: |
+          cd paykit-mobile/ios-demo/PaykitDemo
+          xcodebuild build \
+            -project PaykitDemo.xcodeproj \
+            -scheme PaykitDemo \
+            -destination 'platform=iOS Simulator,name=iPhone 15'
+
+  android-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Run Android tests
+        run: |
+          cd paykit-mobile/android-demo
+          ./gradlew test
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### "No Noise endpoint found"
+
+- Ensure the recipient has published their endpoint
+- Check network connectivity
+- Verify the pubkey is correct
+
+#### "Connection refused"
+
+- Ensure the server is running
+- Check firewall settings
+- Verify port is correct
+
+#### "Handshake failed"
+
+- Verify server public key is correct
+- Check that both parties are using compatible Noise versions
+- Ensure keys are properly derived
+
+#### iOS Build Fails
+
+- Run `pod install` in ios-demo directory
+- Ensure Xcode command line tools are installed
+- Check that PubkyNoise.xcframework is present
+
+#### Android Build Fails
+
+- Ensure JNI libraries are in jniLibs directory
+- Check Gradle version compatibility
+- Verify Kotlin version matches
+
+---
+
+## Related Documentation
+
+- [NOISE_INTEGRATION_GUIDE.md](./NOISE_INTEGRATION_GUIDE.md) - Integration overview
+- [NOISE_PAYMENTS_IMPLEMENTATION.md](./NOISE_PAYMENTS_IMPLEMENTATION.md) - Implementation details
+- [ios-demo/README.md](./ios-demo/README.md) - iOS setup
+- [android-demo/README.md](./android-demo/README.md) - Android setup
+

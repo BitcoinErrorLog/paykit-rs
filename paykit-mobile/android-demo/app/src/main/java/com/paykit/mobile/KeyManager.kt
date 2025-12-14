@@ -59,7 +59,7 @@ class KeyManager(context: Context) {
         private fun secretKey(name: String) = "paykit.identity.$name.secret"
         private fun publicKey(name: String) = "paykit.identity.$name.public"
         private fun publicKeyZ32(name: String) = "paykit.identity.$name.public.z32"
-        private fun nickname(name: String) = "paykit.identity.$name.nickname"
+        private fun nicknameKey(name: String) = "paykit.identity.$name.nickname"
         private fun createdAt(name: String) = "paykit.identity.$name.created_at"
         
         // Current identity and list (stored in regular SharedPreferences)
@@ -166,7 +166,7 @@ class KeyManager(context: Context) {
     fun getIdentityInfo(name: String): IdentityInfo? {
         val publicKeyZ32 = prefs.getString(publicKeyZ32(name), null) ?: return null
         val publicKeyHex = prefs.getString(publicKey(name), null) ?: return null
-        val nickname = prefs.getString(nickname(name), null)
+        val nickname = prefs.getString(nicknameKey(name), null)
         val createdAt = prefs.getLong(createdAt(name), 0L)
         
         return IdentityInfo(
@@ -223,7 +223,7 @@ class KeyManager(context: Context) {
             .apply()
         
         if (nickname != null) {
-            prefs.edit().putString(this.nickname(name), nickname).apply()
+            prefs.edit().putString(nicknameKey(name), nickname).apply()
         }
         
         val createdAt = System.currentTimeMillis()
@@ -289,7 +289,7 @@ class KeyManager(context: Context) {
             .remove(secretKey(name))
             .remove(publicKey(name))
             .remove(publicKeyZ32(name))
-            .remove(nickname(name))
+            .remove(nicknameKey(name))
             .remove(createdAt(name))
             .apply()
         
@@ -633,7 +633,7 @@ sealed class KeyManagerException(message: String) : Exception(message) {
     class BackupDecryptionFailed : KeyManagerException("Failed to decrypt backup. Check your password.")
     class IdentityNotFound(val name: String) : KeyManagerException("Identity '$name' not found.")
     class DuplicateIdentity(val name: String) : KeyManagerException("Identity '$name' already exists.")
-    class InvalidIdentityName(val message: String) : KeyManagerException("Invalid identity name: $message")
+    class InvalidIdentityName(val reason: String) : KeyManagerException("Invalid identity name: $reason")
     class CannotDeleteCurrentIdentity : KeyManagerException("Cannot delete current identity. Switch to another identity first.")
 }
 

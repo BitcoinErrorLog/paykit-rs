@@ -109,7 +109,8 @@ fun SettingsScreen() {
                 item { SettingsSectionHeader("Identity") }
                 
                 item {
-                    val keyManager = remember { KeyManager(LocalContext.current) }
+                    val context = LocalContext.current
+                    val keyManager = remember(context) { KeyManager(context) }
                     val currentIdentityName by keyManager.currentIdentityName.collectAsState()
                     
                     SettingsItem(
@@ -121,6 +122,7 @@ fun SettingsScreen() {
                 item {
                     SettingsItem(
                         title = "Manage Identities",
+                        subtitle = "Switch or create identities",
                         onClick = { showIdentityList = true }
                     )
                 }

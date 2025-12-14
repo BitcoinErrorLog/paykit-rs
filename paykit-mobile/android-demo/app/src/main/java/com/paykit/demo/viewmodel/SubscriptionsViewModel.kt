@@ -15,13 +15,13 @@ import kotlinx.coroutines.flow.update
  * 
  * Uses EncryptedSharedPreferences-backed SubscriptionStorage for secure persistence.
  */
-class SubscriptionsViewModel(application: Application) : AndroidViewModel(application) {
+class SubscriptionsViewModel(private val app: Application) : AndroidViewModel(app) {
 
-    private val keyManager = KeyManager(application)
+    private val keyManager = KeyManager(app)
     private val storage: SubscriptionStorage
         get() {
             val identityName = keyManager.currentIdentityName.value ?: "default"
-            return SubscriptionStorage(application, identityName)
+            return SubscriptionStorage(app, identityName)
         }
     
     private val _uiState = MutableStateFlow(SubscriptionsUiState())

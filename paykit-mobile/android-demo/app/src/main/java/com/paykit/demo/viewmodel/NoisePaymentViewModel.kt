@@ -243,9 +243,9 @@ class NoisePaymentViewModel(application: Application) : AndroidViewModel(applica
         
         contacts.find { 
             it.name.equals(input, ignoreCase = true) ||
-            it.publicKey.equals(input, ignoreCase = true)
+            it.publicKeyZ32.equals(input, ignoreCase = true)
         }?.let {
-            return it.publicKey
+            return it.publicKeyZ32
         }
         
         // Assume it's a raw public key

@@ -17,6 +17,7 @@ package com.paykit.demo.services
 import android.content.Context
 import android.os.Build
 import com.paykit.mobile.KeyManager
+import com.paykit.mobile.NoiseEndpointInfo
 import com.pubky.noise.FfiMobileConfig
 import com.pubky.noise.FfiNoiseManager
 import kotlinx.coroutines.Dispatchers
@@ -33,21 +34,16 @@ import java.net.Socket
 import java.util.UUID
 import kotlinx.coroutines.*
 
-/**
- * Information about a recipient's Noise endpoint
- */
-data class NoiseEndpointInfo(
-    val host: String,
-    val port: Int,
-    val serverPubkeyHex: String,
-    val metadata: String? = null
-) {
-    val connectionAddress: String
-        get() = "$host:$port"
-    
-    val serverPubkeyBytes: ByteArray
-        get() = serverPubkeyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-}
+// Use NoiseEndpointInfo from com.paykit.mobile instead of a local definition
+// Import it explicitly to avoid confusion:
+// import com.paykit.mobile.NoiseEndpointInfo
+
+// Helper extension for backward compatibility
+val com.paykit.mobile.NoiseEndpointInfo.connectionAddress: String
+    get() = "$host:$port"
+
+val com.paykit.mobile.NoiseEndpointInfo.serverPubkeyBytes: ByteArray
+    get() = serverNoisePubkey.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
 /**
  * A payment request to send over Noise channel
@@ -231,13 +227,14 @@ class NoisePaymentService private constructor(private val context: Context) {
         require(parts.size >= 3) { "Expected format: host:port:pubkey_hex" }
         
         val host = parts[0]
-        val port = parts[1].toIntOrNull() ?: throw NoisePaymentException.InvalidEndpoint("Invalid port")
+        val port = parts[1].toIntOrNull()?.toUShort() ?: throw NoisePaymentException.InvalidEndpoint("Invalid port")
         val pubkeyHex = parts[2]
         
         return NoiseEndpointInfo(
+            recipientPubkey = "", // Unknown from test format
             host = host,
             port = port,
-            serverPubkeyHex = pubkeyHex,
+            serverNoisePubkey = pubkeyHex,
             metadata = null
         )
     }
@@ -253,7 +250,7 @@ class NoisePaymentService private constructor(private val context: Context) {
         try {
             socket = Socket().apply {
                 soTimeout = connectionTimeoutMs
-                connect(InetSocketAddress(endpoint.host, endpoint.port), connectionTimeoutMs)
+                connect(InetSocketAddress(endpoint.host, endpoint.port.toInt()), connectionTimeoutMs)
             }
         } catch (e: Exception) {
             throw NoisePaymentException.ConnectionFailed(e.message ?: "Unknown error")
@@ -479,17 +476,29 @@ class NoisePaymentService private constructor(private val context: Context) {
         val keypair = getOrDeriveKeys()
         serverKeypair = keypair
         
-        // Create server configuration
-        val serverConfig = PaykitClient().createNoiseServerConfig(
-            port = port.toUShort(),
-            serverKeypair = com.paykit.mobile.X25519Keypair(
-                secretKeyHex = keypair.secretKeyHex,
-                publicKeyHex = keypair.publicKeyHex
-            )
+        // Get the Ed25519 seed from MockPubkyRingService for FfiNoiseManager
+        val mockRing = MockPubkyRingService.getInstance(context)
+        val seedHex = mockRing.getCachedSeedHex()
+            ?: throw NoisePaymentException.ConfigurationError("No seed available for server mode")
+        val seedData = seedHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        
+        val deviceId = getDeviceId().toByteArray(Charsets.UTF_8)
+        
+        // Create Noise manager for server mode using FfiNoiseManager.newServer
+        val serverConfig = FfiMobileConfig(
+            autoReconnect = false,
+            maxReconnectAttempts = 0u,
+            reconnectDelayMs = 0UL,
+            batterySaver = false,
+            chunkSize = 32768u
         )
         
-        // Create Noise manager for server
-        serverNoiseManager = PaykitClient().createNoiseManagerServer(config = serverConfig)
+        serverNoiseManager = FfiNoiseManager.newServer(
+            config = serverConfig,
+            serverSeed = seedData,
+            serverKid = "paykit-android-server",
+            deviceId = deviceId
+        )
         
         // Create ServerSocket
         val socket = if (port > 0) {
@@ -824,5 +833,4 @@ data class PendingPaymentRequest(
     val receivedAt: Long,
     val connectionId: String
 )
-}
 

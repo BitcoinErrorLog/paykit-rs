@@ -41,30 +41,28 @@ fun RotationSettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     
     val storage = remember(identityName) {
-        identityName?.let { RotationSettingsStorage(context, it) }
+        if (identityName != null) RotationSettingsStorage(context, identityName) else null
     }
     
     fun load() {
-        storage?.let {
-            val settings = it.loadSettings()
-            autoRotateEnabled = settings.autoRotateEnabled
-            defaultPolicy = try { RotationPolicy.valueOf(settings.defaultPolicy) } catch (e: Exception) { RotationPolicy.ON_USE }
-            defaultThreshold = settings.defaultThreshold
-            methodSettings = settings.methodSettings
-            history = it.loadHistory()
-            totalRotations = it.totalRotations()
-        }
+        val s = storage ?: return
+        val settings = s.loadSettings()
+        autoRotateEnabled = settings.autoRotateEnabled
+        defaultPolicy = try { RotationPolicy.valueOf(settings.defaultPolicy) } catch (e: Exception) { RotationPolicy.ON_USE }
+        defaultThreshold = settings.defaultThreshold
+        methodSettings = settings.methodSettings
+        history = s.loadHistory()
+        totalRotations = s.totalRotations()
     }
     
     fun save() {
-        storage?.let {
-            val settings = it.loadSettings().copy(
-                autoRotateEnabled = autoRotateEnabled,
-                defaultPolicy = defaultPolicy.name,
-                defaultThreshold = defaultThreshold
-            )
-            it.saveSettings(settings)
-        }
+        val s = storage ?: return
+        val settings = s.loadSettings().copy(
+            autoRotateEnabled = autoRotateEnabled,
+            defaultPolicy = defaultPolicy.name,
+            defaultThreshold = defaultThreshold
+        )
+        s.saveSettings(settings)
     }
     
     LaunchedEffect(identityName) {

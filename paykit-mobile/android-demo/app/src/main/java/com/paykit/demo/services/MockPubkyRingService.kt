@@ -98,6 +98,12 @@ class MockPubkyRingService private constructor(context: Context) {
         get() = cachedSeedHex != null
     
     /**
+     * Get the cached seed hex (for internal use by NoisePaymentService server mode)
+     * Returns null if no seed is available
+     */
+    fun getCachedSeedHex(): String? = cachedSeedHex
+    
+    /**
      * Initialize the mock service with a new random seed
      *
      * This generates a new Ed25519 keypair and stores the seed securely.

@@ -107,7 +107,7 @@ struct PaymentMethodsView: View {
                             }
                             
                             Button("Publish All Methods") {
-                                viewModel.publishAllMethods()
+                                viewModel.publishAllMethods(client: appState.paykitClient)
                             }
                             .buttonStyle(.bordered)
                             .frame(maxWidth: .infinity)

@@ -736,6 +736,62 @@
                 </div>
             </div>
 
+            <div class="card" id="rotation-settings-section">
+                <h3>Endpoint Rotation</h3>
+                <p>Automatically rotate payment endpoints for enhanced privacy</p>
+                
+                <div class="form-group">
+                    <div class="toggle-row">
+                        <span>Auto-rotate after payments</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="auto-rotate-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="default-rotation-policy">Default Rotation Policy</label>
+                    <select id="default-rotation-policy">
+                        <option value="on-use">Rotate on every use (best privacy)</option>
+                        <option value="after:5">Rotate after 5 uses</option>
+                        <option value="after:10">Rotate after 10 uses</option>
+                        <option value="manual">Manual rotation only</option>
+                    </select>
+                </div>
+
+                <h4>Per-Method Policies</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="rotation-method-select">Payment Method</label>
+                        <select id="rotation-method-select">
+                            <option value="lightning">Lightning</option>
+                            <option value="onchain">On-Chain</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="rotation-method-policy">Policy</label>
+                        <select id="rotation-method-policy">
+                            <option value="default">Use Default</option>
+                            <option value="on-use">Rotate on every use</option>
+                            <option value="after:5">Rotate after 5 uses</option>
+                            <option value="after:10">Rotate after 10 uses</option>
+                            <option value="manual">Manual only</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="set-method-rotation-btn" class="btn btn-secondary">Set Method Policy</button>
+                
+                <div id="rotation-status" class="rotation-status">
+                    <h4>Rotation Status</h4>
+                    <div id="rotation-status-content">
+                        <p class="empty-state">No rotation history yet</p>
+                    </div>
+                </div>
+                
+                <button id="save-rotation-settings-btn" class="btn btn-primary">Save Settings</button>
+            </div>
+
             <div class="card">
                 <h3>How Auto-Pay Works</h3>
                 <div class="autopay-flow">

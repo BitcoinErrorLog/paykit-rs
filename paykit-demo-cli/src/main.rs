@@ -158,11 +158,100 @@ enum Commands {
     /// Show dashboard with summary statistics
     Dashboard,
 
+    /// Manage private endpoints exchanged with peers
+    Endpoints {
+        #[command(subcommand)]
+        action: EndpointAction,
+    },
+
+    /// Configure endpoint rotation policies
+    Rotation {
+        #[command(subcommand)]
+        action: RotationAction,
+    },
+
     /// Manage payment requests and subscriptions
     Subscriptions {
         #[command(subcommand)]
         action: SubscriptionAction,
     },
+}
+
+#[derive(Subcommand)]
+enum EndpointAction {
+    /// List all private endpoints
+    List,
+
+    /// Show endpoints for a specific peer
+    Show {
+        /// Peer public key
+        peer: String,
+    },
+
+    /// Remove a specific endpoint
+    Remove {
+        /// Peer public key
+        peer: String,
+
+        /// Payment method ID
+        method: String,
+    },
+
+    /// Remove all endpoints for a peer
+    RemovePeer {
+        /// Peer public key
+        peer: String,
+    },
+
+    /// Cleanup expired endpoints
+    Cleanup,
+
+    /// Show endpoint statistics
+    Stats,
+}
+
+#[derive(Subcommand)]
+enum RotationAction {
+    /// Show rotation status for all methods
+    Status,
+
+    /// Set rotation policy for a specific method
+    Policy {
+        /// Payment method ID (e.g., "onchain", "lightning")
+        method: String,
+
+        /// Policy: on-use, manual, after:<count>, periodic:<seconds>
+        policy: String,
+    },
+
+    /// Set the default rotation policy
+    Default {
+        /// Policy: on-use, manual, after:<count>, periodic:<seconds>
+        policy: String,
+    },
+
+    /// Enable or disable auto-rotation after payments
+    AutoRotate {
+        /// Enable (true) or disable (false)
+        #[arg(long)]
+        enable: bool,
+    },
+
+    /// Manually trigger rotation for a method
+    Rotate {
+        /// Payment method ID
+        method: String,
+    },
+
+    /// Show rotation history for auditing
+    History {
+        /// Filter by payment method (optional)
+        #[arg(short, long)]
+        method: Option<String>,
+    },
+
+    /// Clear rotation history
+    ClearHistory,
 }
 
 #[derive(Subcommand)]
@@ -697,6 +786,49 @@ async fn main() -> Result<()> {
         Commands::Dashboard => {
             commands::dashboard::run(&storage_dir, cli.verbose).await?;
         }
+        Commands::Endpoints { action } => match action {
+            EndpointAction::List => {
+                commands::endpoints::list(&storage_dir, cli.verbose).await?;
+            }
+            EndpointAction::Show { peer } => {
+                commands::endpoints::show(&storage_dir, &peer, cli.verbose).await?;
+            }
+            EndpointAction::Remove { peer, method } => {
+                commands::endpoints::remove(&storage_dir, &peer, &method, cli.verbose).await?;
+            }
+            EndpointAction::RemovePeer { peer } => {
+                commands::endpoints::remove_peer(&storage_dir, &peer, cli.verbose).await?;
+            }
+            EndpointAction::Cleanup => {
+                commands::endpoints::cleanup(&storage_dir, cli.verbose).await?;
+            }
+            EndpointAction::Stats => {
+                commands::endpoints::stats(&storage_dir, cli.verbose).await?;
+            }
+        },
+        Commands::Rotation { action } => match action {
+            RotationAction::Status => {
+                commands::rotation::status(&storage_dir, cli.verbose).await?;
+            }
+            RotationAction::Policy { method, policy } => {
+                commands::rotation::set_policy(&storage_dir, &method, &policy, cli.verbose).await?;
+            }
+            RotationAction::Default { policy } => {
+                commands::rotation::set_default(&storage_dir, &policy, cli.verbose).await?;
+            }
+            RotationAction::AutoRotate { enable } => {
+                commands::rotation::auto_rotate(&storage_dir, enable, cli.verbose).await?;
+            }
+            RotationAction::Rotate { method } => {
+                commands::rotation::rotate(&storage_dir, &method, cli.verbose).await?;
+            }
+            RotationAction::History { method } => {
+                commands::rotation::history(&storage_dir, method, cli.verbose).await?;
+            }
+            RotationAction::ClearHistory => {
+                commands::rotation::clear_history(&storage_dir, cli.verbose).await?;
+            }
+        },
         Commands::Subscriptions { action } => match action {
             SubscriptionAction::Request {
                 recipient,

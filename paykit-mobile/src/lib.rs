@@ -55,7 +55,7 @@ pub use executor_ffi::{
     LightningPaymentResultFFI, LightningPaymentStatusFFI,
 };
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 // UniFFI scaffolding
 uniffi::setup_scaffolding!();
@@ -562,8 +562,8 @@ pub struct PrivateEndpoint {
 /// Main Paykit client for mobile applications.
 #[derive(uniffi::Object)]
 pub struct PaykitClient {
-    /// Plugin registry.
-    registry: paykit_lib::methods::PaymentMethodRegistry,
+    /// Plugin registry (thread-safe for concurrent access).
+    registry: Arc<std::sync::RwLock<paykit_lib::methods::PaymentMethodRegistry>>,
     /// Health monitor.
     health_monitor: Arc<paykit_lib::health::HealthMonitor>,
     /// Status tracker.
@@ -613,7 +613,7 @@ impl PaykitClient {
         })?;
 
         Ok(Arc::new(Self {
-            registry: paykit_lib::methods::default_registry(),
+            registry: Arc::new(RwLock::new(paykit_lib::methods::default_registry())),
             health_monitor: Arc::new(paykit_lib::health::HealthMonitor::with_defaults()),
             status_tracker: Arc::new(paykit_interactive::PaymentStatusTracker::new()),
             runtime,
@@ -635,6 +635,8 @@ impl PaykitClient {
     /// Get the list of registered payment methods.
     pub fn list_methods(&self) -> Vec<String> {
         self.registry
+            .read()
+            .unwrap()
             .list_methods()
             .into_iter()
             .map(|m| m.0)
@@ -648,6 +650,8 @@ impl PaykitClient {
 
         let plugin = self
             .registry
+            .read()
+            .unwrap()
             .get(&method)
             .ok_or(PaykitMobileError::NotFound {
                 message: format!("Method not found: {}", method.0),
@@ -703,7 +707,7 @@ impl PaykitClient {
             })
             .unwrap_or_default();
 
-        let selector = PaymentMethodSelector::new(self.registry.clone());
+        let selector = PaymentMethodSelector::new(self.registry.read().unwrap().clone());
         let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
             PaykitMobileError::Validation {
                 message: e.to_string(),
@@ -851,7 +855,7 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.register(Box::new(plugin));
+        self.registry.write().unwrap().register(Box::new(plugin));
 
         Ok(())
     }
@@ -895,7 +899,7 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.register(Box::new(plugin));
+        self.registry.write().unwrap().register(Box::new(plugin));
 
         Ok(())
     }
@@ -906,6 +910,8 @@ impl PaykitClient {
     /// `register_bitcoin_executor`, this will return true.
     pub fn has_bitcoin_executor(&self) -> bool {
         self.registry
+            .read()
+            .unwrap()
             .get(&paykit_lib::MethodId("onchain".to_string()))
             .is_some()
     }
@@ -916,6 +922,8 @@ impl PaykitClient {
     /// `register_lightning_executor`, this will return true.
     pub fn has_lightning_executor(&self) -> bool {
         self.registry
+            .read()
+            .unwrap()
             .get(&paykit_lib::MethodId("lightning".to_string()))
             .is_some()
     }
@@ -964,6 +972,8 @@ impl PaykitClient {
     ) -> Result<PaymentExecutionResult> {
         let plugin = self
             .registry
+            .read()
+            .unwrap()
             .get(&paykit_lib::MethodId(method_id.clone()))
             .ok_or(PaykitMobileError::NotFound {
                 message: format!("Payment method not registered: {}", method_id),
@@ -1017,6 +1027,8 @@ impl PaykitClient {
     ) -> Result<PaymentProofResult> {
         let plugin = self
             .registry
+            .read()
+            .unwrap()
             .get(&paykit_lib::MethodId(method_id.clone()))
             .ok_or(PaykitMobileError::NotFound {
                 message: format!("Payment method not registered: {}", method_id),

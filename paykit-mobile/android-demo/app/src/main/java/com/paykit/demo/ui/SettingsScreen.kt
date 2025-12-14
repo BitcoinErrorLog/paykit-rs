@@ -59,6 +59,114 @@ fun SettingsScreen() {
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
+                // Quick Access Section
+                item { SettingsSectionHeader("Quick Access") }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Auto-Pay",
+                        icon = Icons.Default.Repeat,
+                        iconTint = Color(0xFFFF9800),
+                        onClick = { /* Navigate to AutoPay */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Subscriptions",
+                        icon = Icons.Default.Repeat,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick = { /* Navigate to Subscriptions */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Payment Requests",
+                        icon = Icons.Default.Mail,
+                        iconTint = Color(0xFF9C27B0),
+                        onClick = { /* Navigate to Payment Requests */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Directory Publishing",
+                        icon = Icons.Default.Public,
+                        iconTint = Color(0xFF4CAF50),
+                        onClick = { /* Navigate to Payment Methods */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Private Endpoints",
+                        icon = Icons.Default.Lock,
+                        iconTint = Color(0xFF4CAF50),
+                        onClick = { /* Navigate to Private Endpoints */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Rotation Settings",
+                        icon = Icons.Default.Refresh,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        onClick = { /* Navigate to Rotation Settings */ }
+                    )
+                }
+                
+                // Features Section
+                item { SettingsSectionHeader("Features") }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Auto-Pay",
+                        onClick = { /* Navigate to AutoPay */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Subscriptions",
+                        onClick = { /* Navigate to Subscriptions */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Payment Requests",
+                        onClick = { /* Navigate to Payment Requests */ }
+                    )
+                }
+                
+                // Privacy Section
+                item { SettingsSectionHeader("Privacy") }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Private Endpoints",
+                        onClick = { /* Navigate to Private Endpoints */ }
+                    )
+                }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Rotation Settings",
+                        onClick = { /* Navigate to Rotation Settings */ }
+                    )
+                }
+                
+                // Network Section
+                item { SettingsSectionHeader("Network") }
+                
+                item {
+                    SettingsNavigationItem(
+                        title = "Directory Publishing",
+                        onClick = { /* Navigate to Payment Methods */ }
+                    )
+                }
+                
                 // About Section
                 item { SettingsSectionHeader("About") }
 

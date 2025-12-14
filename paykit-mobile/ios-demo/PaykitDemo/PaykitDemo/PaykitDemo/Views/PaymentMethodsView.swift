@@ -15,6 +15,113 @@ struct PaymentMethodsView: View {
     var body: some View {
         NavigationView {
             List {
+                // Privacy Features Section (moved to top)
+                Section {
+                    NavigationLink {
+                        PrivateEndpointsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundColor(.green)
+                                .frame(width: 30)
+                            VStack(alignment: .leading) {
+                                Text("Private Endpoints")
+                                Text("Manage per-peer private addresses")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink {
+                        RotationSettingsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
+                            VStack(alignment: .leading) {
+                                Text("Rotation Settings")
+                                Text("Configure endpoint rotation policies")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Privacy Features")
+                }
+                
+                // Directory Publishing Section
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Publish to Directory")
+                                .font(.headline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.isPublishingEnabled)
+                        }
+                        
+                        if viewModel.isPublishingEnabled {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("\(viewModel.publishedMethodsCount) method(s) published")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Button("Publish All Methods") {
+                                viewModel.publishAllMethods(client: appState.paykitClient)
+                            }
+                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Methods are not publicly discoverable")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Directory Publishing")
+                }
+                
+                // Directory Publishing Section
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Publish to Directory")
+                                .font(.headline)
+                            Spacer()
+                            Toggle("", isOn: $viewModel.isPublishingEnabled)
+                        }
+                        
+                        if viewModel.isPublishingEnabled {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("\(viewModel.publishedMethodsCount) method(s) published")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Button("Publish All Methods") {
+                                viewModel.publishAllMethods()
+                            }
+                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Methods are not publicly discoverable")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Directory Publishing")
+                }
+                
                 // Available Methods Section
                 Section {
                     ForEach(viewModel.methods, id: \.id) { method in
@@ -37,6 +144,8 @@ struct PaymentMethodsView: View {
                     }
                 } header: {
                     Text("Health Status")
+                } footer: {
+                    Text("Health status auto-refreshes when screen appears")
                 }
                 
                 // Method Selection Section
@@ -161,6 +270,8 @@ struct PaymentMethodsView: View {
             .navigationTitle("Payment Methods")
             .onAppear {
                 viewModel.loadMethods(client: appState.paykitClient)
+                viewModel.checkHealth(client: appState.paykitClient)
+                viewModel.loadPublishingStatus(client: appState.paykitClient)
             }
         }
     }
@@ -251,6 +362,8 @@ class PaymentMethodsViewModel: ObservableObject {
     @Published var validationMethod: String = "onchain"
     @Published var validationEndpoint: String = ""
     @Published var validationResult: Bool?
+    @Published var isPublishingEnabled: Bool = false
+    @Published var publishedMethodsCount: Int = 0
     
     func loadMethods(client: PaykitClientWrapper) {
         let methodIds = client.listMethods()
@@ -269,6 +382,31 @@ class PaymentMethodsViewModel: ObservableObject {
     
     func checkHealth(client: PaykitClientWrapper) {
         healthResults = client.checkHealth()
+    }
+    
+    func loadPublishingStatus(client: PaykitClientWrapper) {
+        // Check which methods are published
+        let keyManager = KeyManager()
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        let methodStorage = PaymentMethodStorage(identityName: identityName)
+        let allMethods = methodStorage.listMethods()
+        publishedMethodsCount = allMethods.filter { $0.isPublic }.count
+        isPublishingEnabled = publishedMethodsCount > 0
+    }
+    
+    func publishAllMethods(client: PaykitClientWrapper) {
+        let keyManager = KeyManager()
+        let identityName = keyManager.getCurrentIdentityName() ?? "default"
+        let methodStorage = PaymentMethodStorage(identityName: identityName)
+        let allMethods = methodStorage.listMethods()
+        
+        for method in allMethods {
+            if !method.isPublic {
+                try? methodStorage.setPublic(methodId: method.methodId, isPublic: true)
+            }
+        }
+        
+        loadPublishingStatus(client: client)
     }
     
     func selectMethod(client: PaykitClientWrapper) {

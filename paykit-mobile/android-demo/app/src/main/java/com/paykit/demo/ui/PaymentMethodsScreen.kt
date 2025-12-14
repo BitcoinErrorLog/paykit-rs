@@ -117,6 +117,126 @@ fun PaymentMethodsScreen(
                 }
             }
             
+            // Privacy Features Section (moved to top)
+            item {
+                Text(
+                    text = "Privacy Features",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+            
+            item {
+                Card(
+                    onClick = onNavigateToPrivateEndpoints,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Private Endpoints", style = MaterialTheme.typography.bodyLarge)
+                            Text("Manage per-peer private addresses", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+            
+            item {
+                Card(
+                    onClick = onNavigateToRotationSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Rotation Settings", style = MaterialTheme.typography.bodyLarge)
+                            Text("Configure endpoint rotation policies", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+            
+            // Directory Publishing Section
+            item {
+                Text(
+                    text = "Directory Publishing",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+            
+            item {
+                var isPublishingEnabled by remember { mutableStateOf(false) }
+                var publishedCount by remember { mutableIntStateOf(0) }
+                
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Publish to Directory", style = MaterialTheme.typography.bodyLarge)
+                            Switch(
+                                checked = isPublishingEnabled,
+                                onCheckedChange = { isPublishingEnabled = it }
+                            )
+                        }
+                        
+                        if (isPublishingEnabled) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50)
+                                )
+                                Text(
+                                    "$publishedCount method(s) published",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            
+                            Button(
+                                onClick = { /* TODO: Implement publish all */ },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Publish All Methods")
+                            }
+                        } else {
+                            Text(
+                                "Methods are not publicly discoverable",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            
             // Available Methods Section
             item {
                 Text(
@@ -139,6 +259,11 @@ fun PaymentMethodsScreen(
                 )
             }
 
+            // Auto-refresh health on appear
+            LaunchedEffect(Unit) {
+                healthResults = paykitClient.checkHealth()
+            }
+            
             if (healthResults.isEmpty() && !isLoadingHealth) {
                 item {
                     Button(

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.paykit.demo.storage.StoredReceipt
@@ -44,6 +45,7 @@ fun ReceivePaymentScreen(
     val recentReceipts by viewModel.recentReceipts.collectAsState()
     
     var showQRDialog by remember { mutableStateOf(false) }
+    var isPublishedToDirectory by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         viewModel.loadRecentReceipts()

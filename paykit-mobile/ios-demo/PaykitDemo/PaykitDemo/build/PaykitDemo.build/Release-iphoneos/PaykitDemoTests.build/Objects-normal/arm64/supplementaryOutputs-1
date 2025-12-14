@@ -1,0 +1,12 @@
+{
+  "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/PaykitDemoTests/DirectoryE2ETests.swift" : {
+    "abi-baseline-json" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests.abi.json",
+    "const-values" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests-primary.swiftconstvalues",
+    "dependencies" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests-primary.d",
+    "diagnostics" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests-primary.dia",
+    "objc-header" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests-Swift.h",
+    "swiftdoc" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests.swiftdoc",
+    "swiftmodule" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests.swiftmodule",
+    "swiftsourceinfo" : "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/build/PaykitDemo.build/Release-iphoneos/PaykitDemoTests.build/Objects-normal/arm64/PaykitDemoTests.swiftsourceinfo"
+  }
+}

@@ -1,0 +1,2 @@
+12-14 14:20:13.971  9089  9104 I TestRunner: started: testCreateIdentity(com.paykit.demo.KeyManagementE2ETest)
+12-14 14:20:13.972  9089  9104 I TestRunner: finished: testCreateIdentity(com.paykit.demo.KeyManagementE2ETest)

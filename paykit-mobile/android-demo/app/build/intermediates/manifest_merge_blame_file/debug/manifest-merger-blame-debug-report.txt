@@ -31,15 +31,15 @@
 22-->/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/android-demo/app/src/main/AndroidManifest.xml:13:58-82
 23
 24    <permission
-24-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:22:5-24:47
+24-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:22:5-24:47
 25        android:name="com.paykit.demo.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-25-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:23:9-81
+25-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:23:9-81
 26        android:protectionLevel="signature" />
-26-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:24:9-44
+26-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:24:9-44
 27
 28    <uses-permission android:name="com.paykit.demo.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-28-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:26:5-97
-28-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:26:22-94
+28-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:26:5-97
+28-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:26:22-94
 29
 30    <application
 30-->/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/android-demo/app/src/main/AndroidManifest.xml:15:5-45:19
@@ -48,7 +48,7 @@
 32        android:allowBackup="true"
 32-->/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/android-demo/app/src/main/AndroidManifest.xml:17:9-35
 33        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-33-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/c873dfae54dc8a40d769d8e5eaa37fe5/transformed/core-1.12.0/AndroidManifest.xml:28:18-86
+33-->[androidx.core:core:1.12.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/b4881c491e506971d28653764076babd/transformed/core-1.12.0/AndroidManifest.xml:28:18-86
 34        android:dataExtractionRules="@xml/data_extraction_rules"
 34-->/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile/android-demo/app/src/main/AndroidManifest.xml:18:9-65
 35        android:debuggable="true"
@@ -106,81 +106,81 @@
 62            </intent-filter>
 63        </activity>
 64        <activity
-64-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/4fa1f97628fc6e736f11f1a01c8b42d4/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:23:9-25:39
+64-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/794d94969d8d085280ec91c5bd1b8dde/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:23:9-25:39
 65            android:name="androidx.activity.ComponentActivity"
-65-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/4fa1f97628fc6e736f11f1a01c8b42d4/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:24:13-63
+65-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/794d94969d8d085280ec91c5bd1b8dde/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:24:13-63
 66            android:exported="true" />
-66-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/4fa1f97628fc6e736f11f1a01c8b42d4/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:25:13-36
+66-->[androidx.compose.ui:ui-test-manifest:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/794d94969d8d085280ec91c5bd1b8dde/transformed/ui-test-manifest-1.6.1/AndroidManifest.xml:25:13-36
 67        <activity
-67-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/be7697323702525ae1afdb52bafcd831/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
+67-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/7733becb7a3f3cf8ac6aa90ec99d938e/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
 68            android:name="androidx.compose.ui.tooling.PreviewActivity"
-68-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/be7697323702525ae1afdb52bafcd831/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
+68-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/7733becb7a3f3cf8ac6aa90ec99d938e/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
 69            android:exported="true" />
-69-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/be7697323702525ae1afdb52bafcd831/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
+69-->[androidx.compose.ui:ui-tooling-android:1.6.1] /Users/john/.gradle/caches/9.0-milestone-1/transforms/7733becb7a3f3cf8ac6aa90ec99d938e/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
 70
 71        <provider
-71-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+71-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
 72            android:name="androidx.startup.InitializationProvider"
-72-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+72-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
 73            android:authorities="com.paykit.demo.androidx-startup"
-73-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+73-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
 74            android:exported="false" >
-74-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+74-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
 75            <meta-data
-75-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+75-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
 76                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-76-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+76-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
 77                android:value="androidx.startup" />
-77-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/1f48e4c0e796405636188f081f92616f/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+77-->[androidx.emoji2:emoji2:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/dbd2cf687170aa328594f4270d2e61a9/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
 78            <meta-data
-78-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/03bb368b0d8018f2a24f6ba5bf006b58/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:29:13-31:52
+78-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/a44eb655fc3e405f7cfcefec6c710f70/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:29:13-31:52
 79                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-79-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/03bb368b0d8018f2a24f6ba5bf006b58/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:30:17-78
+79-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/a44eb655fc3e405f7cfcefec6c710f70/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:30:17-78
 80                android:value="androidx.startup" />
-80-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/03bb368b0d8018f2a24f6ba5bf006b58/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:31:17-49
+80-->[androidx.lifecycle:lifecycle-process:2.7.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/a44eb655fc3e405f7cfcefec6c710f70/transformed/lifecycle-process-2.7.0/AndroidManifest.xml:31:17-49
 81            <meta-data
-81-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
+81-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
 82                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-82-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
+82-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
 83                android:value="androidx.startup" />
-83-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
+83-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
 84        </provider>
 85
 86        <receiver
-86-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
+86-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
 87            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-87-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
+87-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
 88            android:directBootAware="false"
-88-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
+88-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
 89            android:enabled="true"
-89-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
+89-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
 90            android:exported="true"
-90-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
+90-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
 91            android:permission="android.permission.DUMP" >
-91-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
+91-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
 92            <intent-filter>
-92-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
+92-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
 93                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-93-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
-93-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
+93-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
+93-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
 94            </intent-filter>
 95            <intent-filter>
-95-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
+95-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
 96                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-96-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
-96-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
+96-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
+96-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
 97            </intent-filter>
 98            <intent-filter>
-98-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
+98-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
 99                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-99-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
-99-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
+99-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
+99-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
 100            </intent-filter>
 101            <intent-filter>
-101-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
+101-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
 102                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-102-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
-102-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/e18bc3c78744a1b9612c0cf7cc4e6d34/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/john/.gradle/caches/9.0-milestone-1/transforms/263a76640199183f906cdae684854eba/transformed/profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
 103            </intent-filter>
 104        </receiver>
 105    </application>

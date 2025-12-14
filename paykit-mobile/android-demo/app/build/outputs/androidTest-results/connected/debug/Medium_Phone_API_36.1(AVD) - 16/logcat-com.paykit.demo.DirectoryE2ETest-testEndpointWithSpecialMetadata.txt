@@ -1,0 +1,2 @@
+12-14 14:20:13.928  9089  9104 I TestRunner: started: testEndpointWithSpecialMetadata(com.paykit.demo.DirectoryE2ETest)
+12-14 14:20:13.929  9089  9104 I TestRunner: finished: testEndpointWithSpecialMetadata(com.paykit.demo.DirectoryE2ETest)

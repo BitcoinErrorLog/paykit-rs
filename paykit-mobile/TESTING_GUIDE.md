@@ -183,6 +183,42 @@ xcodebuild test \
 - Android SDK 26+
 - Gradle 9.0+
 - Java 17+
+- Android emulator or connected device
+
+**Emulator Setup** (Automated):
+```bash
+# Option 1: Use setup script
+cd paykit-mobile/android-demo
+./scripts/setup_emulator.sh [avd_name]
+
+# Option 2: Manual setup
+# Set ANDROID_HOME if not already set
+export ANDROID_HOME=~/Library/Android/sdk
+export PATH=$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
+
+# List available AVDs
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# Start emulator (headless mode)
+$ANDROID_HOME/emulator/emulator -avd <avd_name> -no-window -no-audio &
+
+# Wait for emulator to boot
+adb wait-for-device
+timeout=120
+elapsed=0
+while [ $elapsed -lt $timeout ]; do
+    boot=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+    if [ "$boot" = "1" ]; then
+        echo "Emulator ready"
+        break
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+
+# Verify device is connected
+adb devices
+```
 
 **Unit Tests**:
 ```bash
@@ -195,21 +231,40 @@ cd paykit-mobile/android-demo
 ./gradlew test --tests "com.paykit.demo.KeyManagementE2ETest"
 ```
 
-**Instrumented Tests** (requires emulator or device):
+**Instrumented E2E Tests**:
 ```bash
-# Start emulator first, then:
+cd paykit-mobile/android-demo
+
+# Ensure emulator is running and connected
+adb devices
+
+# Run all instrumented tests
 ./gradlew connectedAndroidTest
+
+# Run with verbose output
+./gradlew connectedAndroidTest --info
 ```
+
+**Test Results**:
+- ✅ **50 E2E tests passing** across 4 test suites
+- Test suites:
+  - `NoisePaymentE2ETest`: 10 tests ✅
+  - `KeyManagementE2ETest`: 13 tests ✅
+  - `DirectoryE2ETest`: 15 tests ✅
+  - `ServerModeE2ETest`: 12 tests ✅
 
 **Test Infrastructure**:
 - Unit tests: `app/src/test/` - JUnit4 tests
-- Instrumented tests: `app/src/androidTest/` - Espresso UI tests
-- Mock services available for testing without network
+- Instrumented tests: `app/src/androidTest/` - AndroidJUnit4 tests
+- Mock services available (MockKeyManager, MockReceiptStore, MockDirectoryService)
+- Test Application class (`TestApplication.kt`) avoids native library initialization
+- Native libraries included in test APK via `sourceSets` configuration
 - All tests use Kotlin Coroutines for async operations
 
-**Test Results**:
-- Unit tests: Located in `build/test-results/test/`
-- Instrumented tests: Located in `build/outputs/androidTest-results/`
+**Test Results Location**:
+- Unit tests: `build/test-results/test/`
+- Instrumented tests: `build/reports/androidTests/connected/debug/`
+- XML results: `build/outputs/androidTest-results/`
 
 ---
 

@@ -58,6 +58,9 @@ android {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
         }
+        getByName("androidTest") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
     }
 }
 

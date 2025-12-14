@@ -1,0 +1,2 @@
+12-14 14:20:13.984  9089  9104 I TestRunner: started: testSwitchIdentity(com.paykit.demo.KeyManagementE2ETest)
+12-14 14:20:13.986  9089  9104 I TestRunner: finished: testSwitchIdentity(com.paykit.demo.KeyManagementE2ETest)

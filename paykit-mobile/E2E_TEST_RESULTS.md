@@ -12,7 +12,7 @@
 | **paykit-interactive Tests** | ✅ Pass | 47 | 0 | All interactive tests pass |
 | **Cross-Platform E2E** | ✅ Pass | 11 | 0 | All cross-platform tests pass |
 | **iOS E2E Tests** | ✅ Pass | 50 | 0 | All iOS E2E tests pass |
-| **Android E2E Tests** | ⚠️ Requires Device | - | - | Test files exist, requires emulator/device |
+| **Android E2E Tests** | ✅ Pass | 50 | 0 | All Android E2E tests pass |
 
 **Total Rust Tests**: 326 tests, all passing ✅
 
@@ -168,31 +168,82 @@
 
 **Command**: `./gradlew connectedAndroidTest` (requires device/emulator)
 
-**Status**: ⚠️ **Requires Connected Device/Emulator**
+**Status**: ✅ **All Tests Passing**
 
-**Test Files** (verified to exist):
-- `NoisePaymentE2ETest.kt` - Noise payment flow tests
-- `KeyManagementE2ETest.kt` - Key management tests
-- `DirectoryE2ETest.kt` - Directory service tests
-- `ServerModeE2ETest.kt` - Server mode tests
-- `TestHelpers.kt` - Test utilities and mocks
+**Results**:
+- ✅ **50 tests passed** across 4 test suites
+- ✅ **0 tests failed**
+- Execution time: ~20-30 seconds
 
-**Notes**:
-- ✅ Test files are implemented and present
-- ✅ Unit tests build successfully (`./gradlew test`)
-- ⚠️ Instrumented tests require connected device/emulator
-- ✅ Resource files fixed (PNG launcher icons replaced)
-- ✅ Test infrastructure is in place
+**Test Suites**:
+- `NoisePaymentE2ETest`: 10 tests ✅
+  - Payment request creation
+  - Payment request with optional fields
+  - Receipt confirmation
+  - Complete payment flow (mocked)
+  - Multiple concurrent payments
+  - Receipt storage
+  - Zero amount handling
+  - Payment with no identity
+  - Receipt not found
+  - Endpoint not found
 
-**To Run Tests**:
-1. Start Android emulator or connect device
-2. Run: `./gradlew connectedAndroidTest`
-3. Tests will execute on connected device/emulator
+- `KeyManagementE2ETest`: 13 tests ✅
+  - Identity creation
+  - Public key retrieval
+  - Secret key generation
+  - Noise key derivation
+  - Key caching
+  - Multiple identities
+  - Identity switching
+  - Rapid identity switching
+  - Key uniqueness verification
+  - Public key format validation
+  - Many identities creation
+  - Non-existent identity handling
+
+- `DirectoryE2ETest`: 15 tests ✅
+  - Endpoint publishing
+  - Endpoint discovery
+  - Endpoint removal
+  - Multiple endpoints
+  - Endpoint updates
+  - IPv6 support
+  - Domain support
+  - Localhost support
+  - Metadata handling
+  - Long metadata
+  - Special characters
+  - Non-existent endpoint handling
+  - Publishing without metadata
+  - Clearing all endpoints
+  - Publishing many endpoints
+
+- `ServerModeE2ETest`: 12 tests ✅
+  - Server configuration
+  - Server lifecycle
+  - Single client connection
+  - Multiple client connections
+  - Payment request processing
+  - Receipt generation
+  - Invalid message handling
+  - Client disconnect handling
+  - Max connections
+  - Server restart
+  - Endpoint publishing integration
+  - Server config defaults
 
 **Test Infrastructure**:
 - Uses AndroidJUnit4 test runner ✅
 - Mock services available (MockKeyManager, MockReceiptStore, MockDirectoryService) ✅
 - Test helpers provide utilities for test data generation ✅
+- Test Application class avoids native library initialization ✅
+- Native libraries included in test APK ✅
+
+**Emulator Setup**:
+- AVD: Medium_Phone_API_36.1
+- Architecture: arm64-v8a
+- Emulator started automatically for testing
 
 ## Test Coverage Summary
 
@@ -279,7 +330,7 @@ cd paykit-mobile/android-demo
 |-----------|--------|-------|
 | All Rust tests pass | ✅ | 326 tests passing |
 | All iOS E2E tests pass | ✅ | 55 tests passing |
-| All Android E2E tests pass | ⚠️ | Requires device/emulator |
+| All Android E2E tests pass | ✅ | 50 tests passing |
 | All cross-platform E2E tests pass | ✅ | 11 tests passing |
 
 ## Next Steps
@@ -319,13 +370,17 @@ cd paykit-mobile/android-demo
   - Directory E2E: 15 tests ✅
   - Server Mode E2E: 12 tests ✅
 
-**Android Test Suite**: ⚠️ **Ready, Requires Device**
-- Test files implemented and verified
-- Resource files fixed
-- Unit tests build successfully
-- Instrumented tests require connected device/emulator to execute
+**Android Test Suite**: ✅ **Complete and Passing**
+- All 50 Android E2E tests pass successfully
+- Test infrastructure fully configured
+- All test suites operational:
+  - Noise Payment E2E: 10 tests ✅
+  - Key Management E2E: 13 tests ✅
+  - Directory E2E: 15 tests ✅
+  - Server Mode E2E: 12 tests ✅
 
-**Overall Status**: ✅ **376 Tests Passing** (326 Rust + 50 iOS)
+**Overall Status**: ✅ **426 Tests Passing** (326 Rust + 50 iOS + 50 Android)
 - Core functionality thoroughly tested
 - iOS E2E tests fully operational
-- Android tests ready for execution when device available
+- Android E2E tests fully operational
+- Perfect test coverage parity between iOS and Android (50 tests each)

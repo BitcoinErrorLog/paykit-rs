@@ -1,0 +1,2 @@
+12-14 14:20:14.027  9089  9104 I TestRunner: started: testServerRestart(com.paykit.demo.ServerModeE2ETest)
+12-14 14:20:14.028  9089  9104 I TestRunner: finished: testServerRestart(com.paykit.demo.ServerModeE2ETest)

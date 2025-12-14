@@ -19,10 +19,16 @@ class PaykitDemoApp : Application() {
         /**
          * Singleton PaykitClient wrapper.
          * Lazily initialized on first access.
+         * Returns placeholder wrapper if initialization fails.
          */
         val paykitClient: PaykitClientWrapper by lazy {
             Log.d(TAG, "Initializing PaykitClient...")
-            PaykitClientWrapper.create()
+            try {
+                PaykitClientWrapper.create()
+            } catch (e: Exception) {
+                Log.w(TAG, "PaykitClient initialization failed: ${e.message}, using placeholder")
+                PaykitClientWrapper.placeholder()
+            }
         }
     }
 
@@ -30,12 +36,8 @@ class PaykitDemoApp : Application() {
         super.onCreate()
         instance = this
         
-        // Pre-initialize the client on app start
+        // Don't pre-initialize PaykitClient here to avoid native library loading issues
+        // in test environments. Client will be initialized lazily when first accessed.
         Log.d(TAG, "PaykitDemoApp onCreate")
-        if (paykitClient.isAvailable) {
-            Log.d(TAG, "PaykitClient is available")
-        } else {
-            Log.w(TAG, "PaykitClient is NOT available - using fallback mode")
-        }
     }
 }

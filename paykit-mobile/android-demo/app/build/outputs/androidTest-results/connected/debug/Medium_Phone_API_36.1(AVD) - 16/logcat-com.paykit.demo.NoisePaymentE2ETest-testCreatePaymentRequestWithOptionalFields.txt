@@ -1,0 +1,2 @@
+12-14 14:20:13.991  9089  9104 I TestRunner: started: testCreatePaymentRequestWithOptionalFields(com.paykit.demo.NoisePaymentE2ETest)
+12-14 14:20:13.996  9089  9104 I TestRunner: finished: testCreatePaymentRequestWithOptionalFields(com.paykit.demo.NoisePaymentE2ETest)

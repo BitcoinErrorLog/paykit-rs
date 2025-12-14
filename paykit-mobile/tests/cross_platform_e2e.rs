@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone)]
 struct PlatformIdentity {
     platform: Platform,
-    nickname: String,
+    _nickname: String,
     public_key_z32: String,
     noise_pubkey: String,
 }
@@ -56,7 +56,7 @@ struct PaymentRequest {
 #[derive(Debug, Clone)]
 struct PaymentResponse {
     success: bool,
-    receipt_id: String,
+    _receipt_id: String,
     confirmed_at: Option<u64>,
     error_message: Option<String>,
 }
@@ -80,10 +80,10 @@ struct CrossPlatformPaymentService {
 
 #[derive(Debug, Clone)]
 struct EndpointInfo {
-    pubkey: String,
-    host: String,
-    port: u16,
-    noise_pubkey: String,
+    _pubkey: String,
+    _host: String,
+    _port: u16,
+    _noise_pubkey: String,
     platform: Platform,
 }
 
@@ -100,10 +100,10 @@ impl CrossPlatformPaymentService {
         endpoints.insert(
             identity.public_key_z32.clone(),
             EndpointInfo {
-                pubkey: identity.public_key_z32.clone(),
-                host: host.to_string(),
-                port,
-                noise_pubkey: identity.noise_pubkey.clone(),
+                _pubkey: identity.public_key_z32.clone(),
+                _host: host.to_string(),
+                _port: port,
+                _noise_pubkey: identity.noise_pubkey.clone(),
                 platform: identity.platform,
             },
         );
@@ -120,7 +120,7 @@ impl CrossPlatformPaymentService {
         if !endpoints.contains_key(&request.payee_pubkey) {
             return PaymentResponse {
                 success: false,
-                receipt_id: request.receipt_id,
+                _receipt_id: request.receipt_id,
                 confirmed_at: None,
                 error_message: Some("Payee endpoint not found".to_string()),
             };
@@ -148,7 +148,7 @@ impl CrossPlatformPaymentService {
 
         PaymentResponse {
             success: true,
-            receipt_id: request.receipt_id,
+            _receipt_id: request.receipt_id,
             confirmed_at: Some(now),
             error_message: None,
         }
@@ -195,7 +195,7 @@ fn generate_noise_pubkey() -> String {
 fn create_identity(platform: Platform, nickname: &str) -> PlatformIdentity {
     PlatformIdentity {
         platform,
-        nickname: nickname.to_string(),
+        _nickname: nickname.to_string(),
         public_key_z32: generate_pubkey(platform),
         noise_pubkey: generate_noise_pubkey(),
     }

@@ -103,11 +103,33 @@ impl PaykitInteractiveManager {
                 method_id,
                 endpoint,
             } => {
-                // Save the private endpoint offered by the peer
+                // Legacy single endpoint offer - save it
                 self.storage
                     .save_private_endpoint(peer, &method_id, &endpoint)
                     .await?;
-                // Send Ack? The protocol doesn't strictly require it, but it's good practice.
+                Ok(Some(PaykitNoiseMessage::Ack))
+            }
+            PaykitNoiseMessage::OfferPrivateEndpoints { methods } => {
+                // Save all offered endpoints
+                let method_ids: Vec<MethodId> = methods.iter().map(|o| o.method_id.clone()).collect();
+                for offer in &methods {
+                    self.storage
+                        .save_private_endpoint(peer, &offer.method_id, &offer.endpoint)
+                        .await?;
+                }
+                // Accept all endpoints (could be made configurable)
+                Ok(Some(PaykitNoiseMessage::AcceptPrivateEndpoints {
+                    method_ids,
+                }))
+            }
+            PaykitNoiseMessage::AcceptPrivateEndpoints { method_ids: _ } => {
+                // Endpoints were accepted - nothing more to do
+                // The endpoints are already saved from the offer
+                Ok(Some(PaykitNoiseMessage::Ack))
+            }
+            PaykitNoiseMessage::DeclinePrivateEndpoints { reason: _ } => {
+                // Endpoints were declined - log for debugging
+                // No action needed, just acknowledge
                 Ok(Some(PaykitNoiseMessage::Ack))
             }
             PaykitNoiseMessage::RequestReceipt {

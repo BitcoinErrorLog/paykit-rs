@@ -361,7 +361,102 @@ impl WasmPaymentClient {
         let payee = PublicKey::from_str(payee_pubkey_str)
             .map_err(|e| JsValue::from_str(&format!("Invalid payee pubkey: {}", e)))?;
 
-        // Discover payment endpoint from directory
+        // Use smart checkout to resolve payment endpoint (private → public fallback)
+        use crate::private_endpoints::WasmPrivateEndpointStorage;
+        use crate::wasm_transport::WasmUnauthenticatedTransport;
+        use paykit_interactive::smart_checkout_detailed;
+        use paykit_lib::MethodId;
+        
+        let method_id = MethodId(method.to_string());
+        
+        // Create storage adapter for private endpoints
+        let endpoint_storage = WasmPrivateEndpointStorage::new();
+        
+        struct WebPaykitStorage {
+            endpoint_storage: WasmPrivateEndpointStorage,
+        }
+        
+        #[async_trait::async_trait]
+        impl paykit_interactive::PaykitStorage for WebPaykitStorage {
+            async fn save_receipt(&self, _receipt: &paykit_interactive::PaykitReceipt) -> paykit_interactive::Result<()> {
+                Ok(()) // Not used in this context
+            }
+            
+            async fn get_receipt(&self, _receipt_id: &str) -> paykit_interactive::Result<Option<paykit_interactive::PaykitReceipt>> {
+                Ok(None) // Not used in this context
+            }
+            
+            async fn list_receipts(&self) -> paykit_interactive::Result<Vec<paykit_interactive::PaykitReceipt>> {
+                Ok(vec![]) // Not used in this context
+            }
+            
+            async fn save_private_endpoint(
+                &self,
+                _peer: &paykit_lib::PublicKey,
+                _method: &paykit_lib::MethodId,
+                _endpoint: &str,
+            ) -> paykit_interactive::Result<()> {
+                Ok(()) // Not used in this context
+            }
+            
+            async fn get_private_endpoint(
+                &self,
+                peer: &paykit_lib::PublicKey,
+                method: &paykit_lib::MethodId,
+            ) -> paykit_interactive::Result<Option<String>> {
+                match self.endpoint_storage.get(peer, method).await {
+                    Ok(Some(endpoint)) => Ok(Some(endpoint.endpoint.0)),
+                    Ok(None) => Ok(None),
+                    Err(_) => Ok(None), // Return None on error
+                }
+            }
+            
+            async fn list_private_endpoints_for_peer(
+                &self,
+                peer: &paykit_lib::PublicKey,
+            ) -> paykit_interactive::Result<Vec<(paykit_lib::MethodId, String)>> {
+                match self.endpoint_storage.list_for_peer(peer).await {
+                    Ok(endpoints) => {
+                        Ok(endpoints.into_iter().map(|e| (e.method_id, e.endpoint.0)).collect())
+                    }
+                    Err(_) => Ok(vec![]), // Return empty on error
+                }
+            }
+            
+            async fn remove_private_endpoint(
+                &self,
+                _peer: &paykit_lib::PublicKey,
+                _method: &paykit_lib::MethodId,
+            ) -> paykit_interactive::Result<()> {
+                Ok(()) // Not used in this context
+            }
+        }
+        
+        let storage_adapter = WebPaykitStorage {
+            endpoint_storage,
+        };
+        
+        // Create WASM-compatible public directory transport
+        let public_transport = WasmUnauthenticatedTransport::new(homeserver.to_string());
+        
+        // Use smart checkout to resolve payment endpoint
+        let checkout_result = smart_checkout_detailed(
+            &storage_adapter,
+            &public_transport,
+            &payee,
+            &method_id,
+        )
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Smart checkout failed: {:?}", e)))?;
+        
+        // Log endpoint source if found
+        if let Some(result) = &checkout_result {
+            let source = if result.is_private { "private" } else { "public" };
+            // Note: We still need the noise:// endpoint for WebSocket connection
+            // The smart checkout gives us the payment endpoint, not the noise transport endpoint
+        }
+        
+        // Discover payment endpoint from directory (for noise:// transport endpoint)
         let client = DirectoryClient::new(homeserver.to_string());
         let methods_js = client
             .query_methods(&payee.to_string())

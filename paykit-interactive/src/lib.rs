@@ -70,9 +70,25 @@ fn chrono_now() -> i64 {
 #[serde(tag = "type", content = "payload")]
 pub enum PaykitNoiseMessage {
     /// Payer offers a private endpoint to the payee (or vice versa).
+    /// @deprecated: Use OfferPrivateEndpoints for multiple methods
     OfferPrivateEndpoint {
         method_id: MethodId,
         endpoint: String,
+    },
+    /// Offer multiple private endpoints for different payment methods.
+    /// Used during handshake negotiation to share available private endpoints.
+    OfferPrivateEndpoints {
+        methods: Vec<PrivateEndpointOffer>,
+    },
+    /// Accept specific private endpoints from an offer.
+    /// Used during handshake to indicate which endpoints are accepted.
+    AcceptPrivateEndpoints {
+        method_ids: Vec<MethodId>,
+    },
+    /// Decline private endpoint offer with a reason.
+    /// Used during handshake to reject endpoint offers.
+    DeclinePrivateEndpoints {
+        reason: String,
     },
     /// Payer requests a receipt for a payment they intend to make or have made.
     RequestReceipt { provisional_receipt: PaykitReceipt },
@@ -82,6 +98,17 @@ pub enum PaykitNoiseMessage {
     Ack,
     /// Error reporting.
     Error { code: String, message: String },
+}
+
+/// Private endpoint offer with optional expiration.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PrivateEndpointOffer {
+    /// The payment method ID (e.g., "lightning", "onchain").
+    pub method_id: MethodId,
+    /// The endpoint data (e.g., Bitcoin address, Lightning invoice).
+    pub endpoint: String,
+    /// Optional expiration timestamp (unix epoch seconds).
+    pub expires_at: Option<i64>,
 }
 
 /// Abstraction for a secure channel to exchange Paykit messages.

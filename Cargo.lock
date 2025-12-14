@@ -3204,6 +3204,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "sha2",
  "thiserror 1.0.69",
  "uuid",
  "wasm-bindgen",

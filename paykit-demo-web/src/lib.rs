@@ -13,9 +13,11 @@ mod payment;
 mod payment_methods;
 mod storage;
 mod storage_migration;
+mod private_endpoints;
 mod subscriptions;
 mod types;
 mod utils;
+mod wasm_transport;
 mod websocket_transport;
 
 pub use contacts::*;

@@ -118,6 +118,45 @@ struct PaymentMethodsView: View {
                 } header: {
                     Text("Endpoint Validation")
                 }
+                
+                // Privacy Features Section
+                Section {
+                    NavigationLink {
+                        PrivateEndpointsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "lock.shield.fill")
+                                .foregroundColor(.green)
+                                .frame(width: 30)
+                            VStack(alignment: .leading) {
+                                Text("Private Endpoints")
+                                Text("Manage per-peer private addresses")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    NavigationLink {
+                        RotationSettingsView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
+                            VStack(alignment: .leading) {
+                                Text("Rotation Settings")
+                                Text("Configure endpoint rotation policies")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Privacy Features")
+                } footer: {
+                    Text("Enhance privacy by using dedicated endpoints per peer and automatically rotating them after use.")
+                }
             }
             .navigationTitle("Payment Methods")
             .onAppear {

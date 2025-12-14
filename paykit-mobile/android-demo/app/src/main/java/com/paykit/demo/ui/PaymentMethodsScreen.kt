@@ -28,7 +28,10 @@ import com.paykit.mobile.SelectionStrategy
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PaymentMethodsScreen() {
+fun PaymentMethodsScreen(
+    onNavigateToPrivateEndpoints: () -> Unit = {},
+    onNavigateToRotationSettings: () -> Unit = {}
+) {
     val paykitClient = remember { PaykitDemoApp.paykitClient }
     
     var testAmount by remember { mutableStateOf(10000L) }
@@ -330,6 +333,106 @@ fun PaymentMethodsScreen() {
                         }
                     }
                 }
+            }
+
+            // Privacy Features Section
+            item {
+                Text(
+                    text = "Privacy Features",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+            
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Private Endpoints
+                        Surface(
+                            onClick = onNavigateToPrivateEndpoints,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color(0xFF4CAF50)
+                                    )
+                                    Column {
+                                        Text("Private Endpoints")
+                                        Text(
+                                            "Manage per-peer private addresses",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        
+                        // Rotation Settings
+                        Surface(
+                            onClick = onNavigateToRotationSettings,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Rotation Settings")
+                                        Text(
+                                            "Configure endpoint rotation policies",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            item {
+                Text(
+                    "Enhance privacy by using dedicated endpoints per peer and automatically rotating them after use.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                )
             }
 
             item { Spacer(modifier = Modifier.height(16.dp)) }

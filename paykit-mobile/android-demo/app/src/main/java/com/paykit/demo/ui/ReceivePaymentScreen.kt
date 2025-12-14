@@ -130,6 +130,7 @@ fun ReceivePaymentScreen(
                 onToggle = {
                     if (isListening) {
                         viewModel.stopListening()
+                        isPublishedToDirectory = false
                     } else {
                         viewModel.startListening()
                     }

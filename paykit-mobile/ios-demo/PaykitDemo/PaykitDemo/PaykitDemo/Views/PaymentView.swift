@@ -152,7 +152,9 @@ struct PaymentView: View {
                 .pickerStyle(.segmented)
                 .disabled(viewModel.isProcessing)
                 .onChange(of: viewModel.selectionStrategy) { _ in
-                    viewModel.applyStrategy()
+                    Task {
+                        await viewModel.checkMethodHealth()
+                    }
                 }
             }
             

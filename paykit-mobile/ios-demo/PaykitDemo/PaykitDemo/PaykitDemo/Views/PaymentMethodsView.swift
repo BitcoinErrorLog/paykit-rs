@@ -87,41 +87,6 @@ struct PaymentMethodsView: View {
                     Text("Directory Publishing")
                 }
                 
-                // Directory Publishing Section
-                Section {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Publish to Directory")
-                                .font(.headline)
-                            Spacer()
-                            Toggle("", isOn: $viewModel.isPublishingEnabled)
-                        }
-                        
-                        if viewModel.isPublishingEnabled {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("\(viewModel.publishedMethodsCount) method(s) published")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Button("Publish All Methods") {
-                                viewModel.publishAllMethods(client: appState.paykitClient)
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Methods are not publicly discoverable")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                } header: {
-                    Text("Directory Publishing")
-                }
-                
                 // Available Methods Section
                 Section {
                     ForEach(viewModel.methods, id: \.id) { method in

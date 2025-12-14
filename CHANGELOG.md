@@ -2,6 +2,49 @@
 
 All notable changes to the Paykit project are documented in this file.
 
+## [Unreleased]
+
+### Bitkit Executor FFI Integration
+
+Added comprehensive support for integrating external wallet implementations (like Bitkit iOS/Android) through UniFFI callback interfaces.
+
+#### New Features
+
+- **Executor FFI Bindings** (`paykit-mobile/src/executor_ffi.rs`)
+  - `BitcoinExecutorFFI` interface for on-chain wallet operations
+  - `LightningExecutorFFI` interface for Lightning node operations
+  - FFI result types: `BitcoinTxResultFFI`, `LightningPaymentResultFFI`, `DecodedInvoiceFFI`
+  - Network configuration enums: `BitcoinNetworkFFI`, `LightningNetworkFFI`
+  - Executor bridges for Rust trait adaptation
+
+- **PaykitClient Extensions** (`paykit-mobile/src/lib.rs`)
+  - `new_with_network()` constructor for testnet/regtest support
+  - `register_bitcoin_executor()` and `register_lightning_executor()` methods
+  - `execute_payment()` for real payment execution
+  - `generate_payment_proof()` for proof generation
+  - Network accessor methods
+
+- **Example Implementations**
+  - `swift/BitkitExecutorExample.swift` - Complete Swift example
+  - `kotlin/BitkitExecutorExample.kt` - Complete Kotlin example
+
+- **Documentation**
+  - `BITKIT_INTEGRATION_GUIDE.md` - Step-by-step integration guide
+  - `API_REFERENCE.md` - Complete API reference
+  - `CHANGELOG.md` - Mobile-specific changelog
+
+- **Integration Tests** (`tests/executor_integration.rs`)
+  - 30 comprehensive tests covering all integration scenarios
+  - Network configuration, executor registration, payment execution
+  - Proof generation, error handling, thread safety
+
+#### Test Results
+- 151 tests passing (121 unit + 30 integration)
+- All builds passing
+- Clippy clean
+
+---
+
 ## [1.0.1] - 2025-12-12
 
 ### Production Audit Remediation

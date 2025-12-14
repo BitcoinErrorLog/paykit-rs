@@ -18,14 +18,14 @@ import kotlinx.coroutines.flow.update
  * 
  * Uses EncryptedSharedPreferences-backed AutoPayStorage for secure persistence.
  */
-class AutoPayViewModel(application: Application) : AndroidViewModel(application) {
+class AutoPayViewModel(private val app: Application) : AndroidViewModel(app) {
 
-    private val context = application.applicationContext
-    private val keyManager = KeyManager(application)
+    private val context = app.applicationContext
+    private val keyManager = KeyManager(app)
     private val storage: AutoPayStorage
         get() {
             val identityName = keyManager.currentIdentityName.value ?: "default"
-            return AutoPayStorage(application, identityName)
+            return AutoPayStorage(app, identityName)
         }
     private val receiptStorage: ReceiptStorage
         get() {

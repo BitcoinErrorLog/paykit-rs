@@ -211,13 +211,13 @@ private fun handleScannedCode(
     onResult: (ScannedUriResult) -> Unit
 ) {
     // Check if it's a Paykit URI
-    if (!paykitClient.isPaykitQr(code)) {
+    if (!paykitClient.isPaykitQR(code)) {
         return
     }
     
     // Parse it
     try {
-        val result = paykitClient.parseScannedQr(code)
+        val result = paykitClient.parseScannedQR(code) ?: return
         onResult(ScannedUriResult(result))
     } catch (e: Exception) {
         // Handle error

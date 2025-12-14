@@ -517,7 +517,7 @@ private fun resolveRecipient(context: android.content.Context, keyManager: KeyMa
     val contacts = storage.listContacts()
     
     contacts.find { it.name.equals(uri, ignoreCase = true) }?.let {
-        return it.publicKey
+        return it.publicKeyZ32
     }
     
     // Assume it's a raw public key

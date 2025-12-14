@@ -55,19 +55,17 @@ class PubkyUnauthenticatedStorageAdapter(
             val response = client.newCall(request).execute()
             
             when {
-                response.code == 404 -> StorageGetResult.ok(content = null)
+                response.code == 404 -> StorageGetResult(success = true, content = null, error = null)
                 response.code in 200..299 -> {
                     val body = response.body?.string()
-                    StorageGetResult.ok(content = body)
+                    StorageGetResult(success = true, content = body, error = null)
                 }
-                else -> StorageGetResult.err(
-                    message = "HTTP ${response.code}"
-                )
+                else -> StorageGetResult(success = false, content = null, error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageGetResult.err(message = "Network error: ${e.message}")
+            StorageGetResult(success = false, content = null, error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageGetResult.err(message = "Error: ${e.message}")
+            StorageGetResult(success = false, content = null, error = "Error: ${e.message}")
         }
     }
     
@@ -87,11 +85,11 @@ class PubkyUnauthenticatedStorageAdapter(
             val response = client.newCall(request).execute()
             
             when {
-                response.code == 404 -> StorageListResult.ok(entries = emptyList())
+                response.code == 404 -> StorageListResult(success = true, entries = emptyList(), error = null)
                 response.code in 200..299 -> {
                     val body = response.body?.string()
                     if (body.isNullOrEmpty()) {
-                        StorageListResult.ok(entries = emptyList())
+                        StorageListResult(success = true, entries = emptyList(), error = null)
                     } else {
                         try {
                             // Parse JSON array of resources
@@ -101,7 +99,7 @@ class PubkyUnauthenticatedStorageAdapter(
                                 val item = jsonArray.getJSONObject(i)
                                 entries.add(item.getString("path"))
                             }
-                            StorageListResult.ok(entries = entries)
+                            StorageListResult(success = true, entries = entries, error = null)
                         } catch (e: Exception) {
                             // Try parsing as simple string array
                             try {
@@ -110,21 +108,23 @@ class PubkyUnauthenticatedStorageAdapter(
                                 for (i in 0 until jsonArray.length()) {
                                     entries.add(jsonArray.getString(i))
                                 }
-                                StorageListResult.ok(entries = entries)
+                                StorageListResult(success = true, entries = entries, error = null)
                             } catch (e2: Exception) {
-                                StorageListResult.err(
-                                    message = "Failed to parse response: ${e2.message}"
+                                StorageListResult(
+                                    success = false,
+                                    entries = emptyList(),
+                                    error = "Failed to parse response: ${e2.message}"
                                 )
                             }
                         }
                     }
                 }
-                else -> StorageListResult.err(message = "HTTP ${response.code}")
+                else -> StorageListResult(success = false, entries = emptyList(), error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageListResult.err(message = "Network error: ${e.message}")
+            StorageListResult(success = false, entries = emptyList(), error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageListResult.err(message = "Error: ${e.message}")
+            StorageListResult(success = false, entries = emptyList(), error = "Error: ${e.message}")
         }
     }
 }
@@ -179,14 +179,14 @@ class PubkyAuthenticatedStorageAdapter(
             val response = client.newCall(request).execute()
             
             if (response.code in 200..299) {
-                StorageOperationResult.ok()
+                StorageOperationResult(success = true, error = null)
             } else {
-                StorageOperationResult.err(message = "HTTP ${response.code}")
+                StorageOperationResult(success = false, error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageOperationResult.err(message = "Network error: ${e.message}")
+            StorageOperationResult(success = false, error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageOperationResult.err(message = "Error: ${e.message}")
+            StorageOperationResult(success = false, error = "Error: ${e.message}")
         }
     }
     
@@ -208,17 +208,17 @@ class PubkyAuthenticatedStorageAdapter(
             val response = client.newCall(request).execute()
             
             when {
-                response.code == 404 -> StorageGetResult.ok(content = null)
+                response.code == 404 -> StorageGetResult(success = true, content = null, error = null)
                 response.code in 200..299 -> {
                     val body = response.body?.string()
-                    StorageGetResult.ok(content = body)
+                    StorageGetResult(success = true, content = body, error = null)
                 }
-                else -> StorageGetResult.err(message = "HTTP ${response.code}")
+                else -> StorageGetResult(success = false, content = null, error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageGetResult.err(message = "Network error: ${e.message}")
+            StorageGetResult(success = false, content = null, error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageGetResult.err(message = "Error: ${e.message}")
+            StorageGetResult(success = false, content = null, error = "Error: ${e.message}")
         }
     }
     
@@ -240,14 +240,14 @@ class PubkyAuthenticatedStorageAdapter(
             
             // 204 No Content or 200 OK are both valid for DELETE
             if (response.code in 200..299 || response.code == 404) {
-                StorageOperationResult.ok()
+                StorageOperationResult(success = true, error = null)
             } else {
-                StorageOperationResult.err(message = "HTTP ${response.code}")
+                StorageOperationResult(success = false, error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageOperationResult.err(message = "Network error: ${e.message}")
+            StorageOperationResult(success = false, error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageOperationResult.err(message = "Error: ${e.message}")
+            StorageOperationResult(success = false, error = "Error: ${e.message}")
         }
     }
     
@@ -269,11 +269,11 @@ class PubkyAuthenticatedStorageAdapter(
             val response = client.newCall(request).execute()
             
             when {
-                response.code == 404 -> StorageListResult.ok(entries = emptyList())
+                response.code == 404 -> StorageListResult(success = true, entries = emptyList(), error = null)
                 response.code in 200..299 -> {
                     val body = response.body?.string()
                     if (body.isNullOrEmpty()) {
-                        StorageListResult.ok(entries = emptyList())
+                        StorageListResult(success = true, entries = emptyList(), error = null)
                     } else {
                         try {
                             val jsonArray = JSONArray(body)
@@ -282,7 +282,7 @@ class PubkyAuthenticatedStorageAdapter(
                                 val item = jsonArray.getJSONObject(i)
                                 entries.add(item.getString("path"))
                             }
-                            StorageListResult.ok(entries = entries)
+                            StorageListResult(success = true, entries = entries, error = null)
                         } catch (e: Exception) {
                             try {
                                 val jsonArray = JSONArray(body)
@@ -290,22 +290,23 @@ class PubkyAuthenticatedStorageAdapter(
                                 for (i in 0 until jsonArray.length()) {
                                     entries.add(jsonArray.getString(i))
                                 }
-                                StorageListResult.ok(entries = entries)
+                                StorageListResult(success = true, entries = entries, error = null)
                             } catch (e2: Exception) {
-                                StorageListResult.err(
-                                    message = "Failed to parse response: ${e2.message}"
+                                StorageListResult(
+                                    success = false,
+                                    entries = emptyList(),
+                                    error = "Failed to parse response: ${e2.message}"
                                 )
                             }
                         }
                     }
                 }
-                else -> StorageListResult.err(message = "HTTP ${response.code}")
+                else -> StorageListResult(success = false, entries = emptyList(), error = "HTTP ${response.code}")
             }
         } catch (e: IOException) {
-            StorageListResult.err(message = "Network error: ${e.message}")
+            StorageListResult(success = false, entries = emptyList(), error = "Network error: ${e.message}")
         } catch (e: Exception) {
-            StorageListResult.err(message = "Error: ${e.message}")
+            StorageListResult(success = false, entries = emptyList(), error = "Error: ${e.message}")
         }
     }
 }
-

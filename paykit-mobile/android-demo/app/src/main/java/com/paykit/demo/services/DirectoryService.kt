@@ -139,9 +139,10 @@ class DirectoryService private constructor(private val context: Context) {
         return try {
             val json = JSONObject(endpointJson)
             NoiseEndpointInfo(
+                recipientPubkey = recipientPubkey,
                 host = json.getString("host"),
-                port = json.getInt("port"),
-                serverPubkeyHex = json.getString("pubkey"),
+                port = json.getInt("port").toUShort(),
+                serverNoisePubkey = json.getString("pubkey"),
                 metadata = json.optString("metadata", null)
             )
         } catch (e: Exception) {
@@ -302,8 +303,8 @@ class DirectoryService private constructor(private val context: Context) {
         
         return try {
             val supportedPayments = client.fetchSupportedPayments(transport, recipientPubkey)
-            supportedPayments.entries.map { entry ->
-                DirectoryPaymentMethod(methodId = entry.methodId, endpoint = entry.endpoint)
+            supportedPayments.map { pm: PaymentMethod ->
+                DirectoryPaymentMethod(methodId = pm.methodId, endpoint = pm.endpoint)
             }
         } catch (e: Exception) {
             throw DirectoryException.NetworkError(e.message ?: "Unknown error")
@@ -332,11 +333,8 @@ class DirectoryService private constructor(private val context: Context) {
             val client = paykitClient ?: throw DirectoryException.NotConfigured
             val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
             
-            val methodIdObj = MethodId(methodId)
-            val endpointData = EndpointData(endpoint)
-            
             try {
-                client.publishPaymentEndpoint(transport, methodIdObj, endpointData)
+                client.publishPaymentEndpoint(transport, methodId, endpoint)
             } catch (e: Exception) {
                 throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
             }
@@ -359,10 +357,8 @@ class DirectoryService private constructor(private val context: Context) {
             val client = paykitClient ?: throw DirectoryException.NotConfigured
             val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
             
-            val methodIdObj = MethodId(methodId)
-            
             try {
-                client.removePaymentEndpoint(transport, methodIdObj)
+                client.removePaymentEndpointFromDirectory(transport, methodId)
             } catch (e: Exception) {
                 throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
             }

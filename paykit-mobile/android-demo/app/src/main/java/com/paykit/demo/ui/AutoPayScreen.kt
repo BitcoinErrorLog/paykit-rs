@@ -240,7 +240,7 @@ fun EmptyState(message: String) {
 @Composable
 fun RecentPaymentCard(receipt: Receipt) {
     val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-    val dateStr = dateFormat.format(Date(receipt.timestamp))
+    val dateStr = dateFormat.format(Date(receipt.createdAt))
     
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -274,7 +274,7 @@ fun RecentPaymentCard(receipt: Receipt) {
                 }
             }
             Text(
-                text = "${receipt.amount.formatSats()} sats",
+                text = "${receipt.amountSats} sats",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )

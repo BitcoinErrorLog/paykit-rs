@@ -327,10 +327,47 @@ class NoiseReceiveViewModel(application: Application) : AndroidViewModel(applica
     private val _recentReceipts = MutableStateFlow<List<StoredReceipt>>(emptyList())
     val recentReceipts: StateFlow<List<StoredReceipt>> = _recentReceipts.asStateFlow()
     
+    private val _activeConnections = MutableStateFlow(0)
+    val activeConnections: StateFlow<Int> = _activeConnections.asStateFlow()
+    
     // Dependencies
     private val context = getApplication<Application>().applicationContext
     private val paymentService = NoisePaymentService.getInstance(context)
     private val keyManager = KeyManager(context)
+    
+    init {
+        setupCallbacks()
+    }
+    
+    /**
+     * Set up callbacks from the payment service
+     */
+    private fun setupCallbacks() {
+        // Handle pending payment requests
+        paymentService.onPendingPaymentRequest = { request ->
+            viewModelScope.launch {
+                val pendingRequest = PendingPaymentRequest(
+                    id = request.id,
+                    payerPubkey = request.payerPubkey,
+                    amount = request.amount,
+                    currency = request.currency,
+                    methodId = request.methodId,
+                    receivedAt = request.receivedAt
+                )
+                _pendingRequests.value = _pendingRequests.value + pendingRequest
+            }
+        }
+        
+        // Handle confirmed receipts
+        paymentService.onReceiptConfirmed = { receipt ->
+            viewModelScope.launch {
+                // Remove from pending
+                _pendingRequests.value = _pendingRequests.value.filter { it.id != receipt.receiptId }
+                // Reload receipts
+                loadRecentReceipts()
+            }
+        }
+    }
     
     /**
      * Pending payment request from a payer
@@ -343,6 +380,17 @@ class NoiseReceiveViewModel(application: Application) : AndroidViewModel(applica
         val methodId: String,
         val receivedAt: Long
     )
+    
+    /**
+     * Refresh server status
+     */
+    fun refreshStatus() {
+        val status = paymentService.getServerStatus()
+        _isListening.value = status.isRunning
+        _listeningPort.value = status.port
+        _noisePubkeyHex.value = status.noisePubkeyHex
+        _activeConnections.value = status.activeConnections
+    }
     
     /**
      * Start listening for payments

@@ -151,6 +151,11 @@ public final class NoisePaymentService: ObservableObject {
     private var serverNoiseManager: FfiNoiseManager?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     
+    // Interactive payment handling
+    private var receiptStore: ReceiptStore?
+    private var interactiveManager: PaykitInteractiveManagerFfi?
+    private var receiptGenerator: ServerReceiptGenerator?
+    
     private let keyManager = KeyManager()
     private let keyCache = NoiseKeyCache.shared
     private let pubkyRing = PubkyRingIntegration.shared
@@ -158,9 +163,39 @@ public final class NoisePaymentService: ObservableObject {
     // Configuration
     public var connectionTimeoutSecs: TimeInterval = 30.0
     
+    // Callbacks for server events
+    public var onPendingPaymentRequest: ((PendingPaymentRequest) -> Void)?
+    public var onReceiptConfirmed: ((ReceiptRequest) -> Void)?
+    
     // MARK: - Initialization
     
-    private init() {}
+    private init() {
+        setupInteractiveManager()
+    }
+    
+    /// Initialize the interactive payment manager
+    private func setupInteractiveManager() {
+        receiptStore = createReceiptStore()
+        interactiveManager = PaykitInteractiveManagerFfi(store: receiptStore!)
+        
+        // Set up receipt generator
+        receiptGenerator = ServerReceiptGenerator()
+        receiptGenerator?.onPaymentRequest { [weak self] request in
+            // Notify about pending request
+            let pendingRequest = PendingPaymentRequest(
+                id: request.receiptId,
+                payerPubkey: request.payer,
+                amount: request.amount,
+                currency: request.currency,
+                methodId: request.methodId,
+                receivedAt: Date(),
+                connectionId: UUID() // Will be overwritten
+            )
+            self?.onPendingPaymentRequest?(pendingRequest)
+        }
+        
+        try? interactiveManager?.setGenerator(generator: receiptGenerator!)
+    }
     
     // MARK: - Key Management
     
@@ -201,8 +236,12 @@ public final class NoisePaymentService: ObservableObject {
             return try parseEndpointString(envEndpoint, recipientPubkey: recipientPubkey)
         }
         
-        // TODO: Query Pubky directory using PaykitClient.discover_noise_endpoint()
-        // For now, return a demo endpoint
+        // Query Pubky directory for Noise endpoint
+        let directoryService = DirectoryService.shared
+        if let endpoint = try await directoryService.discoverNoiseEndpoint(ownerPubkey: recipientPubkey) {
+            return endpoint
+        }
+        
         throw NoisePaymentError.endpointNotFound
     }
     
@@ -661,13 +700,143 @@ extension NoisePaymentService {
     
     /// Handle message from client
     private func handleServerMessage(_ serverConnection: ServerConnection, data: Data) {
-        // Decrypt message using Noise manager
-        // Parse payment message
-        // Handle payment request
-        // Send response
+        guard let manager = interactiveManager else {
+            print("Server: No interactive manager available")
+            return
+        }
         
-        // For now, log the message
-        print("Server received message: \(data.count) bytes")
+        // Check if handshake is complete
+        if !serverConnection.isHandshakeComplete {
+            // First message should be the Noise handshake
+            handleServerHandshake(serverConnection, data: data)
+            return
+        }
+        
+        guard let sessionId = serverConnection.sessionId,
+              let noiseManager = serverConnection.noiseManager else {
+            print("Server: No session ID or noise manager for connection \(serverConnection.id)")
+            return
+        }
+        
+        do {
+            // Decrypt message using Noise manager
+            let plaintext = try noiseManager.decrypt(sessionId: sessionId, ciphertext: data)
+            
+            guard let messageJson = String(data: plaintext, encoding: .utf8) else {
+                print("Server: Failed to decode message as UTF-8")
+                return
+            }
+            
+            // Get our public key (payee)
+            let myPubkey = keyManager.publicKeyZ32
+            let peerPubkey = serverConnection.clientPubkeyHex ?? "unknown"
+            
+            // Handle message using interactive manager
+            let responseJson = try manager.handleMessage(
+                messageJson: messageJson,
+                peerPubkey: peerPubkey,
+                myPubkey: myPubkey
+            )
+            
+            // If there's a response, encrypt and send it
+            if let response = responseJson {
+                sendEncryptedResponse(serverConnection, responseJson: response)
+            }
+            
+        } catch {
+            print("Server: Error processing message: \(error.localizedDescription)")
+            // Send error response
+            sendErrorResponse(serverConnection, code: "PROCESSING_ERROR", message: error.localizedDescription)
+        }
+    }
+    
+    /// Handle Noise handshake for server connection
+    private func handleServerHandshake(_ serverConnection: ServerConnection, data: Data) {
+        guard let noiseManager = serverConnection.noiseManager else {
+            print("Server: No noise manager for handshake")
+            return
+        }
+        
+        do {
+            // Accept connection (server-side handshake)
+            let acceptResult = try noiseManager.acceptConnection(firstMsg: data)
+            
+            // Store session ID and mark handshake complete
+            serverConnection.sessionId = acceptResult.sessionId
+            serverConnection.isHandshakeComplete = true
+            serverConnection.clientPubkeyHex = acceptResult.sessionId // Session ID may include client identity
+            
+            // Send handshake response to client
+            serverConnection.connection.send(content: acceptResult.responseMessage, completion: .contentProcessed { error in
+                if let error = error {
+                    print("Server: Failed to send handshake response: \(error.localizedDescription)")
+                } else {
+                    print("Server: Handshake complete for connection \(serverConnection.id)")
+                }
+            })
+            
+            // Continue receiving messages
+            receiveNextMessage(serverConnection)
+            
+        } catch {
+            print("Server: Handshake failed: \(error.localizedDescription)")
+            serverConnections.removeValue(forKey: serverConnection.id)
+            serverConnection.connection.cancel()
+        }
+    }
+    
+    /// Send encrypted response to client
+    private func sendEncryptedResponse(_ serverConnection: ServerConnection, responseJson: String) {
+        guard let sessionId = serverConnection.sessionId,
+              let noiseManager = serverConnection.noiseManager,
+              let responseData = responseJson.data(using: .utf8) else {
+            return
+        }
+        
+        do {
+            let ciphertext = try noiseManager.encrypt(sessionId: sessionId, plaintext: responseData)
+            
+            // Send with length prefix
+            var message = Data()
+            var length = UInt32(ciphertext.count).bigEndian
+            message.append(Data(bytes: &length, count: 4))
+            message.append(ciphertext)
+            
+            serverConnection.connection.send(content: message, completion: .contentProcessed { error in
+                if let error = error {
+                    print("Server: Failed to send response: \(error.localizedDescription)")
+                }
+            })
+        } catch {
+            print("Server: Failed to encrypt response: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Send error response to client
+    private func sendErrorResponse(_ serverConnection: ServerConnection, code: String, message: String) {
+        let errorJson = """
+        {"type": "Error", "code": "\(code)", "message": "\(message)"}
+        """
+        sendEncryptedResponse(serverConnection, responseJson: errorJson)
+    }
+    
+    /// Continue receiving messages on a connection
+    private func receiveNextMessage(_ serverConnection: ServerConnection) {
+        serverConnection.connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, context, isComplete, error in
+            if let error = error {
+                print("Server: Receive error: \(error.localizedDescription)")
+                self?.serverConnections.removeValue(forKey: serverConnection.id)
+                return
+            }
+            
+            if let data = data, !data.isEmpty {
+                self?.handleServerMessage(serverConnection, data: data)
+            }
+            
+            if !isComplete {
+                self?.receiveNextMessage(serverConnection)
+            }
+        }
     }
     
     /// Register background task for server
@@ -715,16 +884,85 @@ extension NoisePaymentService {
 
 // MARK: - Server Connection
 
-/// Represents an active server connection
+/// Represents an active server connection with Noise session state
 private class ServerConnection {
     let id: UUID
     let connection: NWConnection
     let noiseManager: FfiNoiseManager?
+    var sessionId: String?
+    var isHandshakeComplete: Bool = false
+    var clientPubkeyHex: String?
     
     init(id: UUID, connection: NWConnection, noiseManager: FfiNoiseManager?) {
         self.id = id
         self.connection = connection
         self.noiseManager = noiseManager
     }
+}
+
+// MARK: - Server Receipt Generator
+
+/// Receipt generator callback implementation for server mode
+public class ServerReceiptGenerator: ReceiptGeneratorCallback {
+    
+    private var pendingRequestCallback: ((ReceiptRequest) -> Void)?
+    private var invoiceGenerator: ((ReceiptRequest) -> String)?
+    
+    public init() {}
+    
+    /// Set callback for when a payment request is received
+    public func onPaymentRequest(_ callback: @escaping (ReceiptRequest) -> Void) {
+        pendingRequestCallback = callback
+    }
+    
+    /// Set callback for generating invoices (for real payments)
+    public func setInvoiceGenerator(_ generator: @escaping (ReceiptRequest) -> String) {
+        invoiceGenerator = generator
+    }
+    
+    public func generateReceipt(request: ReceiptRequest) -> ReceiptGenerationResult {
+        // Notify callback about pending request
+        pendingRequestCallback?(request)
+        
+        // Generate invoice if generator is set, otherwise use mock
+        let invoice = invoiceGenerator?(request) ?? "mock_invoice_\(request.receiptId)"
+        
+        // Create confirmed receipt with invoice in metadata
+        var metadataDict = [String: String]()
+        if let metadataJson = request.metadataJson.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: metadataJson) as? [String: String] {
+            metadataDict = parsed
+        }
+        metadataDict["invoice"] = invoice
+        metadataDict["confirmed_at"] = ISO8601DateFormatter().string(from: Date())
+        
+        let updatedMetadataJson = (try? JSONSerialization.data(withJSONObject: metadataDict))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        
+        let confirmedReceipt = ReceiptRequest(
+            receiptId: request.receiptId,
+            payer: request.payer,
+            payee: request.payee,
+            methodId: request.methodId,
+            amount: request.amount,
+            currency: request.currency,
+            metadataJson: updatedMetadataJson
+        )
+        
+        return ReceiptGenerationResult.ok(receipt: confirmedReceipt)
+    }
+}
+
+// MARK: - Pending Payment Request (for ViewModel)
+
+/// Represents a pending payment request received by the server
+public struct PendingPaymentRequest: Identifiable {
+    public let id: String
+    public let payerPubkey: String
+    public let amount: String?
+    public let currency: String?
+    public let methodId: String
+    public let receivedAt: Date
+    public let connectionId: UUID
 }
 

@@ -359,6 +359,7 @@ public final class NoiseReceiveViewModel: ObservableObject {
     @Published public private(set) var noisePubkeyHex: String?
     @Published public private(set) var pendingRequests: [PendingPaymentRequest] = []
     @Published public private(set) var recentReceipts: [StoredReceipt] = []
+    @Published public private(set) var activeConnections = 0
     
     // MARK: - Models
     
@@ -376,6 +377,42 @@ public final class NoiseReceiveViewModel: ObservableObject {
     private let paymentService = NoisePaymentService.shared
     private let keyManager = KeyManager()
     
+    // MARK: - Initialization
+    
+    public init() {
+        setupCallbacks()
+    }
+    
+    /// Set up callbacks from the payment service
+    private func setupCallbacks() {
+        // Handle pending payment requests
+        paymentService.onPendingPaymentRequest = { [weak self] request in
+            Task { @MainActor in
+                guard let self = self else { return }
+                let pendingRequest = PendingPaymentRequest(
+                    id: request.id,
+                    payerPubkey: request.payerPubkey,
+                    amount: request.amount,
+                    currency: request.currency,
+                    methodId: request.methodId,
+                    receivedAt: request.receivedAt
+                )
+                self.pendingRequests.append(pendingRequest)
+            }
+        }
+        
+        // Handle confirmed receipts
+        paymentService.onReceiptConfirmed = { [weak self] receipt in
+            Task { @MainActor in
+                guard let self = self else { return }
+                // Remove from pending
+                self.pendingRequests.removeAll { $0.id == receipt.receiptId }
+                // Reload receipts
+                self.loadRecentReceipts()
+            }
+        }
+    }
+    
     // MARK: - Server Control
     
     /// Start listening for payments
@@ -386,6 +423,7 @@ public final class NoiseReceiveViewModel: ObservableObject {
             isListening = status.isRunning
             listeningPort = status.port
             noisePubkeyHex = status.noisePubkeyHex
+            activeConnections = status.activeConnections
             
         } catch {
             print("Failed to start server: \(error)")
@@ -397,6 +435,16 @@ public final class NoiseReceiveViewModel: ObservableObject {
         paymentService.stopServer()
         isListening = false
         listeningPort = nil
+        activeConnections = 0
+    }
+    
+    /// Refresh server status
+    public func refreshStatus() {
+        let status = paymentService.getServerStatus()
+        isListening = status.isRunning
+        listeningPort = status.port
+        noisePubkeyHex = status.noisePubkeyHex
+        activeConnections = status.activeConnections
     }
     
     /// Get connection info for sharing

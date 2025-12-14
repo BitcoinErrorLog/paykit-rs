@@ -51,8 +51,9 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
             urlString = "\(baseURL)/pubky\(ownerPubkey)\(path)"
         } else {
             // Use _pubky subdomain (requires Pkarr resolution)
-            // For now, we'll use a default homeserver
-            // TODO: Implement Pkarr resolution for _pubky subdomains
+            // Note: Pkarr resolution for _pubky subdomains is a future enhancement.
+            // For production use, configure homeserverBaseURL directly.
+            // DHT-based resolution would require pkarr library integration.
             urlString = "https://_pubky.\(ownerPubkey)\(path)"
         }
         

@@ -37,6 +37,9 @@ class PubkyUnauthenticatedStorageAdapter(
     
     override fun get(ownerPubkey: String, path: String): StorageGetResult {
         // Construct URL: https://_pubky.{ownerPubkey}{path}
+        // Note: Pkarr resolution for _pubky subdomains is a future enhancement.
+        // For production use, configure homeserverBaseURL directly.
+        // DHT-based resolution would require pkarr library integration.
         val urlString = if (homeserverBaseURL != null) {
             "$homeserverBaseURL/pubky$ownerPubkey$path"
         } else {

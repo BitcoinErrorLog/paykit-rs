@@ -78,6 +78,18 @@ Without wallet configuration, the CLI shows simulation mode with setup instructi
 - Full P2P subscription lifecycle
 - No intermediaries required
 
+### 🛡️ Privacy Features
+- **Private Endpoints**: Per-peer dedicated addresses for enhanced privacy
+- **Endpoint Rotation**: Automatic rotation policies (on-use, after:N uses, manual)
+- **Rotation History**: Track all rotations with audit capability
+- **Encrypted Storage**: Private endpoints stored with AES-256-GCM encryption
+
+### 💾 Backup & Restore
+- **Encrypted Backups**: Argon2 + AES-256-GCM key derivation
+- **Export**: `backup --output file.json` to create encrypted backup
+- **Import**: `restore file.json --name <name>` to restore identity
+- **Complete Data**: Includes identity, contacts, payment methods, settings
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -192,6 +204,47 @@ Configure payment execution backends to enable real payments.
 | `subscriptions recent-payments` | Show recent auto-payments | `paykit-demo subscriptions recent-payments --count 20` |
 
 For detailed subscription workflows, see [QUICKSTART.md](./QUICKSTART.md#4-subscriptions).
+
+### Private Endpoints
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `endpoints list` | List all private endpoints | `paykit-demo endpoints list` |
+| `endpoints show` | Show endpoints for a peer | `paykit-demo endpoints show <peer>` |
+| `endpoints remove` | Remove specific endpoint | `paykit-demo endpoints remove <peer> <method>` |
+| `endpoints remove-peer` | Remove all endpoints for peer | `paykit-demo endpoints remove-peer <peer>` |
+| `endpoints cleanup` | Remove expired endpoints | `paykit-demo endpoints cleanup` |
+| `endpoints stats` | Show endpoint statistics | `paykit-demo endpoints stats` |
+
+### Endpoint Rotation
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `rotation status` | Show rotation status | `paykit-demo rotation status` |
+| `rotation default` | Set default policy | `paykit-demo rotation default on-use` |
+| `rotation policy` | Set per-method policy | `paykit-demo rotation policy lightning after:5` |
+| `rotation auto-rotate` | Enable/disable auto-rotation | `paykit-demo rotation auto-rotate --enable true` |
+| `rotation rotate` | Manually trigger rotation | `paykit-demo rotation rotate lightning` |
+| `rotation history` | View rotation history | `paykit-demo rotation history --method lightning` |
+| `rotation clear-history` | Clear rotation history | `paykit-demo rotation clear-history` |
+
+**Rotation policies:**
+- `on-use` - Rotate after every use (best privacy)
+- `after:<N>` - Rotate after N uses
+- `periodic:<seconds>` - Rotate after time interval
+- `manual` - Only rotate when manually triggered
+
+### Backup & Restore
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `backup` | Export encrypted backup | `paykit-demo backup --output backup.json` |
+| `restore` | Import from backup | `paykit-demo restore backup.json --name alice` |
+
+**Backup encryption:**
+- Argon2id key derivation with configurable parameters
+- AES-256-GCM authenticated encryption
+- Includes identity keypair, contacts, settings
 
 ## 🔧 Configuration
 

@@ -34,6 +34,50 @@ chmod +x demos/02-subscription.sh
 ./demos/02-subscription.sh
 ```
 
+### 03-privacy-features.sh
+Privacy-enhancing features demonstrating:
+- Endpoint rotation policies (on-use, after:N, manual)
+- Per-method policy configuration
+- Private endpoint management
+- Rotation history tracking
+
+**Runtime**: ~15 seconds
+
+```bash
+chmod +x demos/03-privacy-features.sh
+./demos/03-privacy-features.sh
+```
+
+### 04-backup-restore.sh
+Identity backup and restore demonstrating:
+- Encrypted backup creation (Argon2 + AES-256-GCM)
+- Contact and settings export
+- Restore workflow
+- Security best practices
+
+**Runtime**: ~10 seconds
+
+```bash
+chmod +x demos/04-backup-restore.sh
+./demos/04-backup-restore.sh
+```
+
+### 05-full-workflow.sh
+Complete Paykit workflow demonstrating:
+- Identity management
+- Contact management with search
+- Privacy configuration
+- Private endpoints
+- Wallet status
+- Dashboard and receipts
+
+**Runtime**: ~30 seconds
+
+```bash
+chmod +x demos/05-full-workflow.sh
+./demos/05-full-workflow.sh
+```
+
 ## Manual Demo Guide
 
 ### Complete Alice→Bob Payment (Interactive)

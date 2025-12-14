@@ -85,6 +85,8 @@ await storage.unpublishFromDirectory(client, publicKey, authToken);
 - Multiple identity support with switching
 - Browser localStorage persistence
 - Import/export capabilities
+- **Security Settings**: Password-based encrypted storage (IndexedDB + SubtleCrypto)
+- Password strength meter and secure key derivation
 
 ### 👥 Contact Management
 - Address book for Pubky peers
@@ -99,8 +101,9 @@ await storage.unpublishFromDirectory(client, publicKey, authToken);
 - Configure your payment endpoints (Lightning, Onchain, Custom)
 - Priority ordering and preferred method selection
 - Public/private visibility controls
-- Local persistence with mock publishing
-- ⚠️ **Demo limitation**: Methods saved locally only, not published to homeserver
+- Multiple publishing modes (Mock, Direct, Proxy)
+- **Endpoint Rotation**: Configurable rotation policies for privacy
+- Auto-rotation after payments (on-use, after:N uses, manual)
 - See [PAYMENT_METHODS.md](./PAYMENT_METHODS.md) for details
 
 ### 🧾 Receipt Management

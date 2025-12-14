@@ -205,7 +205,7 @@ impl MockLightningExecutor {
 impl LightningExecutorFFI for MockLightningExecutor {
     fn pay_invoice(
         &self,
-        invoice: String,
+        _invoice: String,
         amount_msat: Option<u64>,
         _max_fee_msat: Option<u64>,
     ) -> Result<LightningPaymentResultFFI> {

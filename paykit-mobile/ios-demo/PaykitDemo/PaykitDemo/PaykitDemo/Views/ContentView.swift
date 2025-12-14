@@ -18,6 +18,18 @@ struct ContentView: View {
                     Label("Dashboard", systemImage: "house.fill")
                 }
             
+            // Send Payment Tab (Noise)
+            PaymentView()
+                .tabItem {
+                    Label("Send", systemImage: "paperplane.fill")
+                }
+            
+            // Receive Payment Tab (Noise)
+            ReceivePaymentView()
+                .tabItem {
+                    Label("Receive", systemImage: "arrow.down.circle.fill")
+                }
+            
             // Payment Methods Tab
             PaymentMethodsView()
                 .tabItem {
@@ -34,24 +46,6 @@ struct ContentView: View {
             ReceiptsView()
                 .tabItem {
                     Label("Receipts", systemImage: "doc.text.fill")
-                }
-            
-            // Subscriptions Tab
-            SubscriptionsView()
-                .tabItem {
-                    Label("Subscriptions", systemImage: "repeat")
-                }
-            
-            // Auto-Pay Tab
-            AutoPayView()
-                .tabItem {
-                    Label("Auto-Pay", systemImage: "bolt.fill")
-                }
-            
-            // Payment Requests Tab
-            PaymentRequestsView()
-                .tabItem {
-                    Label("Requests", systemImage: "arrow.left.arrow.right")
                 }
             
             // Settings Tab

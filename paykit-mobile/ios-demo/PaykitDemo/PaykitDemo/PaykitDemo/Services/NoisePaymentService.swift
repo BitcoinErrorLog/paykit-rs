@@ -15,6 +15,7 @@
 import Foundation
 import Network
 import UIKit
+import Combine
 
 // MARK: - Noise Endpoint Info
 
@@ -139,7 +140,7 @@ public final class NoisePaymentService: ObservableObject {
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     
     // Interactive payment handling
-    private var receiptStore: PaymentReceiptStore?
+    private var receiptStore: ReceiptStore?
     private var interactiveManager: PaykitInteractiveManagerFfi?
     private var receiptGenerator: ServerReceiptGenerator?
     
@@ -225,7 +226,7 @@ public final class NoisePaymentService: ObservableObject {
         
         // Query Pubky directory for Noise endpoint
         let directoryService = DirectoryService.shared
-        if let endpoint = try await directoryService.discoverNoiseEndpoint(ownerPubkey: recipientPubkey) {
+        if let endpoint = try await directoryService.discoverNoiseEndpoint(recipientPubkey: recipientPubkey) {
             return endpoint
         }
         
@@ -348,7 +349,7 @@ public final class NoisePaymentService: ObservableObject {
         }
         
         // Step 1: Initiate connection
-        let initResult: FfiConnectionResult
+        let initResult: FfiInitiateResult
         do {
             initResult = try noiseManager!.initiateConnection(serverPk: serverPubkey, hint: nil)
         } catch {
@@ -563,27 +564,39 @@ extension NoisePaymentService {
         let keypair = try await getOrDeriveKeys()
         serverKeypair = keypair
         
-        // Create server configuration
-        let serverConfig = try PaykitClient().createNoiseServerConfig(
-            port: port,
-            serverKeypair: X25519Keypair(
-                secretKeyHex: keypair.secretKeyHex,
-                publicKeyHex: keypair.publicKeyHex
-            )
+        // Create Noise manager for server using the derived keys
+        // We need the Ed25519 seed for FfiNoiseManager, get it from MockPubkyRingService
+        let mockRing = MockPubkyRingService.shared
+        guard let seedHex = mockRing.cachedSeedHex,
+              let seedData = Data(hexString: seedHex) else {
+            throw NoisePaymentError.keyDerivationFailed("No seed available for server mode")
+        }
+        
+        let deviceIdData = getDeviceId().data(using: .utf8)!
+        
+        let serverConfig = FfiMobileConfig(
+            autoReconnect: false,
+            maxReconnectAttempts: 0,
+            reconnectDelayMs: 0,
+            batterySaver: false,
+            chunkSize: 32768
         )
         
-        // Create Noise manager for server
-        serverNoiseManager = try PaykitClient().createNoiseManagerServer(config: serverConfig)
+        serverNoiseManager = try FfiNoiseManager.newServer(
+            config: serverConfig,
+            serverSeed: seedData,
+            serverKid: "paykit-ios-server",
+            deviceId: deviceIdData
+        )
         
         // Create NWListener
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
         
         if port > 0 {
-            let endpoint = NWEndpoint.hostPort(host: .any, port: NWEndpoint.Port(rawValue: port)!)
-            serverListener = try NWListener(using: parameters, on: endpoint)
+            serverListener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
         } else {
-            serverListener = try NWListener(using: parameters, on: .any)
+            serverListener = try NWListener(using: parameters)
         }
         
         guard let listener = serverListener else {
@@ -897,7 +910,7 @@ private class ServerConnection {
 // MARK: - Server Receipt Generator
 
 /// Receipt generator callback implementation for server mode
-public class ServerReceiptGenerator: PaymentReceiptGeneratorCallback {
+public class ServerReceiptGenerator: ReceiptGeneratorCallback {
     
     private var pendingRequestCallback: ((ReceiptRequest) -> Void)?
     private var invoiceGenerator: ((ReceiptRequest) -> String)?
@@ -914,7 +927,7 @@ public class ServerReceiptGenerator: PaymentReceiptGeneratorCallback {
         invoiceGenerator = generator
     }
     
-    public func generatePaymentReceipt(request: PaymentReceiptRequest) -> ReceiptGenerationResult {
+    public func generateReceipt(request: ReceiptRequest) -> ReceiptGenerationResult {
         // Notify callback about pending request
         pendingRequestCallback?(request)
         
@@ -923,8 +936,8 @@ public class ServerReceiptGenerator: PaymentReceiptGeneratorCallback {
         
         // Create confirmed receipt with invoice in metadata
         var metadataDict = [String: String]()
-        if let metadataJson = request.metadataJson.data(using: .utf8),
-           let parsed = try? JSONSerialization.jsonObject(with: metadataJson) as? [String: String] {
+        if let metadataData = request.metadataJson.data(using: .utf8),
+           let parsed = try? JSONSerialization.jsonObject(with: metadataData) as? [String: String] {
             metadataDict = parsed
         }
         metadataDict["invoice"] = invoice
@@ -943,7 +956,7 @@ public class ServerReceiptGenerator: PaymentReceiptGeneratorCallback {
             metadataJson: updatedMetadataJson
         )
         
-        return ReceiptGenerationResult.ok(receipt: confirmedReceipt)
+        return ReceiptGenerationResult(success: true, receipt: confirmedReceipt, error: nil)
     }
 }
 

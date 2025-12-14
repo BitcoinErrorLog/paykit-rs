@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 class ReceiptsViewModel: ObservableObject {
     @Published var receipts: [PaymentReceipt] = []
@@ -19,7 +20,7 @@ class ReceiptsViewModel: ObservableObject {
     @Published var showExportSheet = false
     
     private let keyManager = KeyManager()
-    private var storage: PaymentReceiptStorage {
+    private var storage: ReceiptStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
         return ReceiptStorage(identityName: identityName)
     }
@@ -93,7 +94,7 @@ class ReceiptsViewModel: ObservableObject {
         amountSats: UInt64,
         methodId: String,
         memo: String? = nil
-    ) -> Receipt? {
+    ) -> PaymentReceipt? {
         let payer = direction == .sent ? "self" : counterpartyKey
         let payee = direction == .sent ? counterpartyKey : "self"
         
@@ -109,7 +110,7 @@ class ReceiptsViewModel: ObservableObject {
         }
         
         // Convert FFI receipt to local storage format
-        var localReceipt = Receipt.fromFFI(ffiReceipt, direction: direction, counterpartyName: counterpartyName)
+        var localReceipt = PaymentReceipt.fromFFI(ffiReceipt, direction: direction, counterpartyName: counterpartyName)
         localReceipt.memo = memo
         
         do {
@@ -175,8 +176,8 @@ class ReceiptsViewModel: ObservableObject {
                 "direction": receipt.direction.rawValue,
                 "counterparty": receipt.counterpartyKey,
                 "displayName": receipt.displayName,
-                "amount": receipt.amount,
-                "currency": receipt.currency,
+                "amount": receipt.amountSats,
+                "currency": "SAT",
                 "paymentMethod": receipt.paymentMethod,
                 "status": receipt.status.rawValue,
                 "createdAt": ISO8601DateFormatter().string(from: receipt.createdAt),
@@ -206,8 +207,8 @@ class ReceiptsViewModel: ObservableObject {
                 receipt.direction.rawValue,
                 receipt.counterpartyKey,
                 receipt.displayName.replacingOccurrences(of: ",", with: ";"),
-                String(receipt.amount),
-                receipt.currency,
+                String(receipt.amountSats),
+                "SAT",
                 receipt.paymentMethod,
                 receipt.status.rawValue,
                 dateFormatter.string(from: receipt.createdAt),
@@ -362,7 +363,7 @@ struct ReceiptsView: View {
     private var receiptsList: some View {
         List {
             ForEach(viewModel.filteredReceipts) { receipt in
-                NavigationLink(destination: PaymentReceiptDetailView(receipt: receipt)) {
+                NavigationLink(destination: ReceiptDetailView(receipt: receipt)) {
                     ReceiptRowView(receipt: receipt)
                 }
             }
@@ -519,7 +520,7 @@ struct FilterChip: View {
 // MARK: - Filter Sheet
 
 struct FilterSheet: View {
-    @ObservedObject var viewModel: PaymentReceiptsViewModel
+    @ObservedObject var viewModel: ReceiptsViewModel
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {

@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import Combine
 // PaykitMobile types are in the same module, no import needed
 
 struct PrivateEndpointsView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = PrivateEndpointsViewModel()
     @State private var showingCleanupAlert = false
+    
+    private var currentIdentityName: String {
+        KeyManager().getCurrentIdentityName() ?? "default"
+    }
     
     var body: some View {
         NavigationView {
@@ -28,7 +33,7 @@ struct PrivateEndpointsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Button(action: { viewModel.refresh(identityName: appState.currentIdentityName) }) {
+                        Button(action: { viewModel.refresh(identityName: currentIdentityName) }) {
                             Label("Refresh", systemImage: "arrow.clockwise")
                         }
                         
@@ -38,7 +43,7 @@ struct PrivateEndpointsView: View {
                         
                         Divider()
                         
-                        Button(role: .destructive, action: { viewModel.clearAll(identityName: appState.currentIdentityName) }) {
+                        Button(role: .destructive, action: { viewModel.clearAll(identityName: currentIdentityName) }) {
                             Label("Clear All", systemImage: "trash.fill")
                         }
                     } label: {
@@ -49,14 +54,14 @@ struct PrivateEndpointsView: View {
             .alert("Cleanup Expired", isPresented: $showingCleanupAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Cleanup") {
-                    viewModel.cleanupExpired(identityName: appState.currentIdentityName)
+                    viewModel.cleanupExpired(identityName: currentIdentityName)
                 }
             } message: {
                 Text("Remove all expired private endpoints?")
             }
         }
         .onAppear {
-            viewModel.refresh(identityName: appState.currentIdentityName)
+            viewModel.refresh(identityName: currentIdentityName)
         }
     }
 }
@@ -103,9 +108,9 @@ private struct EndpointsList: View {
             // Statistics Section
             Section {
                 HStack {
-                    StatCard(title: "Total", value: "\(viewModel.totalCount)", icon: "link")
-                    StatCard(title: "Peers", value: "\(viewModel.peers.count)", icon: "person.2")
-                    StatCard(title: "Expired", value: "\(viewModel.expiredCount)", icon: "clock.badge.exclamationmark", isWarning: viewModel.expiredCount > 0)
+                    PrivateEndpointsStatCard(title: "Total", value: "\(viewModel.totalCount)", icon: "link")
+                    PrivateEndpointsStatCard(title: "Peers", value: "\(viewModel.peers.count)", icon: "person.2")
+                    PrivateEndpointsStatCard(title: "Expired", value: "\(viewModel.expiredCount)", icon: "clock.badge.exclamationmark", isWarning: viewModel.expiredCount > 0)
                 }
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -136,7 +141,7 @@ private struct EndpointsList: View {
 
 // MARK: - Stat Card
 
-private struct StatCard: View {
+private struct PrivateEndpointsStatCard: View {
     let title: String
     let value: String
     let icon: String
@@ -197,7 +202,7 @@ private struct EndpointRow: View {
             HStack {
                 MethodBadge(methodId: endpoint.methodId)
                 Spacer()
-                StatusBadge(isExpired: false) // TODO: Check expiration when available
+                PrivateEndpointsStatusBadge(isExpired: false) // TODO: Check expiration when available
             }
             
             Text(truncatedEndpoint)
@@ -261,7 +266,7 @@ private struct MethodBadge: View {
 
 // MARK: - Status Badge
 
-private struct StatusBadge: View {
+private struct PrivateEndpointsStatusBadge: View {
     let isExpired: Bool
     
     var body: some View {

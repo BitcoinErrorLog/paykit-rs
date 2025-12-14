@@ -218,7 +218,7 @@ struct ReceivePaymentView: View {
                     .padding()
             } else {
                 ForEach(viewModel.recentReceipts, id: \.id) { receipt in
-                    ReceiptRow(receipt: receipt)
+                    ReceiveReceiptRow(receipt: receipt)
                 }
             }
         }
@@ -295,8 +295,8 @@ struct PendingRequestCard: View {
 
 // MARK: - Receipt Row
 
-struct ReceiptRow: View {
-    let receipt: StoredReceipt
+struct ReceiveReceiptRow: View {
+    let receipt: PaymentReceipt
     
     var body: some View {
         HStack {
@@ -304,7 +304,7 @@ struct ReceiptRow: View {
                 Text(receipt.id.prefix(16) + "...")
                     .font(.system(.caption, design: .monospaced))
                 
-                Text("\(receipt.amount) \(receipt.currency)")
+                Text("\(receipt.amountSats) SAT")
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
@@ -312,11 +312,11 @@ struct ReceiptRow: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: 4) {
-                Text(receipt.timestamp, style: .date)
+                Text(receipt.createdAt, style: .date)
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                StatusBadge(status: receipt.status)
+                ReceiveStatusBadge(status: receipt.status)
             }
         }
         .padding()
@@ -327,7 +327,7 @@ struct ReceiptRow: View {
 
 // MARK: - Status Badge
 
-struct StatusBadge: View {
+struct ReceiveStatusBadge: View {
     let status: PaymentReceiptStatus
     
     var body: some View {
@@ -345,7 +345,7 @@ struct StatusBadge: View {
         case .pending: return .orange
         case .completed: return .green
         case .failed: return .red
-        case .cancelled: return .gray
+        case .refunded: return .gray
         }
     }
 }

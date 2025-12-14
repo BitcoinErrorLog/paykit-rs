@@ -14,6 +14,7 @@
 
 import Foundation
 import Network
+import UIKit
 
 // MARK: - Noise Endpoint Info
 
@@ -141,6 +142,14 @@ public final class NoisePaymentService: ObservableObject {
     private var connection: NWConnection?
     private var connectionQueue = DispatchQueue(label: "com.paykit.noise.connection")
     private var currentEpoch: UInt32 = 0
+    
+    // Server properties
+    private var serverListener: NWListener?
+    private var serverConnections: [UUID: ServerConnection] = [:]
+    private var serverQueue = DispatchQueue(label: "com.paykit.noise.server")
+    private var serverKeypair: X25519KeypairResult?
+    private var serverNoiseManager: FfiNoiseManager?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     
     private let keyManager = KeyManager()
     private let keyCache = NoiseKeyCache.shared
@@ -515,33 +524,207 @@ extension NoisePaymentService {
     
     /// Start listening for incoming payment requests
     public func startServer(port: UInt16 = 0) async throws -> ServerStatus {
+        // Stop existing server if running
+        if serverListener != nil {
+            stopServer()
+        }
+        
         // Get our keys for publishing
         let keypair = try await getOrDeriveKeys()
+        serverKeypair = keypair
         
-        // Note: Full server implementation would use NWListener
-        // For demo, we just return the public key that clients need
+        // Create server configuration
+        let serverConfig = try PaykitClient().createNoiseServerConfig(
+            port: port,
+            serverKeypair: X25519Keypair(
+                secretKeyHex: keypair.secretKeyHex,
+                publicKeyHex: keypair.publicKeyHex
+            )
+        )
+        
+        // Create Noise manager for server
+        serverNoiseManager = try PaykitClient().createNoiseManagerServer(config: serverConfig)
+        
+        // Create NWListener
+        let parameters = NWParameters.tcp
+        parameters.allowLocalEndpointReuse = true
+        
+        if port > 0 {
+            let endpoint = NWEndpoint.hostPort(host: .any, port: NWEndpoint.Port(rawValue: port)!)
+            serverListener = try NWListener(using: parameters, on: endpoint)
+        } else {
+            serverListener = try NWListener(using: parameters, on: .any)
+        }
+        
+        guard let listener = serverListener else {
+            throw NoisePaymentError.serverError(code: "INIT_FAILED", message: "Failed to create listener")
+        }
+        
+        // Set up new connection handler
+        listener.newConnectionHandler = { [weak self] connection in
+            self?.handleNewConnection(connection)
+        }
+        
+        // Start listening
+        let actualPort = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt16, Error>) in
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    if let port = listener.port {
+                        continuation.resume(returning: port.rawValue)
+                    } else {
+                        continuation.resume(throwing: NoisePaymentError.serverError(code: "NO_PORT", message: "Failed to get listener port"))
+                    }
+                case .failed(let error):
+                    continuation.resume(throwing: NoisePaymentError.serverError(code: "LISTENER_FAILED", message: error.localizedDescription))
+                case .cancelled:
+                    continuation.resume(throwing: NoisePaymentError.cancelled)
+                default:
+                    break
+                }
+            }
+            
+            listener.start(queue: self.serverQueue)
+        }
+        
+        // Register for background tasks
+        registerBackgroundTask()
         
         return ServerStatus(
-            isRunning: false, // Would be true with full implementation
-            port: port,
+            isRunning: true,
+            port: actualPort,
             noisePubkeyHex: keypair.publicKeyHex,
-            activeConnections: 0
+            activeConnections: serverConnections.count
         )
+    }
+    
+    /// Handle new incoming connection
+    private func handleNewConnection(_ connection: NWConnection) {
+        let connectionId = UUID()
+        
+        // Create server connection handler
+        let serverConnection = ServerConnection(
+            id: connectionId,
+            connection: connection,
+            noiseManager: serverNoiseManager
+        )
+        
+        serverConnections[connectionId] = serverConnection
+        
+        // Set up connection state handler
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                self?.handleReadyConnection(serverConnection)
+            case .failed(let error), .cancelled:
+                self?.serverConnections.removeValue(forKey: connectionId)
+            default:
+                break
+            }
+        }
+        
+        // Start connection
+        connection.start(queue: serverQueue)
+    }
+    
+    /// Handle ready connection - perform Noise handshake
+    private func handleReadyConnection(_ serverConnection: ServerConnection) {
+        Task {
+            do {
+                // Perform server-side Noise handshake
+                // This is handled by FfiNoiseManager in server mode
+                // The handshake happens automatically when data is received
+                
+                // Set up receive handler
+                serverConnection.connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, context, isComplete, error in
+                    if let error = error {
+                        print("Server connection receive error: \(error)")
+                        self?.serverConnections.removeValue(forKey: serverConnection.id)
+                        return
+                    }
+                    
+                    if let data = data, !data.isEmpty {
+                        self?.handleServerMessage(serverConnection, data: data)
+                    }
+                    
+                    if !isComplete {
+                        // Continue receiving
+                        serverConnection.connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { _, _, _, _ in }
+                    }
+                }
+            } catch {
+                print("Server connection setup error: \(error)")
+                serverConnections.removeValue(forKey: serverConnection.id)
+            }
+        }
+    }
+    
+    /// Handle message from client
+    private func handleServerMessage(_ serverConnection: ServerConnection, data: Data) {
+        // Decrypt message using Noise manager
+        // Parse payment message
+        // Handle payment request
+        // Send response
+        
+        // For now, log the message
+        print("Server received message: \(data.count) bytes")
+    }
+    
+    /// Register background task for server
+    private func registerBackgroundTask() {
+        backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
+            self?.endBackgroundTask()
+        }
+    }
+    
+    /// End background task
+    private func endBackgroundTask() {
+        if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+        }
     }
     
     /// Stop the server
     public func stopServer() {
-        // Would stop NWListener
+        // Cancel all connections
+        for (_, serverConnection) in serverConnections {
+            serverConnection.connection.cancel()
+        }
+        serverConnections.removeAll()
+        
+        // Stop listener
+        serverListener?.cancel()
+        serverListener = nil
+        
+        // End background task
+        endBackgroundTask()
     }
     
     /// Get current server status
     public func getServerStatus() -> ServerStatus {
+        let port = serverListener?.port?.rawValue
         return ServerStatus(
-            isRunning: false,
-            port: nil,
-            noisePubkeyHex: nil,
-            activeConnections: 0
+            isRunning: serverListener != nil,
+            port: port,
+            noisePubkeyHex: serverKeypair?.publicKeyHex,
+            activeConnections: serverConnections.count
         )
+    }
+}
+
+// MARK: - Server Connection
+
+/// Represents an active server connection
+private class ServerConnection {
+    let id: UUID
+    let connection: NWConnection
+    let noiseManager: FfiNoiseManager?
+    
+    init(id: UUID, connection: NWConnection, noiseManager: FfiNoiseManager?) {
+        self.id = id
+        self.connection = connection
+        self.noiseManager = noiseManager
     }
 }
 

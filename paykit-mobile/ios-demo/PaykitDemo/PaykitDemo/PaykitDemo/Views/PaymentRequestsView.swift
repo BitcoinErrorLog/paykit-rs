@@ -73,8 +73,9 @@ struct PaymentRequestsView: View {
                         }
                         
                         Button("Create Request") {
-                            // Get public key from KeyManager if available
-                            let myPubkey = "pk1demo..." // TODO: Get from KeyManager
+                            // Get public key from KeyManager
+                            let keyManager = KeyManager()
+                            let myPubkey = keyManager.publicKeyZ32 ?? "unknown"
                             viewModel.createRequest(client: appState.paykitClient, myPublicKey: myPubkey)
                         }
                         .buttonStyle(.borderedProminent)

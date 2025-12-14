@@ -86,6 +86,7 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var showingQRScanner = false
     @State private var showingPaymentView = false
+    @State private var showingReceiveView = false
     
     var body: some View {
         NavigationView {
@@ -119,6 +120,9 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingPaymentView) {
                 PaymentView()
+            }
+            .sheet(isPresented: $showingReceiveView) {
+                ReceivePaymentView()
             }
         }
     }
@@ -289,7 +293,7 @@ struct DashboardView: View {
                     icon: "qrcode",
                     color: .green
                 ) {
-                    // TODO: Navigate to receive flow
+                    showingReceiveView = true
                 }
                 
                 QuickActionButton(

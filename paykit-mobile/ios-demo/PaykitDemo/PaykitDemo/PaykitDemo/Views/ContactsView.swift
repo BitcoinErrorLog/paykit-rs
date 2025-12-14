@@ -27,19 +27,22 @@ struct ContactsView: View {
             .navigationTitle("Contacts")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(action: { showingAddSheet = true }) {
-                            Label("Add Contact", systemImage: "person.crop.circle.badge.plus")
-                        }
+                    HStack(spacing: 12) {
                         Button(action: {
                             Task {
                                 await viewModel.discoverContacts(directoryService: appState.paykitClient.createDirectoryService())
                             }
                         }) {
-                            Label("Discover from Follows", systemImage: "person.badge.plus")
+                            Label("Discover", systemImage: "person.badge.plus")
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                        
+                        Menu {
+                            Button(action: { showingAddSheet = true }) {
+                                Label("Add Contact", systemImage: "person.crop.circle.badge.plus")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
                     }
                 }
             }
@@ -68,7 +71,7 @@ struct ContactsView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             Image(systemName: "person.crop.circle.badge.plus")
                 .font(.system(size: 80))
                 .foregroundColor(.secondary)
@@ -81,10 +84,25 @@ struct ContactsView: View {
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
             
-            Button(action: { showingAddSheet = true }) {
-                Label("Add Contact", systemImage: "plus.circle.fill")
+            VStack(spacing: 12) {
+                Button(action: {
+                    Task {
+                        await viewModel.discoverContacts(directoryService: appState.paykitClient.createDirectoryService())
+                    }
+                }) {
+                    Label("Discover from Pubky", systemImage: "person.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                
+                Button(action: { showingAddSheet = true }) {
+                    Label("Add Contact Manually", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
+            .padding(.horizontal)
         }
         .padding()
     }

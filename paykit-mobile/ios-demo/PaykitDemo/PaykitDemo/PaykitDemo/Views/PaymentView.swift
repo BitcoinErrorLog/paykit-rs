@@ -138,10 +138,40 @@ struct PaymentView: View {
                 }
             }
             
+            // Selection Strategy
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Selection Strategy")
+                    .font(.headline)
+                
+                Picker("Strategy", selection: $viewModel.selectionStrategy) {
+                    Text("Balanced").tag(SelectionStrategy.balanced)
+                    Text("Cost Optimized").tag(SelectionStrategy.costOptimized)
+                    Text("Speed Optimized").tag(SelectionStrategy.speedOptimized)
+                    Text("Privacy Optimized").tag(SelectionStrategy.privacyOptimized)
+                }
+                .pickerStyle(.segmented)
+                .disabled(viewModel.isProcessing)
+                .onChange(of: viewModel.selectionStrategy) { _ in
+                    viewModel.applyStrategy()
+                }
+            }
+            
             // Payment Method
             VStack(alignment: .leading, spacing: 8) {
-                Text("Payment Method")
-                    .font(.headline)
+                HStack {
+                    Text("Payment Method")
+                        .font(.headline)
+                    Spacer()
+                    if let methodHealth = viewModel.methodHealth {
+                        HStack(spacing: 4) {
+                            Image(systemName: methodHealth.icon)
+                                .foregroundColor(methodHealth.color)
+                            Text(methodHealth.status)
+                                .font(.caption)
+                                .foregroundColor(methodHealth.color)
+                        }
+                    }
+                }
                 
                 Picker("Method", selection: $viewModel.paymentMethod) {
                     Text("Lightning").tag("lightning")
@@ -277,6 +307,7 @@ class PaymentViewModel: ObservableObject {
     @Published var recipientUri: String = ""
     @Published var amount: String = "1000"
     @Published var currency: String = "SAT"
+    @Published var selectionStrategy: SelectionStrategy = .balanced
     @Published var paymentMethod: String = "lightning"
     @Published var description: String = ""
     
@@ -287,6 +318,7 @@ class PaymentViewModel: ObservableObject {
     @Published var showSuccess: Bool = false
     @Published var errorMessage: String = ""
     @Published var confirmedReceiptId: String?
+    @Published var methodHealth: (icon: String, color: Color, status: String)?
     
     // Noise Manager
     private var noiseManager: FfiNoiseManager?
@@ -412,9 +444,12 @@ class PaymentViewModel: ObservableObject {
         recipientUri = ""
         amount = "1000"
         currency = "SAT"
+        selectionStrategy = .balanced
+        paymentMethod = "lightning"
         description = ""
         paymentStatus = .idle
         confirmedReceiptId = nil
+        methodHealth = nil
     }
     
     // MARK: - Helper Methods

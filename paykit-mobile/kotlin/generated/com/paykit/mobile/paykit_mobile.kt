@@ -473,14 +473,22 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_check_health(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_create_noise_error_message(`ptr`: Pointer,`code`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_create_payment_request(`ptr`: Pointer,`fromPubkey`: RustBuffer.ByValue,`toPubkey`: RustBuffer.ByValue,`amountSats`: Long,`currency`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`description`: RustBuffer.ByValue,`expiresInSecs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_create_receipt(`ptr`: Pointer,`payer`: RustBuffer.ByValue,`payee`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`amount`: RustBuffer.ByValue,`currency`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_confirmation_message(`ptr`: Pointer,`receiptId`: RustBuffer.ByValue,`payerPubkey`: RustBuffer.ByValue,`payeePubkey`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`amount`: RustBuffer.ByValue,`currency`: RustBuffer.ByValue,`signature`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_request_message(`ptr`: Pointer,`receiptId`: RustBuffer.ByValue,`payerPubkey`: RustBuffer.ByValue,`payeePubkey`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`amount`: RustBuffer.ByValue,`currency`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_create_subscription(`ptr`: Pointer,`subscriber`: RustBuffer.ByValue,`provider`: RustBuffer.ByValue,`terms`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_days_remaining_in_period(`ptr`: Pointer,`periodEnd`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Int
+    fun uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,`recipientPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_extract_key_from_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_extract_method_from_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -505,13 +513,19 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_list_methods(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_parse_noise_payment_message(`ptr`: Pointer,`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_parse_receipt_metadata(`ptr`: Pointer,`metadataJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_parse_scanned_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,`host`: RustBuffer.ByValue,`port`: Short,`noisePubkey`: RustBuffer.ByValue,`metadata`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_paykit_mobile_fn_method_paykitclient_publish_payment_endpoint(`ptr`: Pointer,`transport`: Pointer,`methodId`: RustBuffer.ByValue,`endpointData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(`ptr`: Pointer,`transport`: Pointer,`contactPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_paykit_mobile_fn_method_paykitclient_remove_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_paykit_mobile_fn_method_paykitclient_remove_payment_endpoint_from_directory(`ptr`: Pointer,`transport`: Pointer,`methodId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -619,15 +633,29 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_directory_operations_async(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_paykit_mobile_fn_func_create_error_message(`code`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_create_interactive_manager(`store`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_message_builder(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_paykit_mobile_fn_func_create_noise_server_config(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_create_noise_server_config_with_port(`port`: Short,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_create_paykit_client(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_paykit_mobile_fn_func_create_private_endpoint_offer_message(`methodId`: RustBuffer.ByValue,`endpoint`: RustBuffer.ByValue,`expiresInSecs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_create_receipt_confirmation_message(`receiptId`: RustBuffer.ByValue,`payerPubkey`: RustBuffer.ByValue,`payeePubkey`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`amount`: RustBuffer.ByValue,`currency`: RustBuffer.ByValue,`signature`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_create_receipt_request_message(`receiptId`: RustBuffer.ByValue,`payerPubkey`: RustBuffer.ByValue,`payeePubkey`: RustBuffer.ByValue,`methodId`: RustBuffer.ByValue,`amount`: RustBuffer.ByValue,`currency`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_create_receipt_store(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_derive_x25519_keypair(`ed25519SecretHex`: RustBuffer.ByValue,`deviceId`: RustBuffer.ByValue,`epoch`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_discover_noise_endpoint(`transport`: Pointer,`recipientPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_ed25519_keypair_from_secret(`secretKeyHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -643,8 +671,14 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_import_keypair_from_backup(`backup`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_parse_payment_message(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_parse_public_key_z32(`publicKeyZ32`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_publish_noise_endpoint(`transport`: Pointer,`host`: RustBuffer.ByValue,`port`: Short,`noisePubkey`: RustBuffer.ByValue,`metadata`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_paykit_mobile_fn_func_remove_noise_endpoint(`transport`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_paykit_mobile_fn_func_sign_message(`secretKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_func_verify_signature(`publicKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,`signatureHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -765,15 +799,29 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_directory_operations_async(
     ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_error_message(
+    ): Short
     fun uniffi_paykit_mobile_checksum_func_create_interactive_manager(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_message_builder(
     ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_noise_server_config(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_noise_server_config_with_port(
+    ): Short
     fun uniffi_paykit_mobile_checksum_func_create_paykit_client(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_private_endpoint_offer_message(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_receipt_confirmation_message(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_receipt_request_message(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_receipt_store(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_derive_x25519_keypair(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_discover_noise_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret(
     ): Short
@@ -789,7 +837,13 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_func_import_keypair_from_backup(
     ): Short
+    fun uniffi_paykit_mobile_checksum_func_parse_payment_message(
+    ): Short
     fun uniffi_paykit_mobile_checksum_func_parse_public_key_z32(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_publish_noise_endpoint(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_remove_noise_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_sign_message(
     ): Short
@@ -847,13 +901,21 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_check_health(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_create_noise_error_message(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_create_payment_request(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_confirmation_message(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_request_message(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_create_subscription(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_period(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr(
     ): Short
@@ -879,13 +941,19 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_list_methods(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_parse_noise_payment_message(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_parse_receipt_metadata(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_parse_scanned_qr(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoint(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_remove_noise_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_remove_payment_endpoint_from_directory(
     ): Short
@@ -1016,19 +1084,40 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_func_create_directory_operations_async() != 3774.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_error_message() != 25647.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_func_create_interactive_manager() != 6575.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_create_message_builder() != 17772.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_noise_server_config() != 51894.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_noise_server_config_with_port() != 63078.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_func_create_paykit_client() != 24343.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_private_endpoint_offer_message() != 34999.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_receipt_confirmation_message() != 39140.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_receipt_request_message() != 38775.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_create_receipt_store() != 25695.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_derive_x25519_keypair() != 35150.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_discover_noise_endpoint() != 40526.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret() != 9902.toShort()) {
@@ -1052,7 +1141,16 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_func_import_keypair_from_backup() != 2045.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_func_parse_payment_message() != 50074.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_func_parse_public_key_z32() != 18323.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_publish_noise_endpoint() != 28655.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_remove_noise_endpoint() != 59542.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_sign_message() != 46705.toShort()) {
@@ -1139,16 +1237,28 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_check_health() != 61124.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_noise_error_message() != 24747.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_payment_request() != 59726.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt() != 12923.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_confirmation_message() != 23349.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_request_message() != 14340.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_create_subscription() != 32373.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_period() != 4816.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint() != 24963.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr() != 60905.toShort()) {
@@ -1187,16 +1297,25 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_list_methods() != 42624.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_parse_noise_payment_message() != 36870.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_parse_receipt_metadata() != 40194.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_parse_scanned_qr() != 50070.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoint() != 20921.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint() != 17605.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact() != 26597.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_remove_noise_endpoint() != 55896.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_remove_payment_endpoint_from_directory() != 33360.toShort()) {
@@ -1412,6 +1531,26 @@ public object FfiConverterUByte: FfiConverter<UByte, Byte> {
 
     override fun write(value: UByte, buf: ByteBuffer) {
         buf.put(value.toByte())
+    }
+}
+
+public object FfiConverterUShort: FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort {
+        return value.toUShort()
+    }
+
+    override fun read(buf: ByteBuffer): UShort {
+        return lift(buf.getShort())
+    }
+
+    override fun lower(value: UShort): Short {
+        return value.toShort()
+    }
+
+    override fun allocationSize(value: UShort) = 2
+
+    override fun write(value: UShort, buf: ByteBuffer) {
+        buf.putShort(value.toShort())
     }
 }
 
@@ -2628,6 +2767,16 @@ public interface PaykitClientInterface {
     fun `checkHealth`(): List<HealthCheckResult>
     
     /**
+     * Create an error message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `code` - Error code
+     * * `message` - Error description
+     */
+    fun `createNoiseErrorMessage`(`code`: String, `message`: String): NoisePaymentMessage
+    
+    /**
      * Create a payment request.
      */
     fun `createPaymentRequest`(`fromPubkey`: String, `toPubkey`: String, `amountSats`: Long, `currency`: String, `methodId`: String, `description`: String, `expiresInSecs`: ULong?): PaymentRequest
@@ -2638,6 +2787,35 @@ public interface PaykitClientInterface {
     fun `createReceipt`(`payer`: String, `payee`: String, `methodId`: String, `amount`: String?, `currency`: String?): Receipt
     
     /**
+     * Create a receipt confirmation message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - The receipt ID being confirmed
+     * * `payer_pubkey` - Payer's public key
+     * * `payee_pubkey` - Payee's public key
+     * * `method_id` - Payment method used
+     * * `amount` - Payment amount
+     * * `currency` - Currency code
+     * * `signature` - Optional signature from payee
+     */
+    fun `createReceiptConfirmationMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?, `signature`: String?): NoisePaymentMessage
+    
+    /**
+     * Create a receipt request message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - Unique identifier for this receipt
+     * * `payer_pubkey` - Payer's public key (z-base32)
+     * * `payee_pubkey` - Payee's public key (z-base32)
+     * * `method_id` - Payment method identifier
+     * * `amount` - Optional payment amount
+     * * `currency` - Optional currency code
+     */
+    fun `createReceiptRequestMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?): NoisePaymentMessage
+    
+    /**
      * Create a new subscription.
      */
     fun `createSubscription`(`subscriber`: String, `provider`: String, `terms`: SubscriptionTerms): Subscription
@@ -2646,6 +2824,31 @@ public interface PaykitClientInterface {
      * Get days remaining in current billing period.
      */
     fun `daysRemainingInPeriod`(`periodEnd`: Long): UInt
+    
+    /**
+     * Discover a Noise endpoint for a recipient.
+     *
+     * Queries the recipient's public directory for their Noise server information.
+     *
+     * # Arguments
+     *
+     * * `transport` - Unauthenticated transport for reading
+     * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+     *
+     * # Returns
+     *
+     * The noise endpoint info if found, None otherwise.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let transport = UnauthenticatedTransportFFI::new_mock();
+     * if let Some(endpoint) = client.discover_noise_endpoint(transport, "8pinxxgqs41...")? {
+     * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+     * }
+     * ```
+     */
+    fun `discoverNoiseEndpoint`(`transport`: UnauthenticatedTransportFfi, `recipientPubkey`: String): NoiseEndpointInfo?
     
     /**
      * Extract public key from scanned QR code.
@@ -2754,6 +2957,15 @@ public interface PaykitClientInterface {
     fun `listMethods`(): List<String>
     
     /**
+     * Parse a payment message from JSON.
+     *
+     * # Arguments
+     *
+     * * `json` - The JSON string to parse
+     */
+    fun `parseNoisePaymentMessage`(`json`: String): NoisePaymentMessage
+    
+    /**
      * Parse receipt metadata as JSON.
      */
     fun `parseReceiptMetadata`(`metadataJson`: String): String
@@ -2762,6 +2974,21 @@ public interface PaykitClientInterface {
      * Parse scanned QR code data as a Paykit URI.
      */
     fun `parseScannedQr`(`scannedData`: String): ScannedUri
+    
+    /**
+     * Publish a Noise endpoint to the directory.
+     *
+     * Makes this device discoverable for receiving payments via Noise protocol.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     * * `host` - Host address where the Noise server is listening
+     * * `port` - Port number where the Noise server is listening
+     * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+     * * `metadata` - Optional metadata about the endpoint
+     */
+    fun `publishNoiseEndpoint`(`transport`: AuthenticatedTransportFfi, `host`: String, `port`: UShort, `noisePubkey`: String, `metadata`: String?)
     
     /**
      * Publish a payment endpoint to the directory.
@@ -2790,6 +3017,17 @@ public interface PaykitClientInterface {
      * * `contact_pubkey` - The contact's public key to remove
      */
     fun `removeContact`(`transport`: AuthenticatedTransportFfi, `contactPubkey`: String)
+    
+    /**
+     * Remove the Noise endpoint from the directory.
+     *
+     * Makes this device no longer discoverable for Noise payments.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     */
+    fun `removeNoiseEndpoint`(`transport`: AuthenticatedTransportFfi)
     
     /**
      * Remove a payment endpoint from the directory.
@@ -2909,6 +3147,26 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Create an error message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `code` - Error code
+     * * `message` - Error description
+     */
+    @Throws(PaykitMobileException::class)override fun `createNoiseErrorMessage`(`code`: String, `message`: String): NoisePaymentMessage =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_create_noise_error_message(it,
+        FfiConverterString.lower(`code`),FfiConverterString.lower(`message`),
+        _status)
+}
+        }.let {
+            FfiConverterTypeNoisePaymentMessage.lift(it)
+        }
+    
+    
+    /**
      * Create a payment request.
      */
     @Throws(PaykitMobileException::class)override fun `createPaymentRequest`(`fromPubkey`: String, `toPubkey`: String, `amountSats`: Long, `currency`: String, `methodId`: String, `description`: String, `expiresInSecs`: ULong?): PaymentRequest =
@@ -2939,6 +3197,55 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Create a receipt confirmation message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - The receipt ID being confirmed
+     * * `payer_pubkey` - Payer's public key
+     * * `payee_pubkey` - Payee's public key
+     * * `method_id` - Payment method used
+     * * `amount` - Payment amount
+     * * `currency` - Currency code
+     * * `signature` - Optional signature from payee
+     */
+    @Throws(PaykitMobileException::class)override fun `createReceiptConfirmationMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?, `signature`: String?): NoisePaymentMessage =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_confirmation_message(it,
+        FfiConverterString.lower(`receiptId`),FfiConverterString.lower(`payerPubkey`),FfiConverterString.lower(`payeePubkey`),FfiConverterString.lower(`methodId`),FfiConverterOptionalString.lower(`amount`),FfiConverterOptionalString.lower(`currency`),FfiConverterOptionalString.lower(`signature`),
+        _status)
+}
+        }.let {
+            FfiConverterTypeNoisePaymentMessage.lift(it)
+        }
+    
+    
+    /**
+     * Create a receipt request message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - Unique identifier for this receipt
+     * * `payer_pubkey` - Payer's public key (z-base32)
+     * * `payee_pubkey` - Payee's public key (z-base32)
+     * * `method_id` - Payment method identifier
+     * * `amount` - Optional payment amount
+     * * `currency` - Optional currency code
+     */
+    @Throws(PaykitMobileException::class)override fun `createReceiptRequestMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?): NoisePaymentMessage =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_request_message(it,
+        FfiConverterString.lower(`receiptId`),FfiConverterString.lower(`payerPubkey`),FfiConverterString.lower(`payeePubkey`),FfiConverterString.lower(`methodId`),FfiConverterOptionalString.lower(`amount`),FfiConverterOptionalString.lower(`currency`),
+        _status)
+}
+        }.let {
+            FfiConverterTypeNoisePaymentMessage.lift(it)
+        }
+    
+    
+    /**
      * Create a new subscription.
      */
     @Throws(PaykitMobileException::class)override fun `createSubscription`(`subscriber`: String, `provider`: String, `terms`: SubscriptionTerms): Subscription =
@@ -2964,6 +3271,41 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
 }
         }.let {
             FfiConverterUInt.lift(it)
+        }
+    
+    
+    /**
+     * Discover a Noise endpoint for a recipient.
+     *
+     * Queries the recipient's public directory for their Noise server information.
+     *
+     * # Arguments
+     *
+     * * `transport` - Unauthenticated transport for reading
+     * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+     *
+     * # Returns
+     *
+     * The noise endpoint info if found, None otherwise.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let transport = UnauthenticatedTransportFFI::new_mock();
+     * if let Some(endpoint) = client.discover_noise_endpoint(transport, "8pinxxgqs41...")? {
+     * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+     * }
+     * ```
+     */
+    @Throws(PaykitMobileException::class)override fun `discoverNoiseEndpoint`(`transport`: UnauthenticatedTransportFfi, `recipientPubkey`: String): NoiseEndpointInfo? =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(it,
+        FfiConverterTypeUnauthenticatedTransportFFI.lower(`transport`),FfiConverterString.lower(`recipientPubkey`),
+        _status)
+}
+        }.let {
+            FfiConverterOptionalTypeNoiseEndpointInfo.lift(it)
         }
     
     
@@ -3186,6 +3528,25 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Parse a payment message from JSON.
+     *
+     * # Arguments
+     *
+     * * `json` - The JSON string to parse
+     */
+    @Throws(PaykitMobileException::class)override fun `parseNoisePaymentMessage`(`json`: String): NoisePaymentMessage =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_parse_noise_payment_message(it,
+        FfiConverterString.lower(`json`),
+        _status)
+}
+        }.let {
+            FfiConverterTypeNoisePaymentMessage.lift(it)
+        }
+    
+    
+    /**
      * Parse receipt metadata as JSON.
      */
     @Throws(PaykitMobileException::class)override fun `parseReceiptMetadata`(`metadataJson`: String): String =
@@ -3213,6 +3574,30 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
         }.let {
             FfiConverterTypeScannedUri.lift(it)
         }
+    
+    
+    /**
+     * Publish a Noise endpoint to the directory.
+     *
+     * Makes this device discoverable for receiving payments via Noise protocol.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     * * `host` - Host address where the Noise server is listening
+     * * `port` - Port number where the Noise server is listening
+     * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+     * * `metadata` - Optional metadata about the endpoint
+     */
+    @Throws(PaykitMobileException::class)override fun `publishNoiseEndpoint`(`transport`: AuthenticatedTransportFfi, `host`: String, `port`: UShort, `noisePubkey`: String, `metadata`: String?) =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(it,
+        FfiConverterTypeAuthenticatedTransportFFI.lower(`transport`),FfiConverterString.lower(`host`),FfiConverterUShort.lower(`port`),FfiConverterString.lower(`noisePubkey`),FfiConverterOptionalString.lower(`metadata`),
+        _status)
+}
+        }
+    
     
     
     /**
@@ -3255,6 +3640,26 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(it,
         FfiConverterTypeAuthenticatedTransportFFI.lower(`transport`),FfiConverterString.lower(`contactPubkey`),
+        _status)
+}
+        }
+    
+    
+    
+    /**
+     * Remove the Noise endpoint from the directory.
+     *
+     * Makes this device no longer discoverable for Noise payments.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     */
+    @Throws(PaykitMobileException::class)override fun `removeNoiseEndpoint`(`transport`: AuthenticatedTransportFfi) =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_remove_noise_endpoint(it,
+        FfiConverterTypeAuthenticatedTransportFFI.lower(`transport`),
         _status)
 }
         }
@@ -5015,6 +5420,336 @@ public object FfiConverterTypeMethodId: FfiConverterRustBuffer<MethodId> {
 
 
 /**
+ * Information about a Noise protocol endpoint for receiving payments.
+ *
+ * This is discovered from a recipient's public directory and contains
+ * the connection information needed to establish a Noise session.
+ */
+data class NoiseEndpointInfo (
+    /**
+     * The recipient's public key (z-base32 encoded).
+     */
+    var `recipientPubkey`: String, 
+    /**
+     * Host address of the Noise server (IP or hostname).
+     */
+    var `host`: String, 
+    /**
+     * Port number of the Noise server.
+     */
+    var `port`: UShort, 
+    /**
+     * The server's Noise public key (X25519, hex encoded).
+     * This is needed to verify the server during handshake.
+     */
+    var `serverNoisePubkey`: String, 
+    /**
+     * Optional metadata about the endpoint.
+     */
+    var `metadata`: String?
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoiseEndpointInfo: FfiConverterRustBuffer<NoiseEndpointInfo> {
+    override fun read(buf: ByteBuffer): NoiseEndpointInfo {
+        return NoiseEndpointInfo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUShort.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoiseEndpointInfo) = (
+            FfiConverterString.allocationSize(value.`recipientPubkey`) +
+            FfiConverterString.allocationSize(value.`host`) +
+            FfiConverterUShort.allocationSize(value.`port`) +
+            FfiConverterString.allocationSize(value.`serverNoisePubkey`) +
+            FfiConverterOptionalString.allocationSize(value.`metadata`)
+    )
+
+    override fun write(value: NoiseEndpointInfo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`recipientPubkey`, buf)
+            FfiConverterString.write(value.`host`, buf)
+            FfiConverterUShort.write(value.`port`, buf)
+            FfiConverterString.write(value.`serverNoisePubkey`, buf)
+            FfiConverterOptionalString.write(value.`metadata`, buf)
+    }
+}
+
+
+
+/**
+ * Result of a Noise handshake operation.
+ */
+data class NoiseHandshakeResult (
+    /**
+     * Whether the handshake succeeded.
+     */
+    var `success`: Boolean, 
+    /**
+     * Session ID for this connection (if successful).
+     */
+    var `sessionId`: String?, 
+    /**
+     * Remote peer's public key (z-base32 encoded, if successful).
+     */
+    var `remotePubkey`: String?, 
+    /**
+     * Error message (if failed).
+     */
+    var `error`: String?
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoiseHandshakeResult: FfiConverterRustBuffer<NoiseHandshakeResult> {
+    override fun read(buf: ByteBuffer): NoiseHandshakeResult {
+        return NoiseHandshakeResult(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoiseHandshakeResult) = (
+            FfiConverterBoolean.allocationSize(value.`success`) +
+            FfiConverterOptionalString.allocationSize(value.`sessionId`) +
+            FfiConverterOptionalString.allocationSize(value.`remotePubkey`) +
+            FfiConverterOptionalString.allocationSize(value.`error`)
+    )
+
+    override fun write(value: NoiseHandshakeResult, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`success`, buf)
+            FfiConverterOptionalString.write(value.`sessionId`, buf)
+            FfiConverterOptionalString.write(value.`remotePubkey`, buf)
+            FfiConverterOptionalString.write(value.`error`, buf)
+    }
+}
+
+
+
+/**
+ * A payment message to send over Noise channel.
+ */
+data class NoisePaymentMessage (
+    /**
+     * Type of the message.
+     */
+    var `messageType`: NoisePaymentMessageType, 
+    /**
+     * JSON payload of the message.
+     */
+    var `payloadJson`: String
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoisePaymentMessage: FfiConverterRustBuffer<NoisePaymentMessage> {
+    override fun read(buf: ByteBuffer): NoisePaymentMessage {
+        return NoisePaymentMessage(
+            FfiConverterTypeNoisePaymentMessageType.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoisePaymentMessage) = (
+            FfiConverterTypeNoisePaymentMessageType.allocationSize(value.`messageType`) +
+            FfiConverterString.allocationSize(value.`payloadJson`)
+    )
+
+    override fun write(value: NoisePaymentMessage, buf: ByteBuffer) {
+            FfiConverterTypeNoisePaymentMessageType.write(value.`messageType`, buf)
+            FfiConverterString.write(value.`payloadJson`, buf)
+    }
+}
+
+
+
+/**
+ * Configuration for a Noise server (receiving payments).
+ */
+data class NoiseServerConfig (
+    /**
+     * The port to listen on (0 for auto-assign).
+     */
+    var `port`: UShort, 
+    /**
+     * Maximum number of concurrent connections.
+     */
+    var `maxConnections`: UInt, 
+    /**
+     * Connection timeout in seconds.
+     */
+    var `connectionTimeoutSecs`: UInt, 
+    /**
+     * Whether to automatically publish endpoint to directory.
+     */
+    var `autoPublish`: Boolean
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoiseServerConfig: FfiConverterRustBuffer<NoiseServerConfig> {
+    override fun read(buf: ByteBuffer): NoiseServerConfig {
+        return NoiseServerConfig(
+            FfiConverterUShort.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoiseServerConfig) = (
+            FfiConverterUShort.allocationSize(value.`port`) +
+            FfiConverterUInt.allocationSize(value.`maxConnections`) +
+            FfiConverterUInt.allocationSize(value.`connectionTimeoutSecs`) +
+            FfiConverterBoolean.allocationSize(value.`autoPublish`)
+    )
+
+    override fun write(value: NoiseServerConfig, buf: ByteBuffer) {
+            FfiConverterUShort.write(value.`port`, buf)
+            FfiConverterUInt.write(value.`maxConnections`, buf)
+            FfiConverterUInt.write(value.`connectionTimeoutSecs`, buf)
+            FfiConverterBoolean.write(value.`autoPublish`, buf)
+    }
+}
+
+
+
+/**
+ * Status of the Noise server.
+ */
+data class NoiseServerStatus (
+    /**
+     * Whether the server is currently running.
+     */
+    var `isRunning`: Boolean, 
+    /**
+     * The port the server is listening on (if running).
+     */
+    var `port`: UShort?, 
+    /**
+     * The server's Noise public key (X25519, hex encoded).
+     */
+    var `noisePubkey`: String, 
+    /**
+     * Number of active sessions.
+     */
+    var `activeSessions`: UInt, 
+    /**
+     * Total connections handled since start.
+     */
+    var `totalConnections`: ULong
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoiseServerStatus: FfiConverterRustBuffer<NoiseServerStatus> {
+    override fun read(buf: ByteBuffer): NoiseServerStatus {
+        return NoiseServerStatus(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalUShort.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoiseServerStatus) = (
+            FfiConverterBoolean.allocationSize(value.`isRunning`) +
+            FfiConverterOptionalUShort.allocationSize(value.`port`) +
+            FfiConverterString.allocationSize(value.`noisePubkey`) +
+            FfiConverterUInt.allocationSize(value.`activeSessions`) +
+            FfiConverterULong.allocationSize(value.`totalConnections`)
+    )
+
+    override fun write(value: NoiseServerStatus, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`isRunning`, buf)
+            FfiConverterOptionalUShort.write(value.`port`, buf)
+            FfiConverterString.write(value.`noisePubkey`, buf)
+            FfiConverterUInt.write(value.`activeSessions`, buf)
+            FfiConverterULong.write(value.`totalConnections`, buf)
+    }
+}
+
+
+
+/**
+ * Information about an active Noise session.
+ */
+data class NoiseSessionInfo (
+    /**
+     * Unique session identifier.
+     */
+    var `sessionId`: String, 
+    /**
+     * Remote peer's public key (z-base32 encoded).
+     */
+    var `remotePubkey`: String, 
+    /**
+     * When the session was established (unix timestamp).
+     */
+    var `establishedAt`: Long, 
+    /**
+     * Whether this is an incoming (server) or outgoing (client) session.
+     */
+    var `isIncoming`: Boolean, 
+    /**
+     * Number of messages sent in this session.
+     */
+    var `messagesSent`: ULong, 
+    /**
+     * Number of messages received in this session.
+     */
+    var `messagesReceived`: ULong
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeNoiseSessionInfo: FfiConverterRustBuffer<NoiseSessionInfo> {
+    override fun read(buf: ByteBuffer): NoiseSessionInfo {
+        return NoiseSessionInfo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: NoiseSessionInfo) = (
+            FfiConverterString.allocationSize(value.`sessionId`) +
+            FfiConverterString.allocationSize(value.`remotePubkey`) +
+            FfiConverterLong.allocationSize(value.`establishedAt`) +
+            FfiConverterBoolean.allocationSize(value.`isIncoming`) +
+            FfiConverterULong.allocationSize(value.`messagesSent`) +
+            FfiConverterULong.allocationSize(value.`messagesReceived`)
+    )
+
+    override fun write(value: NoiseSessionInfo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`sessionId`, buf)
+            FfiConverterString.write(value.`remotePubkey`, buf)
+            FfiConverterLong.write(value.`establishedAt`, buf)
+            FfiConverterBoolean.write(value.`isIncoming`, buf)
+            FfiConverterULong.write(value.`messagesSent`, buf)
+            FfiConverterULong.write(value.`messagesReceived`, buf)
+    }
+}
+
+
+
+/**
  * A supported payment method with its endpoint.
  */
 data class PaymentMethod (
@@ -6113,6 +6848,102 @@ public object FfiConverterTypeModificationType : FfiConverterRustBuffer<Modifica
 
 
 /**
+ * Status of a Noise connection.
+ */
+enum class NoiseConnectionStatus {
+    
+    /**
+     * Not connected.
+     */
+    DISCONNECTED,
+    /**
+     * Connecting to server.
+     */
+    CONNECTING,
+    /**
+     * Handshake in progress.
+     */
+    HANDSHAKING,
+    /**
+     * Connected and ready for communication.
+     */
+    CONNECTED,
+    /**
+     * Connection failed.
+     */
+    FAILED;
+    companion object
+}
+
+public object FfiConverterTypeNoiseConnectionStatus: FfiConverterRustBuffer<NoiseConnectionStatus> {
+    override fun read(buf: ByteBuffer) = try {
+        NoiseConnectionStatus.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: NoiseConnectionStatus) = 4
+
+    override fun write(value: NoiseConnectionStatus, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Type of payment message exchanged over Noise channel.
+ */
+enum class NoisePaymentMessageType {
+    
+    /**
+     * Request a receipt for a payment.
+     */
+    RECEIPT_REQUEST,
+    /**
+     * Confirm receipt of payment.
+     */
+    RECEIPT_CONFIRMATION,
+    /**
+     * Offer a private endpoint.
+     */
+    PRIVATE_ENDPOINT_OFFER,
+    /**
+     * Error response.
+     */
+    ERROR,
+    /**
+     * Ping for connection keep-alive.
+     */
+    PING,
+    /**
+     * Pong response to ping.
+     */
+    PONG;
+    companion object
+}
+
+public object FfiConverterTypeNoisePaymentMessageType: FfiConverterRustBuffer<NoisePaymentMessageType> {
+    override fun read(buf: ByteBuffer) = try {
+        NoisePaymentMessageType.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: NoisePaymentMessageType) = 4
+
+    override fun write(value: NoisePaymentMessageType, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Parsed Paykit message.
  */
 sealed class ParsedMessage {
@@ -6302,10 +7133,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Transport(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6313,10 +7144,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Validation(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6324,10 +7155,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NotFound(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6335,10 +7166,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Serialization(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6346,10 +7177,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Internal(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6357,10 +7188,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NetworkTimeout(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6368,10 +7199,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class ConnectionException(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6379,10 +7210,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class AuthenticationException(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6390,10 +7221,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class SessionException(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6401,10 +7232,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class RateLimitException(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     /**
@@ -6412,10 +7243,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class PermissionDenied(
         
-        val errorMessage: String
+        val `message`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
 
@@ -6824,18 +7655,18 @@ sealed class StorageCacheException: Exception() {
     
     class Storage(
         
-        val errorMessage: String
+        val `message`: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
     class Lock(
         
-        val errorMessage: String
+        val `message`: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ errorMessage }"
+            get() = "message=${ `message` }"
     }
     
 
@@ -7522,6 +8353,35 @@ public object FfiConverterTypeReceiptGeneratorCallback: FfiConverterCallbackInte
 
 
 
+public object FfiConverterOptionalUShort: FfiConverterRustBuffer<UShort?> {
+    override fun read(buf: ByteBuffer): UShort? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUShort.read(buf)
+    }
+
+    override fun allocationSize(value: UShort?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterUShort.allocationSize(value)
+        }
+    }
+
+    override fun write(value: UShort?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUShort.write(value, buf)
+        }
+    }
+}
+
+
+
+
 public object FfiConverterOptionalULong: FfiConverterRustBuffer<ULong?> {
     override fun read(buf: ByteBuffer): ULong? {
         if (buf.get().toInt() == 0) {
@@ -7631,6 +8491,35 @@ public object FfiConverterOptionalTypeCachedContactFFI: FfiConverterRustBuffer<C
         } else {
             buf.put(1)
             FfiConverterTypeCachedContactFFI.write(value, buf)
+        }
+    }
+}
+
+
+
+
+public object FfiConverterOptionalTypeNoiseEndpointInfo: FfiConverterRustBuffer<NoiseEndpointInfo?> {
+    override fun read(buf: ByteBuffer): NoiseEndpointInfo? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeNoiseEndpointInfo.read(buf)
+    }
+
+    override fun allocationSize(value: NoiseEndpointInfo?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterTypeNoiseEndpointInfo.allocationSize(value)
+        }
+    }
+
+    override fun write(value: NoiseEndpointInfo?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeNoiseEndpointInfo.write(value, buf)
         }
     }
 }
@@ -7978,6 +8867,23 @@ fun `createDirectoryOperationsAsync`(): DirectoryOperationsAsync {
 }
 
         /**
+         * Create an error message.
+         *
+         * # Arguments
+         *
+         * * `code` - Error code
+         * * `message` - Error description
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createErrorMessage`(`code`: String, `message`: String): NoisePaymentMessage {
+    return FfiConverterTypeNoisePaymentMessage.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_error_message(FfiConverterString.lower(`code`),FfiConverterString.lower(`message`),_status)
+})
+}
+
+        /**
          * Create a new interactive manager.
          */
 
@@ -8000,6 +8906,28 @@ fun `createMessageBuilder`(): PaykitMessageBuilder {
 }
 
         /**
+         * Create a default noise server configuration.
+         */
+
+fun `createNoiseServerConfig`(): NoiseServerConfig {
+    return FfiConverterTypeNoiseServerConfig.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_noise_server_config(_status)
+})
+}
+
+        /**
+         * Create a noise server configuration with a specific port.
+         */
+
+fun `createNoiseServerConfigWithPort`(`port`: UShort): NoiseServerConfig {
+    return FfiConverterTypeNoiseServerConfig.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_noise_server_config_with_port(FfiConverterUShort.lower(`port`),_status)
+})
+}
+
+        /**
          * Create a new Paykit client.
          */
 @Throws(PaykitMobileException::class)
@@ -8008,6 +8936,67 @@ fun `createPaykitClient`(): PaykitClient {
     return FfiConverterTypePaykitClient.lift(
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_paykit_client(_status)
+})
+}
+
+        /**
+         * Create a private endpoint offer message.
+         *
+         * # Arguments
+         *
+         * * `method_id` - Payment method identifier
+         * * `endpoint` - The private endpoint data
+         * * `expires_in_secs` - Optional expiration time in seconds
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createPrivateEndpointOfferMessage`(`methodId`: String, `endpoint`: String, `expiresInSecs`: ULong?): NoisePaymentMessage {
+    return FfiConverterTypeNoisePaymentMessage.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_private_endpoint_offer_message(FfiConverterString.lower(`methodId`),FfiConverterString.lower(`endpoint`),FfiConverterOptionalULong.lower(`expiresInSecs`),_status)
+})
+}
+
+        /**
+         * Create a receipt confirmation message.
+         *
+         * # Arguments
+         *
+         * * `receipt_id` - The receipt ID being confirmed
+         * * `payer_pubkey` - Payer's public key
+         * * `payee_pubkey` - Payee's public key
+         * * `method_id` - Payment method used
+         * * `amount` - Payment amount
+         * * `currency` - Currency code
+         * * `signature` - Optional signature from payee
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createReceiptConfirmationMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?, `signature`: String?): NoisePaymentMessage {
+    return FfiConverterTypeNoisePaymentMessage.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_receipt_confirmation_message(FfiConverterString.lower(`receiptId`),FfiConverterString.lower(`payerPubkey`),FfiConverterString.lower(`payeePubkey`),FfiConverterString.lower(`methodId`),FfiConverterOptionalString.lower(`amount`),FfiConverterOptionalString.lower(`currency`),FfiConverterOptionalString.lower(`signature`),_status)
+})
+}
+
+        /**
+         * Create a receipt request message.
+         *
+         * # Arguments
+         *
+         * * `receipt_id` - Unique identifier for this receipt
+         * * `payer_pubkey` - Payer's public key (z-base32)
+         * * `payee_pubkey` - Payee's public key (z-base32)
+         * * `method_id` - Payment method identifier
+         * * `amount` - Optional payment amount
+         * * `currency` - Optional currency code
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createReceiptRequestMessage`(`receiptId`: String, `payerPubkey`: String, `payeePubkey`: String, `methodId`: String, `amount`: String?, `currency`: String?): NoisePaymentMessage {
+    return FfiConverterTypeNoisePaymentMessage.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_receipt_request_message(FfiConverterString.lower(`receiptId`),FfiConverterString.lower(`payerPubkey`),FfiConverterString.lower(`payeePubkey`),FfiConverterString.lower(`methodId`),FfiConverterOptionalString.lower(`amount`),FfiConverterOptionalString.lower(`currency`),_status)
 })
 }
 
@@ -8044,6 +9033,39 @@ fun `deriveX25519Keypair`(`ed25519SecretHex`: String, `deviceId`: String, `epoch
     return FfiConverterTypeX25519Keypair.lift(
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_derive_x25519_keypair(FfiConverterString.lower(`ed25519SecretHex`),FfiConverterString.lower(`deviceId`),FfiConverterUInt.lower(`epoch`),_status)
+})
+}
+
+        /**
+         * Discover a Noise endpoint for a recipient.
+         *
+         * Queries the recipient's public directory for their Noise server information.
+         *
+         * # Arguments
+         *
+         * * `transport` - Unauthenticated transport for reading
+         * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+         *
+         * # Returns
+         *
+         * The noise endpoint info if found, None otherwise.
+         *
+         * # Example
+         *
+         * ```ignore
+         * let transport = UnauthenticatedTransportFFI::new_mock();
+         * if let Some(endpoint) = discover_noise_endpoint(&transport, "8pinxxgqs41...")? {
+         * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+         * println!("Server pubkey: {}", endpoint.server_noise_pubkey);
+         * }
+         * ```
+         */
+@Throws(PaykitMobileException::class)
+
+fun `discoverNoiseEndpoint`(`transport`: UnauthenticatedTransportFfi, `recipientPubkey`: String): NoiseEndpointInfo? {
+    return FfiConverterOptionalTypeNoiseEndpointInfo.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_discover_noise_endpoint(FfiConverterTypeUnauthenticatedTransportFFI.lower(`transport`),FfiConverterString.lower(`recipientPubkey`),_status)
 })
 }
 
@@ -8166,6 +9188,22 @@ fun `importKeypairFromBackup`(`backup`: KeyBackup, `password`: String): Ed25519K
 }
 
         /**
+         * Parse a payment message from JSON.
+         *
+         * # Arguments
+         *
+         * * `json` - The JSON string to parse
+         */
+@Throws(PaykitMobileException::class)
+
+fun `parsePaymentMessage`(`json`: String): NoisePaymentMessage {
+    return FfiConverterTypeNoisePaymentMessage.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_parse_payment_message(FfiConverterString.lower(`json`),_status)
+})
+}
+
+        /**
          * Parse z-base32 public key to hex.
          */
 @Throws(PaykitMobileException::class)
@@ -8176,6 +9214,46 @@ fun `parsePublicKeyZ32`(`publicKeyZ32`: String): String {
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_parse_public_key_z32(FfiConverterString.lower(`publicKeyZ32`),_status)
 })
 }
+
+        /**
+         * Publish a Noise endpoint to the directory.
+         *
+         * Makes this device discoverable for receiving payments via Noise protocol.
+         *
+         * # Arguments
+         *
+         * * `transport` - Authenticated transport for writing
+         * * `host` - Host address where the Noise server is listening
+         * * `port` - Port number where the Noise server is listening
+         * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+         * * `metadata` - Optional metadata about the endpoint
+         */
+@Throws(PaykitMobileException::class)
+
+fun `publishNoiseEndpoint`(`transport`: AuthenticatedTransportFfi, `host`: String, `port`: UShort, `noisePubkey`: String, `metadata`: String?) =
+    
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_publish_noise_endpoint(FfiConverterTypeAuthenticatedTransportFFI.lower(`transport`),FfiConverterString.lower(`host`),FfiConverterUShort.lower(`port`),FfiConverterString.lower(`noisePubkey`),FfiConverterOptionalString.lower(`metadata`),_status)
+}
+
+
+        /**
+         * Remove the Noise endpoint from the directory.
+         *
+         * Makes this device no longer discoverable for Noise payments.
+         *
+         * # Arguments
+         *
+         * * `transport` - Authenticated transport for writing
+         */
+@Throws(PaykitMobileException::class)
+
+fun `removeNoiseEndpoint`(`transport`: AuthenticatedTransportFfi) =
+    
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_remove_noise_endpoint(FfiConverterTypeAuthenticatedTransportFFI.lower(`transport`),_status)
+}
+
 
         /**
          * Sign a message with Ed25519 secret key.

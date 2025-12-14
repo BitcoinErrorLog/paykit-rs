@@ -328,7 +328,7 @@ struct ReceiptRow: View {
 // MARK: - Status Badge
 
 struct StatusBadge: View {
-    let status: ReceiptStatus
+    let status: PaymentReceiptStatus
     
     var body: some View {
         Text(status.rawValue.capitalized)

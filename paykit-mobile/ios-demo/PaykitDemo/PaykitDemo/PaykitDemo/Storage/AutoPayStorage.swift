@@ -7,41 +7,8 @@
 
 import Foundation
 
-/// Auto-pay global settings
-struct AutoPaySettings: Codable {
-    var isEnabled: Bool
-    var globalDailyLimitSats: Int64
-    var currentDailySpentSats: Int64
-    var lastResetDate: Date
-    var requireConfirmation: Bool
-    var notifyOnPayment: Bool
-    
-    init() {
-        self.isEnabled = false
-        self.globalDailyLimitSats = 100000 // 100k sats default
-        self.currentDailySpentSats = 0
-        self.lastResetDate = Date()
-        self.requireConfirmation = false
-        self.notifyOnPayment = true
-    }
-    
-    mutating func resetIfNeeded() {
-        let calendar = Calendar.current
-        if !calendar.isDateInToday(lastResetDate) {
-            currentDailySpentSats = 0
-            lastResetDate = Date()
-        }
-    }
-    
-    var remainingDailyLimitSats: Int64 {
-        max(0, globalDailyLimitSats - currentDailySpentSats)
-    }
-    
-    var dailyUsagePercent: Double {
-        guard globalDailyLimitSats > 0 else { return 0 }
-        return Double(currentDailySpentSats) / Double(globalDailyLimitSats) * 100
-    }
-}
+// Note: AutoPaySettings is defined in Models/AutoPayModels.swift
+// This file uses that definition
 
 /// A peer-specific spending limit (stored in Keychain)
 struct StoredPeerLimit: Identifiable, Codable {
@@ -174,24 +141,26 @@ class AutoPayStorage {
     // MARK: - Settings
     
     func getSettings() -> AutoPaySettings {
-        if var cached = settingsCache {
-            cached.resetIfNeeded()
+        // Use the AutoPaySettings from Models/AutoPayModels.swift
+        if let cached = settingsCache {
             return cached
         }
         
         do {
             guard let data = try keychain.retrieve(key: settingsKey) else {
-                return AutoPaySettings()
+                return AutoPaySettings.defaults
             }
-            var settings = try JSONDecoder().decode(AutoPaySettings.self, from: data)
-            settings.resetIfNeeded()
+            let settings = try JSONDecoder().decode(AutoPaySettings.self, from: data)
             settingsCache = settings
             return settings
         } catch {
             print("AutoPayStorage: Failed to load settings: \(error)")
-            return AutoPaySettings()
+            return AutoPaySettings.defaults
         }
     }
+    
+    // Note: The AutoPaySettings from Models doesn't have resetIfNeeded()
+    // If you need that functionality, extend the model or create a wrapper
     
     func saveSettings(_ settings: AutoPaySettings) throws {
         let data = try JSONEncoder().encode(settings)

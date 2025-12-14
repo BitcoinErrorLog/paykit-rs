@@ -18,21 +18,8 @@ import UIKit
 
 // MARK: - Noise Endpoint Info
 
-/// Information about a recipient's Noise endpoint
-public struct NoiseEndpointInfo: Codable {
-    public let host: String
-    public let port: UInt16
-    public let serverPubkeyHex: String
-    public let metadata: String?
-    
-    public var connectionAddress: String {
-        "\(host):\(port)"
-    }
-    
-    public var serverPubkeyData: Data? {
-        Data(hexString: serverPubkeyHex)
-    }
-}
+// Use PaykitMobile.NoiseEndpointInfo from generated bindings
+// It has: recipientPubkey, host, port, serverNoisePubkey, metadata
 
 // MARK: - Payment Request
 
@@ -152,7 +139,7 @@ public final class NoisePaymentService: ObservableObject {
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     
     // Interactive payment handling
-    private var receiptStore: ReceiptStore?
+    private var receiptStore: PaymentReceiptStore?
     private var interactiveManager: PaykitInteractiveManagerFfi?
     private var receiptGenerator: ServerReceiptGenerator?
     
@@ -259,9 +246,10 @@ public final class NoisePaymentService: ObservableObject {
         let pubkeyHex = String(parts[2])
         
         return NoiseEndpointInfo(
+            recipientPubkey: "", // Will be set by caller
             host: host,
             port: port,
-            serverPubkeyHex: pubkeyHex,
+            serverNoisePubkey: pubkeyHex,
             metadata: nil
         )
     }
@@ -316,8 +304,11 @@ public final class NoisePaymentService: ObservableObject {
         }
         
         // Perform Noise handshake
+        guard let serverPubkeyData = Data(hexString: endpoint.serverNoisePubkey) else {
+            throw NoisePaymentError.invalidEndpoint("Invalid server pubkey format")
+        }
         try await performHandshake(
-            serverPubkey: endpoint.serverPubkeyData!,
+            serverPubkey: serverPubkeyData,
             localKeypair: keypair
         )
         
@@ -655,7 +646,10 @@ extension NoisePaymentService {
             switch state {
             case .ready:
                 self?.handleReadyConnection(serverConnection)
-            case .failed(let error), .cancelled:
+            case .failed(let error):
+                print("Server connection failed: \(error)")
+                self?.serverConnections.removeValue(forKey: connectionId)
+            case .cancelled:
                 self?.serverConnections.removeValue(forKey: connectionId)
             default:
                 break
@@ -903,7 +897,7 @@ private class ServerConnection {
 // MARK: - Server Receipt Generator
 
 /// Receipt generator callback implementation for server mode
-public class ServerReceiptGenerator: ReceiptGeneratorCallback {
+public class ServerReceiptGenerator: PaymentReceiptGeneratorCallback {
     
     private var pendingRequestCallback: ((ReceiptRequest) -> Void)?
     private var invoiceGenerator: ((ReceiptRequest) -> String)?
@@ -920,7 +914,7 @@ public class ServerReceiptGenerator: ReceiptGeneratorCallback {
         invoiceGenerator = generator
     }
     
-    public func generateReceipt(request: ReceiptRequest) -> ReceiptGenerationResult {
+    public func generatePaymentReceipt(request: PaymentReceiptRequest) -> ReceiptGenerationResult {
         // Notify callback about pending request
         pendingRequestCallback?(request)
         

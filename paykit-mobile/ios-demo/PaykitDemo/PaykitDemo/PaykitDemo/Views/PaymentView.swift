@@ -180,7 +180,7 @@ struct PaymentView: View {
 
 // MARK: - Payment Status
 
-enum PaymentStatus {
+enum PaymentViewStatus {
     case idle
     case resolvingRecipient
     case discoveringEndpoint
@@ -234,7 +234,7 @@ class PaymentViewModel: ObservableObject {
     @Published var description: String = ""
     
     // State
-    @Published var paymentStatus: PaymentStatus = .idle
+    @Published var paymentStatus: PaymentReceiptStatus = .idle
     @Published var isProcessing: Bool = false
     @Published var showError: Bool = false
     @Published var showSuccess: Bool = false
@@ -564,7 +564,7 @@ class PaymentViewModel: ObservableObject {
         // Store receipt
         let keyManager = KeyManager()
         let storage = ReceiptStorage(identityName: keyManager.currentIdentityName ?? "default")
-        let receipt = StoredReceipt(
+        let receipt = StoredPaymentReceipt(
             id: receiptJson,
             payer: KeyManager().publicKeyZ32 ?? "",
             payee: "",
@@ -575,7 +575,7 @@ class PaymentViewModel: ObservableObject {
             status: .completed,
             notes: description.isEmpty ? nil : description
         )
-        storage.saveReceipt(receipt)
+        storage.savePaymentReceipt(receipt)
         
         return receipt
     }

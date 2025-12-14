@@ -8,7 +8,7 @@
 import SwiftUI
 
 class DashboardViewModel: ObservableObject {
-    @Published var recentReceipts: [Receipt] = []
+    @Published var recentReceipts: [PaymentReceipt] = []
     @Published var contactCount: Int = 0
     @Published var totalSent: UInt64 = 0
     @Published var totalReceived: UInt64 = 0
@@ -32,7 +32,7 @@ class DashboardViewModel: ObservableObject {
     }
     
     private let keyManager = KeyManager()
-    private var receiptStorage: ReceiptStorage {
+    private var receiptStorage: PaymentReceiptStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
         return ReceiptStorage(identityName: identityName)
     }
@@ -181,7 +181,7 @@ struct DashboardView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: ReceiptsView()) {
+                NavigationLink(destination: PaymentReceiptsView()) {
                     Text("See All")
                         .font(.subheadline)
                         .foregroundColor(.blue)
@@ -348,7 +348,7 @@ struct StatCard: View {
 }
 
 struct ReceiptRow: View {
-    let receipt: Receipt
+    let receipt: PaymentReceipt
     
     var body: some View {
         HStack {
@@ -383,7 +383,7 @@ struct ReceiptRow: View {
         .padding()
     }
     
-    private func statusColor(_ status: PaymentStatus) -> Color {
+    private func statusColor(_ status: PaymentReceiptStatus) -> Color {
         switch status {
         case .pending: return .orange
         case .completed: return .green

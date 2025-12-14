@@ -58,7 +58,7 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageGetResult.err(message: "Invalid URL: \(urlString)")
+            return StorageGetResult(success: false, content: nil, error: "Invalid URL: \(urlString)")
         }
         
         // Perform synchronous HTTP request (blocking)
@@ -70,42 +70,42 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageGetResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageGetResult(success: false, content: nil, error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageGetResult.err(message: "Invalid response type")
+                result = StorageGetResult(success: false, content: nil, error: "Invalid response type")
                 return
             }
             
             if httpResponse.statusCode == 404 {
-                result = StorageGetResult.ok(content: nil)
+                result = StorageGetResult(success: true, content: nil, error: nil)
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                result = StorageGetResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageGetResult(success: false, content: nil, error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
             guard let data = data else {
-                result = StorageGetResult.ok(content: nil)
+                result = StorageGetResult(success: true, content: nil, error: nil)
                 return
             }
             
             guard let content = String(data: data, encoding: .utf8) else {
-                result = StorageGetResult.err(message: "Failed to decode response as UTF-8")
+                result = StorageGetResult(success: false, content: nil, error: "Failed to decode response as UTF-8")
                 return
             }
             
-            result = StorageGetResult.ok(content: content)
+            result = StorageGetResult(success: true, content: content, error: nil)
         }
         
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageGetResult.err(message: "Request failed")
+        return result ?? StorageGetResult(success: false, content: nil, error: "Request failed")
     }
     
     public func list(ownerPubkey: String, prefix: String) -> StorageListResult {
@@ -118,7 +118,7 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageListResult.err(message: "Invalid URL: \(urlString)")
+            return StorageListResult(success: false, entries: [], error: "Invalid URL: \(urlString)")
         }
         
         let semaphore = DispatchSemaphore(value: 0)
@@ -128,27 +128,27 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageListResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageListResult(success: false, entries: [], error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageListResult.err(message: "Invalid response type")
+                result = StorageListResult(success: false, entries: [], error: "Invalid response type")
                 return
             }
             
             if httpResponse.statusCode == 404 {
-                result = StorageListResult.ok(entries: [])
+                result = StorageListResult(success: true, entries: [], error: nil)
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                result = StorageListResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageListResult(success: false, entries: [], error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
             guard let data = data else {
-                result = StorageListResult.ok(entries: [])
+                result = StorageListResult(success: true, entries: [], error: nil)
                 return
             }
             
@@ -156,13 +156,13 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
             do {
                 let resources = try JSONDecoder().decode([PubkyResource].self, from: data)
                 let entries = resources.map { $0.path }
-                result = StorageListResult.ok(entries: entries)
+                result = StorageListResult(success: true, entries: entries, error: nil)
             } catch {
                 // If JSON parsing fails, try to parse as simple array of strings
                 if let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [String] {
-                    result = StorageListResult.ok(entries: jsonArray)
+                    result = StorageListResult(success: true, entries: jsonArray, error: nil)
                 } else {
-                    result = StorageListResult.err(message: "Failed to parse response: \(error.localizedDescription)")
+                    result = StorageListResult(success: false, entries: [], error: "Failed to parse response: \(error.localizedDescription)")
                 }
             }
         }
@@ -170,7 +170,7 @@ public final class PubkyUnauthenticatedStorageAdapter: PubkyUnauthenticatedStora
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageListResult.err(message: "Request failed")
+        return result ?? StorageListResult(success: false, entries: [], error: "Request failed")
     }
 }
 
@@ -230,7 +230,7 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageOperationResult.err(message: "Invalid URL: \(urlString)")
+            return StorageOperationResult(success: false, error: "Invalid URL: \(urlString)")
         }
         
         var request = URLRequest(url: url)
@@ -250,27 +250,27 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageOperationResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageOperationResult(success: false, error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageOperationResult.err(message: "Invalid response type")
+                result = StorageOperationResult(success: false, error: "Invalid response type")
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                result = StorageOperationResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageOperationResult(success: false, error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
-            result = StorageOperationResult.ok()
+            result = StorageOperationResult(success: true, error: nil)
         }
         
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageOperationResult.err(message: "Request failed")
+        return result ?? StorageOperationResult(success: false, error: "Request failed")
     }
     
     public func get(path: String) -> StorageGetResult {
@@ -282,7 +282,7 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageGetResult.err(message: "Invalid URL: \(urlString)")
+            return StorageGetResult(success: false, content: nil, error: "Invalid URL: \(urlString)")
         }
         
         var request = URLRequest(url: url)
@@ -296,42 +296,42 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageGetResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageGetResult(success: false, content: nil, error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageGetResult.err(message: "Invalid response type")
+                result = StorageGetResult(success: false, content: nil, error: "Invalid response type")
                 return
             }
             
             if httpResponse.statusCode == 404 {
-                result = StorageGetResult.ok(content: nil)
+                result = StorageGetResult(success: true, content: nil, error: nil)
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                result = StorageGetResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageGetResult(success: false, content: nil, error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
             guard let data = data else {
-                result = StorageGetResult.ok(content: nil)
+                result = StorageGetResult(success: true, content: nil, error: nil)
                 return
             }
             
             guard let content = String(data: data, encoding: .utf8) else {
-                result = StorageGetResult.err(message: "Failed to decode response as UTF-8")
+                result = StorageGetResult(success: false, content: nil, error: "Failed to decode response as UTF-8")
                 return
             }
             
-            result = StorageGetResult.ok(content: content)
+            result = StorageGetResult(success: true, content: content, error: nil)
         }
         
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageGetResult.err(message: "Request failed")
+        return result ?? StorageGetResult(success: false, content: nil, error: "Request failed")
     }
     
     public func delete(path: String) -> StorageOperationResult {
@@ -343,7 +343,7 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageOperationResult.err(message: "Invalid URL: \(urlString)")
+            return StorageOperationResult(success: false, error: "Invalid URL: \(urlString)")
         }
         
         var request = URLRequest(url: url)
@@ -357,28 +357,28 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageOperationResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageOperationResult(success: false, error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageOperationResult.err(message: "Invalid response type")
+                result = StorageOperationResult(success: false, error: "Invalid response type")
                 return
             }
             
             // 204 No Content or 200 OK are both valid for DELETE
             guard (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 404 else {
-                result = StorageOperationResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageOperationResult(success: false, error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
-            result = StorageOperationResult.ok()
+            result = StorageOperationResult(success: true, error: nil)
         }
         
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageOperationResult.err(message: "Request failed")
+        return result ?? StorageOperationResult(success: false, error: "Request failed")
     }
     
     public func list(prefix: String) -> StorageListResult {
@@ -390,7 +390,7 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
         }
         
         guard let url = URL(string: urlString) else {
-            return StorageListResult.err(message: "Invalid URL: \(urlString)")
+            return StorageListResult(success: false, entries: [], error: "Invalid URL: \(urlString)")
         }
         
         var request = URLRequest(url: url)
@@ -404,39 +404,39 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
             defer { semaphore.signal() }
             
             if let error = error {
-                result = StorageListResult.err(message: "Network error: \(error.localizedDescription)")
+                result = StorageListResult(success: false, entries: [], error: "Network error: \(error.localizedDescription)")
                 return
             }
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                result = StorageListResult.err(message: "Invalid response type")
+                result = StorageListResult(success: false, entries: [], error: "Invalid response type")
                 return
             }
             
             if httpResponse.statusCode == 404 {
-                result = StorageListResult.ok(entries: [])
+                result = StorageListResult(success: true, entries: [], error: nil)
                 return
             }
             
             guard (200...299).contains(httpResponse.statusCode) else {
-                result = StorageListResult.err(message: "HTTP \(httpResponse.statusCode)")
+                result = StorageListResult(success: false, entries: [], error: "HTTP \(httpResponse.statusCode)")
                 return
             }
             
             guard let data = data else {
-                result = StorageListResult.ok(entries: [])
+                result = StorageListResult(success: true, entries: [], error: nil)
                 return
             }
             
             do {
                 let resources = try JSONDecoder().decode([PubkyResource].self, from: data)
                 let entries = resources.map { $0.path }
-                result = StorageListResult.ok(entries: entries)
+                result = StorageListResult(success: true, entries: entries, error: nil)
             } catch {
                 if let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [String] {
-                    result = StorageListResult.ok(entries: jsonArray)
+                    result = StorageListResult(success: true, entries: jsonArray, error: nil)
                 } else {
-                    result = StorageListResult.err(message: "Failed to parse response: \(error.localizedDescription)")
+                    result = StorageListResult(success: false, entries: [], error: "Failed to parse response: \(error.localizedDescription)")
                 }
             }
         }
@@ -444,7 +444,7 @@ public final class PubkyAuthenticatedStorageAdapter: PubkyAuthenticatedStorageCa
         task.resume()
         semaphore.wait()
         
-        return result ?? StorageListResult.err(message: "Request failed")
+        return result ?? StorageListResult(success: false, entries: [], error: "Request failed")
     }
 }
 

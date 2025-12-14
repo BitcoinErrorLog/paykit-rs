@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import PaykitMobile
+// PaykitMobile types are in the same module, no import needed
 
 struct PrivateEndpointsView: View {
     @EnvironmentObject var appState: AppState

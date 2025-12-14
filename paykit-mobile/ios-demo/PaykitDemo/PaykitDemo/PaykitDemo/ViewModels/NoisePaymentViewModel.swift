@@ -218,7 +218,7 @@ public final class NoisePaymentViewModel: ObservableObject {
             // Step 7: Handle response
             if response.success, let receiptId = response.receiptId {
                 // Save receipt
-                saveReceipt(request: request, confirmedAt: response.confirmedAt ?? Date())
+                savePaymentReceipt(request: request, confirmedAt: response.confirmedAt ?? Date())
                 
                 state = .completed(receiptId: receiptId)
                 showSuccessAlert = true
@@ -327,11 +327,11 @@ public final class NoisePaymentViewModel: ObservableObject {
     }
     
     /// Save receipt to local storage
-    private func saveReceipt(request: NoisePaymentRequest, confirmedAt: Date) {
+    private func savePaymentReceipt(request: NoisePaymentRequest, confirmedAt: Date) {
         let identityName = keyManager.currentIdentityName ?? "default"
         let storage = ReceiptStorage(identityName: identityName)
         
-        let receipt = StoredReceipt(
+        let receipt = StoredPaymentReceipt(
             id: request.receiptId,
             payer: request.payerPubkey,
             payee: request.payeePubkey,
@@ -343,7 +343,7 @@ public final class NoisePaymentViewModel: ObservableObject {
             notes: request.description
         )
         
-        storage.saveReceipt(receipt)
+        storage.savePaymentReceipt(receipt)
     }
 }
 

@@ -153,14 +153,17 @@ class PaykitClientWrapper: ObservableObject {
     
     // MARK: - Receipts
     
-    func createReceipt(
+    func createPaymentReceipt(
         payer: String,
         payee: String,
         methodId: String,
         amount: String?,
         currency: String?
     ) -> Receipt? {
-        try? client?.createReceipt(
+        // Note: This returns Receipt from PaykitMobile.swift (UniFFI bindings)
+        // which is different from Models.Receipt
+        // The compiler will use the correct one based on context
+        return try? client?.createReceipt(
             payer: payer,
             payee: payee,
             methodId: methodId,
@@ -209,19 +212,9 @@ class PaykitClientWrapper: ObservableObject {
     /// Set `useRealDirectoryTransport` in UserDefaults to true and implement
     /// a PubkyStorageCallback to enable real Pubky directory operations.
     func createDirectoryService() -> DirectoryService {
-        let useRealTransport = UserDefaults.standard.bool(forKey: "paykit.useRealDirectoryTransport")
-        
-        if useRealTransport {
-            // To use real transport, you need to:
-            // 1. Implement PubkyUnauthenticatedStorageCallback with real Pubky SDK calls
-            // 2. Create the callback instance and pass to DirectoryService(mode: .callback(...))
-            //
-            // For now, fall back to mock until a real callback is provided
-            print("⚠️ Real directory transport requested but no callback configured - using mock")
-            return DirectoryService(mode: .mock)
-        } else {
-            return DirectoryService(mode: .mock)
-        }
+        // DirectoryService uses mock by default
+        // To use real transport, implement PubkyStorageAdapter and configure it
+        return DirectoryService()
     }
 }
 
@@ -257,64 +250,9 @@ enum DirectoryTransportMode {
 ///
 /// For real directory operations, you must provide a `PubkyUnauthenticatedStorageCallback`
 /// implementation that connects to the Pubky SDK. See the example implementation below.
-class DirectoryService {
-    private let directoryOps: DirectoryOperationsAsync
-    private let unauthTransport: UnauthenticatedTransportFfi
-    
-    /// Whether this service is using mock transport
-    /// 
-    /// Note: Mock mode is only for offline development. In production,
-    /// use callback mode with a real Pubky SDK implementation.
-    let isMockMode: Bool
-    
-    /// Initialize with mock transport (for development only)
-    /// 
-    /// - Warning: Mock mode does not connect to real Pubky infrastructure.
-    ///   For production use, initialize with `DirectoryService(mode: .callback(...))`
-    convenience init() {
-        // Default to mock for demo purposes - production apps should use callback mode
-        self.init(mode: .mock)
-    }
-    
-    /// Initialize with specified transport mode
-    /// - Parameter mode: Transport mode (mock for offline dev, callback for production)
-    init(mode: DirectoryTransportMode) {
-        switch mode {
-        case .mock:
-            self.unauthTransport = UnauthenticatedTransportFfi.newMock()
-            self.isMockMode = true
-            print("⚠️ DirectoryService initialized in MOCK mode - not connected to Pubky")
-        case .callback(let callback):
-            self.unauthTransport = UnauthenticatedTransportFfi.fromCallback(callback: callback)
-            self.isMockMode = false
-            print("✅ DirectoryService initialized with real Pubky transport")
-        }
-        self.directoryOps = try! createDirectoryOperationsAsync()
-    }
-    
-    /// Fetch known contacts from a user's Pubky directory
-    /// - Parameter ownerPubkey: The public key of the owner (z-base32 format)
-    /// - Returns: Array of contact public keys
-    func fetchKnownContacts(ownerPubkey: String) async throws -> [String] {
-        try directoryOps.fetchKnownContacts(transport: unauthTransport, ownerPubkey: ownerPubkey)
-    }
-    
-    /// Fetch payment endpoint for a specific method
-    /// - Parameters:
-    ///   - ownerPubkey: The public key of the payee
-    ///   - methodId: The payment method ID (e.g., "lightning", "onchain")
-    /// - Returns: The endpoint data if found, nil otherwise
-    func fetchPaymentEndpoint(ownerPubkey: String, methodId: String) async throws -> String? {
-        try directoryOps.fetchPaymentEndpoint(transport: unauthTransport, ownerPubkey: ownerPubkey, methodId: methodId)
-    }
-    
-    /// Fetch all supported payment methods for a payee
-    /// - Parameter ownerPubkey: The public key of the payee
-    /// - Returns: Array of payment methods supported by the payee
-    func fetchSupportedPayments(ownerPubkey: String) async throws -> [PaymentMethod] {
-        try directoryOps.fetchSupportedPayments(transport: unauthTransport, ownerPubkey: ownerPubkey)
-    }
-}
+/// 
+/// Note: The actual DirectoryService implementation is in Services/DirectoryService.swift
+/// This comment block is kept for documentation purposes.
 
 // MARK: - Example Pubky Storage Callback
 

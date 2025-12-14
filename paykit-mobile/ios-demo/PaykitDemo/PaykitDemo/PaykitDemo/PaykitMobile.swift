@@ -310,6 +310,19 @@ fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
     }
 }
 
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -1210,6 +1223,16 @@ public protocol PaykitClientProtocol : AnyObject {
     func checkHealth()  -> [HealthCheckResult]
     
     /**
+     * Create an error message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `code` - Error code
+     * * `message` - Error description
+     */
+    func createNoiseErrorMessage(code: String, message: String) throws  -> NoisePaymentMessage
+    
+    /**
      * Create a payment request.
      */
     func createPaymentRequest(fromPubkey: String, toPubkey: String, amountSats: Int64, currency: String, methodId: String, description: String, expiresInSecs: UInt64?) throws  -> PaymentRequest
@@ -1220,6 +1243,35 @@ public protocol PaykitClientProtocol : AnyObject {
     func createReceipt(payer: String, payee: String, methodId: String, amount: String?, currency: String?) throws  -> Receipt
     
     /**
+     * Create a receipt confirmation message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - The receipt ID being confirmed
+     * * `payer_pubkey` - Payer's public key
+     * * `payee_pubkey` - Payee's public key
+     * * `method_id` - Payment method used
+     * * `amount` - Payment amount
+     * * `currency` - Currency code
+     * * `signature` - Optional signature from payee
+     */
+    func createReceiptConfirmationMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?, signature: String?) throws  -> NoisePaymentMessage
+    
+    /**
+     * Create a receipt request message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - Unique identifier for this receipt
+     * * `payer_pubkey` - Payer's public key (z-base32)
+     * * `payee_pubkey` - Payee's public key (z-base32)
+     * * `method_id` - Payment method identifier
+     * * `amount` - Optional payment amount
+     * * `currency` - Optional currency code
+     */
+    func createReceiptRequestMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?) throws  -> NoisePaymentMessage
+    
+    /**
      * Create a new subscription.
      */
     func createSubscription(subscriber: String, provider: String, terms: SubscriptionTerms) throws  -> Subscription
@@ -1228,6 +1280,31 @@ public protocol PaykitClientProtocol : AnyObject {
      * Get days remaining in current billing period.
      */
     func daysRemainingInPeriod(periodEnd: Int64)  -> UInt32
+    
+    /**
+     * Discover a Noise endpoint for a recipient.
+     *
+     * Queries the recipient's public directory for their Noise server information.
+     *
+     * # Arguments
+     *
+     * * `transport` - Unauthenticated transport for reading
+     * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+     *
+     * # Returns
+     *
+     * The noise endpoint info if found, None otherwise.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let transport = UnauthenticatedTransportFFI::new_mock();
+     * if let Some(endpoint) = client.discover_noise_endpoint(transport, "8pinxxgqs41...")? {
+     * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+     * }
+     * ```
+     */
+    func discoverNoiseEndpoint(transport: UnauthenticatedTransportFfi, recipientPubkey: String) throws  -> NoiseEndpointInfo?
     
     /**
      * Extract public key from scanned QR code.
@@ -1336,6 +1413,15 @@ public protocol PaykitClientProtocol : AnyObject {
     func listMethods()  -> [String]
     
     /**
+     * Parse a payment message from JSON.
+     *
+     * # Arguments
+     *
+     * * `json` - The JSON string to parse
+     */
+    func parseNoisePaymentMessage(json: String) throws  -> NoisePaymentMessage
+    
+    /**
      * Parse receipt metadata as JSON.
      */
     func parseReceiptMetadata(metadataJson: String) throws  -> String
@@ -1344,6 +1430,21 @@ public protocol PaykitClientProtocol : AnyObject {
      * Parse scanned QR code data as a Paykit URI.
      */
     func parseScannedQr(scannedData: String) throws  -> ScannedUri
+    
+    /**
+     * Publish a Noise endpoint to the directory.
+     *
+     * Makes this device discoverable for receiving payments via Noise protocol.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     * * `host` - Host address where the Noise server is listening
+     * * `port` - Port number where the Noise server is listening
+     * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+     * * `metadata` - Optional metadata about the endpoint
+     */
+    func publishNoiseEndpoint(transport: AuthenticatedTransportFfi, host: String, port: UInt16, noisePubkey: String, metadata: String?) throws 
     
     /**
      * Publish a payment endpoint to the directory.
@@ -1372,6 +1473,17 @@ public protocol PaykitClientProtocol : AnyObject {
      * * `contact_pubkey` - The contact's public key to remove
      */
     func removeContact(transport: AuthenticatedTransportFfi, contactPubkey: String) throws 
+    
+    /**
+     * Remove the Noise endpoint from the directory.
+     *
+     * Makes this device no longer discoverable for Noise payments.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     */
+    func removeNoiseEndpoint(transport: AuthenticatedTransportFfi) throws 
     
     /**
      * Remove a payment endpoint from the directory.
@@ -1477,6 +1589,25 @@ public class PaykitClient:
         )
     }
     /**
+     * Create an error message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `code` - Error code
+     * * `message` - Error description
+     */
+    public func createNoiseErrorMessage(code: String, message: String) throws  -> NoisePaymentMessage {
+        return try  FfiConverterTypeNoisePaymentMessage.lift(
+            try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_create_noise_error_message(self.uniffiClonePointer(), 
+        FfiConverterString.lower(code),
+        FfiConverterString.lower(message),$0
+    )
+}
+        )
+    }
+    /**
      * Create a payment request.
      */
     public func createPaymentRequest(fromPubkey: String, toPubkey: String, amountSats: Int64, currency: String, methodId: String, description: String, expiresInSecs: UInt64?) throws  -> PaymentRequest {
@@ -1513,6 +1644,62 @@ public class PaykitClient:
         )
     }
     /**
+     * Create a receipt confirmation message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - The receipt ID being confirmed
+     * * `payer_pubkey` - Payer's public key
+     * * `payee_pubkey` - Payee's public key
+     * * `method_id` - Payment method used
+     * * `amount` - Payment amount
+     * * `currency` - Currency code
+     * * `signature` - Optional signature from payee
+     */
+    public func createReceiptConfirmationMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?, signature: String?) throws  -> NoisePaymentMessage {
+        return try  FfiConverterTypeNoisePaymentMessage.lift(
+            try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_confirmation_message(self.uniffiClonePointer(), 
+        FfiConverterString.lower(receiptId),
+        FfiConverterString.lower(payerPubkey),
+        FfiConverterString.lower(payeePubkey),
+        FfiConverterString.lower(methodId),
+        FfiConverterOptionString.lower(amount),
+        FfiConverterOptionString.lower(currency),
+        FfiConverterOptionString.lower(signature),$0
+    )
+}
+        )
+    }
+    /**
+     * Create a receipt request message for Noise channel.
+     *
+     * # Arguments
+     *
+     * * `receipt_id` - Unique identifier for this receipt
+     * * `payer_pubkey` - Payer's public key (z-base32)
+     * * `payee_pubkey` - Payee's public key (z-base32)
+     * * `method_id` - Payment method identifier
+     * * `amount` - Optional payment amount
+     * * `currency` - Optional currency code
+     */
+    public func createReceiptRequestMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?) throws  -> NoisePaymentMessage {
+        return try  FfiConverterTypeNoisePaymentMessage.lift(
+            try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_create_receipt_request_message(self.uniffiClonePointer(), 
+        FfiConverterString.lower(receiptId),
+        FfiConverterString.lower(payerPubkey),
+        FfiConverterString.lower(payeePubkey),
+        FfiConverterString.lower(methodId),
+        FfiConverterOptionString.lower(amount),
+        FfiConverterOptionString.lower(currency),$0
+    )
+}
+        )
+    }
+    /**
      * Create a new subscription.
      */
     public func createSubscription(subscriber: String, provider: String, terms: SubscriptionTerms) throws  -> Subscription {
@@ -1537,6 +1724,40 @@ public class PaykitClient:
     
     uniffi_paykit_mobile_fn_method_paykitclient_days_remaining_in_period(self.uniffiClonePointer(), 
         FfiConverterInt64.lower(periodEnd),$0
+    )
+}
+        )
+    }
+    /**
+     * Discover a Noise endpoint for a recipient.
+     *
+     * Queries the recipient's public directory for their Noise server information.
+     *
+     * # Arguments
+     *
+     * * `transport` - Unauthenticated transport for reading
+     * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+     *
+     * # Returns
+     *
+     * The noise endpoint info if found, None otherwise.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let transport = UnauthenticatedTransportFFI::new_mock();
+     * if let Some(endpoint) = client.discover_noise_endpoint(transport, "8pinxxgqs41...")? {
+     * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+     * }
+     * ```
+     */
+    public func discoverNoiseEndpoint(transport: UnauthenticatedTransportFfi, recipientPubkey: String) throws  -> NoiseEndpointInfo? {
+        return try  FfiConverterOptionTypeNoiseEndpointInfo.lift(
+            try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(self.uniffiClonePointer(), 
+        FfiConverterTypeUnauthenticatedTransportFFI.lower(transport),
+        FfiConverterString.lower(recipientPubkey),$0
     )
 }
         )
@@ -1754,6 +1975,23 @@ public class PaykitClient:
         )
     }
     /**
+     * Parse a payment message from JSON.
+     *
+     * # Arguments
+     *
+     * * `json` - The JSON string to parse
+     */
+    public func parseNoisePaymentMessage(json: String) throws  -> NoisePaymentMessage {
+        return try  FfiConverterTypeNoisePaymentMessage.lift(
+            try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_parse_noise_payment_message(self.uniffiClonePointer(), 
+        FfiConverterString.lower(json),$0
+    )
+}
+        )
+    }
+    /**
      * Parse receipt metadata as JSON.
      */
     public func parseReceiptMetadata(metadataJson: String) throws  -> String {
@@ -1778,6 +2016,31 @@ public class PaykitClient:
     )
 }
         )
+    }
+    /**
+     * Publish a Noise endpoint to the directory.
+     *
+     * Makes this device discoverable for receiving payments via Noise protocol.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     * * `host` - Host address where the Noise server is listening
+     * * `port` - Port number where the Noise server is listening
+     * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+     * * `metadata` - Optional metadata about the endpoint
+     */
+    public func publishNoiseEndpoint(transport: AuthenticatedTransportFfi, host: String, port: UInt16, noisePubkey: String, metadata: String?) throws  {
+        try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(self.uniffiClonePointer(), 
+        FfiConverterTypeAuthenticatedTransportFFI.lower(transport),
+        FfiConverterString.lower(host),
+        FfiConverterUInt16.lower(port),
+        FfiConverterString.lower(noisePubkey),
+        FfiConverterOptionString.lower(metadata),$0
+    )
+}
     }
     /**
      * Publish a payment endpoint to the directory.
@@ -1819,6 +2082,23 @@ public class PaykitClient:
     uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(self.uniffiClonePointer(), 
         FfiConverterTypeAuthenticatedTransportFFI.lower(transport),
         FfiConverterString.lower(contactPubkey),$0
+    )
+}
+    }
+    /**
+     * Remove the Noise endpoint from the directory.
+     *
+     * Makes this device no longer discoverable for Noise payments.
+     *
+     * # Arguments
+     *
+     * * `transport` - Authenticated transport for writing
+     */
+    public func removeNoiseEndpoint(transport: AuthenticatedTransportFfi) throws  {
+        try 
+    rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_method_paykitclient_remove_noise_endpoint(self.uniffiClonePointer(), 
+        FfiConverterTypeAuthenticatedTransportFFI.lower(transport),$0
     )
 }
     }
@@ -3821,6 +4101,659 @@ public func FfiConverterTypeMethodId_lower(_ value: MethodId) -> RustBuffer {
 
 
 /**
+ * Information about a Noise protocol endpoint for receiving payments.
+ *
+ * This is discovered from a recipient's public directory and contains
+ * the connection information needed to establish a Noise session.
+ */
+public struct NoiseEndpointInfo {
+    /**
+     * The recipient's public key (z-base32 encoded).
+     */
+    public var recipientPubkey: String
+    /**
+     * Host address of the Noise server (IP or hostname).
+     */
+    public var host: String
+    /**
+     * Port number of the Noise server.
+     */
+    public var port: UInt16
+    /**
+     * The server's Noise public key (X25519, hex encoded).
+     * This is needed to verify the server during handshake.
+     */
+    public var serverNoisePubkey: String
+    /**
+     * Optional metadata about the endpoint.
+     */
+    public var metadata: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The recipient's public key (z-base32 encoded).
+         */
+        recipientPubkey: String, 
+        /**
+         * Host address of the Noise server (IP or hostname).
+         */
+        host: String, 
+        /**
+         * Port number of the Noise server.
+         */
+        port: UInt16, 
+        /**
+         * The server's Noise public key (X25519, hex encoded).
+         * This is needed to verify the server during handshake.
+         */
+        serverNoisePubkey: String, 
+        /**
+         * Optional metadata about the endpoint.
+         */
+        metadata: String?) {
+        self.recipientPubkey = recipientPubkey
+        self.host = host
+        self.port = port
+        self.serverNoisePubkey = serverNoisePubkey
+        self.metadata = metadata
+    }
+}
+
+
+extension NoiseEndpointInfo: Equatable, Hashable {
+    public static func ==(lhs: NoiseEndpointInfo, rhs: NoiseEndpointInfo) -> Bool {
+        if lhs.recipientPubkey != rhs.recipientPubkey {
+            return false
+        }
+        if lhs.host != rhs.host {
+            return false
+        }
+        if lhs.port != rhs.port {
+            return false
+        }
+        if lhs.serverNoisePubkey != rhs.serverNoisePubkey {
+            return false
+        }
+        if lhs.metadata != rhs.metadata {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(recipientPubkey)
+        hasher.combine(host)
+        hasher.combine(port)
+        hasher.combine(serverNoisePubkey)
+        hasher.combine(metadata)
+    }
+}
+
+
+public struct FfiConverterTypeNoiseEndpointInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseEndpointInfo {
+        return
+            try NoiseEndpointInfo(
+                recipientPubkey: FfiConverterString.read(from: &buf), 
+                host: FfiConverterString.read(from: &buf), 
+                port: FfiConverterUInt16.read(from: &buf), 
+                serverNoisePubkey: FfiConverterString.read(from: &buf), 
+                metadata: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoiseEndpointInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.recipientPubkey, into: &buf)
+        FfiConverterString.write(value.host, into: &buf)
+        FfiConverterUInt16.write(value.port, into: &buf)
+        FfiConverterString.write(value.serverNoisePubkey, into: &buf)
+        FfiConverterOptionString.write(value.metadata, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoiseEndpointInfo_lift(_ buf: RustBuffer) throws -> NoiseEndpointInfo {
+    return try FfiConverterTypeNoiseEndpointInfo.lift(buf)
+}
+
+public func FfiConverterTypeNoiseEndpointInfo_lower(_ value: NoiseEndpointInfo) -> RustBuffer {
+    return FfiConverterTypeNoiseEndpointInfo.lower(value)
+}
+
+
+/**
+ * Result of a Noise handshake operation.
+ */
+public struct NoiseHandshakeResult {
+    /**
+     * Whether the handshake succeeded.
+     */
+    public var success: Bool
+    /**
+     * Session ID for this connection (if successful).
+     */
+    public var sessionId: String?
+    /**
+     * Remote peer's public key (z-base32 encoded, if successful).
+     */
+    public var remotePubkey: String?
+    /**
+     * Error message (if failed).
+     */
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Whether the handshake succeeded.
+         */
+        success: Bool, 
+        /**
+         * Session ID for this connection (if successful).
+         */
+        sessionId: String?, 
+        /**
+         * Remote peer's public key (z-base32 encoded, if successful).
+         */
+        remotePubkey: String?, 
+        /**
+         * Error message (if failed).
+         */
+        error: String?) {
+        self.success = success
+        self.sessionId = sessionId
+        self.remotePubkey = remotePubkey
+        self.error = error
+    }
+}
+
+
+extension NoiseHandshakeResult: Equatable, Hashable {
+    public static func ==(lhs: NoiseHandshakeResult, rhs: NoiseHandshakeResult) -> Bool {
+        if lhs.success != rhs.success {
+            return false
+        }
+        if lhs.sessionId != rhs.sessionId {
+            return false
+        }
+        if lhs.remotePubkey != rhs.remotePubkey {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(success)
+        hasher.combine(sessionId)
+        hasher.combine(remotePubkey)
+        hasher.combine(error)
+    }
+}
+
+
+public struct FfiConverterTypeNoiseHandshakeResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseHandshakeResult {
+        return
+            try NoiseHandshakeResult(
+                success: FfiConverterBool.read(from: &buf), 
+                sessionId: FfiConverterOptionString.read(from: &buf), 
+                remotePubkey: FfiConverterOptionString.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoiseHandshakeResult, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.success, into: &buf)
+        FfiConverterOptionString.write(value.sessionId, into: &buf)
+        FfiConverterOptionString.write(value.remotePubkey, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoiseHandshakeResult_lift(_ buf: RustBuffer) throws -> NoiseHandshakeResult {
+    return try FfiConverterTypeNoiseHandshakeResult.lift(buf)
+}
+
+public func FfiConverterTypeNoiseHandshakeResult_lower(_ value: NoiseHandshakeResult) -> RustBuffer {
+    return FfiConverterTypeNoiseHandshakeResult.lower(value)
+}
+
+
+/**
+ * A payment message to send over Noise channel.
+ */
+public struct NoisePaymentMessage {
+    /**
+     * Type of the message.
+     */
+    public var messageType: NoisePaymentMessageType
+    /**
+     * JSON payload of the message.
+     */
+    public var payloadJson: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Type of the message.
+         */
+        messageType: NoisePaymentMessageType, 
+        /**
+         * JSON payload of the message.
+         */
+        payloadJson: String) {
+        self.messageType = messageType
+        self.payloadJson = payloadJson
+    }
+}
+
+
+extension NoisePaymentMessage: Equatable, Hashable {
+    public static func ==(lhs: NoisePaymentMessage, rhs: NoisePaymentMessage) -> Bool {
+        if lhs.messageType != rhs.messageType {
+            return false
+        }
+        if lhs.payloadJson != rhs.payloadJson {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(messageType)
+        hasher.combine(payloadJson)
+    }
+}
+
+
+public struct FfiConverterTypeNoisePaymentMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoisePaymentMessage {
+        return
+            try NoisePaymentMessage(
+                messageType: FfiConverterTypeNoisePaymentMessageType.read(from: &buf), 
+                payloadJson: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoisePaymentMessage, into buf: inout [UInt8]) {
+        FfiConverterTypeNoisePaymentMessageType.write(value.messageType, into: &buf)
+        FfiConverterString.write(value.payloadJson, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoisePaymentMessage_lift(_ buf: RustBuffer) throws -> NoisePaymentMessage {
+    return try FfiConverterTypeNoisePaymentMessage.lift(buf)
+}
+
+public func FfiConverterTypeNoisePaymentMessage_lower(_ value: NoisePaymentMessage) -> RustBuffer {
+    return FfiConverterTypeNoisePaymentMessage.lower(value)
+}
+
+
+/**
+ * Configuration for a Noise server (receiving payments).
+ */
+public struct NoiseServerConfig {
+    /**
+     * The port to listen on (0 for auto-assign).
+     */
+    public var port: UInt16
+    /**
+     * Maximum number of concurrent connections.
+     */
+    public var maxConnections: UInt32
+    /**
+     * Connection timeout in seconds.
+     */
+    public var connectionTimeoutSecs: UInt32
+    /**
+     * Whether to automatically publish endpoint to directory.
+     */
+    public var autoPublish: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The port to listen on (0 for auto-assign).
+         */
+        port: UInt16, 
+        /**
+         * Maximum number of concurrent connections.
+         */
+        maxConnections: UInt32, 
+        /**
+         * Connection timeout in seconds.
+         */
+        connectionTimeoutSecs: UInt32, 
+        /**
+         * Whether to automatically publish endpoint to directory.
+         */
+        autoPublish: Bool) {
+        self.port = port
+        self.maxConnections = maxConnections
+        self.connectionTimeoutSecs = connectionTimeoutSecs
+        self.autoPublish = autoPublish
+    }
+}
+
+
+extension NoiseServerConfig: Equatable, Hashable {
+    public static func ==(lhs: NoiseServerConfig, rhs: NoiseServerConfig) -> Bool {
+        if lhs.port != rhs.port {
+            return false
+        }
+        if lhs.maxConnections != rhs.maxConnections {
+            return false
+        }
+        if lhs.connectionTimeoutSecs != rhs.connectionTimeoutSecs {
+            return false
+        }
+        if lhs.autoPublish != rhs.autoPublish {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(port)
+        hasher.combine(maxConnections)
+        hasher.combine(connectionTimeoutSecs)
+        hasher.combine(autoPublish)
+    }
+}
+
+
+public struct FfiConverterTypeNoiseServerConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseServerConfig {
+        return
+            try NoiseServerConfig(
+                port: FfiConverterUInt16.read(from: &buf), 
+                maxConnections: FfiConverterUInt32.read(from: &buf), 
+                connectionTimeoutSecs: FfiConverterUInt32.read(from: &buf), 
+                autoPublish: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoiseServerConfig, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.port, into: &buf)
+        FfiConverterUInt32.write(value.maxConnections, into: &buf)
+        FfiConverterUInt32.write(value.connectionTimeoutSecs, into: &buf)
+        FfiConverterBool.write(value.autoPublish, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoiseServerConfig_lift(_ buf: RustBuffer) throws -> NoiseServerConfig {
+    return try FfiConverterTypeNoiseServerConfig.lift(buf)
+}
+
+public func FfiConverterTypeNoiseServerConfig_lower(_ value: NoiseServerConfig) -> RustBuffer {
+    return FfiConverterTypeNoiseServerConfig.lower(value)
+}
+
+
+/**
+ * Status of the Noise server.
+ */
+public struct NoiseServerStatus {
+    /**
+     * Whether the server is currently running.
+     */
+    public var isRunning: Bool
+    /**
+     * The port the server is listening on (if running).
+     */
+    public var port: UInt16?
+    /**
+     * The server's Noise public key (X25519, hex encoded).
+     */
+    public var noisePubkey: String
+    /**
+     * Number of active sessions.
+     */
+    public var activeSessions: UInt32
+    /**
+     * Total connections handled since start.
+     */
+    public var totalConnections: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Whether the server is currently running.
+         */
+        isRunning: Bool, 
+        /**
+         * The port the server is listening on (if running).
+         */
+        port: UInt16?, 
+        /**
+         * The server's Noise public key (X25519, hex encoded).
+         */
+        noisePubkey: String, 
+        /**
+         * Number of active sessions.
+         */
+        activeSessions: UInt32, 
+        /**
+         * Total connections handled since start.
+         */
+        totalConnections: UInt64) {
+        self.isRunning = isRunning
+        self.port = port
+        self.noisePubkey = noisePubkey
+        self.activeSessions = activeSessions
+        self.totalConnections = totalConnections
+    }
+}
+
+
+extension NoiseServerStatus: Equatable, Hashable {
+    public static func ==(lhs: NoiseServerStatus, rhs: NoiseServerStatus) -> Bool {
+        if lhs.isRunning != rhs.isRunning {
+            return false
+        }
+        if lhs.port != rhs.port {
+            return false
+        }
+        if lhs.noisePubkey != rhs.noisePubkey {
+            return false
+        }
+        if lhs.activeSessions != rhs.activeSessions {
+            return false
+        }
+        if lhs.totalConnections != rhs.totalConnections {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(isRunning)
+        hasher.combine(port)
+        hasher.combine(noisePubkey)
+        hasher.combine(activeSessions)
+        hasher.combine(totalConnections)
+    }
+}
+
+
+public struct FfiConverterTypeNoiseServerStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseServerStatus {
+        return
+            try NoiseServerStatus(
+                isRunning: FfiConverterBool.read(from: &buf), 
+                port: FfiConverterOptionUInt16.read(from: &buf), 
+                noisePubkey: FfiConverterString.read(from: &buf), 
+                activeSessions: FfiConverterUInt32.read(from: &buf), 
+                totalConnections: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoiseServerStatus, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.isRunning, into: &buf)
+        FfiConverterOptionUInt16.write(value.port, into: &buf)
+        FfiConverterString.write(value.noisePubkey, into: &buf)
+        FfiConverterUInt32.write(value.activeSessions, into: &buf)
+        FfiConverterUInt64.write(value.totalConnections, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoiseServerStatus_lift(_ buf: RustBuffer) throws -> NoiseServerStatus {
+    return try FfiConverterTypeNoiseServerStatus.lift(buf)
+}
+
+public func FfiConverterTypeNoiseServerStatus_lower(_ value: NoiseServerStatus) -> RustBuffer {
+    return FfiConverterTypeNoiseServerStatus.lower(value)
+}
+
+
+/**
+ * Information about an active Noise session.
+ */
+public struct NoiseSessionInfo {
+    /**
+     * Unique session identifier.
+     */
+    public var sessionId: String
+    /**
+     * Remote peer's public key (z-base32 encoded).
+     */
+    public var remotePubkey: String
+    /**
+     * When the session was established (unix timestamp).
+     */
+    public var establishedAt: Int64
+    /**
+     * Whether this is an incoming (server) or outgoing (client) session.
+     */
+    public var isIncoming: Bool
+    /**
+     * Number of messages sent in this session.
+     */
+    public var messagesSent: UInt64
+    /**
+     * Number of messages received in this session.
+     */
+    public var messagesReceived: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Unique session identifier.
+         */
+        sessionId: String, 
+        /**
+         * Remote peer's public key (z-base32 encoded).
+         */
+        remotePubkey: String, 
+        /**
+         * When the session was established (unix timestamp).
+         */
+        establishedAt: Int64, 
+        /**
+         * Whether this is an incoming (server) or outgoing (client) session.
+         */
+        isIncoming: Bool, 
+        /**
+         * Number of messages sent in this session.
+         */
+        messagesSent: UInt64, 
+        /**
+         * Number of messages received in this session.
+         */
+        messagesReceived: UInt64) {
+        self.sessionId = sessionId
+        self.remotePubkey = remotePubkey
+        self.establishedAt = establishedAt
+        self.isIncoming = isIncoming
+        self.messagesSent = messagesSent
+        self.messagesReceived = messagesReceived
+    }
+}
+
+
+extension NoiseSessionInfo: Equatable, Hashable {
+    public static func ==(lhs: NoiseSessionInfo, rhs: NoiseSessionInfo) -> Bool {
+        if lhs.sessionId != rhs.sessionId {
+            return false
+        }
+        if lhs.remotePubkey != rhs.remotePubkey {
+            return false
+        }
+        if lhs.establishedAt != rhs.establishedAt {
+            return false
+        }
+        if lhs.isIncoming != rhs.isIncoming {
+            return false
+        }
+        if lhs.messagesSent != rhs.messagesSent {
+            return false
+        }
+        if lhs.messagesReceived != rhs.messagesReceived {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sessionId)
+        hasher.combine(remotePubkey)
+        hasher.combine(establishedAt)
+        hasher.combine(isIncoming)
+        hasher.combine(messagesSent)
+        hasher.combine(messagesReceived)
+    }
+}
+
+
+public struct FfiConverterTypeNoiseSessionInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseSessionInfo {
+        return
+            try NoiseSessionInfo(
+                sessionId: FfiConverterString.read(from: &buf), 
+                remotePubkey: FfiConverterString.read(from: &buf), 
+                establishedAt: FfiConverterInt64.read(from: &buf), 
+                isIncoming: FfiConverterBool.read(from: &buf), 
+                messagesSent: FfiConverterUInt64.read(from: &buf), 
+                messagesReceived: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NoiseSessionInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.sessionId, into: &buf)
+        FfiConverterString.write(value.remotePubkey, into: &buf)
+        FfiConverterInt64.write(value.establishedAt, into: &buf)
+        FfiConverterBool.write(value.isIncoming, into: &buf)
+        FfiConverterUInt64.write(value.messagesSent, into: &buf)
+        FfiConverterUInt64.write(value.messagesReceived, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeNoiseSessionInfo_lift(_ buf: RustBuffer) throws -> NoiseSessionInfo {
+    return try FfiConverterTypeNoiseSessionInfo.lift(buf)
+}
+
+public func FfiConverterTypeNoiseSessionInfo_lower(_ value: NoiseSessionInfo) -> RustBuffer {
+    return FfiConverterTypeNoiseSessionInfo.lower(value)
+}
+
+
+/**
  * A supported payment method with its endpoint.
  */
 public struct PaymentMethod {
@@ -5766,6 +6699,198 @@ extension ModificationType: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Status of a Noise connection.
+ */
+public enum NoiseConnectionStatus {
+    
+    /**
+     * Not connected.
+     */
+    case disconnected
+    /**
+     * Connecting to server.
+     */
+    case connecting
+    /**
+     * Handshake in progress.
+     */
+    case handshaking
+    /**
+     * Connected and ready for communication.
+     */
+    case connected
+    /**
+     * Connection failed.
+     */
+    case failed
+}
+
+public struct FfiConverterTypeNoiseConnectionStatus: FfiConverterRustBuffer {
+    typealias SwiftType = NoiseConnectionStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoiseConnectionStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .disconnected
+        
+        case 2: return .connecting
+        
+        case 3: return .handshaking
+        
+        case 4: return .connected
+        
+        case 5: return .failed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NoiseConnectionStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .disconnected:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .connecting:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .handshaking:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .connected:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+public func FfiConverterTypeNoiseConnectionStatus_lift(_ buf: RustBuffer) throws -> NoiseConnectionStatus {
+    return try FfiConverterTypeNoiseConnectionStatus.lift(buf)
+}
+
+public func FfiConverterTypeNoiseConnectionStatus_lower(_ value: NoiseConnectionStatus) -> RustBuffer {
+    return FfiConverterTypeNoiseConnectionStatus.lower(value)
+}
+
+
+extension NoiseConnectionStatus: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Type of payment message exchanged over Noise channel.
+ */
+public enum NoisePaymentMessageType {
+    
+    /**
+     * Request a receipt for a payment.
+     */
+    case receiptRequest
+    /**
+     * Confirm receipt of payment.
+     */
+    case receiptConfirmation
+    /**
+     * Offer a private endpoint.
+     */
+    case privateEndpointOffer
+    /**
+     * Error response.
+     */
+    case error
+    /**
+     * Ping for connection keep-alive.
+     */
+    case ping
+    /**
+     * Pong response to ping.
+     */
+    case pong
+}
+
+public struct FfiConverterTypeNoisePaymentMessageType: FfiConverterRustBuffer {
+    typealias SwiftType = NoisePaymentMessageType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoisePaymentMessageType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .receiptRequest
+        
+        case 2: return .receiptConfirmation
+        
+        case 3: return .privateEndpointOffer
+        
+        case 4: return .error
+        
+        case 5: return .ping
+        
+        case 6: return .pong
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NoisePaymentMessageType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .receiptRequest:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .receiptConfirmation:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .privateEndpointOffer:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .error:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .ping:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .pong:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+public func FfiConverterTypeNoisePaymentMessageType_lift(_ buf: RustBuffer) throws -> NoisePaymentMessageType {
+    return try FfiConverterTypeNoisePaymentMessageType.lift(buf)
+}
+
+public func FfiConverterTypeNoisePaymentMessageType_lower(_ value: NoisePaymentMessageType) -> RustBuffer {
+    return FfiConverterTypeNoisePaymentMessageType.lower(value)
+}
+
+
+extension NoisePaymentMessageType: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Parsed Paykit message.
  */
 public enum ParsedMessage {
@@ -7188,6 +8313,27 @@ extension FfiConverterCallbackInterfaceReceiptGeneratorCallback : FfiConverter {
     }
 }
 
+fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
+    typealias SwiftType = UInt16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
 fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
     typealias SwiftType = UInt64?
 
@@ -7267,6 +8413,27 @@ fileprivate struct FfiConverterOptionTypeCachedContactFFI: FfiConverterRustBuffe
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeCachedContactFFI.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+fileprivate struct FfiConverterOptionTypeNoiseEndpointInfo: FfiConverterRustBuffer {
+    typealias SwiftType = NoiseEndpointInfo?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeNoiseEndpointInfo.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeNoiseEndpointInfo.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -7551,6 +8718,23 @@ public func createDirectoryOperationsAsync() throws  -> DirectoryOperationsAsync
     )
 }
 /**
+ * Create an error message.
+ *
+ * # Arguments
+ *
+ * * `code` - Error code
+ * * `message` - Error description
+ */
+public func createErrorMessage(code: String, message: String) throws  -> NoisePaymentMessage {
+    return try  FfiConverterTypeNoisePaymentMessage.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_create_error_message(
+        FfiConverterString.lower(code),
+        FfiConverterString.lower(message),$0)
+}
+    )
+}
+/**
  * Create a new interactive manager.
  */
 public func createInteractiveManager(store: ReceiptStore)  -> PaykitInteractiveManagerFfi {
@@ -7572,12 +8756,104 @@ public func createMessageBuilder()  -> PaykitMessageBuilder {
     )
 }
 /**
+ * Create a default noise server configuration.
+ */
+public func createNoiseServerConfig()  -> NoiseServerConfig {
+    return try!  FfiConverterTypeNoiseServerConfig.lift(
+        try! rustCall() {
+    uniffi_paykit_mobile_fn_func_create_noise_server_config($0)
+}
+    )
+}
+/**
+ * Create a noise server configuration with a specific port.
+ */
+public func createNoiseServerConfigWithPort(port: UInt16)  -> NoiseServerConfig {
+    return try!  FfiConverterTypeNoiseServerConfig.lift(
+        try! rustCall() {
+    uniffi_paykit_mobile_fn_func_create_noise_server_config_with_port(
+        FfiConverterUInt16.lower(port),$0)
+}
+    )
+}
+/**
  * Create a new Paykit client.
  */
 public func createPaykitClient() throws  -> PaykitClient {
     return try  FfiConverterTypePaykitClient.lift(
         try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
     uniffi_paykit_mobile_fn_func_create_paykit_client($0)
+}
+    )
+}
+/**
+ * Create a private endpoint offer message.
+ *
+ * # Arguments
+ *
+ * * `method_id` - Payment method identifier
+ * * `endpoint` - The private endpoint data
+ * * `expires_in_secs` - Optional expiration time in seconds
+ */
+public func createPrivateEndpointOfferMessage(methodId: String, endpoint: String, expiresInSecs: UInt64?) throws  -> NoisePaymentMessage {
+    return try  FfiConverterTypeNoisePaymentMessage.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_create_private_endpoint_offer_message(
+        FfiConverterString.lower(methodId),
+        FfiConverterString.lower(endpoint),
+        FfiConverterOptionUInt64.lower(expiresInSecs),$0)
+}
+    )
+}
+/**
+ * Create a receipt confirmation message.
+ *
+ * # Arguments
+ *
+ * * `receipt_id` - The receipt ID being confirmed
+ * * `payer_pubkey` - Payer's public key
+ * * `payee_pubkey` - Payee's public key
+ * * `method_id` - Payment method used
+ * * `amount` - Payment amount
+ * * `currency` - Currency code
+ * * `signature` - Optional signature from payee
+ */
+public func createReceiptConfirmationMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?, signature: String?) throws  -> NoisePaymentMessage {
+    return try  FfiConverterTypeNoisePaymentMessage.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_create_receipt_confirmation_message(
+        FfiConverterString.lower(receiptId),
+        FfiConverterString.lower(payerPubkey),
+        FfiConverterString.lower(payeePubkey),
+        FfiConverterString.lower(methodId),
+        FfiConverterOptionString.lower(amount),
+        FfiConverterOptionString.lower(currency),
+        FfiConverterOptionString.lower(signature),$0)
+}
+    )
+}
+/**
+ * Create a receipt request message.
+ *
+ * # Arguments
+ *
+ * * `receipt_id` - Unique identifier for this receipt
+ * * `payer_pubkey` - Payer's public key (z-base32)
+ * * `payee_pubkey` - Payee's public key (z-base32)
+ * * `method_id` - Payment method identifier
+ * * `amount` - Optional payment amount
+ * * `currency` - Optional currency code
+ */
+public func createReceiptRequestMessage(receiptId: String, payerPubkey: String, payeePubkey: String, methodId: String, amount: String?, currency: String?) throws  -> NoisePaymentMessage {
+    return try  FfiConverterTypeNoisePaymentMessage.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_create_receipt_request_message(
+        FfiConverterString.lower(receiptId),
+        FfiConverterString.lower(payerPubkey),
+        FfiConverterString.lower(payeePubkey),
+        FfiConverterString.lower(methodId),
+        FfiConverterOptionString.lower(amount),
+        FfiConverterOptionString.lower(currency),$0)
 }
     )
 }
@@ -7614,6 +8890,39 @@ public func deriveX25519Keypair(ed25519SecretHex: String, deviceId: String, epoc
         FfiConverterString.lower(ed25519SecretHex),
         FfiConverterString.lower(deviceId),
         FfiConverterUInt32.lower(epoch),$0)
+}
+    )
+}
+/**
+ * Discover a Noise endpoint for a recipient.
+ *
+ * Queries the recipient's public directory for their Noise server information.
+ *
+ * # Arguments
+ *
+ * * `transport` - Unauthenticated transport for reading
+ * * `recipient_pubkey` - The recipient's public key (z-base32 encoded)
+ *
+ * # Returns
+ *
+ * The noise endpoint info if found, None otherwise.
+ *
+ * # Example
+ *
+ * ```ignore
+ * let transport = UnauthenticatedTransportFFI::new_mock();
+ * if let Some(endpoint) = discover_noise_endpoint(&transport, "8pinxxgqs41...")? {
+ * println!("Connecting to {}:{}", endpoint.host, endpoint.port);
+ * println!("Server pubkey: {}", endpoint.server_noise_pubkey);
+ * }
+ * ```
+ */
+public func discoverNoiseEndpoint(transport: UnauthenticatedTransportFfi, recipientPubkey: String) throws  -> NoiseEndpointInfo? {
+    return try  FfiConverterOptionTypeNoiseEndpointInfo.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_discover_noise_endpoint(
+        FfiConverterTypeUnauthenticatedTransportFFI.lower(transport),
+        FfiConverterString.lower(recipientPubkey),$0)
 }
     )
 }
@@ -7730,6 +9039,21 @@ public func importKeypairFromBackup(backup: KeyBackup, password: String) throws 
     )
 }
 /**
+ * Parse a payment message from JSON.
+ *
+ * # Arguments
+ *
+ * * `json` - The JSON string to parse
+ */
+public func parsePaymentMessage(json: String) throws  -> NoisePaymentMessage {
+    return try  FfiConverterTypeNoisePaymentMessage.lift(
+        try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_parse_payment_message(
+        FfiConverterString.lower(json),$0)
+}
+    )
+}
+/**
  * Parse z-base32 public key to hex.
  */
 public func parsePublicKeyZ32(publicKeyZ32: String) throws  -> String {
@@ -7740,6 +9064,48 @@ public func parsePublicKeyZ32(publicKeyZ32: String) throws  -> String {
 }
     )
 }
+/**
+ * Publish a Noise endpoint to the directory.
+ *
+ * Makes this device discoverable for receiving payments via Noise protocol.
+ *
+ * # Arguments
+ *
+ * * `transport` - Authenticated transport for writing
+ * * `host` - Host address where the Noise server is listening
+ * * `port` - Port number where the Noise server is listening
+ * * `noise_pubkey` - This server's Noise public key (X25519, hex encoded)
+ * * `metadata` - Optional metadata about the endpoint
+ */
+public func publishNoiseEndpoint(transport: AuthenticatedTransportFfi, host: String, port: UInt16, noisePubkey: String, metadata: String?) throws  {
+    try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_publish_noise_endpoint(
+        FfiConverterTypeAuthenticatedTransportFFI.lower(transport),
+        FfiConverterString.lower(host),
+        FfiConverterUInt16.lower(port),
+        FfiConverterString.lower(noisePubkey),
+        FfiConverterOptionString.lower(metadata),$0)
+}
+}
+
+
+/**
+ * Remove the Noise endpoint from the directory.
+ *
+ * Makes this device no longer discoverable for Noise payments.
+ *
+ * # Arguments
+ *
+ * * `transport` - Authenticated transport for writing
+ */
+public func removeNoiseEndpoint(transport: AuthenticatedTransportFfi) throws  {
+    try rustCallWithError(FfiConverterTypePaykitMobileError.lift) {
+    uniffi_paykit_mobile_fn_func_remove_noise_endpoint(
+        FfiConverterTypeAuthenticatedTransportFFI.lower(transport),$0)
+}
+}
+
+
 /**
  * Sign a message with Ed25519 secret key.
  *
@@ -7806,19 +9172,40 @@ private var initializationResult: InitializationResult {
     if (uniffi_paykit_mobile_checksum_func_create_directory_operations_async() != 3774) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_func_create_error_message() != 25647) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_func_create_interactive_manager() != 6575) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_func_create_message_builder() != 17772) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_func_create_noise_server_config() != 51894) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_create_noise_server_config_with_port() != 63078) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_func_create_paykit_client() != 24343) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_create_private_endpoint_offer_message() != 34999) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_create_receipt_confirmation_message() != 39140) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_create_receipt_request_message() != 38775) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_func_create_receipt_store() != 25695) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_func_derive_x25519_keypair() != 35150) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_discover_noise_endpoint() != 40526) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_func_ed25519_keypair_from_secret() != 9902) {
@@ -7842,7 +9229,16 @@ private var initializationResult: InitializationResult {
     if (uniffi_paykit_mobile_checksum_func_import_keypair_from_backup() != 2045) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_func_parse_payment_message() != 50074) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_func_parse_public_key_z32() != 18323) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_publish_noise_endpoint() != 28655) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_func_remove_noise_endpoint() != 59542) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_func_sign_message() != 46705) {
@@ -7929,16 +9325,28 @@ private var initializationResult: InitializationResult {
     if (uniffi_paykit_mobile_checksum_method_paykitclient_check_health() != 61124) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_create_noise_error_message() != 24747) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_create_payment_request() != 59726) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt() != 12923) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_confirmation_message() != 23349) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_create_receipt_request_message() != 14340) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_create_subscription() != 32373) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_period() != 4816) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint() != 24963) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr() != 60905) {
@@ -7977,16 +9385,25 @@ private var initializationResult: InitializationResult {
     if (uniffi_paykit_mobile_checksum_method_paykitclient_list_methods() != 42624) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_parse_noise_payment_message() != 36870) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_parse_receipt_metadata() != 40194) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_parse_scanned_qr() != 50070) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoint() != 20921) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint() != 17605) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact() != 26597) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_paykit_mobile_checksum_method_paykitclient_remove_noise_endpoint() != 55896) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_paykit_mobile_checksum_method_paykitclient_remove_payment_endpoint_from_directory() != 33360) {

@@ -154,7 +154,7 @@ public final class MockPubkyRingService {
     ///   - deviceId: Unique identifier for this device
     ///   - epoch: Key rotation epoch (increment to rotate keys)
     /// - Returns: Derived X25519 keypair
-    public func deriveX25519Keypair(deviceId: String, epoch: UInt32) throws -> X25519KeypairResult {
+    public func deriveKeypair(deviceId: String, epoch: UInt32) throws -> X25519KeypairResult {
         guard let seedHex = cachedSeedHex else {
             throw MockPubkyRingError.noSeedAvailable
         }
@@ -162,7 +162,12 @@ public final class MockPubkyRingService {
         // Use paykit-mobile FFI for key derivation
         // This uses the same HKDF as pubky-noise
         do {
-            let keypair = try deriveX25519Keypair(ed25519SecretHex: seedHex, deviceId: deviceId, epoch: epoch)
+            // Call the global function from PaykitMobile.swift
+            // Use a local function wrapper to avoid naming conflict with this instance method
+            func callGlobalDerive(_ ed25519SecretHex: String, _ deviceId: String, _ epoch: UInt32) throws -> X25519Keypair {
+                return try deriveX25519Keypair(ed25519SecretHex: ed25519SecretHex, deviceId: deviceId, epoch: epoch)
+            }
+            let keypair = try callGlobalDerive(seedHex, deviceId, epoch)
             return X25519KeypairResult(
                 secretKeyHex: keypair.secretKeyHex,
                 publicKeyHex: keypair.publicKeyHex,
@@ -197,12 +202,17 @@ public final class MockPubkyRingService {
     ///
     /// - Parameter message: Message to sign
     /// - Returns: 64-byte signature as hex string
-    public func signMessage(_ message: Data) throws -> String {
+    public func signData(_ message: Data) throws -> String {
         guard let seedHex = cachedSeedHex else {
             throw MockPubkyRingError.noSeedAvailable
         }
         
-        return try signMessage(secretKeyHex: seedHex, message: Array(message))
+        // Call the global function from PaykitMobile.swift
+        // Use a local function wrapper to avoid naming conflict with this instance method
+        func callGlobalSign(_ secretKeyHex: String, _ message: Data) throws -> String {
+            return try signMessage(secretKeyHex: secretKeyHex, message: message)
+        }
+        return try callGlobalSign(seedHex, message)
     }
     
     /// Clear the mock seed (for testing)
@@ -221,27 +231,6 @@ public final class MockPubkyRingService {
 }
 
 // MARK: - Data Extension for Hex
-
-extension Data {
-    init?(hexString: String) {
-        let len = hexString.count / 2
-        var data = Data(capacity: len)
-        var index = hexString.startIndex
-        
-        for _ in 0..<len {
-            let nextIndex = hexString.index(index, offsetBy: 2)
-            guard let byte = UInt8(hexString[index..<nextIndex], radix: 16) else {
-                return nil
-            }
-            data.append(byte)
-            index = nextIndex
-        }
-        
-        self = data
-    }
-    
-    var hexString: String {
-        return map { String(format: "%02x", $0) }.joined()
-    }
-}
+// Note: PaymentView.swift also has a Data extension with hexString
+// If you get a redeclaration error, remove this extension and use the one from PaymentView
 

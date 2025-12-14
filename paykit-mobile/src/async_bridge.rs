@@ -446,7 +446,41 @@ pub fn create_directory_operations_async(
 /// Async bridge for executor operations.
 ///
 /// Provides async wrappers for Bitcoin and Lightning executor operations
-/// with timeout handling and cancellation support.
+/// with timeout handling and cancellation support. This is useful when
+/// you need to wrap synchronous wallet operations with timeout handling.
+///
+/// # Usage
+///
+/// ```ignore
+/// let bridge = ExecutorAsyncBridge::new()?;
+///
+/// // Execute with default 30s timeout
+/// let result = bridge.execute_bitcoin_operation(|| {
+///     // Your wallet operation here
+///     wallet.send_to_address(address, amount)
+/// }, None)?;
+///
+/// // Execute with custom 60s timeout
+/// let result = bridge.execute_lightning_operation(|| {
+///     // Your node operation here
+///     node.pay_invoice(invoice)
+/// }, Some(60000))?;
+/// ```
+///
+/// # Timeout Handling
+///
+/// If an operation exceeds the timeout, a `PaykitMobileError::Transport`
+/// error is returned with message "Bitcoin/Lightning operation timed out".
+///
+/// # Thread Safety
+///
+/// The bridge manages its own Tokio runtime and is safe to use from any thread.
+/// Operations are executed on the runtime's thread pool.
+///
+/// # Cancellation
+///
+/// Use `execute_with_cancellation()` to get an `AsyncHandle` that can be used
+/// to cancel long-running operations.
 #[derive(uniffi::Object)]
 pub struct ExecutorAsyncBridge {
     runtime: tokio::runtime::Runtime,
@@ -500,17 +534,20 @@ impl ExecutorAsyncBridge {
         F: FnOnce() -> Result<T, PaykitMobileError> + Send + 'static,
         T: Send + 'static,
     {
-        let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
 
         self.runtime.block_on(async {
-            tokio::time::timeout(timeout, async move { tokio::task::spawn_blocking(operation).await })
-                .await
-                .map_err(|_| PaykitMobileError::Transport {
-                    message: "Bitcoin operation timed out".to_string(),
-                })?
-                .map_err(|e| PaykitMobileError::Internal {
-                    message: format!("Task join error: {}", e),
-                })?
+            tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(operation).await
+            })
+            .await
+            .map_err(|_| PaykitMobileError::Transport {
+                message: "Bitcoin operation timed out".to_string(),
+            })?
+            .map_err(|e| PaykitMobileError::Internal {
+                message: format!("Task join error: {}", e),
+            })?
         })
     }
 
@@ -527,17 +564,20 @@ impl ExecutorAsyncBridge {
         F: FnOnce() -> Result<T, PaykitMobileError> + Send + 'static,
         T: Send + 'static,
     {
-        let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
 
         self.runtime.block_on(async {
-            tokio::time::timeout(timeout, async move { tokio::task::spawn_blocking(operation).await })
-                .await
-                .map_err(|_| PaykitMobileError::Transport {
-                    message: "Lightning operation timed out".to_string(),
-                })?
-                .map_err(|e| PaykitMobileError::Internal {
-                    message: format!("Task join error: {}", e),
-                })?
+            tokio::time::timeout(timeout, async move {
+                tokio::task::spawn_blocking(operation).await
+            })
+            .await
+            .map_err(|_| PaykitMobileError::Transport {
+                message: "Lightning operation timed out".to_string(),
+            })?
+            .map_err(|e| PaykitMobileError::Internal {
+                message: format!("Task join error: {}", e),
+            })?
         })
     }
 
@@ -556,7 +596,8 @@ impl ExecutorAsyncBridge {
         C: ResultCallback<T> + 'static,
     {
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
+        let timeout =
+            std::time::Duration::from_millis(timeout_ms.unwrap_or(self.default_timeout_ms));
 
         self.runtime.spawn(async move {
             tokio::select! {

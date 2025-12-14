@@ -23,7 +23,7 @@ A comprehensive iOS demo application showcasing Paykit features including key ma
 | QR Scanner | **Real** | AVFoundation-based QR code scanning with Paykit URI parsing |
 | Multiple Identities | **Real** | Create, switch, and manage multiple identities |
 | Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
-| Noise Payments | Not Implemented | Requires WebSocket/TCP transport |
+| Noise Payments | **Real** | Send/receive payments over encrypted Noise protocol channels |
 
 ## Features
 
@@ -111,6 +111,43 @@ Auto-pay settings management with Keychain persistence:
   - Import selected contacts with one tap
   - Automatically filters out contacts you already have
 
+### Noise Payments (Real Implementation)
+
+Send and receive payments over encrypted Noise protocol channels:
+
+- **Key Architecture**: "Cold pkarr, hot noise" - Ed25519 keys managed by Pubky Ring, X25519 keys cached locally
+- **Secure Channel**: Full Noise_IK handshake over TCP
+- **Receipt Exchange**: Cryptographic receipts for payment proof
+- **Server Mode**: Receive payments by listening for incoming connections
+- **Private Endpoints**: Fresh payment addresses exchanged over encrypted channel
+
+Key files:
+- `Services/NoisePaymentService.swift` - Core Noise payment coordination
+- `Services/NoiseKeyCache.swift` - Secure X25519 key caching
+- `Services/PubkyRingIntegration.swift` - Integration with remote key manager
+- `Services/MockPubkyRingService.swift` - Demo/testing key derivation
+- `Services/DirectoryService.swift` - Endpoint discovery and publishing
+- `ViewModels/NoisePaymentViewModel.swift` - Payment flow state management
+- `Views/ReceivePaymentView.swift` - Server mode UI
+
+#### Sending Payments
+
+1. Navigate to Send tab
+2. Enter recipient (pubky:// URI or contact name)
+3. Enter amount and select payment method
+4. Tap "Send Payment"
+5. App discovers recipient's Noise endpoint
+6. Establishes encrypted connection
+7. Exchanges payment request and receipt
+
+#### Receiving Payments
+
+1. Navigate to Receive tab
+2. Tap "Start Listening"
+3. Share connection info (QR code or copy)
+4. Accept incoming payment requests
+5. Receipts stored automatically
+
 ### Directory Operations (Configurable Transport)
 
 The DirectoryService supports both mock and real Pubky transport:
@@ -181,25 +218,36 @@ PaykitDemo/
 ├── KeychainStorage.swift        # iOS Keychain wrapper
 ├── PaykitMobile.swift           # UniFFI generated Swift bindings
 ├── PaykitMobileFFI.h            # C header for FFI
+├── PubkyNoise.swift             # Noise protocol FFI bindings
+├── PubkyNoiseFFI.h              # Noise FFI header
 ├── Models/
 │   ├── AutoPayModels.swift      # Auto-pay data models
 │   ├── Contact.swift            # Contact data model
 │   └── Receipt.swift            # Receipt data model
+├── Services/
+│   ├── NoisePaymentService.swift    # Core Noise payment coordination
+│   ├── NoiseKeyCache.swift          # X25519 key caching
+│   ├── PubkyRingIntegration.swift   # Remote key manager integration
+│   ├── MockPubkyRingService.swift   # Demo/testing key derivation
+│   └── DirectoryService.swift       # Endpoint discovery/publishing
 ├── Storage/
 │   ├── ContactStorage.swift     # Keychain-backed contact storage
 │   └── ReceiptStorage.swift     # Keychain-backed receipt storage
 ├── ViewModels/
-│   └── AutoPayViewModel.swift   # Auto-pay business logic (sample data)
+│   ├── AutoPayViewModel.swift   # Auto-pay business logic
+│   └── NoisePaymentViewModel.swift  # Payment flow state management
 └── Views/
-    ├── ContentView.swift        # Main tab navigation
+    ├── ContentView.swift        # Main tab navigation (Send/Receive tabs)
     ├── DashboardView.swift      # Dashboard with stats and activity
-    ├── PaymentMethodsView.swift # Payment methods UI (static)
+    ├── PaymentView.swift        # Send payment UI
+    ├── ReceivePaymentView.swift # Receive payment UI (server mode)
+    ├── PaymentMethodsView.swift # Payment methods UI
     ├── ContactsView.swift       # Contact management
     ├── ReceiptsView.swift       # Receipt history with filtering
-    ├── SubscriptionsView.swift  # Subscriptions UI (sample data)
-    ├── AutoPayView.swift        # Auto-pay settings UI (sample data)
-    ├── PaymentRequestsView.swift # Payment requests UI (sample data)
-    └── SettingsView.swift       # Settings with real key management
+    ├── SubscriptionsView.swift  # Subscriptions UI
+    ├── AutoPayView.swift        # Auto-pay settings UI
+    ├── PaymentRequestsView.swift # Payment requests UI
+    └── SettingsView.swift       # Settings with key management
 ```
 
 ## Requirements
@@ -383,9 +431,15 @@ Completed improvements:
 - ✅ **Subscription Storage**: Identity-scoped subscription management
 - ✅ **Auto-Pay Storage**: Identity-scoped auto-pay settings and rules
 
+Recent additions:
+- ✅ **Noise Payments**: Send and receive payments over encrypted Noise protocol channels
+- ✅ **Key Architecture**: "Cold pkarr, hot noise" key model with Pubky Ring integration
+- ✅ **Server Mode**: Receive payments by listening for incoming connections
+- ✅ **Private Endpoint Exchange**: Fresh payment addresses over encrypted channel
+
 Planned improvements:
 1. **Pubky SDK Integration**: Implement `PubkyUnauthenticatedStorageCallback` with real Pubky SDK
-2. **Noise Integration**: Real encrypted payments via Noise protocol
+2. **Real Pubky Ring Integration**: Connect to actual Pubky Ring app for key management
 3. **QR Scanner Navigation**: Add navigation flows for scanned QR codes (payment flows, contact addition, etc.)
 
 ## Related Documentation

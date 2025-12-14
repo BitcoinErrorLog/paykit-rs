@@ -8,7 +8,7 @@
 import Foundation
 
 /// Payment status
-enum PaymentReceiptStatus: String, Codable {
+public enum PaymentReceiptStatus: String, Codable {
     case pending = "pending"
     case completed = "completed"
     case failed = "failed"
@@ -16,43 +16,43 @@ enum PaymentReceiptStatus: String, Codable {
 }
 
 /// Payment direction
-enum PaymentDirection: String, Codable {
+public enum PaymentDirection: String, Codable {
     case sent = "sent"
     case received = "received"
 }
 
 /// A payment receipt (local model, different from PaykitMobile.Receipt)
-struct PaymentReceipt: Identifiable, Codable, Equatable {
+public struct PaymentReceipt: Identifiable, Codable, Equatable {
     /// Unique identifier
-    let id: String
+    public let id: String
     /// Direction of payment
-    let direction: PaymentDirection
+    public let direction: PaymentDirection
     /// Counterparty public key (z-base32)
-    let counterpartyKey: String
+    public let counterpartyKey: String
     /// Counterparty display name (if known)
-    var counterpartyName: String?
+    public var counterpartyName: String?
     /// Amount in satoshis
-    let amountSats: UInt64
+    public let amountSats: UInt64
     /// Payment status
-    var status: PaymentReceiptStatus
+    public var status: PaymentReceiptStatus
     /// Payment method used
-    let paymentMethod: String
+    public let paymentMethod: String
     /// When the payment was initiated
-    let createdAt: Date
+    public let createdAt: Date
     /// When the payment was completed (if applicable)
-    var completedAt: Date?
+    public var completedAt: Date?
     /// Optional memo/note
-    var memo: String?
+    public var memo: String?
     /// Transaction ID (if applicable)
-    var txId: String?
+    public var txId: String?
     /// Payment proof (optional, JSON string)
-    var proof: String?
+    public var proof: String?
     /// Whether proof has been verified
-    var proofVerified: Bool = false
+    public var proofVerified: Bool = false
     /// Timestamp when proof was verified
-    var proofVerifiedAt: Date?
+    public var proofVerifiedAt: Date?
     
-    init(
+    public init(
         direction: PaymentDirection,
         counterpartyKey: String,
         counterpartyName: String? = nil,

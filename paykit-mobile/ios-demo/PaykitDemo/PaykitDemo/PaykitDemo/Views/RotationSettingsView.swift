@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct RotationSettingsView: View {
     @EnvironmentObject var appState: AppState
@@ -140,7 +141,8 @@ struct RotationSettingsView: View {
             }
         }
         .onAppear {
-            viewModel.load(identityName: appState.currentIdentityName)
+            let identityName = KeyManager().getCurrentIdentityName() ?? "default"
+            viewModel.load(identityName: identityName)
         }
     }
 }

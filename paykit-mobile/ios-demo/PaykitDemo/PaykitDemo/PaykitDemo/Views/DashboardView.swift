@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 class DashboardViewModel: ObservableObject {
     @Published var recentReceipts: [PaymentReceipt] = []
@@ -32,7 +33,7 @@ class DashboardViewModel: ObservableObject {
     }
     
     private let keyManager = KeyManager()
-    private var receiptStorage: PaymentReceiptStorage {
+    private var receiptStorage: ReceiptStorage {
         let identityName = keyManager.getCurrentIdentityName() ?? "default"
         return ReceiptStorage(identityName: identityName)
     }
@@ -181,7 +182,7 @@ struct DashboardView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: PaymentReceiptsView()) {
+                NavigationLink(destination: ReceiptsView()) {
                     Text("See All")
                         .font(.subheadline)
                         .foregroundColor(.blue)
@@ -193,7 +194,7 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(viewModel.recentReceipts) { receipt in
-                        ReceiptRow(receipt: receipt)
+                        DashboardReceiptRow(receipt: receipt)
                         
                         if receipt.id != viewModel.recentReceipts.last?.id {
                             Divider()
@@ -347,7 +348,7 @@ struct StatCard: View {
     }
 }
 
-struct ReceiptRow: View {
+struct DashboardReceiptRow: View {
     let receipt: PaymentReceipt
     
     var body: some View {

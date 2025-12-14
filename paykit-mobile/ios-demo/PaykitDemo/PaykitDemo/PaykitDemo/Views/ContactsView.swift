@@ -411,18 +411,20 @@ class ContactsViewModel: ObservableObject {
         
         // Get current identity's public key
         guard let currentIdentityName = keyManager.getCurrentIdentityName(),
-              let identityInfo = keyManager.getIdentityInfo(name: currentIdentityName),
-              let publicKey = keyManager.publicKey(name: currentIdentityName) else {
+              let _ = keyManager.getIdentityInfo(name: currentIdentityName),
+              !keyManager.publicKeyZ32.isEmpty else {
             await MainActor.run {
                 self.error = "No active identity found"
                 self.isLoading = false
             }
             return
         }
+        let publicKey = keyManager.publicKeyZ32
         
         do {
-            // Fetch known contacts from Pubky follows
-            let contactPubkeys = try await directoryService.fetchKnownContacts(ownerPubkey: publicKey)
+            // For demo, use locally stored contacts as there's no remote fetch yet
+            // In production, this would fetch from Pubky follows
+            let contactPubkeys = storage.listContacts().map { $0.publicKeyZ32 }
             
             // Fetch supported payments for each contact to get more info
             var discovered: [DiscoveredContact] = []
@@ -433,8 +435,8 @@ class ContactsViewModel: ObservableObject {
                     continue // Skip contacts we already have
                 }
                 
-                // Try to fetch supported payments to see if they have payment methods
-                let supportedPayments = try? await directoryService.fetchSupportedPayments(ownerPubkey: pubkey)
+                // Try to discover supported payment methods
+                let supportedPayments = try? await directoryService.discoverPaymentMethods(recipientPubkey: pubkey)
                 let hasPaymentMethods = supportedPayments?.isEmpty == false
                 
                 // Create a discovered contact

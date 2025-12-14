@@ -272,9 +272,9 @@ public final class NoisePaymentViewModel: ObservableObject {
         
         if let contact = contacts.first(where: { 
             $0.name.lowercased() == input.lowercased() ||
-            $0.publicKey.lowercased() == input.lowercased()
+            $0.publicKeyZ32.lowercased() == input.lowercased()
         }) {
-            return contact.publicKey
+            return contact.publicKeyZ32
         }
         
         // Assume it's a raw public key
@@ -305,9 +305,10 @@ public final class NoisePaymentViewModel: ObservableObject {
         }
         
         return NoiseEndpointInfo(
+            recipientPubkey: "", // Will be set from context
             host: host,
             port: port,
-            serverPubkeyHex: pubkey,
+            serverNoisePubkey: pubkey,
             metadata: nil
         )
     }
@@ -331,19 +332,18 @@ public final class NoisePaymentViewModel: ObservableObject {
         let identityName = keyManager.currentIdentityName ?? "default"
         let storage = ReceiptStorage(identityName: identityName)
         
-        let receipt = StoredPaymentReceipt(
-            id: request.receiptId,
-            payer: request.payerPubkey,
-            payee: request.payeePubkey,
-            amount: Int64(request.amount ?? "0") ?? 0,
-            currency: request.currency ?? "SAT",
-            method: request.methodId,
-            timestamp: confirmedAt,
-            status: .completed,
-            notes: request.description
+        var receipt = PaymentReceipt(
+            direction: .sent,
+            counterpartyKey: request.payeePubkey,
+            counterpartyName: nil,
+            amountSats: UInt64(request.amount ?? "0") ?? 0,
+            paymentMethod: request.methodId,
+            memo: request.description
         )
+        receipt.status = .completed
+        receipt.completedAt = confirmedAt
         
-        storage.savePaymentReceipt(receipt)
+        try? storage.addPaymentReceipt(receipt)
     }
 }
 
@@ -358,7 +358,7 @@ public final class NoiseReceiveViewModel: ObservableObject {
     @Published public private(set) var listeningPort: UInt16?
     @Published public private(set) var noisePubkeyHex: String?
     @Published public private(set) var pendingRequests: [PendingPaymentRequest] = []
-    @Published public private(set) var recentReceipts: [StoredReceipt] = []
+    @Published public private(set) var recentReceipts: [PaymentReceipt] = []
     @Published public private(set) var activeConnections = 0
     
     // MARK: - Models
@@ -476,10 +476,7 @@ public final class NoiseReceiveViewModel: ObservableObject {
     public func loadRecentReceipts() {
         let identityName = keyManager.currentIdentityName ?? "default"
         let storage = ReceiptStorage(identityName: identityName)
-        recentReceipts = storage.listReceipts()
-            .sorted { $0.timestamp > $1.timestamp }
-            .prefix(10)
-            .map { $0 }
+        recentReceipts = Array(storage.recentReceipts(limit: 10))
     }
     
     // MARK: - Helpers

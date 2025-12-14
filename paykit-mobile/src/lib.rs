@@ -17,6 +17,7 @@
 //! Async operations use the Tokio runtime.
 
 pub mod async_bridge;
+pub mod executor_ffi;
 pub mod interactive_ffi;
 pub mod keys;
 pub mod noise_ffi;
@@ -45,6 +46,13 @@ pub use keys::{Ed25519Keypair, KeyBackup, X25519Keypair};
 pub use noise_ffi::{
     NoiseConnectionStatus, NoiseEndpointInfo, NoiseHandshakeResult, NoisePaymentMessage,
     NoisePaymentMessageType, NoiseServerConfig, NoiseServerStatus, NoiseSessionInfo,
+};
+
+// Re-export executor FFI types for wallet integration (Bitkit, etc.)
+pub use executor_ffi::{
+    BitcoinExecutorBridge, BitcoinExecutorFFI, BitcoinNetworkFFI, BitcoinTxResultFFI,
+    DecodedInvoiceFFI, LightningExecutorBridge, LightningExecutorFFI, LightningNetworkFFI,
+    LightningPaymentResultFFI, LightningPaymentStatusFFI,
 };
 
 use std::sync::Arc;

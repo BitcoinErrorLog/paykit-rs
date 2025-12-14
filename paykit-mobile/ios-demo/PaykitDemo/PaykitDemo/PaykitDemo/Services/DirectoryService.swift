@@ -86,9 +86,53 @@ public final class DirectoryService {
     /// Whether to use mock mode
     public var useMockMode = true
     
+    /// PaykitClient instance for FFI operations
+    private var paykitClient: PaykitClient?
+    
+    /// Unauthenticated transport for public reads
+    private var unauthenticatedTransport: UnauthenticatedTransportFfi?
+    
+    /// Authenticated transport for writes (requires session)
+    private var authenticatedTransport: AuthenticatedTransportFfi?
+    
+    /// Homeserver base URL (optional, for direct homeserver access)
+    public var homeserverBaseURL: String? = nil
+    
     // MARK: - Initialization
     
-    private init() {}
+    private init() {
+        // Initialize PaykitClient
+        do {
+            self.paykitClient = try PaykitClient()
+        } catch {
+            print("Failed to initialize PaykitClient: \(error)")
+        }
+    }
+    
+    // MARK: - Transport Setup
+    
+    /// Configure real Pubky transport
+    /// - Parameter homeserverBaseURL: Optional base URL for homeserver
+    public func configurePubkyTransport(homeserverBaseURL: String? = nil) {
+        self.homeserverBaseURL = homeserverBaseURL
+        
+        // Create unauthenticated storage adapter
+        let unauthAdapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL: homeserverBaseURL)
+        self.unauthenticatedTransport = UnauthenticatedTransportFfi.fromCallback(callback: unauthAdapter)
+    }
+    
+    /// Configure authenticated transport with session
+    /// - Parameters:
+    ///   - sessionId: Session ID for authentication
+    ///   - ownerPubkey: Owner's public key (z-base32 encoded)
+    ///   - homeserverBaseURL: Optional base URL for homeserver
+    public func configureAuthenticatedTransport(sessionId: String, ownerPubkey: String, homeserverBaseURL: String? = nil) {
+        self.homeserverBaseURL = homeserverBaseURL
+        
+        // Create authenticated storage adapter
+        let authAdapter = PubkyAuthenticatedStorageAdapter(sessionId: sessionId, homeserverBaseURL: homeserverBaseURL)
+        self.authenticatedTransport = AuthenticatedTransportFfi.fromCallback(callback: authAdapter, ownerPubkey: ownerPubkey)
+    }
     
     // MARK: - Noise Endpoint Discovery
     
@@ -126,13 +170,26 @@ public final class DirectoryService {
     
     /// Pubky SDK implementation
     private func discoverNoiseEndpointPubky(recipientPubkey: String) async throws -> NoiseEndpointInfo? {
-        // TODO: Implement using PaykitMobile FFI
-        // let client = try createPaykitClient()
-        // let transport = UnauthenticatedTransportFfi.newMock()
-        // return client.discoverNoiseEndpoint(transport: transport, recipientPubkey: recipientPubkey)
+        guard let client = paykitClient else {
+            throw DirectoryError.notConfigured
+        }
         
-        // For now, return nil
-        return nil
+        // Use configured transport or create a new one
+        let transport: UnauthenticatedTransportFfi
+        if let existing = unauthenticatedTransport {
+            transport = existing
+        } else {
+            // Create transport with adapter
+            let adapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL: homeserverBaseURL)
+            transport = UnauthenticatedTransportFfi.fromCallback(callback: adapter)
+            unauthenticatedTransport = transport
+        }
+        
+        do {
+            return try await client.discoverNoiseEndpoint(transport: transport, recipientPubkey: recipientPubkey)
+        } catch {
+            throw DirectoryError.networkError(error.localizedDescription)
+        }
     }
     
     // MARK: - Noise Endpoint Publishing
@@ -176,8 +233,25 @@ public final class DirectoryService {
     
     /// Pubky SDK implementation
     private func publishNoiseEndpointPubky(entry: DirectoryNoiseEndpoint) async throws {
-        // TODO: Implement using PaykitMobile FFI
-        throw DirectoryError.notConfigured
+        guard let client = paykitClient else {
+            throw DirectoryError.notConfigured
+        }
+        
+        guard let transport = authenticatedTransport else {
+            throw DirectoryError.notConfigured
+        }
+        
+        do {
+            try await client.publishNoiseEndpoint(
+                transport: transport,
+                host: entry.host,
+                port: entry.port,
+                noisePubkey: entry.pubkey,
+                metadata: entry.metadata
+            )
+        } catch {
+            throw DirectoryError.publishFailed(error.localizedDescription)
+        }
     }
     
     /// Remove noise endpoint from directory
@@ -189,8 +263,16 @@ public final class DirectoryService {
             }
             mockStorage[ownerPubkey]?.removeValue(forKey: Self.noiseEndpointPath)
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryError.notConfigured
+            guard let client = paykitClient,
+                  let transport = authenticatedTransport else {
+                throw DirectoryError.notConfigured
+            }
+            
+            do {
+                try await client.removeNoiseEndpoint(transport: transport)
+            } catch {
+                throw DirectoryError.publishFailed(error.localizedDescription)
+            }
         }
     }
     
@@ -225,8 +307,28 @@ public final class DirectoryService {
     
     /// Pubky SDK implementation
     private func discoverPaymentMethodsPubky(recipientPubkey: String) async throws -> [DirectoryPaymentMethod] {
-        // TODO: Implement using PaykitMobile FFI
-        return []
+        guard let client = paykitClient else {
+            throw DirectoryError.notConfigured
+        }
+        
+        // Use configured transport or create a new one
+        let transport: UnauthenticatedTransportFfi
+        if let existing = unauthenticatedTransport {
+            transport = existing
+        } else {
+            let adapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL: homeserverBaseURL)
+            transport = UnauthenticatedTransportFfi.fromCallback(callback: adapter)
+            unauthenticatedTransport = transport
+        }
+        
+        do {
+            let supportedPayments = try await client.fetchSupportedPayments(transport: transport, payeePubkey: recipientPubkey)
+            return supportedPayments.entries.map { entry in
+                DirectoryPaymentMethod(methodId: entry.methodId, endpoint: entry.endpoint)
+            }
+        } catch {
+            throw DirectoryError.networkError(error.localizedDescription)
+        }
     }
     
     // MARK: - Payment Method Publishing
@@ -246,8 +348,23 @@ public final class DirectoryService {
             }
             mockStorage[ownerPubkey]![path] = endpoint
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryError.notConfigured
+            guard let client = paykitClient,
+                  let transport = authenticatedTransport else {
+                throw DirectoryError.notConfigured
+            }
+            
+            let methodIdObj = MethodId(methodId: methodId)
+            let endpointData = EndpointData(data: endpoint)
+            
+            do {
+                try await client.publishPaymentEndpoint(
+                    transport: transport,
+                    method: methodIdObj,
+                    endpoint: endpointData
+                )
+            } catch {
+                throw DirectoryError.publishFailed(error.localizedDescription)
+            }
         }
     }
     
@@ -262,8 +379,18 @@ public final class DirectoryService {
             let path = "\(Self.paykitPathPrefix)\(methodId)"
             mockStorage[ownerPubkey]?.removeValue(forKey: path)
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryError.notConfigured
+            guard let client = paykitClient,
+                  let transport = authenticatedTransport else {
+                throw DirectoryError.notConfigured
+            }
+            
+            let methodIdObj = MethodId(methodId: methodId)
+            
+            do {
+                try await client.removePaymentEndpoint(transport: transport, method: methodIdObj)
+            } catch {
+                throw DirectoryError.publishFailed(error.localizedDescription)
+            }
         }
     }
     

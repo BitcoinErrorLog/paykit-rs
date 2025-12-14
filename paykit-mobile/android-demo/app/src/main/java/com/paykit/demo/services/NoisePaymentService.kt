@@ -28,8 +28,10 @@ import org.json.JSONObject
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.InetSocketAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
+import kotlinx.coroutines.*
 
 /**
  * Information about a recipient's Noise endpoint
@@ -117,12 +119,62 @@ class NoisePaymentService private constructor(private val context: Context) {
     private var socket: Socket? = null
     private var currentEpoch: UInt = 0u
     
+    // Server properties
+    private var serverSocket: ServerSocket? = null
+    private val serverConnections = mutableMapOf<String, ServerConnection>()
+    private var serverJob: Job? = null
+    private var serverKeypair: X25519KeypairResult? = null
+    private var serverNoiseManager: FfiNoiseManager? = null
+    private val serverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // Interactive payment handling
+    private var receiptStore: com.paykit.mobile.ReceiptStore? = null
+    private var interactiveManager: com.paykit.mobile.PaykitInteractiveManagerFfi? = null
+    private var receiptGenerator: ServerReceiptGenerator? = null
+    
     private val keyManager = KeyManager(context)
     private val keyCache = NoiseKeyCache.getInstance(context)
     private val pubkyRing = PubkyRingIntegration.getInstance(context)
     
     // Configuration
     var connectionTimeoutMs: Int = 30000
+    
+    // Callbacks for server events
+    var onPendingPaymentRequest: ((PendingPaymentRequest) -> Unit)? = null
+    var onReceiptConfirmed: ((com.paykit.mobile.ReceiptRequest) -> Unit)? = null
+    
+    init {
+        setupInteractiveManager()
+    }
+    
+    /**
+     * Initialize the interactive payment manager
+     */
+    private fun setupInteractiveManager() {
+        receiptStore = com.paykit.mobile.createReceiptStore()
+        interactiveManager = com.paykit.mobile.PaykitInteractiveManagerFfi(receiptStore!!)
+        
+        // Set up receipt generator
+        receiptGenerator = ServerReceiptGenerator { request ->
+            // Notify about pending request
+            val pendingRequest = PendingPaymentRequest(
+                id = request.receiptId,
+                payerPubkey = request.payer,
+                amount = request.amount,
+                currency = request.currency,
+                methodId = request.methodId,
+                receivedAt = System.currentTimeMillis(),
+                connectionId = "" // Will be overwritten
+            )
+            onPendingPaymentRequest?.invoke(pendingRequest)
+        }
+        
+        try {
+            interactiveManager?.setGenerator(receiptGenerator!!)
+        } catch (e: Exception) {
+            android.util.Log.e("NoisePaymentService", "Failed to set receipt generator: ${e.message}")
+        }
+    }
     
     // MARK: - Key Management
     
@@ -417,38 +469,360 @@ class NoisePaymentService private constructor(private val context: Context) {
     /**
      * Start listening for incoming payment requests
      */
-    suspend fun startServer(port: Int = 0): ServerStatus {
+    suspend fun startServer(port: Int = 0): ServerStatus = withContext(Dispatchers.IO) {
+        // Stop existing server if running
+        if (serverSocket != null) {
+            stopServer()
+        }
+        
         // Get our keys for publishing
         val keypair = getOrDeriveKeys()
+        serverKeypair = keypair
         
-        // Note: Full server implementation would use ServerSocket
-        // For demo, we just return the public key that clients need
-        
-        return ServerStatus(
-            isRunning = false, // Would be true with full implementation
-            port = port,
-            noisePubkeyHex = keypair.publicKeyHex,
-            activeConnections = 0
+        // Create server configuration
+        val serverConfig = PaykitClient().createNoiseServerConfig(
+            port = port.toUShort(),
+            serverKeypair = com.paykit.mobile.X25519Keypair(
+                secretKeyHex = keypair.secretKeyHex,
+                publicKeyHex = keypair.publicKeyHex
+            )
         )
+        
+        // Create Noise manager for server
+        serverNoiseManager = PaykitClient().createNoiseManagerServer(config = serverConfig)
+        
+        // Create ServerSocket
+        val socket = if (port > 0) {
+            ServerSocket(port)
+        } else {
+            ServerSocket(0) // Bind to any available port
+        }
+        
+        serverSocket = socket
+        val actualPort = socket.localPort
+        
+        // Start accepting connections
+        serverJob = serverScope.launch {
+            acceptConnections(socket)
+        }
+        
+        ServerStatus(
+            isRunning = true,
+            port = actualPort,
+            noisePubkeyHex = keypair.publicKeyHex,
+            activeConnections = serverConnections.size
+        )
+    }
+    
+    /**
+     * Accept incoming connections
+     */
+    private suspend fun acceptConnections(serverSocket: ServerSocket) {
+        while (serverSocket.isBound && !serverSocket.isClosed) {
+            try {
+                val clientSocket = withContext(Dispatchers.IO) {
+                    serverSocket.accept()
+                }
+                
+                // Handle connection in separate coroutine
+                val connectionId = UUID.randomUUID().toString()
+                serverScope.launch {
+                    handleClientConnection(connectionId, clientSocket)
+                }
+            } catch (e: Exception) {
+                if (!serverSocket.isClosed) {
+                    android.util.Log.e("NoisePaymentService", "Error accepting connection: ${e.message}")
+                }
+                break
+            }
+        }
+    }
+    
+    /**
+     * Handle client connection
+     */
+    private suspend fun handleClientConnection(connectionId: String, socket: Socket) {
+        try {
+            val serverConnection = ServerConnection(
+                id = connectionId,
+                socket = socket,
+                noiseManager = serverNoiseManager
+            )
+            
+            serverConnections[connectionId] = serverConnection
+            
+            // Perform Noise handshake (handled by FfiNoiseManager in server mode)
+            // Set up message receiving
+            receiveServerMessages(serverConnection)
+        } catch (e: Exception) {
+            android.util.Log.e("NoisePaymentService", "Error handling connection: ${e.message}")
+            serverConnections.remove(connectionId)
+            socket.close()
+        }
+    }
+    
+    /**
+     * Receive and handle messages from client
+     */
+    private suspend fun receiveServerMessages(serverConnection: ServerConnection) {
+        val input = DataInputStream(serverConnection.socket.getInputStream())
+        val buffer = ByteArray(65536)
+        
+        while (serverConnection.socket.isConnected && !serverConnection.socket.isClosed) {
+            try {
+                val bytesRead = withContext(Dispatchers.IO) {
+                    input.read(buffer)
+                }
+                
+                if (bytesRead > 0) {
+                    val data = buffer.copyOf(bytesRead)
+                    handleServerMessage(serverConnection, data)
+                } else if (bytesRead == -1) {
+                    // Connection closed
+                    break
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NoisePaymentService", "Error receiving message: ${e.message}")
+                break
+            }
+        }
+        
+        // Clean up
+        serverConnections.remove(serverConnection.id)
+        serverConnection.socket.close()
+    }
+    
+    /**
+     * Handle message from client
+     */
+    private suspend fun handleServerMessage(serverConnection: ServerConnection, data: ByteArray) {
+        val manager = interactiveManager ?: run {
+            android.util.Log.e("NoisePaymentService", "No interactive manager available")
+            return
+        }
+        
+        // Check if handshake is complete
+        if (!serverConnection.isHandshakeComplete) {
+            // First message should be the Noise handshake
+            handleServerHandshake(serverConnection, data)
+            return
+        }
+        
+        val sessionId = serverConnection.sessionId ?: run {
+            android.util.Log.e("NoisePaymentService", "No session ID for connection ${serverConnection.id}")
+            return
+        }
+        
+        val noiseManager = serverConnection.noiseManager ?: run {
+            android.util.Log.e("NoisePaymentService", "No noise manager for connection ${serverConnection.id}")
+            return
+        }
+        
+        try {
+            // Decrypt message using Noise manager
+            val plaintext = noiseManager.decrypt(sessionId, data)
+            val messageJson = String(plaintext, Charsets.UTF_8)
+            
+            // Get our public key (payee)
+            val myPubkey = keyManager.getPublicKeyZ32() ?: "unknown"
+            val peerPubkey = serverConnection.clientPubkeyHex ?: "unknown"
+            
+            // Handle message using interactive manager
+            val responseJson = manager.handleMessage(
+                messageJson = messageJson,
+                peerPubkey = peerPubkey,
+                myPubkey = myPubkey
+            )
+            
+            // If there's a response, encrypt and send it
+            responseJson?.let { response ->
+                sendEncryptedResponse(serverConnection, response)
+            }
+            
+        } catch (e: Exception) {
+            android.util.Log.e("NoisePaymentService", "Error processing message: ${e.message}")
+            // Send error response
+            sendErrorResponse(serverConnection, "PROCESSING_ERROR", e.message ?: "Unknown error")
+        }
+    }
+    
+    /**
+     * Handle Noise handshake for server connection
+     */
+    private suspend fun handleServerHandshake(serverConnection: ServerConnection, data: ByteArray) = withContext(Dispatchers.IO) {
+        val noiseManager = serverConnection.noiseManager ?: run {
+            android.util.Log.e("NoisePaymentService", "No noise manager for handshake")
+            return@withContext
+        }
+        
+        try {
+            // Accept connection (server-side handshake)
+            val acceptResult = noiseManager.acceptConnection(data)
+            
+            // Store session ID and mark handshake complete
+            serverConnection.sessionId = acceptResult.sessionId
+            serverConnection.isHandshakeComplete = true
+            serverConnection.clientPubkeyHex = acceptResult.sessionId // Session ID may include client identity
+            
+            // Send handshake response to client
+            val outputStream = DataOutputStream(serverConnection.socket.getOutputStream())
+            outputStream.write(acceptResult.responseMessage)
+            outputStream.flush()
+            
+            android.util.Log.d("NoisePaymentService", "Handshake complete for connection ${serverConnection.id}")
+            
+        } catch (e: Exception) {
+            android.util.Log.e("NoisePaymentService", "Handshake failed: ${e.message}")
+            serverConnections.remove(serverConnection.id)
+            try { serverConnection.socket.close() } catch (_: Exception) {}
+        }
+    }
+    
+    /**
+     * Send encrypted response to client
+     */
+    private suspend fun sendEncryptedResponse(serverConnection: ServerConnection, responseJson: String) = withContext(Dispatchers.IO) {
+        val sessionId = serverConnection.sessionId ?: return@withContext
+        val noiseManager = serverConnection.noiseManager ?: return@withContext
+        
+        try {
+            val responseData = responseJson.toByteArray(Charsets.UTF_8)
+            val ciphertext = noiseManager.encrypt(sessionId, responseData)
+            
+            // Send with length prefix
+            val outputStream = DataOutputStream(serverConnection.socket.getOutputStream())
+            outputStream.writeInt(ciphertext.size)
+            outputStream.write(ciphertext)
+            outputStream.flush()
+            
+        } catch (e: Exception) {
+            android.util.Log.e("NoisePaymentService", "Failed to send encrypted response: ${e.message}")
+        }
+    }
+    
+    /**
+     * Send error response to client
+     */
+    private suspend fun sendErrorResponse(serverConnection: ServerConnection, code: String, message: String) {
+        val errorJson = """{"type": "Error", "code": "$code", "message": "$message"}"""
+        sendEncryptedResponse(serverConnection, errorJson)
     }
     
     /**
      * Stop the server
      */
     fun stopServer() {
-        // Would stop ServerSocket
+        // Cancel server job
+        serverJob?.cancel()
+        serverJob = null
+        
+        // Close all connections
+        serverConnections.values.forEach { connection ->
+            try {
+                connection.socket.close()
+            } catch (e: Exception) {
+                android.util.Log.e("NoisePaymentService", "Error closing connection: ${e.message}")
+            }
+        }
+        serverConnections.clear()
+        
+        // Close server socket
+        serverSocket?.close()
+        serverSocket = null
     }
     
     /**
      * Get current server status
      */
     fun getServerStatus(): ServerStatus {
+        val port = serverSocket?.localPort
         return ServerStatus(
-            isRunning = false,
-            port = null,
-            noisePubkeyHex = null,
-            activeConnections = 0
+            isRunning = serverSocket != null && !serverSocket!!.isClosed,
+            port = port,
+            noisePubkeyHex = serverKeypair?.publicKeyHex,
+            activeConnections = serverConnections.size
         )
     }
+}
+
+/**
+ * Represents an active server connection with Noise session state
+ */
+private data class ServerConnection(
+    val id: String,
+    val socket: Socket,
+    val noiseManager: FfiNoiseManager?,
+    var sessionId: String? = null,
+    var isHandshakeComplete: Boolean = false,
+    var clientPubkeyHex: String? = null
+)
+
+/**
+ * Receipt generator callback implementation for server mode
+ */
+class ServerReceiptGenerator(
+    private val onPaymentRequest: ((com.paykit.mobile.ReceiptRequest) -> Unit)? = null
+) : com.paykit.mobile.ReceiptGeneratorCallback {
+    
+    private var invoiceGenerator: ((com.paykit.mobile.ReceiptRequest) -> String)? = null
+    
+    /**
+     * Set callback for generating invoices (for real payments)
+     */
+    fun setInvoiceGenerator(generator: (com.paykit.mobile.ReceiptRequest) -> String) {
+        invoiceGenerator = generator
+    }
+    
+    override fun generateReceipt(request: com.paykit.mobile.ReceiptRequest): com.paykit.mobile.ReceiptGenerationResult {
+        // Notify callback about pending request
+        onPaymentRequest?.invoke(request)
+        
+        // Generate invoice if generator is set, otherwise use mock
+        val invoice = invoiceGenerator?.invoke(request) ?: "mock_invoice_${request.receiptId}"
+        
+        // Create confirmed receipt with invoice in metadata
+        val metadataDict = mutableMapOf<String, String>()
+        try {
+            val parsedMetadata = org.json.JSONObject(request.metadataJson)
+            parsedMetadata.keys().forEach { key ->
+                metadataDict[key] = parsedMetadata.optString(key, "")
+            }
+        } catch (_: Exception) {}
+        
+        metadataDict["invoice"] = invoice
+        metadataDict["confirmed_at"] = java.time.Instant.now().toString()
+        
+        val updatedMetadataJson = org.json.JSONObject(metadataDict as Map<*, *>).toString()
+        
+        val confirmedReceipt = com.paykit.mobile.ReceiptRequest(
+            receiptId = request.receiptId,
+            payer = request.payer,
+            payee = request.payee,
+            methodId = request.methodId,
+            amount = request.amount,
+            currency = request.currency,
+            metadataJson = updatedMetadataJson
+        )
+        
+        return com.paykit.mobile.ReceiptGenerationResult(
+            success = true,
+            receipt = confirmedReceipt,
+            error = null
+        )
+    }
+}
+
+/**
+ * Represents a pending payment request received by the server
+ */
+data class PendingPaymentRequest(
+    val id: String,
+    val payerPubkey: String,
+    val amount: String?,
+    val currency: String?,
+    val methodId: String,
+    val receivedAt: Long,
+    val connectionId: String
+)
 }
 

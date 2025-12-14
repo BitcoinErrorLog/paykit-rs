@@ -14,6 +14,8 @@ struct QRScannerView: View {
     @StateObject private var scanner = QRScannerViewModel()
     @State private var showingResult = false
     @State private var scannedResult: ScannedUri?
+    @State private var showingPaymentView = false
+    @State private var paymentRecipientPubkey: String?
     
     var body: some View {
         ZStack {
@@ -56,9 +58,16 @@ struct QRScannerView: View {
                 // Handle the result based on type
                 handleResult(result)
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                dismiss()
+            }
         } message: { result in
             Text(resultDescription(result))
+        }
+        .sheet(isPresented: $showingPaymentView) {
+            if let pubkey = paymentRecipientPubkey {
+                PaymentView(initialRecipient: pubkey)
+            }
         }
     }
     
@@ -82,24 +91,25 @@ struct QRScannerView: View {
         case .pubky:
             if let pubkey = result.publicKey {
                 // Navigate to payment flow with this public key
-                // TODO: Implement navigation
-                print("Scanned Pubky URI: \(pubkey)")
+                paymentRecipientPubkey = pubkey
+                showingPaymentView = true
             }
         case .invoice:
             if let methodId = result.methodId, let data = result.data {
-                // Process invoice
+                // Process invoice - navigate to payment view with invoice data
+                // For now, show alert with invoice info
                 print("Scanned Invoice: method=\(methodId), data=\(data)")
+                dismiss()
             }
         case .paymentRequest:
             if let requestId = result.requestId {
-                // Handle payment request
+                // Handle payment request - could navigate to payment request view
                 print("Scanned Payment Request: \(requestId)")
+                dismiss()
             }
         case .unknown:
-            break
+            dismiss()
         }
-        
-        dismiss()
     }
     
     private func resultDescription(_ result: ScannedUri) -> String {

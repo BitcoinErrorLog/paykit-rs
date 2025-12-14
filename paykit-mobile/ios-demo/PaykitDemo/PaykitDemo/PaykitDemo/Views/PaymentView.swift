@@ -14,6 +14,7 @@ import Combine
 struct PaymentView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = PaymentViewModel()
+    var initialRecipient: String? = nil
     
     var body: some View {
         NavigationView {
@@ -35,6 +36,11 @@ struct PaymentView: View {
                 .padding()
             }
             .navigationTitle("Send Payment")
+            .onAppear {
+                if let recipient = initialRecipient {
+                    viewModel.recipientUri = recipient
+                }
+            }
             .alert("Payment Error", isPresented: $viewModel.showError) {
                 Button("OK") { viewModel.showError = false }
             } message: {
@@ -386,12 +392,27 @@ class PaymentViewModel: ObservableObject {
     }
     
     private func discoverNoiseEndpoint(payeePubkey: String) async throws -> String {
-        // In a real implementation, this would query the Pubky directory
-        // For demo, we check environment or use a test endpoint
+        // Query the Pubky directory for payment methods
+        let directoryService = DirectoryService.shared
         
-        // TODO: Integrate with DirectoryService.queryMethods()
-        // For now, throw an error indicating the recipient needs to publish an endpoint
-        throw PaymentError.noEndpoint
+        do {
+            let methods = try await directoryService.discoverPaymentMethods(recipientPubkey: payeePubkey)
+            
+            // Look for Noise endpoint
+            if let noiseEndpoint = try await directoryService.discoverNoiseEndpoint(recipientPubkey: payeePubkey) {
+                return "noise://\(noiseEndpoint.host):\(noiseEndpoint.port)@\(noiseEndpoint.serverPubkeyHex)"
+            }
+            
+            // If no Noise endpoint, check for other methods
+            if methods.isEmpty {
+                throw PaymentError.noEndpoint
+            }
+            
+            // Return first available method (could be enhanced to select best method)
+            throw PaymentError.noEndpoint // Still need Noise endpoint for this flow
+        } catch {
+            throw PaymentError.noEndpoint
+        }
     }
     
     private func parseNoiseEndpoint(_ endpoint: String) throws -> (String, UInt16, Data) {

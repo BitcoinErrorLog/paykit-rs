@@ -12,7 +12,7 @@
 package com.paykit.demo.services
 
 import android.content.Context
-import com.paykit.mobile.KeyManager
+import com.paykit.mobile.*
 import org.json.JSONObject
 
 /**
@@ -71,6 +71,49 @@ class DirectoryService private constructor(private val context: Context) {
     
     private val keyManager = KeyManager(context)
     
+    // PaykitClient instance for FFI operations
+    private var paykitClient: PaykitClient? = null
+    
+    // Unauthenticated transport for public reads
+    private var unauthenticatedTransport: UnauthenticatedTransportFfi? = null
+    
+    // Authenticated transport for writes (requires session)
+    private var authenticatedTransport: AuthenticatedTransportFfi? = null
+    
+    // Homeserver base URL (optional, for direct homeserver access)
+    var homeserverBaseURL: String? = null
+    
+    init {
+        // Initialize PaykitClient
+        try {
+            paykitClient = PaykitClient()
+        } catch (e: Exception) {
+            android.util.Log.e("DirectoryService", "Failed to initialize PaykitClient: ${e.message}")
+        }
+    }
+    
+    /**
+     * Configure real Pubky transport
+     */
+    fun configurePubkyTransport(homeserverBaseURL: String? = null) {
+        this.homeserverBaseURL = homeserverBaseURL
+        
+        // Create unauthenticated storage adapter
+        val unauthAdapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL)
+        unauthenticatedTransport = UnauthenticatedTransportFfi.fromCallback(unauthAdapter)
+    }
+    
+    /**
+     * Configure authenticated transport with session
+     */
+    fun configureAuthenticatedTransport(sessionId: String, ownerPubkey: String, homeserverBaseURL: String? = null) {
+        this.homeserverBaseURL = homeserverBaseURL
+        
+        // Create authenticated storage adapter
+        val authAdapter = PubkyAuthenticatedStorageAdapter(sessionId, homeserverBaseURL)
+        authenticatedTransport = AuthenticatedTransportFfi.fromCallback(authAdapter, ownerPubkey)
+    }
+    
     // MARK: - Noise Endpoint Discovery
     
     /**
@@ -110,13 +153,21 @@ class DirectoryService private constructor(private val context: Context) {
      * Pubky SDK implementation
      */
     private suspend fun discoverNoiseEndpointPubky(recipientPubkey: String): NoiseEndpointInfo? {
-        // TODO: Implement using PaykitMobile FFI
-        // val client = createPaykitClient()
-        // val transport = UnauthenticatedTransportFfi.newMock()
-        // return client.discoverNoiseEndpoint(transport, recipientPubkey)
+        val client = paykitClient ?: throw DirectoryException.NotConfigured
         
-        // For now, return null
-        return null
+        // Use configured transport or create a new one
+        val transport = unauthenticatedTransport ?: run {
+            val adapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL)
+            UnauthenticatedTransportFfi.fromCallback(adapter).also {
+                unauthenticatedTransport = it
+            }
+        }
+        
+        return try {
+            client.discoverNoiseEndpoint(transport, recipientPubkey)
+        } catch (e: Exception) {
+            throw DirectoryException.NetworkError(e.message ?: "Unknown error")
+        }
     }
     
     // MARK: - Noise Endpoint Publishing
@@ -170,8 +221,20 @@ class DirectoryService private constructor(private val context: Context) {
      * Pubky SDK implementation
      */
     private suspend fun publishNoiseEndpointPubky(entry: DirectoryNoiseEndpoint) {
-        // TODO: Implement using PaykitMobile FFI
-        throw DirectoryException.NotConfigured
+        val client = paykitClient ?: throw DirectoryException.NotConfigured
+        val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
+        
+        try {
+            client.publishNoiseEndpoint(
+                transport,
+                entry.host,
+                entry.port.toUInt().toUShort(),
+                entry.pubkey,
+                entry.metadata
+            )
+        } catch (e: Exception) {
+            throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
+        }
     }
     
     /**
@@ -185,8 +248,14 @@ class DirectoryService private constructor(private val context: Context) {
             }
             mockStorage[ownerPubkey]?.remove(NOISE_ENDPOINT_PATH)
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryException.NotConfigured
+            val client = paykitClient ?: throw DirectoryException.NotConfigured
+            val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
+            
+            try {
+                client.removeNoiseEndpoint(transport)
+            } catch (e: Exception) {
+                throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
+            }
         }
     }
     
@@ -221,8 +290,24 @@ class DirectoryService private constructor(private val context: Context) {
      * Pubky SDK implementation
      */
     private suspend fun discoverPaymentMethodsPubky(recipientPubkey: String): List<DirectoryPaymentMethod> {
-        // TODO: Implement using PaykitMobile FFI
-        return emptyList()
+        val client = paykitClient ?: throw DirectoryException.NotConfigured
+        
+        // Use configured transport or create a new one
+        val transport = unauthenticatedTransport ?: run {
+            val adapter = PubkyUnauthenticatedStorageAdapter(homeserverBaseURL)
+            UnauthenticatedTransportFfi.fromCallback(adapter).also {
+                unauthenticatedTransport = it
+            }
+        }
+        
+        return try {
+            val supportedPayments = client.fetchSupportedPayments(transport, recipientPubkey)
+            supportedPayments.entries.map { entry ->
+                DirectoryPaymentMethod(methodId = entry.methodId, endpoint = entry.endpoint)
+            }
+        } catch (e: Exception) {
+            throw DirectoryException.NetworkError(e.message ?: "Unknown error")
+        }
     }
     
     // MARK: - Payment Method Publishing
@@ -244,8 +329,17 @@ class DirectoryService private constructor(private val context: Context) {
             }
             mockStorage[ownerPubkey]!![path] = endpoint
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryException.NotConfigured
+            val client = paykitClient ?: throw DirectoryException.NotConfigured
+            val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
+            
+            val methodIdObj = MethodId(methodId)
+            val endpointData = EndpointData(endpoint)
+            
+            try {
+                client.publishPaymentEndpoint(transport, methodIdObj, endpointData)
+            } catch (e: Exception) {
+                throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
+            }
         }
     }
     
@@ -262,8 +356,16 @@ class DirectoryService private constructor(private val context: Context) {
             val path = "$PAYKIT_PATH_PREFIX$methodId"
             mockStorage[ownerPubkey]?.remove(path)
         } else {
-            // TODO: Implement using PaykitMobile FFI
-            throw DirectoryException.NotConfigured
+            val client = paykitClient ?: throw DirectoryException.NotConfigured
+            val transport = authenticatedTransport ?: throw DirectoryException.NotConfigured
+            
+            val methodIdObj = MethodId(methodId)
+            
+            try {
+                client.removePaymentEndpoint(transport, methodIdObj)
+            } catch (e: Exception) {
+                throw DirectoryException.PublishFailed(e.message ?: "Unknown error")
+            }
         }
     }
     

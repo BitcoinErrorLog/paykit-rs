@@ -34,7 +34,11 @@ pub mod config {
         format!(
             "{}_{}",
             prefix,
-            uuid::Uuid::new_v4().to_string().chars().take(8).collect::<String>()
+            uuid::Uuid::new_v4()
+                .to_string()
+                .chars()
+                .take(8)
+                .collect::<String>()
         )
     }
 }

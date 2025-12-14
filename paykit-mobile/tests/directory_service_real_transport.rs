@@ -30,7 +30,7 @@ async fn test_unauthenticated_get_success() {
 
     // Verify mock server is set up correctly
     // In full implementation, would test actual HTTP request to mock server
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -47,7 +47,7 @@ async fn test_unauthenticated_get_not_found() {
         .await;
 
     // Test would verify 404 is handled correctly
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -67,14 +67,14 @@ async fn test_unauthenticated_list_success() {
         .await;
 
     // Test would verify list parsing
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
 async fn test_unauthenticated_network_error() {
     // Test handling of network errors (timeout, connection refused, etc.)
     // This would test error handling in the adapter
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 // ============================================================================
@@ -97,7 +97,7 @@ async fn test_authenticated_put_success() {
 
     // Verify mock server is set up correctly
     // In full implementation, would test actual HTTP PUT request
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -114,7 +114,7 @@ async fn test_authenticated_delete_success() {
         .await;
 
     // Test would verify DELETE operation
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -131,7 +131,7 @@ async fn test_authenticated_permission_denied() {
         .await;
 
     // Test would verify error handling
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 // ============================================================================
@@ -145,7 +145,10 @@ async fn test_discover_payment_methods() {
 
     // Mock directory listing
     Mock::given(method("GET"))
-        .and(path(format!("/pubky{}/pub/paykit.app/v0/endpoints", owner_pubkey)))
+        .and(path(format!(
+            "/pubky{}/pub/paykit.app/v0/endpoints",
+            owner_pubkey
+        )))
         .and(query_param("shallow", "true"))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(serde_json::json!(["lightning", "onchain"])),
@@ -154,7 +157,7 @@ async fn test_discover_payment_methods() {
         .await;
 
     // Test would verify payment method discovery
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -187,7 +190,7 @@ async fn test_discover_noise_endpoint() {
 
     // Verify mock server is set up correctly
     // In full implementation, would test actual endpoint discovery
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -196,7 +199,7 @@ async fn test_publish_noise_endpoint() {
     let owner_pubkey = "test_owner_pubkey";
     let device_id = "device1";
 
-    let endpoint_json = serde_json::json!({
+    let _endpoint_json = serde_json::json!({
         "host": "127.0.0.1",
         "port": 9999,
         "server_pubkey_hex": "abcdef1234567890"
@@ -213,7 +216,7 @@ async fn test_publish_noise_endpoint() {
         .await;
 
     // Test would verify endpoint publishing
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
@@ -233,7 +236,7 @@ async fn test_remove_noise_endpoint() {
         .await;
 
     // Test would verify endpoint removal
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 // ============================================================================
@@ -244,18 +247,17 @@ async fn test_remove_noise_endpoint() {
 async fn test_timeout_handling() {
     // Test timeout scenarios
     // This would test that timeouts are handled gracefully
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
 async fn test_retry_on_failure() {
     // Test retry logic for transient failures
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
 
 #[tokio::test]
 async fn test_fallback_to_mock() {
     // Test that transport falls back to mock when homeserver is unavailable
-    assert!(true);
+    // Placeholder test - infrastructure verification only
 }
-

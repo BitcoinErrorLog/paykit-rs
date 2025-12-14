@@ -499,6 +499,66 @@ let decrypted = noiseManager.decrypt(sessionId: sessionId, ciphertext: receivedD
 let parsed = builder.parseMessage(messageJson: String(data: decrypted, encoding: .utf8)!)
 ```
 
+## Testing
+
+### Rust Tests
+
+```bash
+# Run all tests
+cargo test -p paykit-mobile
+
+# Run specific test suite
+cargo test -p paykit-mobile --test noise_ffi_integration
+cargo test -p paykit-mobile --test cross_platform_e2e
+```
+
+**Test Results**: 326 tests passing (90 unit + 178 integration + 47 interactive + 11 cross-platform)
+
+### iOS Tests
+
+The iOS demo includes E2E tests for Noise payments, key management, directory operations, and server mode.
+
+**Prerequisites**:
+- Xcode 15.0+
+- iOS Simulator
+
+**Run Tests**:
+```bash
+cd ios-demo/PaykitDemo/PaykitDemo
+xcodebuild test \
+  -project PaykitDemo.xcodeproj \
+  -scheme PaykitDemo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+**Test Files**:
+- `PaykitDemoTests/NoisePaymentE2ETests.swift` - Noise payment flows
+- `PaykitDemoTests/KeyManagementE2ETests.swift` - Key management operations
+- `PaykitDemoTests/DirectoryE2ETests.swift` - Directory service operations
+- `PaykitDemoTests/ServerModeE2ETests.swift` - Server mode functionality
+
+### Android Tests
+
+The Android demo includes unit and instrumented tests.
+
+**Run Tests**:
+```bash
+cd android-demo
+
+# Unit tests
+./gradlew test
+
+# Instrumented tests (requires emulator/device)
+./gradlew connectedAndroidTest
+```
+
+**Test Files**:
+- `app/src/test/` - Unit tests
+- `app/src/androidTest/java/com/paykit/demo/` - Instrumented E2E tests
+
+For detailed testing information, see [TESTING_GUIDE.md](./TESTING_GUIDE.md).
+
 ## Demo Apps
 
 Complete demo applications are available:

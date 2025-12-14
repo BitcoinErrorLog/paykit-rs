@@ -145,30 +145,71 @@ cargo test -p paykit-mobile --test noise_server_mode
 
 ### iOS Tests (Xcode)
 
-1. Open `paykit-mobile/ios-demo/PaykitDemo/PaykitDemo.xcodeproj`
-2. Select a simulator target
-3. Press `Cmd+U` to run tests
-4. Or use command line:
+**Prerequisites**:
+- Xcode 15.0+
+- iOS Simulator (iPhone 17 Pro or later recommended)
+- Test target `PaykitDemoTests` is configured in the project
 
+**From Xcode**:
+1. Open `paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/PaykitDemo.xcodeproj`
+2. Select the `PaykitDemo` scheme
+3. Select a simulator target (e.g., iPhone 17 Pro)
+4. Press `Cmd+U` to run all tests
+5. Or select specific test classes/functions in the test navigator
+
+**From Command Line**:
 ```bash
-cd paykit-mobile/ios-demo/PaykitDemo
+cd paykit-mobile/ios-demo/PaykitDemo/PaykitDemo
 xcodebuild test \
   -project PaykitDemo.xcodeproj \
   -scheme PaykitDemo \
-  -destination 'platform=iOS Simulator,name=iPhone 15'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
 ```
+
+**Test Infrastructure**:
+- Test target: `PaykitDemoTests` (unit test bundle)
+- Test files: Located in `PaykitDemoTests/` directory
+- Test helpers: `TestHelpers.swift` provides mock services and utilities
+- All tests use async/await for asynchronous operations
+
+**Known Issues**:
+- Test target must be built before running tests
+- Some tests may require network connectivity for directory operations
 
 ### Android Tests (Gradle)
 
+**Prerequisites**:
+- Android SDK 26+
+- Gradle 9.0+
+- Java 17+
+
+**Unit Tests**:
 ```bash
 cd paykit-mobile/android-demo
 
-# Unit tests
+# Run all unit tests
 ./gradlew test
 
-# Instrumented tests (requires emulator/device)
+# Run specific test class
+./gradlew test --tests "com.paykit.demo.KeyManagementE2ETest"
+```
+
+**Instrumented Tests** (requires emulator or device):
+```bash
+# Start emulator first, then:
 ./gradlew connectedAndroidTest
 ```
+
+**Test Infrastructure**:
+- Unit tests: `app/src/test/` - JUnit4 tests
+- Instrumented tests: `app/src/androidTest/` - Espresso UI tests
+- Mock services available for testing without network
+- All tests use Kotlin Coroutines for async operations
+
+**Test Results**:
+- Unit tests: Located in `build/test-results/test/`
+- Instrumented tests: Located in `build/outputs/androidTest-results/`
 
 ---
 

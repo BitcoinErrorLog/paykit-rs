@@ -53,7 +53,8 @@ fn test_server_config_various_ports() {
 fn test_server_publishes_endpoint_for_discovery() {
     // Simulate server publishing its endpoint for clients to discover
     let server_auth = AuthenticatedTransportFFI::new_mock("server_user".to_string());
-    let client_unauth = UnauthenticatedTransportFFI::from_authenticated(server_auth.clone()).unwrap();
+    let client_unauth =
+        UnauthenticatedTransportFFI::from_authenticated(server_auth.clone()).unwrap();
 
     // Server generates X25519 keypair and publishes endpoint
     let server_noise_pubkey = "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd";
@@ -164,10 +165,7 @@ fn test_server_rejects_invalid_request() {
     )
     .unwrap();
 
-    assert!(matches!(
-        error.message_type,
-        NoisePaymentMessageType::Error
-    ));
+    assert!(matches!(error.message_type, NoisePaymentMessageType::Error));
     assert!(error.payload_json.contains("unsupported_method"));
 }
 
@@ -262,7 +260,7 @@ fn test_server_handles_multiple_client_requests() {
     // Simulate server handling requests from multiple clients
 
     // Client 1 request
-    let request1 = create_receipt_request_message(
+    let _request1 = create_receipt_request_message(
         "multi_rcpt_001".to_string(),
         "client1_pk".to_string(),
         "server_pk".to_string(),
@@ -273,7 +271,7 @@ fn test_server_handles_multiple_client_requests() {
     .unwrap();
 
     // Client 2 request
-    let request2 = create_receipt_request_message(
+    let _request2 = create_receipt_request_message(
         "multi_rcpt_002".to_string(),
         "client2_pk".to_string(),
         "server_pk".to_string(),
@@ -333,8 +331,7 @@ fn test_server_removes_endpoint_on_shutdown() {
     .unwrap();
 
     // Verify published
-    let endpoint = discover_noise_endpoint(unauth.clone(), "shutdown_server".to_string())
-        .unwrap();
+    let endpoint = discover_noise_endpoint(unauth.clone(), "shutdown_server".to_string()).unwrap();
     assert!(endpoint.is_some());
 
     // Server shuts down - remove endpoint
@@ -344,4 +341,3 @@ fn test_server_removes_endpoint_on_shutdown() {
     let endpoint = discover_noise_endpoint(unauth, "shutdown_server".to_string()).unwrap();
     assert!(endpoint.is_none());
 }
-

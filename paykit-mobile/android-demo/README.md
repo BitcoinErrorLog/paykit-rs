@@ -465,16 +465,43 @@ Payment Request Received
 
 ## Testing
 
-### Real Features
+### Running Tests
 
-Test the key management features:
+The Android demo includes unit tests and instrumented E2E tests.
+
+**Unit Tests**:
+```bash
+cd android-demo
+./gradlew test
+```
+
+**Instrumented Tests** (requires emulator or device):
+```bash
+./gradlew connectedAndroidTest
+```
+
+**Test Files**:
+- `app/src/test/` - Unit tests for individual components
+- `app/src/androidTest/java/com/paykit/demo/` - E2E tests:
+  - `NoisePaymentE2ETest.kt` - Noise payment flows
+  - `KeyManagementE2ETest.kt` - Key management operations
+  - `DirectoryE2ETest.kt` - Directory service operations
+  - `ServerModeE2ETest.kt` - Server mode functionality
+
+**Test Infrastructure**:
+- Uses JUnit4 and Espresso for UI testing
+- Mock services available for testing without network
+- All tests use Kotlin Coroutines for async operations
+
+### Manual Testing
+
+**Real Features**:
 1. Go to Settings → Manage Keys
 2. Generate a new keypair (or one is created automatically)
 3. Export with password
 4. Import from backup
 
-### Demo Features
-
+**Demo Features**:
 The following use sample data for UI demonstration:
 - Subscriptions: Empty state initially
 - Auto-Pay: Basic toggle only

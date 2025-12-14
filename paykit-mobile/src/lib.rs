@@ -2102,7 +2102,7 @@ mod tests {
             fn send_to_address(
                 &self,
                 _address: String,
-                amount_sats: u64,
+                _amount_sats: u64,
                 _fee_rate: Option<f64>,
             ) -> Result<executor_ffi::BitcoinTxResultFFI> {
                 self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -2234,8 +2234,8 @@ mod tests {
         impl executor_ffi::BitcoinExecutorFFI for MockBitcoinExecutor {
             fn send_to_address(
                 &self,
-                address: String,
-                amount_sats: u64,
+                _address: String,
+                _amount_sats: u64,
                 _fee_rate: Option<f64>,
             ) -> Result<executor_ffi::BitcoinTxResultFFI> {
                 Ok(executor_ffi::BitcoinTxResultFFI {

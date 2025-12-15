@@ -8345,10 +8345,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Transport(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8356,10 +8356,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Validation(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8367,10 +8367,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NotFound(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8378,10 +8378,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Serialization(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8389,10 +8389,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class Internal(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8400,10 +8400,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class NetworkTimeout(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8411,10 +8411,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class ConnectionException(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8422,10 +8422,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class AuthenticationException(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8433,10 +8433,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class SessionException(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8444,10 +8444,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class RateLimitException(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     /**
@@ -8455,10 +8455,10 @@ sealed class PaykitMobileException: Exception() {
      */
     class PermissionDenied(
         
-        val `message`: String
+        val `msg`: String
         ) : PaykitMobileException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
 
@@ -8516,57 +8516,57 @@ public object FfiConverterTypePaykitMobileError : FfiConverterRustBuffer<PaykitM
             is PaykitMobileException.Transport -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.Validation -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.NotFound -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.Serialization -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.Internal -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.NetworkTimeout -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.ConnectionException -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.AuthenticationException -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.SessionException -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.RateLimitException -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is PaykitMobileException.PermissionDenied -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
         }
     }
@@ -8575,57 +8575,57 @@ public object FfiConverterTypePaykitMobileError : FfiConverterRustBuffer<PaykitM
         when(value) {
             is PaykitMobileException.Transport -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.Validation -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.NotFound -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.Serialization -> {
                 buf.putInt(4)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.Internal -> {
                 buf.putInt(5)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.NetworkTimeout -> {
                 buf.putInt(6)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.ConnectionException -> {
                 buf.putInt(7)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.AuthenticationException -> {
                 buf.putInt(8)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.SessionException -> {
                 buf.putInt(9)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.RateLimitException -> {
                 buf.putInt(10)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is PaykitMobileException.PermissionDenied -> {
                 buf.putInt(11)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -8867,18 +8867,18 @@ sealed class StorageCacheException: Exception() {
     
     class Storage(
         
-        val `message`: String
+        val `msg`: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     class Lock(
         
-        val `message`: String
+        val `msg`: String
         ) : StorageCacheException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
 
@@ -8909,12 +8909,12 @@ public object FfiConverterTypeStorageCacheError : FfiConverterRustBuffer<Storage
             is StorageCacheException.Storage -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is StorageCacheException.Lock -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
         }
     }
@@ -8923,12 +8923,12 @@ public object FfiConverterTypeStorageCacheError : FfiConverterRustBuffer<Storage
         when(value) {
             is StorageCacheException.Storage -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is StorageCacheException.Lock -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

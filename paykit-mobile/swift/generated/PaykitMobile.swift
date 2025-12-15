@@ -8572,67 +8572,67 @@ public enum PaykitMobileError {
      * Transport layer error (network, I/O).
      */
     case Transport(
-        message: String
+        msg: String
     )
     /**
      * Validation error (invalid input, format).
      */
     case Validation(
-        message: String
+        msg: String
     )
     /**
      * Resource not found.
      */
     case NotFound(
-        message: String
+        msg: String
     )
     /**
      * Serialization/deserialization error.
      */
     case Serialization(
-        message: String
+        msg: String
     )
     /**
      * Internal error (unexpected state).
      */
     case Internal(
-        message: String
+        msg: String
     )
     /**
      * Network timeout error.
      */
     case NetworkTimeout(
-        message: String
+        msg: String
     )
     /**
      * Connection refused or failed.
      */
     case ConnectionError(
-        message: String
+        msg: String
     )
     /**
      * Authentication failed.
      */
     case AuthenticationError(
-        message: String
+        msg: String
     )
     /**
      * Session expired or invalid.
      */
     case SessionError(
-        message: String
+        msg: String
     )
     /**
      * Rate limit exceeded.
      */
     case RateLimitError(
-        message: String
+        msg: String
     )
     /**
      * Permission denied.
      */
     case PermissionDenied(
-        message: String
+        msg: String
     )
 
     fileprivate static func uniffiErrorHandler(_ error: RustBuffer) throws -> Error {
@@ -8652,37 +8652,37 @@ public struct FfiConverterTypePaykitMobileError: FfiConverterRustBuffer {
 
         
         case 1: return .Transport(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 2: return .Validation(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 3: return .NotFound(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 4: return .Serialization(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 5: return .Internal(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 6: return .NetworkTimeout(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 7: return .ConnectionError(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 8: return .AuthenticationError(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 9: return .SessionError(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 10: return .RateLimitError(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 11: return .PermissionDenied(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
 
          default: throw UniffiInternalError.unexpectedEnumCase
@@ -8696,59 +8696,59 @@ public struct FfiConverterTypePaykitMobileError: FfiConverterRustBuffer {
 
         
         
-        case let .Transport(message):
+        case let .Transport(msg):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .Validation(message):
+        case let .Validation(msg):
             writeInt(&buf, Int32(2))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .NotFound(message):
+        case let .NotFound(msg):
             writeInt(&buf, Int32(3))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .Serialization(message):
+        case let .Serialization(msg):
             writeInt(&buf, Int32(4))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .Internal(message):
+        case let .Internal(msg):
             writeInt(&buf, Int32(5))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .NetworkTimeout(message):
+        case let .NetworkTimeout(msg):
             writeInt(&buf, Int32(6))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .ConnectionError(message):
+        case let .ConnectionError(msg):
             writeInt(&buf, Int32(7))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .AuthenticationError(message):
+        case let .AuthenticationError(msg):
             writeInt(&buf, Int32(8))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .SessionError(message):
+        case let .SessionError(msg):
             writeInt(&buf, Int32(9))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .RateLimitError(message):
+        case let .RateLimitError(msg):
             writeInt(&buf, Int32(10))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .PermissionDenied(message):
+        case let .PermissionDenied(msg):
             writeInt(&buf, Int32(11))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         }
     }
@@ -9097,10 +9097,10 @@ public enum StorageCacheError {
     
     
     case Storage(
-        message: String
+        msg: String
     )
     case Lock(
-        message: String
+        msg: String
     )
 
     fileprivate static func uniffiErrorHandler(_ error: RustBuffer) throws -> Error {
@@ -9120,10 +9120,10 @@ public struct FfiConverterTypeStorageCacheError: FfiConverterRustBuffer {
 
         
         case 1: return .Storage(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
         case 2: return .Lock(
-            message: try FfiConverterString.read(from: &buf)
+            msg: try FfiConverterString.read(from: &buf)
             )
 
          default: throw UniffiInternalError.unexpectedEnumCase
@@ -9137,14 +9137,14 @@ public struct FfiConverterTypeStorageCacheError: FfiConverterRustBuffer {
 
         
         
-        case let .Storage(message):
+        case let .Storage(msg):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         
-        case let .Lock(message):
+        case let .Lock(msg):
             writeInt(&buf, Int32(2))
-            FfiConverterString.write(message, into: &buf)
+            FfiConverterString.write(msg, into: &buf)
             
         }
     }

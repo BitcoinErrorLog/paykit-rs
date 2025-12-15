@@ -4,6 +4,49 @@ All notable changes to the paykit-mobile crate are documented in this file.
 
 ## [Unreleased]
 
+### Added - Bitkit Advanced Features & Services (Phase 3 & 4)
+
+This release completes the Bitkit integration with advanced UI components and service integration templates.
+
+**Phase 3: Advanced UI Components**
+
+**iOS Components (SwiftUI):**
+- `BitkitSubscriptionsView` - Subscription management with proration calculator
+- `BitkitAutoPayView` - Complete auto-pay settings UI
+- `BitkitPaymentRequestsView` - Payment request creation and management
+- `BitkitQRScannerView` - QR code scanning with Paykit URI parsing
+- `BitkitSettingsView` - App settings and configuration
+- `BitkitIdentityListView` - Multiple identity management
+
+**Android Components (Jetpack Compose):**
+- `BitkitSubscriptionsScreen` - Subscription management
+- `BitkitAutoPayScreen` - Auto-pay settings UI
+- `BitkitPaymentRequestsScreen` - Payment request management
+- `BitkitQRScannerScreen` - QR code scanning
+- `BitkitSettingsScreen` - App settings
+- `BitkitIdentityListScreen` - Identity management
+
+**Phase 4: Service Integration Templates**
+
+**iOS Services:**
+- `BitkitDirectoryService` - Directory operations template
+- `BitkitPubkyRingIntegration` - Pubky Ring integration template
+- `BitkitNoisePaymentService` - Noise payment coordination template
+
+**Autopay Integration:**
+- `BitkitAutoPayViewModel` (iOS/Android) - Complete autopay logic
+- `AutoPayStorageProtocol` - Storage interface for Bitkit implementation
+- Full integration with `PaymentRequestService` for automatic payments
+
+**Documentation:**
+- `BITKIT_COMPLETE_INTEGRATION.md` - Complete integration guide covering all phases
+
+**Integration Requirements:**
+- Bitkit must implement storage protocols
+- Bitkit must implement service methods using their Pubky SDK
+- Bitkit must implement Pubky Ring URL scheme handling
+- Bitkit must implement Noise protocol handshake
+
 ### Added - Bitkit Core UI Components (Phase 2)
 
 This release adds reusable UI components for core Paykit features, ported from the demo apps for Bitkit integration.

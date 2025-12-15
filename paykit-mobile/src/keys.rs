@@ -101,12 +101,12 @@ pub fn ed25519_keypair_from_secret(secret_key_hex: String) -> Result<Ed25519Keyp
     use ed25519_dalek::SigningKey;
 
     let secret_bytes = hex::decode(&secret_key_hex).map_err(|e| PaykitMobileError::Validation {
-        message: format!("Invalid hex: {}", e),
+        msg: format!("Invalid hex: {}", e),
     })?;
 
     if secret_bytes.len() != 32 {
         return Err(PaykitMobileError::Validation {
-            message: format!("Secret key must be 32 bytes, got {}", secret_bytes.len()),
+            msg: format!("Secret key must be 32 bytes, got {}", secret_bytes.len()),
         });
     }
 
@@ -202,16 +202,16 @@ pub fn verify_signature(
     let public_bytes = hex_to_32_bytes(&public_key_hex)?;
     let verifying_key =
         VerifyingKey::from_bytes(&public_bytes).map_err(|e| PaykitMobileError::Validation {
-            message: format!("Invalid public key: {}", e),
+            msg: format!("Invalid public key: {}", e),
         })?;
 
     let sig_bytes = hex::decode(&signature_hex).map_err(|e| PaykitMobileError::Validation {
-        message: format!("Invalid signature hex: {}", e),
+        msg: format!("Invalid signature hex: {}", e),
     })?;
 
     if sig_bytes.len() != 64 {
         return Err(PaykitMobileError::Validation {
-            message: format!("Signature must be 64 bytes, got {}", sig_bytes.len()),
+            msg: format!("Signature must be 64 bytes, got {}", sig_bytes.len()),
         });
     }
 
@@ -251,13 +251,13 @@ pub fn export_keypair_to_backup(secret_key_hex: String, password: String) -> Res
     Argon2::default()
         .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
         .map_err(|e| PaykitMobileError::Internal {
-            message: format!("Key derivation failed: {}", e),
+            msg: format!("Key derivation failed: {}", e),
         })?;
 
     // Encrypt with AES-GCM
     let cipher =
         Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| PaykitMobileError::Internal {
-            message: format!("Cipher init failed: {}", e),
+            msg: format!("Cipher init failed: {}", e),
         })?;
 
     let mut nonce_bytes = [0u8; 12];
@@ -268,7 +268,7 @@ pub fn export_keypair_to_backup(secret_key_hex: String, password: String) -> Res
         cipher
             .encrypt(nonce, secret_bytes.as_ref())
             .map_err(|e| PaykitMobileError::Internal {
-                message: format!("Encryption failed: {}", e),
+                msg: format!("Encryption failed: {}", e),
             })?;
 
     // Get public key for identification
@@ -303,22 +303,22 @@ pub fn import_keypair_from_backup(backup: KeyBackup, password: String) -> Result
 
     if backup.version != 1 {
         return Err(PaykitMobileError::Validation {
-            message: format!("Unsupported backup version: {}", backup.version),
+            msg: format!("Unsupported backup version: {}", backup.version),
         });
     }
 
     let salt = hex::decode(&backup.salt_hex).map_err(|e| PaykitMobileError::Validation {
-        message: format!("Invalid salt: {}", e),
+        msg: format!("Invalid salt: {}", e),
     })?;
 
     let nonce_bytes =
         hex::decode(&backup.nonce_hex).map_err(|e| PaykitMobileError::Validation {
-            message: format!("Invalid nonce: {}", e),
+            msg: format!("Invalid nonce: {}", e),
         })?;
 
     let encrypted =
         hex::decode(&backup.encrypted_data_hex).map_err(|e| PaykitMobileError::Validation {
-            message: format!("Invalid encrypted data: {}", e),
+            msg: format!("Invalid encrypted data: {}", e),
         })?;
 
     // Derive encryption key from password
@@ -326,25 +326,25 @@ pub fn import_keypair_from_backup(backup: KeyBackup, password: String) -> Result
     Argon2::default()
         .hash_password_into(password.as_bytes(), &salt, &mut encryption_key)
         .map_err(|e| PaykitMobileError::Internal {
-            message: format!("Key derivation failed: {}", e),
+            msg: format!("Key derivation failed: {}", e),
         })?;
 
     // Decrypt
     let cipher =
         Aes256Gcm::new_from_slice(&encryption_key).map_err(|e| PaykitMobileError::Internal {
-            message: format!("Cipher init failed: {}", e),
+            msg: format!("Cipher init failed: {}", e),
         })?;
 
     if nonce_bytes.len() != 12 {
         return Err(PaykitMobileError::Validation {
-            message: "Invalid nonce length".to_string(),
+            msg: "Invalid nonce length".to_string(),
         });
     }
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let decrypted = cipher.decrypt(nonce, encrypted.as_ref()).map_err(|_| {
         PaykitMobileError::AuthenticationError {
-            message: "Invalid password or corrupted backup".to_string(),
+            msg: "Invalid password or corrupted backup".to_string(),
         }
     })?;
 
@@ -354,7 +354,7 @@ pub fn import_keypair_from_backup(backup: KeyBackup, password: String) -> Result
     // Verify public key matches
     if keypair.public_key_z32 != backup.public_key_z32 {
         return Err(PaykitMobileError::Validation {
-            message: "Backup public key mismatch".to_string(),
+            msg: "Backup public key mismatch".to_string(),
         });
     }
 
@@ -393,12 +393,12 @@ pub fn generate_device_id() -> String {
 
 fn hex_to_32_bytes(hex_str: &str) -> Result<[u8; 32]> {
     let bytes = hex::decode(hex_str).map_err(|e| PaykitMobileError::Validation {
-        message: format!("Invalid hex: {}", e),
+        msg: format!("Invalid hex: {}", e),
     })?;
 
     if bytes.len() != 32 {
         return Err(PaykitMobileError::Validation {
-            message: format!("Expected 32 bytes, got {}", bytes.len()),
+            msg: format!("Expected 32 bytes, got {}", bytes.len()),
         });
     }
 
@@ -447,7 +447,7 @@ fn z32_decode(s: &str) -> Result<[u8; 32]> {
     for c in s.chars() {
         let value = ALPHABET.iter().position(|&x| x == c as u8).ok_or_else(|| {
             PaykitMobileError::Validation {
-                message: format!("Invalid z-base32 character: {}", c),
+                msg: format!("Invalid z-base32 character: {}", c),
             }
         })? as u64;
 
@@ -462,7 +462,7 @@ fn z32_decode(s: &str) -> Result<[u8; 32]> {
 
     if result.len() != 32 {
         return Err(PaykitMobileError::Validation {
-            message: format!(
+            msg: format!(
                 "Invalid z-base32 length: expected 32 bytes, got {}",
                 result.len()
             ),

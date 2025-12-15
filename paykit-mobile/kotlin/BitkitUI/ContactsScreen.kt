@@ -10,7 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.paykit.mobile.bitkit.Contact
+// Contact is defined in StorageProtocols.kt
 
 /**
  * Contacts view model for Bitkit integration
@@ -45,20 +45,14 @@ class BitkitContactsViewModel(private val contactStorage: ContactStorageProtocol
     }
     
     fun addContact(name: String, pubkey: String) {
-        val contact = Contact(
-            id = java.util.UUID.randomUUID().toString(),
-            name = name,
-            pubkey = pubkey
-        )
-        contacts = contacts + contact
-        filteredContacts = contacts
-        // Bitkit should persist this to their storage
+        val contact = Contact(name = name, pubkey = pubkey)
+        contactStorage.addContact(contact)
+        loadContacts()
     }
     
     fun deleteContact(contact: Contact) {
-        contacts = contacts.filter { it.id != contact.id }
-        filteredContacts = contacts
-        // Bitkit should delete from their storage
+        contactStorage.deleteContact(contact.id)
+        loadContacts()
     }
 }
 

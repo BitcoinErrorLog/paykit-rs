@@ -337,7 +337,7 @@ impl DirectoryOperationsAsync {
     #[uniffi::constructor]
     pub fn new() -> Result<Arc<Self>, PaykitMobileError> {
         let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
-            message: format!("Failed to create runtime: {}", e),
+            msg: format!("Failed to create runtime: {}", e),
         })?;
         Ok(Arc::new(Self { runtime }))
     }
@@ -513,7 +513,7 @@ impl ExecutorAsyncBridge {
 impl ExecutorAsyncBridge {
     fn with_timeout_internal(timeout_ms: u64) -> Result<Arc<Self>, PaykitMobileError> {
         let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
-            message: format!("Failed to create runtime: {}", e),
+            msg: format!("Failed to create runtime: {}", e),
         })?;
         Ok(Arc::new(Self {
             runtime,
@@ -543,10 +543,10 @@ impl ExecutorAsyncBridge {
             })
             .await
             .map_err(|_| PaykitMobileError::Transport {
-                message: "Bitcoin operation timed out".to_string(),
+                msg: "Bitcoin operation timed out".to_string(),
             })?
             .map_err(|e| PaykitMobileError::Internal {
-                message: format!("Task join error: {}", e),
+                msg: format!("Task join error: {}", e),
             })?
         })
     }
@@ -573,10 +573,10 @@ impl ExecutorAsyncBridge {
             })
             .await
             .map_err(|_| PaykitMobileError::Transport {
-                message: "Lightning operation timed out".to_string(),
+                msg: "Lightning operation timed out".to_string(),
             })?
             .map_err(|e| PaykitMobileError::Internal {
-                message: format!("Task join error: {}", e),
+                msg: format!("Task join error: {}", e),
             })?
         })
     }
@@ -767,7 +767,7 @@ mod tests {
         let result: Result<i32, _> = bridge.execute_bitcoin_operation(
             || {
                 Err(PaykitMobileError::Transport {
-                    message: "Network error".to_string(),
+                    msg: "Network error".to_string(),
                 })
             },
             None,

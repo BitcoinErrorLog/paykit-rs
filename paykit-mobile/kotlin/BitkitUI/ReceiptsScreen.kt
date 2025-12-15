@@ -40,14 +40,33 @@ class BitkitReceiptsViewModel(private val receiptStorage: ReceiptStorageProtocol
         isLoading = false
     }
     
+    // Identity checker callback - Bitkit must provide this to determine payment direction
+    var isMyPubkey: ((String) -> Boolean)? = null
+    
     fun applyFilters() {
         var filtered = receipts
         
-        // Apply direction filter (Bitkit should implement direction detection)
+        // Apply direction filter
         when (filterDirection) {
             PaymentDirectionFilter.ALL -> { /* No filter */ }
-            PaymentDirectionFilter.SENT -> { /* Filter sent */ }
-            PaymentDirectionFilter.RECEIVED -> { /* Filter received */ }
+            PaymentDirectionFilter.SENT -> {
+                // Filter for sent payments - receipts where we are the payer
+                val checker = isMyPubkey
+                if (checker != null) {
+                    filtered = filtered.filter { receipt ->
+                        checker(receipt.payer)
+                    }
+                }
+            }
+            PaymentDirectionFilter.RECEIVED -> {
+                // Filter for received payments - receipts where we are the payee
+                val checker = isMyPubkey
+                if (checker != null) {
+                    filtered = filtered.filter { receipt ->
+                        checker(receipt.payee)
+                    }
+                }
+            }
         }
         
         // Apply search filter

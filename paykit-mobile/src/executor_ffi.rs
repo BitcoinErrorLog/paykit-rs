@@ -715,7 +715,7 @@ mod tests {
         ) -> Result<BitcoinTxResultFFI, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             self.send_count.fetch_add(1, Ordering::SeqCst);
@@ -738,7 +738,7 @@ mod tests {
         ) -> Result<u64, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             // Simple fee estimation: lower target = higher fee
@@ -751,7 +751,7 @@ mod tests {
         ) -> Result<Option<BitcoinTxResultFFI>, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             if txid.starts_with("mock_txid") {
@@ -777,7 +777,7 @@ mod tests {
         ) -> Result<bool, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             Ok(true)
@@ -815,7 +815,7 @@ mod tests {
         ) -> Result<LightningPaymentResultFFI, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             self.pay_count.fetch_add(1, Ordering::SeqCst);
@@ -835,7 +835,7 @@ mod tests {
         fn decode_invoice(&self, _invoice: String) -> Result<DecodedInvoiceFFI, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             Ok(DecodedInvoiceFFI {
@@ -853,7 +853,7 @@ mod tests {
         fn estimate_fee(&self, _invoice: String) -> Result<u64, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             Ok(100)
@@ -865,7 +865,7 @@ mod tests {
         ) -> Result<Option<LightningPaymentResultFFI>, PaykitMobileError> {
             if self.should_fail {
                 return Err(PaykitMobileError::Transport {
-                    message: "Mock failure".to_string(),
+                    msg: "Mock failure".to_string(),
                 });
             }
             if payment_hash.starts_with("mock_hash") {

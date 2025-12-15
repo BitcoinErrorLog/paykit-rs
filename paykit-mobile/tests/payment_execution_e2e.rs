@@ -102,7 +102,12 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
         }
     }
 
-    fn verify_transaction(&self, txid: String, _address: String, _amount_sats: u64) -> Result<bool> {
+    fn verify_transaction(
+        &self,
+        txid: String,
+        _address: String,
+        _amount_sats: u64,
+    ) -> Result<bool> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
                 message: self.failure_message.clone(),
@@ -234,11 +239,9 @@ impl LightningExecutorFFI for MockLightningExecutorE2E {
 #[test]
 fn test_e2e_onchain_payment_full_flow() {
     // Step 1: Create client with testnet
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Step 2: Register Bitcoin executor
     let executor = Box::new(MockBitcoinExecutorE2E::new());
@@ -278,11 +281,9 @@ fn test_e2e_onchain_payment_full_flow() {
 
 #[test]
 fn test_e2e_onchain_payment_with_custom_fee() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     client
         .register_bitcoin_executor(Box::new(MockBitcoinExecutorE2E::new()))
@@ -321,11 +322,9 @@ fn test_e2e_onchain_payment_with_custom_fee() {
 #[test]
 fn test_e2e_lightning_payment_full_flow() {
     // Step 1: Create client
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Step 2: Register Lightning executor
     let executor = Box::new(MockLightningExecutorE2E::new());
@@ -361,11 +360,9 @@ fn test_e2e_lightning_payment_full_flow() {
 
 #[test]
 fn test_e2e_lightning_payment_with_amount() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     client
         .register_lightning_executor(Box::new(MockLightningExecutorE2E::new()))
@@ -407,11 +404,9 @@ fn test_e2e_payment_method_not_found() {
 
 #[test]
 fn test_e2e_bitcoin_executor_failure() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Register failing executor
     client
@@ -433,11 +428,9 @@ fn test_e2e_bitcoin_executor_failure() {
 
 #[test]
 fn test_e2e_lightning_executor_failure() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Register failing executor
     client
@@ -487,11 +480,9 @@ fn test_e2e_unknown_method_proof_generation() {
 
 #[test]
 fn test_e2e_multiple_sequential_payments() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     client
         .register_bitcoin_executor(Box::new(MockBitcoinExecutorE2E::new()))
@@ -515,11 +506,9 @@ fn test_e2e_multiple_sequential_payments() {
 
 #[test]
 fn test_e2e_mixed_payment_methods() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Register both executors
     client
@@ -575,11 +564,9 @@ fn test_e2e_mainnet_configuration() {
 
 #[test]
 fn test_e2e_testnet_configuration() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     assert_eq!(client.bitcoin_network(), BitcoinNetworkFFI::Testnet);
     assert_eq!(client.lightning_network(), LightningNetworkFFI::Testnet);
@@ -587,11 +574,9 @@ fn test_e2e_testnet_configuration() {
 
 #[test]
 fn test_e2e_regtest_configuration() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Regtest,
-        LightningNetworkFFI::Regtest,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Regtest, LightningNetworkFFI::Regtest)
+            .unwrap();
 
     assert_eq!(client.bitcoin_network(), BitcoinNetworkFFI::Regtest);
     assert_eq!(client.lightning_network(), LightningNetworkFFI::Regtest);

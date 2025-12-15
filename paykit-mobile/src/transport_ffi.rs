@@ -331,7 +331,7 @@ impl AuthenticatedTransportFFI {
         // Validate JSON
         serde_json::from_str::<serde_json::Value>(&session_json).map_err(|e| {
             PaykitMobileError::Serialization {
-                message: format!("Invalid session JSON: {}", e),
+                msg: format!("Invalid session JSON: {}", e),
             }
         })?;
 
@@ -353,7 +353,7 @@ impl AuthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Transport lock poisoned".to_string(),
+                msg: "Transport lock poisoned".to_string(),
             })?;
         Ok(matches!(*backend, StorageBackend::Mock(_)))
     }
@@ -364,13 +364,13 @@ impl AuthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
                 let mut storage = storage.write().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 storage.data.insert(path, content);
                 Ok(())
@@ -381,7 +381,7 @@ impl AuthenticatedTransportFFI {
                     Ok(())
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }
@@ -394,13 +394,13 @@ impl AuthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
                 let storage = storage.read().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 Ok(storage.data.get(&path).cloned())
             }
@@ -410,7 +410,7 @@ impl AuthenticatedTransportFFI {
                     Ok(result.content)
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }
@@ -423,13 +423,13 @@ impl AuthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
                 let mut storage = storage.write().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 storage.data.remove(&path);
                 Ok(())
@@ -440,7 +440,7 @@ impl AuthenticatedTransportFFI {
                     Ok(())
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }
@@ -453,13 +453,13 @@ impl AuthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             StorageBackend::Mock(storage) => {
                 let storage = storage.read().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 Ok(storage
                     .data
@@ -474,7 +474,7 @@ impl AuthenticatedTransportFFI {
                     Ok(result.entries)
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }
@@ -580,7 +580,7 @@ impl UnauthenticatedTransportFFI {
         // Validate JSON
         serde_json::from_str::<serde_json::Value>(&config_json).map_err(|e| {
             PaykitMobileError::Serialization {
-                message: format!("Invalid config JSON: {}", e),
+                msg: format!("Invalid config JSON: {}", e),
             }
         })?;
 
@@ -603,7 +603,7 @@ impl UnauthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
@@ -611,7 +611,7 @@ impl UnauthenticatedTransportFFI {
                 backend: RwLock::new(UnauthenticatedStorageBackend::Mock(storage.clone())),
             })),
             StorageBackend::Callback(_) => Err(PaykitMobileError::Validation {
-                message: "Cannot create unauthenticated transport from callback-based authenticated transport. Use from_callback() instead.".to_string(),
+                msg: "Cannot create unauthenticated transport from callback-based authenticated transport. Use from_callback() instead.".to_string(),
             }),
         }
     }
@@ -625,7 +625,7 @@ impl UnauthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Transport lock poisoned".to_string(),
+                msg: "Transport lock poisoned".to_string(),
             })?;
         Ok(matches!(*backend, UnauthenticatedStorageBackend::Mock(_)))
     }
@@ -636,13 +636,13 @@ impl UnauthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             UnauthenticatedStorageBackend::Mock(storage) => {
                 let storage = storage.read().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 // In mock mode, we ignore owner_pubkey since all data is in one storage
                 let _ = owner_pubkey;
@@ -654,7 +654,7 @@ impl UnauthenticatedTransportFFI {
                     Ok(result.content)
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }
@@ -667,13 +667,13 @@ impl UnauthenticatedTransportFFI {
             .backend
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         match &*backend {
             UnauthenticatedStorageBackend::Mock(storage) => {
                 let storage = storage.read().map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
                 // In mock mode, we ignore owner_pubkey
                 let _ = owner_pubkey;
@@ -690,7 +690,7 @@ impl UnauthenticatedTransportFFI {
                     Ok(result.entries)
                 } else {
                     Err(PaykitMobileError::Transport {
-                        message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        msg: result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     })
                 }
             }

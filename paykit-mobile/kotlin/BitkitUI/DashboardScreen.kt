@@ -18,7 +18,6 @@ import com.paykit.mobile.paykit_mobile.Receipt
 
 /**
  * Dashboard view model for Bitkit integration
- * Bitkit should adapt this to use their storage and data sources
  */
 class BitkitDashboardViewModel(private val paykitClient: PaykitClient) {
     var recentReceipts by mutableStateOf<List<Receipt>>(emptyList())
@@ -94,58 +93,10 @@ class BitkitDashboardViewModel(private val paykitClient: PaykitClient) {
     }
 }
 
-/**
- * Storage protocols for Bitkit to implement
- */
-interface ReceiptStorageProtocol {
-    fun recentReceipts(limit: Int): List<Receipt>
-    fun totalSent(): Long
-    fun totalReceived(): Long
-    fun pendingCount(): Int
-}
-
-interface ContactStorageProtocol {
-    fun listContacts(): List<Contact>
-}
-
-interface AutoPayStorageProtocol {
-    fun getSettings(): AutoPaySettings
-}
-
-interface SubscriptionStorageProtocol {
-    fun activeSubscriptions(): List<Subscription>
-}
-
-interface PaymentRequestStorageProtocol {
-    fun pendingCount(): Int
-}
-
-/**
- * Contact model (placeholder - Bitkit should use their own)
- */
-data class Contact(
-    val id: String,
-    val name: String,
-    val pubkey: String
-)
-
-/**
- * AutoPaySettings (placeholder)
- */
-data class AutoPaySettings(
-    val isEnabled: Boolean = false
-)
-
-/**
- * Subscription (placeholder)
- */
-data class Subscription(
-    val id: String
-)
+// Storage protocols are defined in StorageProtocols.kt
 
 /**
  * Dashboard screen component
- * Bitkit should adapt this to match their design system
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

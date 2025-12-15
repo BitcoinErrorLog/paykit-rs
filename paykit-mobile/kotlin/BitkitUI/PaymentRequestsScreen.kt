@@ -73,6 +73,7 @@ class BitkitPaymentRequestsViewModel(
                     expiresInSecs = expiresInSecs
                 )
                 
+                paymentRequestStorage.addRequest(request)
                 pendingRequests = pendingRequests + request
                 isLoading = false
                 resetForm()
@@ -87,10 +88,12 @@ class BitkitPaymentRequestsViewModel(
     fun handleRequestAction(request: PaymentRequest, action: RequestAction) {
         when (action) {
             is RequestAction.Accept -> {
-                // Bitkit should implement payment request acceptance
+                // Payment request acceptance should trigger payment execution
+                // This is handled by PaymentRequestService
             }
             is RequestAction.Decline -> {
                 pendingRequests = pendingRequests.filter { it.requestId != request.requestId }
+                paymentRequestStorage.deleteRequest(id = request.requestId)
             }
         }
     }
@@ -98,6 +101,7 @@ class BitkitPaymentRequestsViewModel(
     fun deleteRequest(id: String) {
         pendingRequests = pendingRequests.filter { it.requestId != id }
         requestHistory = requestHistory.filter { it.requestId != id }
+        paymentRequestStorage.deleteRequest(id = id)
     }
     
     private fun resetForm() {
@@ -122,7 +126,7 @@ sealed class RequestAction {
 @Composable
 fun BitkitPaymentRequestsScreen(
     viewModel: BitkitPaymentRequestsViewModel,
-    myPublicKey: String = "" // Bitkit should provide this
+    myPublicKey: String
 ) {
     val scope = rememberCoroutineScope()
     
@@ -409,13 +413,4 @@ fun RequestHistoryRow(request: PaymentRequest) {
     }
 }
 
-// Extension for PaymentRequestStorageProtocol
-fun PaymentRequestStorageProtocol.pendingRequests(): List<PaymentRequest> {
-    // Bitkit should implement this
-    return emptyList()
-}
-
-fun PaymentRequestStorageProtocol.requestHistory(): List<PaymentRequest> {
-    // Bitkit should implement this
-    return emptyList()
-}
+// PaymentRequestStorageProtocol methods are defined in StorageProtocols.kt

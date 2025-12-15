@@ -66,7 +66,6 @@ class BitkitPaymentViewModel(private val paykitClient: PaykitClient) {
         
         scope.launch {
             try {
-                // Bitkit should implement endpoint resolution
                 val endpoint = resolveEndpoint(recipientUri)
                 
                 val result = paykitClient.executePayment(
@@ -98,11 +97,15 @@ class BitkitPaymentViewModel(private val paykitClient: PaykitClient) {
         currency = "SAT"
     }
     
-    // Placeholder - Bitkit should implement endpoint resolution
+    // Endpoint resolver callback - Bitkit must provide this
+    var endpointResolver: (suspend (String) -> String)? = null
+    
     private suspend fun resolveEndpoint(recipient: String): String {
-        throw IllegalStateException(
-            "Endpoint resolution not implemented. Bitkit should implement this."
-        )
+        val resolver = endpointResolver
+            ?: throw IllegalStateException(
+                "Endpoint resolver not provided. Set endpointResolver on BitkitPaymentViewModel."
+            )
+        return resolver(recipient)
     }
 }
 

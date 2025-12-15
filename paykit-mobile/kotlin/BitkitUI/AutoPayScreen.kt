@@ -43,7 +43,7 @@ class BitkitAutoPayViewModel(
         val settings = autoPayStorage.getSettings()
         isEnabled = settings.isEnabled
         dailyLimit = settings.globalDailyLimitSats
-        usedToday = 0L // Bitkit should track this separately
+        usedToday = 0L // Tracked separately in view model
         
         // Load peer limits
         peerLimits = autoPayStorage.getPeerLimits().map { storedLimit ->

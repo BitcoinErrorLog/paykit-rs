@@ -137,7 +137,7 @@ impl PaykitMessageBuilder {
             }
         });
         serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -173,7 +173,7 @@ impl PaykitMessageBuilder {
         });
 
         serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -209,7 +209,7 @@ impl PaykitMessageBuilder {
         });
 
         serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -224,7 +224,7 @@ impl PaykitMessageBuilder {
             "payload": null
         });
         serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -247,7 +247,7 @@ impl PaykitMessageBuilder {
             }
         });
         serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -263,12 +263,12 @@ impl PaykitMessageBuilder {
     pub fn parse_message(&self, message_json: String) -> Result<ParsedMessage> {
         let value: serde_json::Value =
             serde_json::from_str(&message_json).map_err(|e| PaykitMobileError::Validation {
-                message: format!("Invalid message JSON: {}", e),
+                msg: format!("Invalid message JSON: {}", e),
             })?;
 
         let msg_type = value.get("type").and_then(|t| t.as_str()).ok_or_else(|| {
             PaykitMobileError::Validation {
-                message: "Missing message type".to_string(),
+                msg: "Missing message type".to_string(),
             }
         })?;
 
@@ -278,7 +278,7 @@ impl PaykitMessageBuilder {
                     value
                         .get("payload")
                         .ok_or_else(|| PaykitMobileError::Validation {
-                            message: "Missing payload".to_string(),
+                            msg: "Missing payload".to_string(),
                         })?;
 
                 let method_id = payload
@@ -304,12 +304,12 @@ impl PaykitMessageBuilder {
                     value
                         .get("payload")
                         .ok_or_else(|| PaykitMobileError::Validation {
-                            message: "Missing payload".to_string(),
+                            msg: "Missing payload".to_string(),
                         })?;
 
                 let receipt = payload.get("provisional_receipt").ok_or_else(|| {
                     PaykitMobileError::Validation {
-                        message: "Missing provisional_receipt".to_string(),
+                        msg: "Missing provisional_receipt".to_string(),
                     }
                 })?;
 
@@ -322,14 +322,14 @@ impl PaykitMessageBuilder {
                     value
                         .get("payload")
                         .ok_or_else(|| PaykitMobileError::Validation {
-                            message: "Missing payload".to_string(),
+                            msg: "Missing payload".to_string(),
                         })?;
 
                 let receipt =
                     payload
                         .get("receipt")
                         .ok_or_else(|| PaykitMobileError::Validation {
-                            message: "Missing receipt".to_string(),
+                            msg: "Missing receipt".to_string(),
                         })?;
 
                 Ok(ParsedMessage::ConfirmReceipt {
@@ -342,7 +342,7 @@ impl PaykitMessageBuilder {
                     value
                         .get("payload")
                         .ok_or_else(|| PaykitMobileError::Validation {
-                            message: "Missing payload".to_string(),
+                            msg: "Missing payload".to_string(),
                         })?;
 
                 let code = payload
@@ -361,7 +361,7 @@ impl PaykitMessageBuilder {
                 })
             }
             _ => Err(PaykitMobileError::Validation {
-                message: format!("Unknown message type: {}", msg_type),
+                msg: format!("Unknown message type: {}", msg_type),
             }),
         }
     }
@@ -378,12 +378,12 @@ impl PaykitMessageBuilder {
     pub fn get_message_type(&self, message_json: String) -> Result<PaykitMessageType> {
         let value: serde_json::Value =
             serde_json::from_str(&message_json).map_err(|e| PaykitMobileError::Validation {
-                message: format!("Invalid message JSON: {}", e),
+                msg: format!("Invalid message JSON: {}", e),
             })?;
 
         let msg_type = value.get("type").and_then(|t| t.as_str()).ok_or_else(|| {
             PaykitMobileError::Validation {
-                message: "Missing message type".to_string(),
+                msg: "Missing message type".to_string(),
             }
         })?;
 
@@ -394,7 +394,7 @@ impl PaykitMessageBuilder {
             "Ack" => Ok(PaykitMessageType::Ack),
             "Error" => Ok(PaykitMessageType::Error),
             _ => Err(PaykitMobileError::Validation {
-                message: format!("Unknown message type: {}", msg_type),
+                msg: format!("Unknown message type: {}", msg_type),
             }),
         }
     }
@@ -431,7 +431,7 @@ impl ReceiptStore {
             .receipts
             .write()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         receipts.insert(receipt.receipt_id.clone(), receipt);
         Ok(())
@@ -443,7 +443,7 @@ impl ReceiptStore {
             .receipts
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         Ok(receipts.get(&receipt_id).cloned())
     }
@@ -454,7 +454,7 @@ impl ReceiptStore {
             .receipts
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         Ok(receipts.values().cloned().collect())
     }
@@ -465,7 +465,7 @@ impl ReceiptStore {
             .receipts
             .write()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         receipts.remove(&receipt_id);
         Ok(())
@@ -477,7 +477,7 @@ impl ReceiptStore {
             self.private_endpoints
                 .write()
                 .map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
         let key = format!("{}:{}", peer, offer.method_id);
         endpoints.insert(key, offer);
@@ -494,7 +494,7 @@ impl ReceiptStore {
             .private_endpoints
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         let key = format!("{}:{}", peer, method_id);
         Ok(endpoints.get(&key).cloned())
@@ -506,7 +506,7 @@ impl ReceiptStore {
             .private_endpoints
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
         let prefix = format!("{}:", peer);
         Ok(endpoints
@@ -523,7 +523,7 @@ impl ReceiptStore {
                 .receipts
                 .write()
                 .map_err(|_| PaykitMobileError::Internal {
-                    message: "Lock poisoned".to_string(),
+                    msg: "Lock poisoned".to_string(),
                 })?;
             receipts.clear();
         }
@@ -532,7 +532,7 @@ impl ReceiptStore {
                 self.private_endpoints
                     .write()
                     .map_err(|_| PaykitMobileError::Internal {
-                        message: "Lock poisoned".to_string(),
+                        msg: "Lock poisoned".to_string(),
                     })?;
             endpoints.clear();
         }
@@ -545,7 +545,7 @@ impl ReceiptStore {
             .receipts
             .read()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         let list: Vec<_> = receipts.values().map(|r| {
@@ -561,7 +561,7 @@ impl ReceiptStore {
         }).collect();
 
         serde_json::to_string(&list).map_err(|e| PaykitMobileError::Serialization {
-            message: e.to_string(),
+            msg: e.to_string(),
         })
     }
 
@@ -569,14 +569,14 @@ impl ReceiptStore {
     pub fn import_receipts_json(&self, json: String) -> Result<u32> {
         let list: Vec<serde_json::Value> =
             serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
 
         let mut receipts = self
             .receipts
             .write()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Lock poisoned".to_string(),
+                msg: "Lock poisoned".to_string(),
             })?;
 
         let mut count = 0;
@@ -784,7 +784,7 @@ impl PaykitInteractiveManagerFFI {
             .generator
             .write()
             .map_err(|_| PaykitMobileError::Internal {
-                message: "Generator lock poisoned".to_string(),
+                msg: "Generator lock poisoned".to_string(),
             })?;
         *guard = Some(generator);
         Ok(())
@@ -847,7 +847,7 @@ impl PaykitInteractiveManagerFFI {
                     self.generator
                         .read()
                         .map_err(|_| PaykitMobileError::Internal {
-                            message: "Lock poisoned".to_string(),
+                            msg: "Lock poisoned".to_string(),
                         })?;
 
                 let generator = match generator_guard.as_ref() {
@@ -979,7 +979,7 @@ impl PaykitInteractiveManagerFFI {
                 // Validate receipt matches request ID
                 if receipt.receipt_id != original_receipt_id {
                     return Err(PaykitMobileError::Validation {
-                        message: format!(
+                        msg: format!(
                             "Receipt ID mismatch: expected {}, got {}",
                             original_receipt_id, receipt.receipt_id
                         ),
@@ -991,10 +991,10 @@ impl PaykitInteractiveManagerFFI {
                 Ok(receipt)
             }
             ParsedMessage::Error { error } => Err(PaykitMobileError::Transport {
-                message: format!("Payment rejected: {} - {}", error.code, error.message),
+                msg: format!("Payment rejected: {} - {}", error.code, error.message),
             }),
             _ => Err(PaykitMobileError::Validation {
-                message: "Unexpected response type".to_string(),
+                msg: "Unexpected response type".to_string(),
             }),
         }
     }

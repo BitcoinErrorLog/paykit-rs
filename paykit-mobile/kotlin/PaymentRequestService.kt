@@ -165,3 +165,8 @@ interface AutopayEvaluator {
      */
     fun evaluate(peerPubkey: String, amount: Long, methodId: String): AutopayEvaluationResult
 }
+
+/**
+ * Extension to make BitkitAutoPayViewModel conform to AutopayEvaluator
+ * The view model already implements evaluate() method
+ */

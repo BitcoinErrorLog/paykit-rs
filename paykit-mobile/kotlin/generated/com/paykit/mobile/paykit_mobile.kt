@@ -381,6 +381,8 @@ internal interface UniffiLib : Library {
             .also { lib: UniffiLib ->
                 uniffiCheckContractApiVersion(lib)
                 uniffiCheckApiChecksums(lib)
+                uniffiCallbackInterfaceBitcoinExecutorFFI.register(lib)
+                uniffiCallbackInterfaceLightningExecutorFFI.register(lib)
                 uniffiCallbackInterfacePubkyAuthenticatedStorageCallback.register(lib)
                 uniffiCallbackInterfacePubkyUnauthenticatedStorageCallback.register(lib)
                 uniffiCallbackInterfaceReceiptGeneratorCallback.register(lib)
@@ -461,14 +463,28 @@ internal interface UniffiLib : Library {
     ): Unit
     fun uniffi_paykit_mobile_fn_method_directoryoperationsasync_remove_payment_endpoint(`ptr`: Pointer,`transport`: Pointer,`methodId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_paykit_mobile_fn_clone_executorasyncbridge(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
+    fun uniffi_paykit_mobile_fn_free_executorasyncbridge(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_paykit_mobile_fn_constructor_executorasyncbridge_new(uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
+    fun uniffi_paykit_mobile_fn_constructor_executorasyncbridge_with_timeout(`timeoutMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
+    fun uniffi_paykit_mobile_fn_method_executorasyncbridge_default_timeout_ms(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     fun uniffi_paykit_mobile_fn_clone_paykitclient(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_paykit_mobile_fn_free_paykitclient(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_paykit_mobile_fn_constructor_paykitclient_new(uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
+    fun uniffi_paykit_mobile_fn_constructor_paykitclient_new_with_network(`bitcoinNetwork`: RustBuffer.ByValue,`lightningNetwork`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
     fun uniffi_paykit_mobile_fn_method_paykitclient_add_contact(`ptr`: Pointer,`transport`: Pointer,`contactPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_paykit_mobile_fn_method_paykitclient_bitcoin_network(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_calculate_proration(`ptr`: Pointer,`currentAmountSats`: Long,`newAmountSats`: Long,`periodStart`: Long,`periodEnd`: Long,`changeDate`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_check_health(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -489,6 +505,8 @@ internal interface UniffiLib : Library {
     ): Int
     fun uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,`recipientPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_execute_payment(`ptr`: Pointer,`methodId`: RustBuffer.ByValue,`endpoint`: RustBuffer.ByValue,`amountSats`: Long,`metadataJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_extract_key_from_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_extract_method_from_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -499,16 +517,24 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_fetch_supported_payments(`ptr`: Pointer,`transport`: Pointer,`ownerPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_generate_payment_proof(`ptr`: Pointer,`methodId`: RustBuffer.ByValue,`executionDataJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_get_health_status(`ptr`: Pointer,`methodId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_get_in_progress_payments(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_get_payment_status(`ptr`: Pointer,`receiptId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_method_paykitclient_has_bitcoin_executor(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    fun uniffi_paykit_mobile_fn_method_paykitclient_has_lightning_executor(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     fun uniffi_paykit_mobile_fn_method_paykitclient_is_method_usable(`ptr`: Pointer,`methodId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     fun uniffi_paykit_mobile_fn_method_paykitclient_is_paykit_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    fun uniffi_paykit_mobile_fn_method_paykitclient_lightning_network(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_list_contacts(`ptr`: Pointer,`transport`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_paykit_mobile_fn_method_paykitclient_list_methods(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -522,6 +548,10 @@ internal interface UniffiLib : Library {
     fun uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,`host`: RustBuffer.ByValue,`port`: Short,`noisePubkey`: RustBuffer.ByValue,`metadata`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_paykit_mobile_fn_method_paykitclient_publish_payment_endpoint(`ptr`: Pointer,`transport`: Pointer,`methodId`: RustBuffer.ByValue,`endpointData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_paykit_mobile_fn_method_paykitclient_register_bitcoin_executor(`ptr`: Pointer,`executor`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_paykit_mobile_fn_method_paykitclient_register_lightning_executor(`ptr`: Pointer,`executor`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(`ptr`: Pointer,`transport`: Pointer,`contactPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -623,6 +653,10 @@ internal interface UniffiLib : Library {
     ): Byte
     fun uniffi_paykit_mobile_fn_method_unauthenticatedtransportffi_list(`ptr`: Pointer,`ownerPubkey`: RustBuffer.ByValue,`prefix`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_init_callback_bitcoinexecutorffi(`handle`: ForeignCallback,
+    ): Unit
+    fun uniffi_paykit_mobile_fn_init_callback_lightningexecutorffi(`handle`: ForeignCallback,
+    ): Unit
     fun uniffi_paykit_mobile_fn_init_callback_pubkyauthenticatedstoragecallback(`handle`: ForeignCallback,
     ): Unit
     fun uniffi_paykit_mobile_fn_init_callback_pubkyunauthenticatedstoragecallback(`handle`: ForeignCallback,
@@ -635,6 +669,10 @@ internal interface UniffiLib : Library {
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_error_message(`code`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_paykit_mobile_fn_func_create_executor_async_bridge(uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
+    fun uniffi_paykit_mobile_fn_func_create_executor_async_bridge_with_timeout(`timeoutMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_interactive_manager(`store`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
     ): Pointer
     fun uniffi_paykit_mobile_fn_func_create_message_builder(uniffi_out_err: UniffiRustCallStatus, 
@@ -801,6 +839,10 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_error_message(
     ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_executor_async_bridge(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_func_create_executor_async_bridge_with_timeout(
+    ): Short
     fun uniffi_paykit_mobile_checksum_func_create_interactive_manager(
     ): Short
     fun uniffi_paykit_mobile_checksum_func_create_message_builder(
@@ -895,7 +937,11 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_method_directoryoperationsasync_remove_payment_endpoint(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_executorasyncbridge_default_timeout_ms(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_add_contact(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_bitcoin_network(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_calculate_proration(
     ): Short
@@ -917,6 +963,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_execute_payment(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_extract_method_from_qr(
@@ -927,15 +975,23 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_fetch_supported_payments(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_generate_payment_proof(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_get_health_status(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_get_in_progress_payments(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_get_payment_status(
     ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_has_bitcoin_executor(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_has_lightning_executor(
+    ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_is_method_usable(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_is_paykit_qr(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_lightning_network(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_list_contacts(
     ): Short
@@ -950,6 +1006,10 @@ internal interface UniffiLib : Library {
     fun uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoint(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_register_bitcoin_executor(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_paykitclient_register_lightning_executor(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact(
     ): Short
@@ -1031,7 +1091,13 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_paykit_mobile_checksum_constructor_directoryoperationsasync_new(
     ): Short
+    fun uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_new(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_with_timeout(
+    ): Short
     fun uniffi_paykit_mobile_checksum_constructor_paykitclient_new(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_constructor_paykitclient_new_with_network(
     ): Short
     fun uniffi_paykit_mobile_checksum_constructor_paykitinteractivemanagerffi_new(
     ): Short
@@ -1046,6 +1112,24 @@ internal interface UniffiLib : Library {
     fun uniffi_paykit_mobile_checksum_constructor_unauthenticatedtransportffi_from_config_json(
     ): Short
     fun uniffi_paykit_mobile_checksum_constructor_unauthenticatedtransportffi_new_mock(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_send_to_address(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_estimate_fee(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_get_transaction(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_verify_transaction(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_pay_invoice(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_decode_invoice(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_estimate_fee(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_get_payment(
+    ): Short
+    fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_verify_preimage(
     ): Short
     fun uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_put(
     ): Short
@@ -1085,6 +1169,12 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_create_error_message() != 25647.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_executor_async_bridge() != 20970.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_create_executor_async_bridge_with_timeout() != 21762.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_create_interactive_manager() != 6575.toShort()) {
@@ -1228,7 +1318,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_directoryoperationsasync_remove_payment_endpoint() != 40611.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_executorasyncbridge_default_timeout_ms() != 61076.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_add_contact() != 5322.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_bitcoin_network() != 27708.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_calculate_proration() != 64929.toShort()) {
@@ -1261,6 +1357,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint() != 24963.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_execute_payment() != 37877.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr() != 60905.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1276,6 +1375,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_fetch_supported_payments() != 45518.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_generate_payment_proof() != 1536.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_get_health_status() != 665.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1285,10 +1387,19 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_get_payment_status() != 49692.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_has_bitcoin_executor() != 26726.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_has_lightning_executor() != 9374.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_is_method_usable() != 34148.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_is_paykit_qr() != 30125.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_lightning_network() != 43080.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_list_contacts() != 15384.toShort()) {
@@ -1310,6 +1421,12 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint() != 17605.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_register_bitcoin_executor() != 14959.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_register_lightning_executor() != 62778.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact() != 26597.toShort()) {
@@ -1432,7 +1549,16 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_constructor_directoryoperationsasync_new() != 62626.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_paykit_mobile_checksum_constructor_paykitclient_new() != 40010.toShort()) {
+    if (lib.uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_new() != 34664.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_with_timeout() != 25141.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_constructor_paykitclient_new() != 49579.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_constructor_paykitclient_new_with_network() != 5373.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_constructor_paykitinteractivemanagerffi_new() != 57460.toShort()) {
@@ -1454,6 +1580,33 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_constructor_unauthenticatedtransportffi_new_mock() != 13023.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_send_to_address() != 33998.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_estimate_fee() != 33393.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_get_transaction() != 51498.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_verify_transaction() != 37690.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_pay_invoice() != 15946.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_decode_invoice() != 55362.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_estimate_fee() != 21019.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_get_payment() != 62134.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_verify_preimage() != 34449.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_put() != 59509.toShort()) {
@@ -1611,6 +1764,26 @@ public object FfiConverterLong: FfiConverter<Long, Long> {
 
     override fun write(value: Long, buf: ByteBuffer) {
         buf.putLong(value)
+    }
+}
+
+public object FfiConverterDouble: FfiConverter<Double, Double> {
+    override fun lift(value: Double): Double {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Double {
+        return buf.getDouble()
+    }
+
+    override fun lower(value: Double): Double {
+        return value
+    }
+
+    override fun allocationSize(value: Double) = 8
+
+    override fun write(value: Double, buf: ByteBuffer) {
+        buf.putDouble(value)
     }
 }
 
@@ -2742,6 +2915,198 @@ public object FfiConverterTypeDirectoryOperationsAsync: FfiConverter<DirectoryOp
 
 
 /**
+ * Async bridge for executor operations.
+ *
+ * Provides async wrappers for Bitcoin and Lightning executor operations
+ * with timeout handling and cancellation support. This is useful when
+ * you need to wrap synchronous wallet operations with timeout handling.
+ *
+ * # Usage
+ *
+ * ```ignore
+ * let bridge = ExecutorAsyncBridge::new()?;
+ *
+ * // Execute with default 30s timeout
+ * let result = bridge.execute_bitcoin_operation(|| {
+ * // Your wallet operation here
+ * wallet.send_to_address(address, amount)
+ * }, None)?;
+ *
+ * // Execute with custom 60s timeout
+ * let result = bridge.execute_lightning_operation(|| {
+ * // Your node operation here
+ * node.pay_invoice(invoice)
+ * }, Some(60000))?;
+ * ```
+ *
+ * # Timeout Handling
+ *
+ * If an operation exceeds the timeout, a `PaykitMobileError::Transport`
+ * error is returned with message "Bitcoin/Lightning operation timed out".
+ *
+ * # Thread Safety
+ *
+ * The bridge manages its own Tokio runtime and is safe to use from any thread.
+ * Operations are executed on the runtime's thread pool.
+ *
+ * # Cancellation
+ *
+ * Use `execute_with_cancellation()` to get an `AsyncHandle` that can be used
+ * to cancel long-running operations.
+ */
+public interface ExecutorAsyncBridgeInterface {
+    
+    /**
+     * Get the default timeout in milliseconds.
+     */
+    fun `defaultTimeoutMs`(): ULong
+    
+    companion object
+}
+
+/**
+ * Async bridge for executor operations.
+ *
+ * Provides async wrappers for Bitcoin and Lightning executor operations
+ * with timeout handling and cancellation support. This is useful when
+ * you need to wrap synchronous wallet operations with timeout handling.
+ *
+ * # Usage
+ *
+ * ```ignore
+ * let bridge = ExecutorAsyncBridge::new()?;
+ *
+ * // Execute with default 30s timeout
+ * let result = bridge.execute_bitcoin_operation(|| {
+ * // Your wallet operation here
+ * wallet.send_to_address(address, amount)
+ * }, None)?;
+ *
+ * // Execute with custom 60s timeout
+ * let result = bridge.execute_lightning_operation(|| {
+ * // Your node operation here
+ * node.pay_invoice(invoice)
+ * }, Some(60000))?;
+ * ```
+ *
+ * # Timeout Handling
+ *
+ * If an operation exceeds the timeout, a `PaykitMobileError::Transport`
+ * error is returned with message "Bitcoin/Lightning operation timed out".
+ *
+ * # Thread Safety
+ *
+ * The bridge manages its own Tokio runtime and is safe to use from any thread.
+ * Operations are executed on the runtime's thread pool.
+ *
+ * # Cancellation
+ *
+ * Use `execute_with_cancellation()` to get an `AsyncHandle` that can be used
+ * to cancel long-running operations.
+ */
+open class ExecutorAsyncBridge : FFIObject, ExecutorAsyncBridgeInterface {
+
+    constructor(pointer: Pointer): super(pointer)
+
+    /**
+     * This constructor can be used to instantiate a fake object.
+     *
+     * **WARNING: Any object instantiated with this constructor cannot be passed to an actual Rust-backed object.**
+     * Since there isn't a backing [Pointer] the FFI lower functions will crash.
+     * @param noPointer Placeholder value so we can have a constructor separate from the default empty one that may be
+     *   implemented for classes extending [FFIObject].
+     */
+    constructor(noPointer: NoPointer): super(noPointer)
+    /**
+     * Create a new executor async bridge.
+     */
+    constructor() :
+        this(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_constructor_executorasyncbridge_new(_status)
+})
+
+    override val cleanable: UniffiCleaner.Cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
+        override fun run() {
+            pointer?.let { ptr ->
+                uniffiRustCall { status ->
+                    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_free_executorasyncbridge(ptr, status)
+                }
+            }
+        }
+    }
+
+    override fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
+            UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_clone_executorasyncbridge(pointer!!, status)
+        }
+    }
+
+    
+    /**
+     * Get the default timeout in milliseconds.
+     */override fun `defaultTimeoutMs`(): ULong =
+        callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_executorasyncbridge_default_timeout_ms(it,
+        
+        _status)
+}
+        }.let {
+            FfiConverterULong.lift(it)
+        }
+    
+    
+
+    companion object {
+        
+    /**
+     * Create with custom timeout.
+     */
+        fun `withTimeout`(`timeoutMs`: ULong): ExecutorAsyncBridge =
+            ExecutorAsyncBridge(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_constructor_executorasyncbridge_with_timeout(FfiConverterULong.lower(`timeoutMs`),_status)
+})
+        
+    }
+    
+}
+
+public object FfiConverterTypeExecutorAsyncBridge: FfiConverter<ExecutorAsyncBridge, Pointer> {
+
+    override fun lower(value: ExecutorAsyncBridge): Pointer {
+        return value.uniffiClonePointer()
+    }
+
+    override fun lift(value: Pointer): ExecutorAsyncBridge {
+        return ExecutorAsyncBridge(value)
+    }
+
+    override fun read(buf: ByteBuffer): ExecutorAsyncBridge {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: ExecutorAsyncBridge) = 8
+
+    override fun write(value: ExecutorAsyncBridge, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+
+
+/**
  * Main Paykit client for mobile applications.
  */
 public interface PaykitClientInterface {
@@ -2755,6 +3120,11 @@ public interface PaykitClientInterface {
      * * `contact_pubkey` - The contact's public key to add
      */
     fun `addContact`(`transport`: AuthenticatedTransportFfi, `contactPubkey`: String)
+    
+    /**
+     * Get the configured Bitcoin network.
+     */
+    fun `bitcoinNetwork`(): BitcoinNetworkFfi
     
     /**
      * Calculate proration for a subscription modification.
@@ -2851,6 +3221,41 @@ public interface PaykitClientInterface {
     fun `discoverNoiseEndpoint`(`transport`: UnauthenticatedTransportFfi, `recipientPubkey`: String): NoiseEndpointInfo?
     
     /**
+     * Execute a payment using the registered executor.
+     *
+     * This method executes a real payment using the wallet executor that was
+     * registered via `register_bitcoin_executor` or `register_lightning_executor`.
+     *
+     * # Arguments
+     *
+     * * `method_id` - Payment method ("onchain" or "lightning")
+     * * `endpoint` - Payment destination (Bitcoin address or Lightning invoice)
+     * * `amount_sats` - Amount to send in satoshis
+     * * `metadata_json` - Optional JSON metadata (e.g., fee rate preferences)
+     *
+     * # Returns
+     *
+     * `PaymentExecutionResult` with success/failure status and execution details.
+     *
+     * # Example
+     *
+     * ```ignore
+     * // After registering executors
+     * let result = client.execute_payment(
+     * "lightning",
+     * "lnbc1000n1...",
+     * 1000,
+     * None
+     * )?;
+     *
+     * if result.success {
+     * println!("Payment succeeded: {}", result.execution_id);
+     * }
+     * ```
+     */
+    fun `executePayment`(`methodId`: String, `endpoint`: String, `amountSats`: ULong, `metadataJson`: String?): PaymentExecutionResult
+    
+    /**
      * Extract public key from scanned QR code.
      */
     fun `extractKeyFromQr`(`scannedData`: String): String?
@@ -2914,6 +3319,23 @@ public interface PaykitClientInterface {
     fun `fetchSupportedPayments`(`transport`: UnauthenticatedTransportFfi, `ownerPubkey`: String): List<PaymentMethod>
     
     /**
+     * Generate a payment proof from an execution result.
+     *
+     * After a successful payment, call this to generate cryptographic proof
+     * of payment (e.g., transaction ID for on-chain, preimage for Lightning).
+     *
+     * # Arguments
+     *
+     * * `method_id` - Payment method used
+     * * `execution_data_json` - The execution data from `execute_payment` result
+     *
+     * # Returns
+     *
+     * `PaymentProofResult` containing the proof type and data.
+     */
+    fun `generatePaymentProof`(`methodId`: String, `executionDataJson`: String): PaymentProofResult
+    
+    /**
      * Get health status of a specific method.
      */
     fun `getHealthStatus`(`methodId`: String): HealthStatus?
@@ -2929,6 +3351,22 @@ public interface PaykitClientInterface {
     fun `getPaymentStatus`(`receiptId`: String): PaymentStatusInfo?
     
     /**
+     * Check if a Bitcoin executor has been registered.
+     *
+     * Note: This checks if the onchain method is registered. After calling
+     * `register_bitcoin_executor`, this will return true.
+     */
+    fun `hasBitcoinExecutor`(): Boolean
+    
+    /**
+     * Check if a Lightning executor has been registered.
+     *
+     * Note: This checks if the lightning method is registered. After calling
+     * `register_lightning_executor`, this will return true.
+     */
+    fun `hasLightningExecutor`(): Boolean
+    
+    /**
      * Check if a method is usable (healthy or degraded).
      */
     fun `isMethodUsable`(`methodId`: String): Boolean
@@ -2937,6 +3375,11 @@ public interface PaykitClientInterface {
      * Check if scanned data looks like a Paykit URI.
      */
     fun `isPaykitQr`(`scannedData`: String): Boolean
+    
+    /**
+     * Get the configured Lightning network.
+     */
+    fun `lightningNetwork`(): LightningNetworkFfi
     
     /**
      * List all contacts.
@@ -3009,6 +3452,67 @@ public interface PaykitClientInterface {
     fun `publishPaymentEndpoint`(`transport`: AuthenticatedTransportFfi, `methodId`: String, `endpointData`: String)
     
     /**
+     * Register a Bitcoin executor for on-chain payments.
+     *
+     * This allows Bitkit or other wallets to provide their wallet implementation
+     * as the executor for on-chain Bitcoin payments. The executor handles:
+     * - Sending payments to addresses
+     * - Estimating fees
+     * - Verifying transactions
+     *
+     * # Arguments
+     *
+     * * `executor` - Implementation of `BitcoinExecutorFFI` from the wallet
+     *
+     * # Example (Swift)
+     *
+     * ```swift
+     * class BitkitBitcoinExecutor: BitcoinExecutorFFI {
+     * func sendToAddress(address: String, amountSats: UInt64, feeRate: Double?) throws -> BitcoinTxResultFFI {
+     * // Implement using Bitkit wallet
+     * }
+     * // ... other methods
+     * }
+     *
+     * let client = PaykitClient.newWithNetwork(
+     * bitcoinNetwork: .mainnet,
+     * lightningNetwork: .mainnet
+     * )
+     * try client.registerBitcoinExecutor(executor: BitkitBitcoinExecutor())
+     * ```
+     */
+    fun `registerBitcoinExecutor`(`executor`: BitcoinExecutorFfi)
+    
+    /**
+     * Register a Lightning executor for Lightning Network payments.
+     *
+     * This allows Bitkit or other wallets to provide their Lightning node
+     * implementation as the executor for Lightning payments. The executor handles:
+     * - Paying BOLT11 invoices
+     * - Decoding invoices
+     * - Estimating routing fees
+     * - Verifying payments via preimage
+     *
+     * # Arguments
+     *
+     * * `executor` - Implementation of `LightningExecutorFFI` from the wallet
+     *
+     * # Example (Swift)
+     *
+     * ```swift
+     * class BitkitLightningExecutor: LightningExecutorFFI {
+     * func payInvoice(invoice: String, amountMsat: UInt64?, maxFeeMsat: UInt64?) throws -> LightningPaymentResultFFI {
+     * // Implement using Bitkit Lightning node
+     * }
+     * // ... other methods
+     * }
+     *
+     * try client.registerLightningExecutor(executor: BitkitLightningExecutor())
+     * ```
+     */
+    fun `registerLightningExecutor`(`executor`: LightningExecutorFfi)
+    
+    /**
      * Remove a contact from the follows list.
      *
      * # Arguments
@@ -3069,7 +3573,7 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
      */
     constructor(noPointer: NoPointer): super(noPointer)
     /**
-     * Create a new Paykit client.
+     * Create a new Paykit client with default (mainnet) network configuration.
      */
     constructor() :
         this(
@@ -3115,6 +3619,20 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
 }
         }
     
+    
+    
+    /**
+     * Get the configured Bitcoin network.
+     */override fun `bitcoinNetwork`(): BitcoinNetworkFfi =
+        callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_bitcoin_network(it,
+        
+        _status)
+}
+        }.let {
+            FfiConverterTypeBitcoinNetworkFFI.lift(it)
+        }
     
     
     /**
@@ -3310,6 +3828,51 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Execute a payment using the registered executor.
+     *
+     * This method executes a real payment using the wallet executor that was
+     * registered via `register_bitcoin_executor` or `register_lightning_executor`.
+     *
+     * # Arguments
+     *
+     * * `method_id` - Payment method ("onchain" or "lightning")
+     * * `endpoint` - Payment destination (Bitcoin address or Lightning invoice)
+     * * `amount_sats` - Amount to send in satoshis
+     * * `metadata_json` - Optional JSON metadata (e.g., fee rate preferences)
+     *
+     * # Returns
+     *
+     * `PaymentExecutionResult` with success/failure status and execution details.
+     *
+     * # Example
+     *
+     * ```ignore
+     * // After registering executors
+     * let result = client.execute_payment(
+     * "lightning",
+     * "lnbc1000n1...",
+     * 1000,
+     * None
+     * )?;
+     *
+     * if result.success {
+     * println!("Payment succeeded: {}", result.execution_id);
+     * }
+     * ```
+     */
+    @Throws(PaykitMobileException::class)override fun `executePayment`(`methodId`: String, `endpoint`: String, `amountSats`: ULong, `metadataJson`: String?): PaymentExecutionResult =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_execute_payment(it,
+        FfiConverterString.lower(`methodId`),FfiConverterString.lower(`endpoint`),FfiConverterULong.lower(`amountSats`),FfiConverterOptionalString.lower(`metadataJson`),
+        _status)
+}
+        }.let {
+            FfiConverterTypePaymentExecutionResult.lift(it)
+        }
+    
+    
+    /**
      * Extract public key from scanned QR code.
      */override fun `extractKeyFromQr`(`scannedData`: String): String? =
         callWithPointer {
@@ -3421,6 +3984,33 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Generate a payment proof from an execution result.
+     *
+     * After a successful payment, call this to generate cryptographic proof
+     * of payment (e.g., transaction ID for on-chain, preimage for Lightning).
+     *
+     * # Arguments
+     *
+     * * `method_id` - Payment method used
+     * * `execution_data_json` - The execution data from `execute_payment` result
+     *
+     * # Returns
+     *
+     * `PaymentProofResult` containing the proof type and data.
+     */
+    @Throws(PaykitMobileException::class)override fun `generatePaymentProof`(`methodId`: String, `executionDataJson`: String): PaymentProofResult =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_generate_payment_proof(it,
+        FfiConverterString.lower(`methodId`),FfiConverterString.lower(`executionDataJson`),
+        _status)
+}
+        }.let {
+            FfiConverterTypePaymentProofResult.lift(it)
+        }
+    
+    
+    /**
      * Get health status of a specific method.
      */override fun `getHealthStatus`(`methodId`: String): HealthStatus? =
         callWithPointer {
@@ -3463,6 +4053,40 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Check if a Bitcoin executor has been registered.
+     *
+     * Note: This checks if the onchain method is registered. After calling
+     * `register_bitcoin_executor`, this will return true.
+     */override fun `hasBitcoinExecutor`(): Boolean =
+        callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_has_bitcoin_executor(it,
+        
+        _status)
+}
+        }.let {
+            FfiConverterBoolean.lift(it)
+        }
+    
+    
+    /**
+     * Check if a Lightning executor has been registered.
+     *
+     * Note: This checks if the lightning method is registered. After calling
+     * `register_lightning_executor`, this will return true.
+     */override fun `hasLightningExecutor`(): Boolean =
+        callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_has_lightning_executor(it,
+        
+        _status)
+}
+        }.let {
+            FfiConverterBoolean.lift(it)
+        }
+    
+    
+    /**
      * Check if a method is usable (healthy or degraded).
      */override fun `isMethodUsable`(`methodId`: String): Boolean =
         callWithPointer {
@@ -3487,6 +4111,20 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
 }
         }.let {
             FfiConverterBoolean.lift(it)
+        }
+    
+    
+    /**
+     * Get the configured Lightning network.
+     */override fun `lightningNetwork`(): LightningNetworkFfi =
+        callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_lightning_network(it,
+        
+        _status)
+}
+        }.let {
+            FfiConverterTypeLightningNetworkFFI.lift(it)
         }
     
     
@@ -3628,6 +4266,85 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
     /**
+     * Register a Bitcoin executor for on-chain payments.
+     *
+     * This allows Bitkit or other wallets to provide their wallet implementation
+     * as the executor for on-chain Bitcoin payments. The executor handles:
+     * - Sending payments to addresses
+     * - Estimating fees
+     * - Verifying transactions
+     *
+     * # Arguments
+     *
+     * * `executor` - Implementation of `BitcoinExecutorFFI` from the wallet
+     *
+     * # Example (Swift)
+     *
+     * ```swift
+     * class BitkitBitcoinExecutor: BitcoinExecutorFFI {
+     * func sendToAddress(address: String, amountSats: UInt64, feeRate: Double?) throws -> BitcoinTxResultFFI {
+     * // Implement using Bitkit wallet
+     * }
+     * // ... other methods
+     * }
+     *
+     * let client = PaykitClient.newWithNetwork(
+     * bitcoinNetwork: .mainnet,
+     * lightningNetwork: .mainnet
+     * )
+     * try client.registerBitcoinExecutor(executor: BitkitBitcoinExecutor())
+     * ```
+     */
+    @Throws(PaykitMobileException::class)override fun `registerBitcoinExecutor`(`executor`: BitcoinExecutorFfi) =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_register_bitcoin_executor(it,
+        FfiConverterTypeBitcoinExecutorFFI.lower(`executor`),
+        _status)
+}
+        }
+    
+    
+    
+    /**
+     * Register a Lightning executor for Lightning Network payments.
+     *
+     * This allows Bitkit or other wallets to provide their Lightning node
+     * implementation as the executor for Lightning payments. The executor handles:
+     * - Paying BOLT11 invoices
+     * - Decoding invoices
+     * - Estimating routing fees
+     * - Verifying payments via preimage
+     *
+     * # Arguments
+     *
+     * * `executor` - Implementation of `LightningExecutorFFI` from the wallet
+     *
+     * # Example (Swift)
+     *
+     * ```swift
+     * class BitkitLightningExecutor: LightningExecutorFFI {
+     * func payInvoice(invoice: String, amountMsat: UInt64?, maxFeeMsat: UInt64?) throws -> LightningPaymentResultFFI {
+     * // Implement using Bitkit Lightning node
+     * }
+     * // ... other methods
+     * }
+     *
+     * try client.registerLightningExecutor(executor: BitkitLightningExecutor())
+     * ```
+     */
+    @Throws(PaykitMobileException::class)override fun `registerLightningExecutor`(`executor`: LightningExecutorFfi) =
+        callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_register_lightning_executor(it,
+        FfiConverterTypeLightningExecutorFFI.lower(`executor`),
+        _status)
+}
+        }
+    
+    
+    
+    /**
      * Remove a contact from the follows list.
      *
      * # Arguments
@@ -3716,8 +4433,33 @@ open class PaykitClient : FFIObject, PaykitClientInterface {
     
     
 
-    
-    companion object
+    companion object {
+        
+    /**
+     * Create a new Paykit client with specific network configuration.
+     *
+     * # Arguments
+     *
+     * * `bitcoin_network` - Bitcoin network to use (Mainnet, Testnet, or Regtest)
+     * * `lightning_network` - Lightning network to use (Mainnet, Testnet, or Regtest)
+     *
+     * # Example
+     *
+     * ```ignore
+     * // For testnet development
+     * let client = PaykitClient::new_with_network(
+     * BitcoinNetworkFFI::Testnet,
+     * LightningNetworkFFI::Testnet,
+     * )?;
+     * ```
+     */
+        fun `newWithNetwork`(`bitcoinNetwork`: BitcoinNetworkFfi, `lightningNetwork`: LightningNetworkFfi): PaykitClient =
+            PaykitClient(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_constructor_paykitclient_new_with_network(FfiConverterTypeBitcoinNetworkFFI.lower(`bitcoinNetwork`),FfiConverterTypeLightningNetworkFFI.lower(`lightningNetwork`),_status)
+})
+        
+    }
     
 }
 
@@ -5143,6 +5885,82 @@ public object FfiConverterTypeAmount: FfiConverterRustBuffer<Amount> {
 
 
 /**
+ * Result of a Bitcoin on-chain transaction (FFI-compatible).
+ *
+ * This type is returned by `BitcoinExecutorFFI::sendToAddress()` after
+ * successfully broadcasting a transaction.
+ */
+data class BitcoinTxResultFfi (
+    /**
+     * The transaction ID (hex-encoded, 64 characters).
+     */
+    var `txid`: String, 
+    /**
+     * The raw transaction hex (optional, for debugging/verification).
+     */
+    var `rawTx`: String?, 
+    /**
+     * The output index used for payment.
+     */
+    var `vout`: UInt, 
+    /**
+     * The fee paid in satoshis.
+     */
+    var `feeSats`: ULong, 
+    /**
+     * The fee rate in sat/vB.
+     */
+    var `feeRate`: Double, 
+    /**
+     * Block height if confirmed (None if unconfirmed).
+     */
+    var `blockHeight`: ULong?, 
+    /**
+     * Number of confirmations.
+     */
+    var `confirmations`: ULong
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeBitcoinTxResultFFI: FfiConverterRustBuffer<BitcoinTxResultFfi> {
+    override fun read(buf: ByteBuffer): BitcoinTxResultFfi {
+        return BitcoinTxResultFfi(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: BitcoinTxResultFfi) = (
+            FfiConverterString.allocationSize(value.`txid`) +
+            FfiConverterOptionalString.allocationSize(value.`rawTx`) +
+            FfiConverterUInt.allocationSize(value.`vout`) +
+            FfiConverterULong.allocationSize(value.`feeSats`) +
+            FfiConverterDouble.allocationSize(value.`feeRate`) +
+            FfiConverterOptionalULong.allocationSize(value.`blockHeight`) +
+            FfiConverterULong.allocationSize(value.`confirmations`)
+    )
+
+    override fun write(value: BitcoinTxResultFfi, buf: ByteBuffer) {
+            FfiConverterString.write(value.`txid`, buf)
+            FfiConverterOptionalString.write(value.`rawTx`, buf)
+            FfiConverterUInt.write(value.`vout`, buf)
+            FfiConverterULong.write(value.`feeSats`, buf)
+            FfiConverterDouble.write(value.`feeRate`, buf)
+            FfiConverterOptionalULong.write(value.`blockHeight`, buf)
+            FfiConverterULong.write(value.`confirmations`, buf)
+    }
+}
+
+
+
+/**
  * FFI-safe cached contact.
  */
 data class CachedContactFfi (
@@ -5177,6 +5995,88 @@ public object FfiConverterTypeCachedContactFFI: FfiConverterRustBuffer<CachedCon
             FfiConverterOptionalString.write(value.`name`, buf)
             FfiConverterLong.write(value.`addedAt`, buf)
             FfiConverterOptionalLong.write(value.`lastSyncedAt`, buf)
+    }
+}
+
+
+
+/**
+ * Decoded BOLT11 invoice details (FFI-compatible).
+ *
+ * This type is returned by `LightningExecutorFFI::decodeInvoice()`.
+ */
+data class DecodedInvoiceFfi (
+    /**
+     * The payment hash (hex-encoded).
+     */
+    var `paymentHash`: String, 
+    /**
+     * Amount in millisatoshis (None for zero-amount invoices).
+     */
+    var `amountMsat`: ULong?, 
+    /**
+     * Invoice description.
+     */
+    var `description`: String?, 
+    /**
+     * Description hash (for invoices with hashed descriptions).
+     */
+    var `descriptionHash`: String?, 
+    /**
+     * Payee public key (hex-encoded).
+     */
+    var `payee`: String, 
+    /**
+     * Expiry time in seconds.
+     */
+    var `expiry`: ULong, 
+    /**
+     * Creation timestamp (Unix epoch seconds).
+     */
+    var `timestamp`: ULong, 
+    /**
+     * Whether the invoice has expired.
+     */
+    var `expired`: Boolean
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeDecodedInvoiceFFI: FfiConverterRustBuffer<DecodedInvoiceFfi> {
+    override fun read(buf: ByteBuffer): DecodedInvoiceFfi {
+        return DecodedInvoiceFfi(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DecodedInvoiceFfi) = (
+            FfiConverterString.allocationSize(value.`paymentHash`) +
+            FfiConverterOptionalULong.allocationSize(value.`amountMsat`) +
+            FfiConverterOptionalString.allocationSize(value.`description`) +
+            FfiConverterOptionalString.allocationSize(value.`descriptionHash`) +
+            FfiConverterString.allocationSize(value.`payee`) +
+            FfiConverterULong.allocationSize(value.`expiry`) +
+            FfiConverterULong.allocationSize(value.`timestamp`) +
+            FfiConverterBoolean.allocationSize(value.`expired`)
+    )
+
+    override fun write(value: DecodedInvoiceFfi, buf: ByteBuffer) {
+            FfiConverterString.write(value.`paymentHash`, buf)
+            FfiConverterOptionalULong.write(value.`amountMsat`, buf)
+            FfiConverterOptionalString.write(value.`description`, buf)
+            FfiConverterOptionalString.write(value.`descriptionHash`, buf)
+            FfiConverterString.write(value.`payee`, buf)
+            FfiConverterULong.write(value.`expiry`, buf)
+            FfiConverterULong.write(value.`timestamp`, buf)
+            FfiConverterBoolean.write(value.`expired`, buf)
     }
 }
 
@@ -5386,6 +6286,76 @@ public object FfiConverterTypeKeyBackup: FfiConverterRustBuffer<KeyBackup> {
             FfiConverterString.write(value.`saltHex`, buf)
             FfiConverterString.write(value.`nonceHex`, buf)
             FfiConverterString.write(value.`publicKeyZ32`, buf)
+    }
+}
+
+
+
+/**
+ * Result of a Lightning payment (FFI-compatible).
+ *
+ * This type is returned by `LightningExecutorFFI::payInvoice()` after
+ * a successful Lightning payment.
+ */
+data class LightningPaymentResultFfi (
+    /**
+     * The payment preimage (hex-encoded, 64 characters).
+     * This is the cryptographic proof of payment.
+     */
+    var `preimage`: String, 
+    /**
+     * The payment hash (hex-encoded, 64 characters).
+     */
+    var `paymentHash`: String, 
+    /**
+     * The amount paid in millisatoshis.
+     */
+    var `amountMsat`: ULong, 
+    /**
+     * The fee paid in millisatoshis.
+     */
+    var `feeMsat`: ULong, 
+    /**
+     * Number of hops in the payment route.
+     */
+    var `hops`: UInt, 
+    /**
+     * Payment status.
+     */
+    var `status`: LightningPaymentStatusFfi
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypeLightningPaymentResultFFI: FfiConverterRustBuffer<LightningPaymentResultFfi> {
+    override fun read(buf: ByteBuffer): LightningPaymentResultFfi {
+        return LightningPaymentResultFfi(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterTypeLightningPaymentStatusFFI.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LightningPaymentResultFfi) = (
+            FfiConverterString.allocationSize(value.`preimage`) +
+            FfiConverterString.allocationSize(value.`paymentHash`) +
+            FfiConverterULong.allocationSize(value.`amountMsat`) +
+            FfiConverterULong.allocationSize(value.`feeMsat`) +
+            FfiConverterUInt.allocationSize(value.`hops`) +
+            FfiConverterTypeLightningPaymentStatusFFI.allocationSize(value.`status`)
+    )
+
+    override fun write(value: LightningPaymentResultFfi, buf: ByteBuffer) {
+            FfiConverterString.write(value.`preimage`, buf)
+            FfiConverterString.write(value.`paymentHash`, buf)
+            FfiConverterULong.write(value.`amountMsat`, buf)
+            FfiConverterULong.write(value.`feeMsat`, buf)
+            FfiConverterUInt.write(value.`hops`, buf)
+            FfiConverterTypeLightningPaymentStatusFFI.write(value.`status`, buf)
     }
 }
 
@@ -5750,6 +6720,89 @@ public object FfiConverterTypeNoiseSessionInfo: FfiConverterRustBuffer<NoiseSess
 
 
 /**
+ * Result of a payment execution.
+ *
+ * Returned by `PaykitClient::execute_payment()` after attempting to
+ * send a payment via the registered wallet executor.
+ */
+data class PaymentExecutionResult (
+    /**
+     * Unique execution ID.
+     */
+    var `executionId`: String, 
+    /**
+     * Payment method used.
+     */
+    var `methodId`: String, 
+    /**
+     * Payment destination.
+     */
+    var `endpoint`: String, 
+    /**
+     * Amount sent in satoshis.
+     */
+    var `amountSats`: ULong, 
+    /**
+     * Whether the payment succeeded.
+     */
+    var `success`: Boolean, 
+    /**
+     * Unix timestamp of execution.
+     */
+    var `executedAt`: Long, 
+    /**
+     * Execution details as JSON (contains txid, preimage, fees, etc.).
+     */
+    var `executionDataJson`: String, 
+    /**
+     * Error message if failed.
+     */
+    var `error`: String?
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypePaymentExecutionResult: FfiConverterRustBuffer<PaymentExecutionResult> {
+    override fun read(buf: ByteBuffer): PaymentExecutionResult {
+        return PaymentExecutionResult(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PaymentExecutionResult) = (
+            FfiConverterString.allocationSize(value.`executionId`) +
+            FfiConverterString.allocationSize(value.`methodId`) +
+            FfiConverterString.allocationSize(value.`endpoint`) +
+            FfiConverterULong.allocationSize(value.`amountSats`) +
+            FfiConverterBoolean.allocationSize(value.`success`) +
+            FfiConverterLong.allocationSize(value.`executedAt`) +
+            FfiConverterString.allocationSize(value.`executionDataJson`) +
+            FfiConverterOptionalString.allocationSize(value.`error`)
+    )
+
+    override fun write(value: PaymentExecutionResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`executionId`, buf)
+            FfiConverterString.write(value.`methodId`, buf)
+            FfiConverterString.write(value.`endpoint`, buf)
+            FfiConverterULong.write(value.`amountSats`, buf)
+            FfiConverterBoolean.write(value.`success`, buf)
+            FfiConverterLong.write(value.`executedAt`, buf)
+            FfiConverterString.write(value.`executionDataJson`, buf)
+            FfiConverterOptionalString.write(value.`error`, buf)
+    }
+}
+
+
+
+/**
  * A supported payment method with its endpoint.
  */
 data class PaymentMethod (
@@ -5776,6 +6829,47 @@ public object FfiConverterTypePaymentMethod: FfiConverterRustBuffer<PaymentMetho
     override fun write(value: PaymentMethod, buf: ByteBuffer) {
             FfiConverterString.write(value.`methodId`, buf)
             FfiConverterString.write(value.`endpoint`, buf)
+    }
+}
+
+
+
+/**
+ * Result of generating a payment proof.
+ *
+ * Returned by `PaykitClient::generate_payment_proof()` after
+ * extracting proof data from a successful payment execution.
+ */
+data class PaymentProofResult (
+    /**
+     * Type of proof ("bitcoin_txid", "lightning_preimage", "custom").
+     */
+    var `proofType`: String, 
+    /**
+     * Proof data as JSON.
+     */
+    var `proofDataJson`: String
+) {
+    
+    companion object
+}
+
+public object FfiConverterTypePaymentProofResult: FfiConverterRustBuffer<PaymentProofResult> {
+    override fun read(buf: ByteBuffer): PaymentProofResult {
+        return PaymentProofResult(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PaymentProofResult) = (
+            FfiConverterString.allocationSize(value.`proofType`) +
+            FfiConverterString.allocationSize(value.`proofDataJson`)
+    )
+
+    override fun write(value: PaymentProofResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`proofType`, buf)
+            FfiConverterString.write(value.`proofDataJson`, buf)
     }
 }
 
@@ -6627,6 +7721,46 @@ public object FfiConverterTypeX25519Keypair: FfiConverterRustBuffer<X25519Keypai
 
 
 /**
+ * Bitcoin network types (FFI-compatible).
+ *
+ * Used to configure which Bitcoin network the wallet operates on.
+ */
+enum class BitcoinNetworkFfi {
+    
+    /**
+     * Bitcoin mainnet (real money).
+     */
+    MAINNET,
+    /**
+     * Bitcoin testnet (test coins).
+     */
+    TESTNET,
+    /**
+     * Bitcoin regtest (local development).
+     */
+    REGTEST;
+    companion object
+}
+
+public object FfiConverterTypeBitcoinNetworkFFI: FfiConverterRustBuffer<BitcoinNetworkFfi> {
+    override fun read(buf: ByteBuffer) = try {
+        BitcoinNetworkFfi.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: BitcoinNetworkFfi) = 4
+
+    override fun write(value: BitcoinNetworkFfi, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Health status of a payment method.
  */
 enum class HealthStatus {
@@ -6648,6 +7782,84 @@ public object FfiConverterTypeHealthStatus: FfiConverterRustBuffer<HealthStatus>
     override fun allocationSize(value: HealthStatus) = 4
 
     override fun write(value: HealthStatus, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Lightning network types (FFI-compatible).
+ *
+ * Used to configure which Lightning network the wallet operates on.
+ */
+enum class LightningNetworkFfi {
+    
+    /**
+     * Lightning mainnet (real money).
+     */
+    MAINNET,
+    /**
+     * Lightning testnet (test coins).
+     */
+    TESTNET,
+    /**
+     * Lightning regtest (local development).
+     */
+    REGTEST;
+    companion object
+}
+
+public object FfiConverterTypeLightningNetworkFFI: FfiConverterRustBuffer<LightningNetworkFfi> {
+    override fun read(buf: ByteBuffer) = try {
+        LightningNetworkFfi.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: LightningNetworkFfi) = 4
+
+    override fun write(value: LightningNetworkFfi, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Status of a Lightning payment (FFI-compatible).
+ */
+enum class LightningPaymentStatusFfi {
+    
+    /**
+     * Payment succeeded.
+     */
+    SUCCEEDED,
+    /**
+     * Payment is pending/in-flight.
+     */
+    PENDING,
+    /**
+     * Payment failed.
+     */
+    FAILED;
+    companion object
+}
+
+public object FfiConverterTypeLightningPaymentStatusFFI: FfiConverterRustBuffer<LightningPaymentStatusFfi> {
+    override fun read(buf: ByteBuffer) = try {
+        LightningPaymentStatusFfi.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: LightningPaymentStatusFfi) = 4
+
+    override fun write(value: LightningPaymentStatusFfi, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -7771,57 +8983,88 @@ public object FfiConverterTypeUriType: FfiConverterRustBuffer<UriType> {
 
 
 /**
- * Callback interface for authenticated Pubky storage operations.
+ * Bitcoin executor callback interface for mobile wallets.
  *
- * Mobile apps implement this to wrap their Pubky SDK session.
- * All operations are performed on the owner's storage.
+ * Implement this interface in Swift/Kotlin to provide on-chain Bitcoin
+ * payment capabilities to Paykit.
  *
  * # Thread Safety
  *
- * Implementations must be thread-safe (Send + Sync).
+ * All methods may be called from any thread. Implementations must be
+ * thread-safe.
+ *
+ * # Error Handling
+ *
+ * Return `PaykitMobileError` for failures. The error will be propagated
+ * to the caller.
  */
-public interface PubkyAuthenticatedStorageCallback {
+public interface BitcoinExecutorFfi {
     
     /**
-     * Put (create or update) content at the given path.
+     * Send Bitcoin to an address.
      *
      * # Arguments
      *
-     * * `path` - Storage path (e.g., "/pub/paykit.app/v0/lightning")
-     * * `content` - Content to store
-     */
-    fun `put`(`path`: String, `content`: String): StorageOperationResult
-    
-    /**
-     * Get content at the given path.
-     *
-     * # Arguments
-     *
-     * * `path` - Storage path to read
+     * * `address` - The destination Bitcoin address
+     * * `amount_sats` - The amount to send in satoshis
+     * * `fee_rate` - Optional fee rate in sat/vB (uses wallet default if None)
      *
      * # Returns
      *
-     * Content if found, None if path doesn't exist.
+     * Transaction result with txid and fee details.
+     *
+     * # Errors
+     *
+     * Returns an error if:
+     * - The address is invalid
+     * - Insufficient funds
+     * - Network error
+     * - Wallet is locked
      */
-    fun `get`(`path`: String): StorageGetResult
+    fun `sendToAddress`(`address`: String, `amountSats`: ULong, `feeRate`: Double?): BitcoinTxResultFfi
     
     /**
-     * Delete content at the given path.
+     * Estimate the fee for a transaction.
      *
      * # Arguments
      *
-     * * `path` - Storage path to delete
+     * * `address` - The destination address
+     * * `amount_sats` - The amount to send in satoshis
+     * * `target_blocks` - Confirmation target in blocks (1, 3, 6, etc.)
+     *
+     * # Returns
+     *
+     * Estimated fee in satoshis.
      */
-    fun `delete`(`path`: String): StorageOperationResult
+    fun `estimateFee`(`address`: String, `amountSats`: ULong, `targetBlocks`: UInt): ULong
     
     /**
-     * List files with the given prefix.
+     * Get transaction details by txid.
      *
      * # Arguments
      *
-     * * `prefix` - Path prefix to list (e.g., "/pub/paykit.app/v0/")
+     * * `txid` - The transaction ID (hex-encoded)
+     *
+     * # Returns
+     *
+     * Transaction details if found, None otherwise.
      */
-    fun `list`(`prefix`: String): StorageListResult
+    fun `getTransaction`(`txid`: String): BitcoinTxResultFfi?
+    
+    /**
+     * Verify a transaction was sent to the expected address and amount.
+     *
+     * # Arguments
+     *
+     * * `txid` - The transaction ID
+     * * `address` - Expected destination address
+     * * `amount_sats` - Expected amount in satoshis
+     *
+     * # Returns
+     *
+     * True if the transaction matches, false otherwise.
+     */
+    fun `verifyTransaction`(`txid`: String, `address`: String, `amountSats`: ULong): Boolean
     
     companion object
 }
@@ -7891,6 +9134,627 @@ public abstract class FfiConverterCallbackInterface<CallbackInterface>: FfiConve
         buf.putLong(lower(value))
     }
 }
+
+// Implement the foreign callback handler for BitcoinExecutorFfi
+internal class UniffiCallbackInterfaceBitcoinExecutorFFI : ForeignCallback {
+    @Suppress("TooGenericExceptionCaught")
+    override fun invoke(handle: UniffiHandle, method: Int, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val cb = FfiConverterTypeBitcoinExecutorFFI.handleMap.get(handle)
+        return when (method) {
+            IDX_CALLBACK_FREE -> {
+                FfiConverterTypeBitcoinExecutorFFI.handleMap.remove(handle)
+
+                // Successful return
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs`
+                UNIFFI_CALLBACK_SUCCESS
+            }
+            1 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeSendToAddress`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            2 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeEstimateFee`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            3 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeGetTransaction`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            4 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeVerifyTransaction`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            
+            else -> {
+                // An unexpected error happened.
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs`
+                try {
+                    // Try to serialize the error into a string
+                    outBuf.setValue(FfiConverterString.lower("Invalid Callback index"))
+                } catch (e: Throwable) {
+                    // If that fails, then it's time to give up and just return
+                }
+                UNIFFI_CALLBACK_UNEXPECTED_ERROR
+            }
+        }
+    }
+
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeSendToAddress`(kotlinCallbackInterface: BitcoinExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`sendToAddress`(
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterULong.read(argsBuf)
+                , 
+                FfiConverterOptionalDouble.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterTypeBitcoinTxResultFFI.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeEstimateFee`(kotlinCallbackInterface: BitcoinExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`estimateFee`(
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterULong.read(argsBuf)
+                , 
+                FfiConverterUInt.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterULong.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeGetTransaction`(kotlinCallbackInterface: BitcoinExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`getTransaction`(
+                FfiConverterString.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterOptionalTypeBitcoinTxResultFFI.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeVerifyTransaction`(kotlinCallbackInterface: BitcoinExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`verifyTransaction`(
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterULong.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterBoolean.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_paykit_mobile_fn_init_callback_bitcoinexecutorffi(this)
+    }
+}
+
+internal val uniffiCallbackInterfaceBitcoinExecutorFFI = UniffiCallbackInterfaceBitcoinExecutorFFI()
+
+// The ffiConverter which transforms the Callbacks in to UniffiHandles to pass to Rust.
+public object FfiConverterTypeBitcoinExecutorFFI: FfiConverterCallbackInterface<BitcoinExecutorFfi>()
+
+
+
+
+
+/**
+ * Lightning executor callback interface for mobile wallets.
+ *
+ * Implement this interface in Swift/Kotlin to provide Lightning Network
+ * payment capabilities to Paykit.
+ *
+ * # Thread Safety
+ *
+ * All methods may be called from any thread. Implementations must be
+ * thread-safe.
+ *
+ * # Error Handling
+ *
+ * Return `PaykitMobileError` for failures. The error will be propagated
+ * to the caller.
+ */
+public interface LightningExecutorFfi {
+    
+    /**
+     * Pay a BOLT11 invoice.
+     *
+     * # Arguments
+     *
+     * * `invoice` - The BOLT11 invoice string
+     * * `amount_msat` - Optional amount in millisatoshis (for zero-amount invoices)
+     * * `max_fee_msat` - Maximum fee willing to pay in millisatoshis
+     *
+     * # Returns
+     *
+     * Payment result with preimage proof.
+     *
+     * # Errors
+     *
+     * Returns an error if:
+     * - Invoice is invalid or expired
+     * - No route found
+     * - Insufficient funds
+     * - Payment failed
+     */
+    fun `payInvoice`(`invoice`: String, `amountMsat`: ULong?, `maxFeeMsat`: ULong?): LightningPaymentResultFfi
+    
+    /**
+     * Decode a BOLT11 invoice without paying.
+     *
+     * # Arguments
+     *
+     * * `invoice` - The BOLT11 invoice string
+     *
+     * # Returns
+     *
+     * Decoded invoice details.
+     */
+    fun `decodeInvoice`(`invoice`: String): DecodedInvoiceFfi
+    
+    /**
+     * Estimate the fee for paying an invoice.
+     *
+     * # Arguments
+     *
+     * * `invoice` - The BOLT11 invoice
+     *
+     * # Returns
+     *
+     * Estimated fee in millisatoshis.
+     */
+    fun `estimateFee`(`invoice`: String): ULong
+    
+    /**
+     * Check the status of a payment by payment hash.
+     *
+     * # Arguments
+     *
+     * * `payment_hash` - The payment hash (hex-encoded)
+     *
+     * # Returns
+     *
+     * Payment result if found, None otherwise.
+     */
+    fun `getPayment`(`paymentHash`: String): LightningPaymentResultFfi?
+    
+    /**
+     * Verify a payment was made (check preimage matches hash).
+     *
+     * # Arguments
+     *
+     * * `preimage` - The payment preimage (hex-encoded)
+     * * `payment_hash` - The payment hash (hex-encoded)
+     *
+     * # Returns
+     *
+     * True if preimage matches hash.
+     */
+    fun `verifyPreimage`(`preimage`: String, `paymentHash`: String): Boolean
+    
+    companion object
+}
+
+
+
+// Implement the foreign callback handler for LightningExecutorFfi
+internal class UniffiCallbackInterfaceLightningExecutorFFI : ForeignCallback {
+    @Suppress("TooGenericExceptionCaught")
+    override fun invoke(handle: UniffiHandle, method: Int, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val cb = FfiConverterTypeLightningExecutorFFI.handleMap.get(handle)
+        return when (method) {
+            IDX_CALLBACK_FREE -> {
+                FfiConverterTypeLightningExecutorFFI.handleMap.remove(handle)
+
+                // Successful return
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs`
+                UNIFFI_CALLBACK_SUCCESS
+            }
+            1 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokePayInvoice`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            2 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeDecodeInvoice`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            3 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeEstimateFee`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            4 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeGetPayment`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            5 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    this.`invokeVerifyPreimage`(cb, argsData, argsLen, outBuf)
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    UNIFFI_CALLBACK_UNEXPECTED_ERROR
+                }
+            }
+            
+            else -> {
+                // An unexpected error happened.
+                // See docs of ForeignCallback in `uniffi_core/src/ffi/foreigncallbacks.rs`
+                try {
+                    // Try to serialize the error into a string
+                    outBuf.setValue(FfiConverterString.lower("Invalid Callback index"))
+                } catch (e: Throwable) {
+                    // If that fails, then it's time to give up and just return
+                }
+                UNIFFI_CALLBACK_UNEXPECTED_ERROR
+            }
+        }
+    }
+
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokePayInvoice`(kotlinCallbackInterface: LightningExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`payInvoice`(
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterOptionalULong.read(argsBuf)
+                , 
+                FfiConverterOptionalULong.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterTypeLightningPaymentResultFFI.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeDecodeInvoice`(kotlinCallbackInterface: LightningExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`decodeInvoice`(
+                FfiConverterString.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterTypeDecodedInvoiceFFI.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeEstimateFee`(kotlinCallbackInterface: LightningExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`estimateFee`(
+                FfiConverterString.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterULong.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeGetPayment`(kotlinCallbackInterface: LightningExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`getPayment`(
+                FfiConverterString.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterOptionalTypeLightningPaymentResultFFI.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError()  : Int = try {
+            makeCall()
+        } catch (e: PaykitMobileException) {
+            // Expected error, serialize it into outBuf
+            outBuf.setValue(FfiConverterTypePaykitMobileError.lowerIntoRustBuffer(e))
+            UNIFFI_CALLBACK_ERROR
+        }
+
+        return makeCallAndHandleError()
+    }
+    
+    @Suppress("UNUSED_PARAMETER")
+    private fun `invokeVerifyPreimage`(kotlinCallbackInterface: LightningExecutorFfi, argsData: Pointer, argsLen: Int, outBuf: RustBufferByReference): Int {
+        val argsBuf = argsData.getByteBuffer(0, argsLen.toLong()).also {
+            it.order(ByteOrder.BIG_ENDIAN)
+        }
+        fun makeCall() : Int {
+            val returnValue = kotlinCallbackInterface.`verifyPreimage`(
+                FfiConverterString.read(argsBuf)
+                , 
+                FfiConverterString.read(argsBuf)
+                
+            )
+            outBuf.setValue(FfiConverterBoolean.lowerIntoRustBuffer(returnValue))
+            return UNIFFI_CALLBACK_SUCCESS
+        }
+        fun makeCallAndHandleError() : Int = makeCall()
+
+        return makeCallAndHandleError()
+    }
+    
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_paykit_mobile_fn_init_callback_lightningexecutorffi(this)
+    }
+}
+
+internal val uniffiCallbackInterfaceLightningExecutorFFI = UniffiCallbackInterfaceLightningExecutorFFI()
+
+// The ffiConverter which transforms the Callbacks in to UniffiHandles to pass to Rust.
+public object FfiConverterTypeLightningExecutorFFI: FfiConverterCallbackInterface<LightningExecutorFfi>()
+
+
+
+
+
+/**
+ * Callback interface for authenticated Pubky storage operations.
+ *
+ * Mobile apps implement this to wrap their Pubky SDK session.
+ * All operations are performed on the owner's storage.
+ *
+ * # Thread Safety
+ *
+ * Implementations must be thread-safe (Send + Sync).
+ */
+public interface PubkyAuthenticatedStorageCallback {
+    
+    /**
+     * Put (create or update) content at the given path.
+     *
+     * # Arguments
+     *
+     * * `path` - Storage path (e.g., "/pub/paykit.app/v0/lightning")
+     * * `content` - Content to store
+     */
+    fun `put`(`path`: String, `content`: String): StorageOperationResult
+    
+    /**
+     * Get content at the given path.
+     *
+     * # Arguments
+     *
+     * * `path` - Storage path to read
+     *
+     * # Returns
+     *
+     * Content if found, None if path doesn't exist.
+     */
+    fun `get`(`path`: String): StorageGetResult
+    
+    /**
+     * Delete content at the given path.
+     *
+     * # Arguments
+     *
+     * * `path` - Storage path to delete
+     */
+    fun `delete`(`path`: String): StorageOperationResult
+    
+    /**
+     * List files with the given prefix.
+     *
+     * # Arguments
+     *
+     * * `prefix` - Path prefix to list (e.g., "/pub/paykit.app/v0/")
+     */
+    fun `list`(`prefix`: String): StorageListResult
+    
+    companion object
+}
+
+
 
 // Implement the foreign callback handler for PubkyAuthenticatedStorageCallback
 internal class UniffiCallbackInterfacePubkyAuthenticatedStorageCallback : ForeignCallback {
@@ -8440,6 +10304,35 @@ public object FfiConverterOptionalLong: FfiConverterRustBuffer<Long?> {
 
 
 
+public object FfiConverterOptionalDouble: FfiConverterRustBuffer<Double?> {
+    override fun read(buf: ByteBuffer): Double? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterDouble.read(buf)
+    }
+
+    override fun allocationSize(value: Double?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterDouble.allocationSize(value)
+        }
+    }
+
+    override fun write(value: Double?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterDouble.write(value, buf)
+        }
+    }
+}
+
+
+
+
 public object FfiConverterOptionalString: FfiConverterRustBuffer<String?> {
     override fun read(buf: ByteBuffer): String? {
         if (buf.get().toInt() == 0) {
@@ -8469,6 +10362,35 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<String?> {
 
 
 
+public object FfiConverterOptionalTypeBitcoinTxResultFFI: FfiConverterRustBuffer<BitcoinTxResultFfi?> {
+    override fun read(buf: ByteBuffer): BitcoinTxResultFfi? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeBitcoinTxResultFFI.read(buf)
+    }
+
+    override fun allocationSize(value: BitcoinTxResultFfi?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterTypeBitcoinTxResultFFI.allocationSize(value)
+        }
+    }
+
+    override fun write(value: BitcoinTxResultFfi?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeBitcoinTxResultFFI.write(value, buf)
+        }
+    }
+}
+
+
+
+
 public object FfiConverterOptionalTypeCachedContactFFI: FfiConverterRustBuffer<CachedContactFfi?> {
     override fun read(buf: ByteBuffer): CachedContactFfi? {
         if (buf.get().toInt() == 0) {
@@ -8491,6 +10413,35 @@ public object FfiConverterOptionalTypeCachedContactFFI: FfiConverterRustBuffer<C
         } else {
             buf.put(1)
             FfiConverterTypeCachedContactFFI.write(value, buf)
+        }
+    }
+}
+
+
+
+
+public object FfiConverterOptionalTypeLightningPaymentResultFFI: FfiConverterRustBuffer<LightningPaymentResultFfi?> {
+    override fun read(buf: ByteBuffer): LightningPaymentResultFfi? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeLightningPaymentResultFFI.read(buf)
+    }
+
+    override fun allocationSize(value: LightningPaymentResultFfi?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterTypeLightningPaymentResultFFI.allocationSize(value)
+        }
+    }
+
+    override fun write(value: LightningPaymentResultFfi?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeLightningPaymentResultFFI.write(value, buf)
         }
     }
 }
@@ -8880,6 +10831,30 @@ fun `createErrorMessage`(`code`: String, `message`: String): NoisePaymentMessage
     return FfiConverterTypeNoisePaymentMessage.lift(
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_error_message(FfiConverterString.lower(`code`),FfiConverterString.lower(`message`),_status)
+})
+}
+
+        /**
+         * Create a new executor async bridge.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createExecutorAsyncBridge`(): ExecutorAsyncBridge {
+    return FfiConverterTypeExecutorAsyncBridge.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_executor_async_bridge(_status)
+})
+}
+
+        /**
+         * Create an executor async bridge with custom timeout.
+         */
+@Throws(PaykitMobileException::class)
+
+fun `createExecutorAsyncBridgeWithTimeout`(`timeoutMs`: ULong): ExecutorAsyncBridge {
+    return FfiConverterTypeExecutorAsyncBridge.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_create_executor_async_bridge_with_timeout(FfiConverterULong.lower(`timeoutMs`),_status)
 })
 }
 

@@ -4,6 +4,118 @@ All notable changes to the paykit-mobile crate are documented in this file.
 
 ## [Unreleased]
 
+### Added - Bitkit Advanced Features & Services (Phase 3 & 4)
+
+This release completes the Bitkit integration with advanced UI components and service integration templates.
+
+**Phase 3: Advanced UI Components**
+
+**iOS Components (SwiftUI):**
+- `BitkitSubscriptionsView` - Subscription management with proration calculator
+- `BitkitAutoPayView` - Complete auto-pay settings UI
+- `BitkitPaymentRequestsView` - Payment request creation and management
+- `BitkitQRScannerView` - QR code scanning with Paykit URI parsing
+- `BitkitSettingsView` - App settings and configuration
+- `BitkitIdentityListView` - Multiple identity management
+
+**Android Components (Jetpack Compose):**
+- `BitkitSubscriptionsScreen` - Subscription management
+- `BitkitAutoPayScreen` - Auto-pay settings UI
+- `BitkitPaymentRequestsScreen` - Payment request management
+- `BitkitQRScannerScreen` - QR code scanning
+- `BitkitSettingsScreen` - App settings
+- `BitkitIdentityListScreen` - Identity management
+
+**Phase 4: Service Integration Templates**
+
+**iOS Services:**
+- `BitkitDirectoryService` - Directory operations template
+- `BitkitPubkyRingIntegration` - Pubky Ring integration template
+- `BitkitNoisePaymentService` - Noise payment coordination template
+
+**Autopay Integration:**
+- `BitkitAutoPayViewModel` (iOS/Android) - Complete autopay logic
+- `AutoPayStorageProtocol` - Storage interface for Bitkit implementation
+- Full integration with `PaymentRequestService` for automatic payments
+
+**Documentation:**
+- `BITKIT_COMPLETE_INTEGRATION.md` - Complete integration guide covering all phases
+
+**Integration Requirements:**
+- Bitkit must implement storage protocols
+- Bitkit must implement service methods using their Pubky SDK
+- Bitkit must implement Pubky Ring URL scheme handling
+- Bitkit must implement Noise protocol handshake
+
+### Added - Bitkit Core UI Components (Phase 2)
+
+This release adds reusable UI components for core Paykit features, ported from the demo apps for Bitkit integration.
+
+**iOS Components (SwiftUI):**
+- `BitkitDashboardView` - Dashboard with stats, quick actions, and recent activity
+- `BitkitPaymentView` - Send payment form with method selection
+- `BitkitReceivePaymentView` - Receive payment with server mode
+- `BitkitContactsView` - Contact management with search
+- `BitkitReceiptsView` - Receipt history with filtering
+- `BitkitPaymentMethodsView` - Payment method listing with health monitoring
+- `BitkitMainNavigationView` - Complete navigation structure example
+
+**Android Components (Jetpack Compose):**
+- `BitkitDashboardScreen` - Dashboard with Material 3 design
+- `BitkitPaymentScreen` - Send payment form
+- `BitkitContactsScreen` - Contact management
+- `BitkitReceiptsScreen` - Receipt history
+- `BitkitPaymentMethodsScreen` - Payment methods listing
+- `BitkitMainNavigation` - Navigation structure example
+
+**Architecture:**
+- Protocol-based storage interfaces for easy Bitkit integration
+- Callback-based navigation (no hardcoded navigation)
+- ViewModel pattern for business logic separation
+- Empty states and loading indicators
+- Consistent component structure
+
+**Documentation:**
+- `BITKIT_UI_INTEGRATION.md` - Complete integration guide with styling instructions
+- `PHASE2_SUMMARY.md` - Implementation summary
+
+**Integration Requirements:**
+- Bitkit must implement storage protocols
+- Bitkit must apply their design system/styling
+- Bitkit must set up navigation structure
+- Bitkit must handle endpoint resolution
+
+### Added - Bitkit Payment Request Waking with Autopay (Phase 1)
+
+This release adds payment request handling with autopay evaluation for Bitkit integration.
+
+**New Services:**
+- `PaymentRequestService` (Swift/Kotlin) - Service for handling incoming payment requests with autopay support
+  - `handleIncomingRequest()` - Process incoming payment requests
+  - `evaluateAutopay()` - Evaluate if payment meets autopay requirements
+  - `executePayment()` - Execute payment requests via PaykitClient
+
+**New Protocols/Interfaces:**
+- `AutopayEvaluator` - Protocol for autopay evaluation logic
+  - `AutoPayViewModel` (iOS) already conforms to this protocol
+  - Android `AutoPayViewModel` can implement the interface
+
+**Integration Support:**
+- Deep link/URL scheme handler examples for iOS and Android
+- Background processing examples using BGTaskScheduler (iOS) and WorkManager (Android)
+- Comprehensive integration guide: `BITKIT_AUTOPAY_INTEGRATION.md`
+
+**Files Added:**
+- `swift/PaymentRequestService.swift` - iOS payment request service
+- `kotlin/PaymentRequestService.kt` - Android payment request service
+- `BITKIT_AUTOPAY_INTEGRATION.md` - Complete integration guide
+
+**Note:** Bitkit must implement:
+- Payment request fetching from storage/network
+- Endpoint resolution for payment requests
+- Deep link/notification handlers in their app
+- Background processing integration
+
 ### Added - Bitkit Executor FFI Integration
 
 This release adds comprehensive support for integrating external wallet implementations (like Bitkit) through FFI callback interfaces.

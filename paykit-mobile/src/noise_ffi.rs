@@ -139,7 +139,7 @@ pub fn discover_noise_endpoint(
             // Parse the endpoint JSON
             let info: NoiseEndpointData =
                 serde_json::from_str(&json_str).map_err(|e| PaykitMobileError::Serialization {
-                    message: format!("Invalid noise endpoint format: {}", e),
+                    msg: format!("Invalid noise endpoint format: {}", e),
                 })?;
 
             Ok(Some(NoiseEndpointInfo {
@@ -182,7 +182,7 @@ pub fn publish_noise_endpoint(
 
     let json =
         serde_json::to_string(&endpoint_data).map_err(|e| PaykitMobileError::Serialization {
-            message: format!("Failed to serialize noise endpoint: {}", e),
+            msg: format!("Failed to serialize noise endpoint: {}", e),
         })?;
 
     transport.put(NOISE_ENDPOINT_PATH.to_string(), json)
@@ -453,7 +453,7 @@ pub fn create_error_message(code: String, message: String) -> Result<NoisePaymen
 pub fn parse_payment_message(json: String) -> Result<NoisePaymentMessage> {
     let value: serde_json::Value =
         serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-            message: format!("Invalid message JSON: {}", e),
+            msg: format!("Invalid message JSON: {}", e),
         })?;
 
     let msg_type = value
@@ -470,7 +470,7 @@ pub fn parse_payment_message(json: String) -> Result<NoisePaymentMessage> {
         "pong" => NoisePaymentMessageType::Pong,
         _ => {
             return Err(PaykitMobileError::Validation {
-                message: format!("Unknown message type: {}", msg_type),
+                msg: format!("Unknown message type: {}", msg_type),
             })
         }
     };

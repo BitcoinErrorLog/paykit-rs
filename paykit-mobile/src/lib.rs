@@ -68,89 +68,89 @@ uniffi::setup_scaffolding!();
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum PaykitMobileError {
     /// Transport layer error (network, I/O).
-    #[error("Transport error: {message}")]
-    Transport { message: String },
+    #[error("Transport error: {msg}")]
+    Transport { msg: String },
 
     /// Validation error (invalid input, format).
-    #[error("Validation error: {message}")]
-    Validation { message: String },
+    #[error("Validation error: {msg}")]
+    Validation { msg: String },
 
     /// Resource not found.
-    #[error("Not found: {message}")]
-    NotFound { message: String },
+    #[error("Not found: {msg}")]
+    NotFound { msg: String },
 
     /// Serialization/deserialization error.
-    #[error("Serialization error: {message}")]
-    Serialization { message: String },
+    #[error("Serialization error: {msg}")]
+    Serialization { msg: String },
 
     /// Internal error (unexpected state).
-    #[error("Internal error: {message}")]
-    Internal { message: String },
+    #[error("Internal error: {msg}")]
+    Internal { msg: String },
 
     /// Network timeout error.
-    #[error("Network timeout: {message}")]
-    NetworkTimeout { message: String },
+    #[error("Network timeout: {msg}")]
+    NetworkTimeout { msg: String },
 
     /// Connection refused or failed.
-    #[error("Connection error: {message}")]
-    ConnectionError { message: String },
+    #[error("Connection error: {msg}")]
+    ConnectionError { msg: String },
 
     /// Authentication failed.
-    #[error("Authentication error: {message}")]
-    AuthenticationError { message: String },
+    #[error("Authentication error: {msg}")]
+    AuthenticationError { msg: String },
 
     /// Session expired or invalid.
-    #[error("Session error: {message}")]
-    SessionError { message: String },
+    #[error("Session error: {msg}")]
+    SessionError { msg: String },
 
     /// Rate limit exceeded.
-    #[error("Rate limit exceeded: {message}")]
-    RateLimitError { message: String },
+    #[error("Rate limit exceeded: {msg}")]
+    RateLimitError { msg: String },
 
     /// Permission denied.
-    #[error("Permission denied: {message}")]
-    PermissionDenied { message: String },
+    #[error("Permission denied: {msg}")]
+    PermissionDenied { msg: String },
 }
 
 impl From<paykit_lib::PaykitError> for PaykitMobileError {
     fn from(e: paykit_lib::PaykitError) -> Self {
         match e {
-            paykit_lib::PaykitError::Transport(msg) => Self::Transport { message: msg },
+            paykit_lib::PaykitError::Transport(msg) => Self::Transport { msg },
             paykit_lib::PaykitError::Unimplemented(msg) => Self::Internal {
-                message: msg.to_string(),
+                msg: msg.to_string(),
             },
             paykit_lib::PaykitError::ConnectionFailed { target, reason } => Self::ConnectionError {
-                message: format!("Connection to {} failed: {}", target, reason),
+                msg: format!("Connection to {} failed: {}", target, reason),
             },
             paykit_lib::PaykitError::ConnectionTimeout {
                 operation,
                 timeout_ms,
             } => Self::NetworkTimeout {
-                message: format!("{} timed out after {}ms", operation, timeout_ms),
+                msg: format!("{} timed out after {}ms", operation, timeout_ms),
             },
-            paykit_lib::PaykitError::Auth(msg) => Self::AuthenticationError { message: msg },
+            paykit_lib::PaykitError::Auth(msg) => Self::AuthenticationError { msg },
             paykit_lib::PaykitError::SessionExpired => Self::SessionError {
-                message: "Session expired".to_string(),
+                msg: "Session expired".to_string(),
             },
             paykit_lib::PaykitError::InvalidCredentials(msg) => {
-                Self::AuthenticationError { message: msg }
+                Self::AuthenticationError { msg }
             }
             paykit_lib::PaykitError::NotFound {
                 resource_type,
                 identifier,
             } => Self::NotFound {
-                message: format!("{} not found: {}", resource_type, identifier),
+                msg: format!("{} not found: {}", resource_type, identifier),
             },
             paykit_lib::PaykitError::MethodNotSupported(method) => Self::Validation {
-                message: format!("Payment method not supported: {}", method),
+                msg: format!("Payment method not supported: {}", method),
             },
             paykit_lib::PaykitError::InvalidData { field, reason } => Self::Validation {
-                message: format!("Invalid {}: {}", field, reason),
+                msg: format!("Invalid {}: {}", field, reason),
             },
-            paykit_lib::PaykitError::ValidationFailed(msg) => Self::Validation { message: msg },
-            paykit_lib::PaykitError::Serialization(msg) => Self::Serialization { message: msg },
+            paykit_lib::PaykitError::ValidationFailed(msg) => Self::Validation { msg },
+            paykit_lib::PaykitError::Serialization(msg) => Self::Serialization { msg },
             paykit_lib::PaykitError::Payment { payment_id, reason } => Self::Transport {
-                message: format!(
+                msg: format!(
                     "Payment {} failed: {}",
                     payment_id.unwrap_or_default(),
                     reason
@@ -161,7 +161,7 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
                 available,
                 currency,
             } => Self::Transport {
-                message: format!(
+                msg: format!(
                     "Insufficient funds: need {} {}, have {} {}",
                     required, currency, available, currency
                 ),
@@ -170,22 +170,22 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
                 invoice_id,
                 expired_at,
             } => Self::Transport {
-                message: format!("Invoice {} expired at {}", invoice_id, expired_at),
+                msg: format!("Invoice {} expired at {}", invoice_id, expired_at),
             },
             paykit_lib::PaykitError::PaymentRejected { payment_id, reason } => Self::Transport {
-                message: format!("Payment {} rejected: {}", payment_id, reason),
+                msg: format!("Payment {} rejected: {}", payment_id, reason),
             },
             paykit_lib::PaykitError::PaymentAlreadyCompleted { payment_id } => Self::Transport {
-                message: format!("Payment {} already completed", payment_id),
+                msg: format!("Payment {} already completed", payment_id),
             },
-            paykit_lib::PaykitError::Storage(msg) => Self::Internal { message: msg },
+            paykit_lib::PaykitError::Storage(msg) => Self::Internal { msg },
             paykit_lib::PaykitError::QuotaExceeded { used, limit } => Self::Internal {
-                message: format!("Quota exceeded: {} of {} used", used, limit),
+                msg: format!("Quota exceeded: {} of {} used", used, limit),
             },
             paykit_lib::PaykitError::RateLimited { retry_after_ms } => Self::RateLimitError {
-                message: format!("Rate limited, retry after {}ms", retry_after_ms),
+                msg: format!("Rate limited, retry after {}ms", retry_after_ms),
             },
-            paykit_lib::PaykitError::Internal(msg) => Self::Internal { message: msg },
+            paykit_lib::PaykitError::Internal(msg) => Self::Internal { msg },
         }
     }
 }
@@ -609,7 +609,7 @@ impl PaykitClient {
         lightning_network: executor_ffi::LightningNetworkFFI,
     ) -> Result<Arc<Self>> {
         let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
-            message: e.to_string(),
+            msg: e.to_string(),
         })?;
 
         Ok(Arc::new(Self {
@@ -654,7 +654,7 @@ impl PaykitClient {
             .unwrap()
             .get(&method)
             .ok_or(PaykitMobileError::NotFound {
-                message: format!("Method not found: {}", method.0),
+                msg: format!("Method not found: {}", method.0),
             })?;
 
         let result = plugin.validate_endpoint(&data);
@@ -710,7 +710,7 @@ impl PaykitClient {
         let selector = PaymentMethodSelector::new(self.registry.read().unwrap().clone());
         let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
             PaykitMobileError::Validation {
-                message: e.to_string(),
+                msg: e.to_string(),
             }
         })?;
 
@@ -976,7 +976,7 @@ impl PaykitClient {
             .unwrap()
             .get(&paykit_lib::MethodId(method_id.clone()))
             .ok_or(PaykitMobileError::NotFound {
-                message: format!("Payment method not registered: {}", method_id),
+                msg: format!("Payment method not registered: {}", method_id),
             })?;
 
         let endpoint_data = paykit_lib::EndpointData(endpoint.clone());
@@ -1031,13 +1031,13 @@ impl PaykitClient {
             .unwrap()
             .get(&paykit_lib::MethodId(method_id.clone()))
             .ok_or(PaykitMobileError::NotFound {
-                message: format!("Payment method not registered: {}", method_id),
+                msg: format!("Payment method not registered: {}", method_id),
             })?;
 
         // Parse execution data
         let execution_data: serde_json::Value = serde_json::from_str(&execution_data_json)
             .map_err(|e| PaykitMobileError::Serialization {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
 
         // Extract amount - try amount_sats first, then convert from amount_msat
@@ -1102,12 +1102,12 @@ impl PaykitClient {
 
         let subscriber_key = paykit_lib::PublicKey::from_str(&subscriber).map_err(|e| {
             PaykitMobileError::Validation {
-                message: format!("Invalid subscriber key: {}", e),
+                msg: format!("Invalid subscriber key: {}", e),
             }
         })?;
         let provider_key = paykit_lib::PublicKey::from_str(&provider).map_err(|e| {
             PaykitMobileError::Validation {
-                message: format!("Invalid provider key: {}", e),
+                msg: format!("Invalid provider key: {}", e),
             }
         })?;
 
@@ -1176,7 +1176,7 @@ impl PaykitClient {
                 "SAT",
             )
             .map_err(|e| PaykitMobileError::Validation {
-                message: e.to_string(),
+                msg: e.to_string(),
             })?;
 
         Ok(ProrationResult {
@@ -1221,12 +1221,12 @@ impl PaykitClient {
 
         let from_key = paykit_lib::PublicKey::from_str(&from_pubkey).map_err(|e| {
             PaykitMobileError::Validation {
-                message: format!("Invalid from key: {}", e),
+                msg: format!("Invalid from key: {}", e),
             }
         })?;
         let to_key = paykit_lib::PublicKey::from_str(&to_pubkey).map_err(|e| {
             PaykitMobileError::Validation {
-                message: format!("Invalid to key: {}", e),
+                msg: format!("Invalid to key: {}", e),
             }
         })?;
 
@@ -1276,11 +1276,11 @@ impl PaykitClient {
 
         let payer_key =
             paykit_lib::PublicKey::from_str(&payer).map_err(|e| PaykitMobileError::Validation {
-                message: format!("Invalid payer key: {}", e),
+                msg: format!("Invalid payer key: {}", e),
             })?;
         let payee_key =
             paykit_lib::PublicKey::from_str(&payee).map_err(|e| PaykitMobileError::Validation {
-                message: format!("Invalid payee key: {}", e),
+                msg: format!("Invalid payee key: {}", e),
             })?;
 
         let now = std::time::SystemTime::now()
@@ -1317,7 +1317,7 @@ impl PaykitClient {
         // Validate JSON
         serde_json::from_str::<serde_json::Value>(&metadata_json).map_err(|e| {
             PaykitMobileError::Serialization {
-                message: e.to_string(),
+                msg: e.to_string(),
             }
         })?;
         Ok(metadata_json)
@@ -1330,7 +1330,7 @@ impl PaykitClient {
     /// Parse scanned QR code data as a Paykit URI.
     pub fn parse_scanned_qr(&self, scanned_data: String) -> Result<scanner::ScannedUri> {
         scanner::parse_scanned_uri(scanned_data)
-            .map_err(|e| PaykitMobileError::Validation { message: e })
+            .map_err(|e| PaykitMobileError::Validation { msg: e })
     }
 
     /// Check if scanned data looks like a Paykit URI.

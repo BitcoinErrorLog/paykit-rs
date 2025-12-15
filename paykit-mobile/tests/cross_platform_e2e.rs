@@ -629,7 +629,11 @@ impl BitcoinExecutorFFI for CrossPlatformMockBitcoinExecutor {
     ) -> Result<BitcoinTxResultFFI> {
         let count = self.call_count.fetch_add(1, Ordering::SeqCst);
         Ok(BitcoinTxResultFFI {
-            txid: format!("xplat_{}_txid_{:08x}", self.platform.name().to_lowercase(), count),
+            txid: format!(
+                "xplat_{}_txid_{:08x}",
+                self.platform.name().to_lowercase(),
+                count
+            ),
             raw_tx: None,
             vout: 0,
             fee_sats: 210,
@@ -639,7 +643,12 @@ impl BitcoinExecutorFFI for CrossPlatformMockBitcoinExecutor {
         })
     }
 
-    fn estimate_fee(&self, _address: String, _amount_sats: u64, _target_blocks: u32) -> Result<u64> {
+    fn estimate_fee(
+        &self,
+        _address: String,
+        _amount_sats: u64,
+        _target_blocks: u32,
+    ) -> Result<u64> {
         Ok(210)
     }
 
@@ -647,7 +656,12 @@ impl BitcoinExecutorFFI for CrossPlatformMockBitcoinExecutor {
         Ok(None)
     }
 
-    fn verify_transaction(&self, _txid: String, _address: String, _amount_sats: u64) -> Result<bool> {
+    fn verify_transaction(
+        &self,
+        _txid: String,
+        _address: String,
+        _amount_sats: u64,
+    ) -> Result<bool> {
         Ok(true)
     }
 }
@@ -714,17 +728,19 @@ impl LightningExecutorFFI for CrossPlatformMockLightningExecutor {
 #[test]
 fn test_executor_cross_platform_ios_simulation() {
     // Simulate iOS client with executor
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     client
-        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Ios)))
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(
+            Platform::Ios,
+        )))
         .unwrap();
     client
-        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(Platform::Ios)))
+        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(
+            Platform::Ios,
+        )))
         .unwrap();
 
     // Execute payment
@@ -744,17 +760,19 @@ fn test_executor_cross_platform_ios_simulation() {
 #[test]
 fn test_executor_cross_platform_android_simulation() {
     // Simulate Android client with executor
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     client
-        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Android)))
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(
+            Platform::Android,
+        )))
         .unwrap();
     client
-        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(Platform::Android)))
+        .register_lightning_executor(Box::new(CrossPlatformMockLightningExecutor::new(
+            Platform::Android,
+        )))
         .unwrap();
 
     // Execute payment
@@ -774,23 +792,23 @@ fn test_executor_cross_platform_android_simulation() {
 #[test]
 fn test_executor_payment_proof_format_consistency() {
     // Test that proof format is consistent across platforms
-    let ios_client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let ios_client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
-    let android_client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let android_client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     ios_client
-        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Ios)))
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(
+            Platform::Ios,
+        )))
         .unwrap();
     android_client
-        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(Platform::Android)))
+        .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(
+            Platform::Android,
+        )))
         .unwrap();
 
     // Execute payments
@@ -852,7 +870,9 @@ fn test_executor_concurrent_cross_platform_payments() {
             .unwrap();
 
             client
-                .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(platform)))
+                .register_bitcoin_executor(Box::new(CrossPlatformMockBitcoinExecutor::new(
+                    platform,
+                )))
                 .unwrap();
 
             let result = client

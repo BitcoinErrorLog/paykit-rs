@@ -530,17 +530,17 @@ pub struct SyncResult {
 /// FFI-safe storage error type.
 #[derive(Debug, Clone, thiserror::Error, uniffi::Error)]
 pub enum StorageCacheError {
-    #[error("Storage error: {message}")]
-    Storage { message: String },
+    #[error("Storage error: {msg}")]
+    Storage { msg: String },
 
-    #[error("Lock error: {message}")]
-    Lock { message: String },
+    #[error("Lock error: {msg}")]
+    Lock { msg: String },
 }
 
 impl From<StorageError> for StorageCacheError {
     fn from(e: StorageError) -> Self {
         Self::Storage {
-            message: e.to_string(),
+            msg: e.to_string(),
         }
     }
 }
@@ -570,7 +570,7 @@ impl ContactCacheFFI {
     /// Get all cached contacts.
     pub fn get_all(&self) -> Result<Vec<CachedContactFFI>, StorageCacheError> {
         let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         let contacts = cache.get_all()?;
         Ok(contacts.into_iter().map(CachedContactFFI::from).collect())
@@ -579,7 +579,7 @@ impl ContactCacheFFI {
     /// Get a specific contact by public key.
     pub fn get(&self, pubkey: String) -> Result<Option<CachedContactFFI>, StorageCacheError> {
         let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         let contact = cache.get(&pubkey)?;
         Ok(contact.map(CachedContactFFI::from))
@@ -588,7 +588,7 @@ impl ContactCacheFFI {
     /// Add a contact by public key.
     pub fn add(&self, pubkey: String) -> Result<(), StorageCacheError> {
         let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         cache.add(pubkey)?;
         Ok(())
@@ -597,7 +597,7 @@ impl ContactCacheFFI {
     /// Add a contact with a display name.
     pub fn add_with_name(&self, pubkey: String, name: String) -> Result<(), StorageCacheError> {
         let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         cache.add_with_name(pubkey, name)?;
         Ok(())
@@ -606,7 +606,7 @@ impl ContactCacheFFI {
     /// Remove a contact by public key.
     pub fn remove(&self, pubkey: String) -> Result<(), StorageCacheError> {
         let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         cache.remove(&pubkey)?;
         Ok(())
@@ -615,7 +615,7 @@ impl ContactCacheFFI {
     /// Check if a contact exists.
     pub fn contains(&self, pubkey: String) -> Result<bool, StorageCacheError> {
         let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         Ok(cache.contains(&pubkey)?)
     }
@@ -623,7 +623,7 @@ impl ContactCacheFFI {
     /// Get the number of cached contacts.
     pub fn count(&self) -> Result<u32, StorageCacheError> {
         let cache = self.cache.read().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         Ok(cache.count()? as u32)
     }
@@ -631,7 +631,7 @@ impl ContactCacheFFI {
     /// Clear all cached contacts.
     pub fn clear(&self) -> Result<(), StorageCacheError> {
         let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         cache.clear()?;
         Ok(())
@@ -640,7 +640,7 @@ impl ContactCacheFFI {
     /// Sync with remote contacts.
     pub fn sync(&self, remote_pubkeys: Vec<String>) -> Result<SyncResultFFI, StorageCacheError> {
         let cache = self.cache.write().map_err(|_| StorageCacheError::Lock {
-            message: "Lock poisoned".to_string(),
+            msg: "Lock poisoned".to_string(),
         })?;
         let result = cache.sync(&remote_pubkeys)?;
         Ok(SyncResultFFI::from(result))

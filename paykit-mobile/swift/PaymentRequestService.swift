@@ -177,20 +177,9 @@ public protocol AutopayEvaluator {
     func evaluate(peerPubkey: String, amount: Int64, methodId: String) -> AutopayEvaluationResult
 }
 
-/// Extension to make AutoPayViewModel conform to AutopayEvaluator
-extension AutoPayViewModel: AutopayEvaluator {
-    public func evaluate(peerPubkey: String, amount: Int64, methodId: String) -> AutopayEvaluationResult {
-        let result = shouldAutoApprove(peerPubkey: peerPubkey, amount: amount, methodId: methodId)
-        
-        switch result {
-        case .approved(let ruleId, let ruleName):
-            return .approved(ruleId: ruleId, ruleName: ruleName)
-        case .denied(let reason):
-            return .denied(reason: reason)
-        case .needsApproval:
-            return .needsApproval
-        }
-    }
+/// Extension to make BitkitAutoPayViewModel conform to AutopayEvaluator
+extension BitkitAutoPayViewModel: AutopayEvaluator {
+    // Already implements evaluate() method
 }
 
 // PaymentRequest is already defined in PaykitMobile.swift

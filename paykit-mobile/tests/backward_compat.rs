@@ -126,11 +126,9 @@ fn test_backward_compat_optional_network_param() {
     // but if used, should work correctly
     use paykit_mobile::executor_ffi::{BitcoinNetworkFFI, LightningNetworkFFI};
 
-    let _ = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Mainnet,
-        LightningNetworkFFI::Mainnet,
-    )
-    .unwrap();
+    let _ =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Mainnet, LightningNetworkFFI::Mainnet)
+            .unwrap();
 }
 
 #[test]
@@ -169,7 +167,10 @@ fn test_backward_compat_error_types() {
 
     // All should be usable
     assert!(matches!(transport_err, PaykitMobileError::Transport { .. }));
-    assert!(matches!(validation_err, PaykitMobileError::Validation { .. }));
+    assert!(matches!(
+        validation_err,
+        PaykitMobileError::Validation { .. }
+    ));
     assert!(matches!(not_found_err, PaykitMobileError::NotFound { .. }));
     assert!(matches!(internal_err, PaykitMobileError::Internal { .. }));
 }
@@ -285,11 +286,9 @@ fn test_backward_compat_network_defaults() {
 fn test_backward_compat_network_accessors() {
     use paykit_mobile::executor_ffi::{BitcoinNetworkFFI, LightningNetworkFFI};
 
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     // Network accessors should work
     let _btc_network = client.bitcoin_network();

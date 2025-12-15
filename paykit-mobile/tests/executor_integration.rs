@@ -99,12 +99,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutor {
         })
     }
 
-    fn estimate_fee(
-        &self,
-        _address: String,
-        _amount_sats: u64,
-        target_blocks: u32,
-    ) -> Result<u64> {
+    fn estimate_fee(&self, _address: String, _amount_sats: u64, target_blocks: u32) -> Result<u64> {
         if self.should_fail.load(Ordering::SeqCst) {
             return Err(PaykitMobileError::Transport {
                 message: self.failure_message.clone(),
@@ -311,11 +306,9 @@ fn test_create_client_mainnet() {
 
 #[test]
 fn test_create_client_testnet() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Testnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Testnet)
+            .unwrap();
 
     assert_eq!(client.bitcoin_network(), BitcoinNetworkFFI::Testnet);
     assert_eq!(client.lightning_network(), LightningNetworkFFI::Testnet);
@@ -323,11 +316,9 @@ fn test_create_client_testnet() {
 
 #[test]
 fn test_create_client_regtest() {
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Regtest,
-        LightningNetworkFFI::Regtest,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Regtest, LightningNetworkFFI::Regtest)
+            .unwrap();
 
     assert_eq!(client.bitcoin_network(), BitcoinNetworkFFI::Regtest);
     assert_eq!(client.lightning_network(), LightningNetworkFFI::Regtest);
@@ -336,11 +327,9 @@ fn test_create_client_regtest() {
 #[test]
 fn test_mixed_network_configuration() {
     // This is unusual but should work (e.g., testnet Bitcoin with mainnet Lightning)
-    let client = PaykitClient::new_with_network(
-        BitcoinNetworkFFI::Testnet,
-        LightningNetworkFFI::Mainnet,
-    )
-    .unwrap();
+    let client =
+        PaykitClient::new_with_network(BitcoinNetworkFFI::Testnet, LightningNetworkFFI::Mainnet)
+            .unwrap();
 
     assert_eq!(client.bitcoin_network(), BitcoinNetworkFFI::Testnet);
     assert_eq!(client.lightning_network(), LightningNetworkFFI::Mainnet);
@@ -464,9 +453,7 @@ fn test_execute_bitcoin_payment_failure() {
             .unwrap();
 
     client
-        .register_bitcoin_executor(Box::new(MockBitcoinExecutor::failing(
-            "Insufficient funds",
-        )))
+        .register_bitcoin_executor(Box::new(MockBitcoinExecutor::failing("Insufficient funds")))
         .unwrap();
 
     let result = client.execute_payment(
@@ -827,7 +814,10 @@ fn test_multiple_payments_sequential() {
 
     // Verify all payments were tracked
     assert_eq!(executor.get_send_count(), 5);
-    assert_eq!(executor.get_total_sent(), 10000 + 20000 + 30000 + 40000 + 50000);
+    assert_eq!(
+        executor.get_total_sent(),
+        10000 + 20000 + 30000 + 40000 + 50000
+    );
 }
 
 // ============================================================================

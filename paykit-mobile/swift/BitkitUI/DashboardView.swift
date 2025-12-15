@@ -10,7 +10,6 @@ import SwiftUI
 import PaykitMobile
 
 /// Dashboard view model for Bitkit integration
-/// Bitkit should adapt this to use their storage and data sources
 public class BitkitDashboardViewModel: ObservableObject {
     @Published public var recentReceipts: [Receipt] = []
     @Published public var contactCount: Int = 0
@@ -35,7 +34,6 @@ public class BitkitDashboardViewModel: ObservableObject {
     }
     
     /// Load dashboard data
-    /// Bitkit should implement this to load from their storage
     public func loadDashboard(
         receiptStorage: ReceiptStorageProtocol? = nil,
         contactStorage: ContactStorageProtocol? = nil,
@@ -92,49 +90,13 @@ public class BitkitDashboardViewModel: ObservableObject {
     }
 }
 
-/// Storage protocols for Bitkit to implement
-public protocol ReceiptStorageProtocol {
-    func recentReceipts(limit: Int) -> [Receipt]
-    func totalSent() -> UInt64
-    func totalReceived() -> UInt64
-    func pendingCount() -> Int
-}
-
-public protocol ContactStorageProtocol {
-    func listContacts() -> [Contact]
-}
-
-public protocol AutoPayStorageProtocol {
-    func getSettings() -> AutoPaySettings
-}
-
-public protocol SubscriptionStorageProtocol {
-    func activeSubscriptions() -> [Subscription]
-}
-
-public protocol PaymentRequestStorageProtocol {
-    func pendingCount() -> Int
-}
-
-/// Contact model (placeholder - Bitkit should use their own)
-public struct Contact: Identifiable {
-    public let id: String
-    public let name: String
-    public let pubkey: String
-    
-    public init(id: String, name: String, pubkey: String) {
-        self.id = id
-        self.name = name
-        self.pubkey = pubkey
-    }
-}
+// Storage protocols are defined in StorageProtocols.swift
 
 /// Dashboard view component
-/// Bitkit should adapt this to match their design system
 public struct BitkitDashboardView: View {
     @ObservedObject var viewModel: BitkitDashboardViewModel
     
-    // Navigation callbacks - Bitkit should implement these
+    // Navigation callbacks
     public var onSendPayment: () -> Void = {}
     public var onReceivePayment: () -> Void = {}
     public var onScanQR: () -> Void = {}
@@ -167,7 +129,6 @@ public struct BitkitDashboardView: View {
             .padding()
         }
         .refreshable {
-            // Bitkit should implement refresh logic
             viewModel.loadDashboard()
         }
     }

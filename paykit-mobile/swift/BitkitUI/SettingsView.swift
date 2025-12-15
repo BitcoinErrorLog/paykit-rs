@@ -45,10 +45,7 @@ public struct BitkitSettingsView: View {
                 // Quick Access Section
                 Section {
                     if let onAutoPay = viewModel.onNavigateToAutoPay {
-                        NavigationLink {
-                            // Bitkit should provide AutoPayView
-                            Text("Auto-Pay Settings")
-                        } label: {
+                        Button(action: onAutoPay) {
                             HStack {
                                 Image(systemName: "arrow.clockwise.circle.fill")
                                     .foregroundColor(.orange)
@@ -59,10 +56,7 @@ public struct BitkitSettingsView: View {
                     }
                     
                     if let onSubscriptions = viewModel.onNavigateToSubscriptions {
-                        NavigationLink {
-                            // Bitkit should provide SubscriptionsView
-                            Text("Subscriptions")
-                        } label: {
+                        Button(action: onSubscriptions) {
                             HStack {
                                 Image(systemName: "repeat.circle.fill")
                                     .foregroundColor(.blue)
@@ -73,10 +67,7 @@ public struct BitkitSettingsView: View {
                     }
                     
                     if let onPaymentRequests = viewModel.onNavigateToPaymentRequests {
-                        NavigationLink {
-                            // Bitkit should provide PaymentRequestsView
-                            Text("Payment Requests")
-                        } label: {
+                        Button(action: onPaymentRequests) {
                             HStack {
                                 Image(systemName: "envelope.circle.fill")
                                     .foregroundColor(.purple)
@@ -87,10 +78,7 @@ public struct BitkitSettingsView: View {
                     }
                     
                     if let onPaymentMethods = viewModel.onNavigateToPaymentMethods {
-                        NavigationLink {
-                            // Bitkit should provide PaymentMethodsView
-                            Text("Payment Methods")
-                        } label: {
+                        Button(action: onPaymentMethods) {
                             HStack {
                                 Image(systemName: "globe")
                                     .foregroundColor(.green)
@@ -142,10 +130,7 @@ public struct BitkitSettingsView: View {
                 // Identity Management
                 if let onIdentityManagement = viewModel.onNavigateToIdentityManagement {
                     Section {
-                        NavigationLink {
-                            // Bitkit should provide IdentityListView
-                            Text("Manage Identities")
-                        } label: {
+                        Button(action: onIdentityManagement) {
                             HStack {
                                 Image(systemName: "person.2.fill")
                                     .foregroundColor(.blue)

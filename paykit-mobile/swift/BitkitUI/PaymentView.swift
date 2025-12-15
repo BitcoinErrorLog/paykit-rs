@@ -59,8 +59,6 @@ public class BitkitPaymentViewModel: ObservableObject {
         
         Task {
             do {
-                // Bitkit should implement recipient resolution and endpoint discovery
-                // For now, this is a placeholder
                 let endpoint = try await resolveEndpoint(for: recipientUri)
                 
                 let result = try paykitClient.executePayment(
@@ -97,15 +95,18 @@ public class BitkitPaymentViewModel: ObservableObject {
         currency = "SAT"
     }
     
-    // Placeholder - Bitkit should implement endpoint resolution
+    // Endpoint resolver callback - Bitkit must provide this
+    public var endpointResolver: ((String) async throws -> String)?
+    
     private func resolveEndpoint(for recipient: String) async throws -> String {
-        // This should resolve the recipient's payment endpoint
-        // from their directory or contact information
-        throw NSError(
-            domain: "BitkitPaymentViewModel",
-            code: 1,
-            userInfo: [NSLocalizedDescriptionKey: "Endpoint resolution not implemented. Bitkit should implement this."]
-        )
+        guard let resolver = endpointResolver else {
+            throw NSError(
+                domain: "BitkitPaymentViewModel",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Endpoint resolver not provided. Set endpointResolver on BitkitPaymentViewModel."]
+            )
+        }
+        return try await resolver(recipient)
     }
 }
 

@@ -68,6 +68,7 @@ public class BitkitPaymentRequestsViewModel: ObservableObject {
                 )
                 
                 await MainActor.run {
+                    paymentRequestStorage.addRequest(request)
                     pendingRequests.append(request)
                     isLoading = false
                     resetForm()
@@ -85,18 +86,19 @@ public class BitkitPaymentRequestsViewModel: ObservableObject {
     func handleRequestAction(request: PaymentRequest, action: RequestAction) {
         switch action {
         case .accept:
-            // Bitkit should implement payment request acceptance
+            // Payment request acceptance should trigger payment execution
+            // This is handled by PaymentRequestService
             break
         case .decline:
             pendingRequests.removeAll { $0.requestId == request.requestId }
-            // Bitkit should update storage
+            paymentRequestStorage.deleteRequest(id: request.requestId)
         }
     }
     
     func deleteRequest(id: String) {
         pendingRequests.removeAll { $0.requestId == id }
         requestHistory.removeAll { $0.requestId == id }
-        // Bitkit should delete from storage
+        paymentRequestStorage.deleteRequest(id: id)
     }
     
     private func resetForm() {
@@ -117,10 +119,11 @@ enum RequestAction {
 /// Payment Requests view component
 public struct BitkitPaymentRequestsView: View {
     @ObservedObject var viewModel: BitkitPaymentRequestsViewModel
-    @State private var myPublicKey: String = "" // Bitkit should provide this
+    private let myPublicKey: String
     
-    public init(viewModel: BitkitPaymentRequestsViewModel) {
+    public init(viewModel: BitkitPaymentRequestsViewModel, myPublicKey: String) {
         self.viewModel = viewModel
+        self.myPublicKey = myPublicKey
     }
     
     public var body: some View {
@@ -301,16 +304,4 @@ struct RequestHistoryRow: View {
     }
 }
 
-// MARK: - Payment Request Storage Protocol Extension
-
-extension PaymentRequestStorageProtocol {
-    func pendingRequests() -> [PaymentRequest] {
-        // Bitkit should implement this
-        return []
-    }
-    
-    func requestHistory() -> [PaymentRequest] {
-        // Bitkit should implement this
-        return []
-    }
-}
+// PaymentRequestStorageProtocol methods are defined in StorageProtocols.swift

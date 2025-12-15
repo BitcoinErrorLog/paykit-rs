@@ -43,16 +43,18 @@ public class BitkitContactsViewModel: ObservableObject {
     }
     
     func addContact(name: String, pubkey: String) {
-        let contact = Contact(id: UUID().uuidString, name: name, pubkey: pubkey)
-        contacts.append(contact)
-        filteredContacts = contacts
-        // Bitkit should persist this to their storage
+        let contact = Contact(name: name, pubkey: pubkey)
+        contactStorage.addContact(contact)
+        loadContacts()
     }
     
     func deleteContact(at offsets: IndexSet) {
+        let toDelete = offsets.map { contacts[$0] }
         contacts.remove(atOffsets: offsets)
         filteredContacts = contacts
-        // Bitkit should delete from their storage
+        for contact in toDelete {
+            contactStorage.deleteContact(id: contact.id)
+        }
     }
 }
 

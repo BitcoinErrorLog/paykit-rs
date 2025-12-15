@@ -23,28 +23,61 @@ public class BitkitReceivePaymentViewModel: ObservableObject {
         self.paykitClient = paykitClient
     }
     
+    // Server mode callbacks - Bitkit must provide these
+    public var onStartListening: (() async throws -> (connectionInfo: String, qrCodeData: String))?
+    public var onStopListening: (() -> Void)?
+    public var onAcceptRequest: ((PaymentRequest) async throws -> Void)?
+    
     func startListening() {
-        // Bitkit should implement Noise server mode listening
-        // This is a placeholder
-        isListening = true
-        // Generate connection info and QR code
-        connectionInfo = "pubky://..." // Bitkit should generate this
-        qrCodeData = connectionInfo
+        guard let startHandler = onStartListening else {
+            errorMessage = "Server mode handler not provided. Set onStartListening on BitkitReceivePaymentViewModel."
+            return
+        }
+        
+        Task {
+            do {
+                let (info, qr) = try await startHandler()
+                await MainActor.run {
+                    isListening = true
+                    connectionInfo = info
+                    qrCodeData = qr
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
     
     func stopListening() {
+        onStopListening?()
         isListening = false
         connectionInfo = ""
         qrCodeData = ""
     }
     
     func acceptRequest(_ request: PaymentRequest) {
-        // Bitkit should implement payment request acceptance
-        // This would execute the payment and generate a receipt
+        guard let acceptHandler = onAcceptRequest else {
+            errorMessage = "Request acceptance handler not provided. Set onAcceptRequest on BitkitReceivePaymentViewModel."
+            return
+        }
+        
+        Task {
+            do {
+                try await acceptHandler(request)
+                await MainActor.run {
+                    incomingRequests.removeAll { $0.requestId == request.requestId }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
     
     func declineRequest(_ request: PaymentRequest) {
-        // Bitkit should implement payment request decline
         incomingRequests.removeAll { $0.requestId == request.requestId }
     }
 }

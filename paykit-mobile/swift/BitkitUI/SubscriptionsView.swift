@@ -83,6 +83,7 @@ public class BitkitSubscriptionsViewModel: ObservableObject {
                 )
                 
                 await MainActor.run {
+                    subscriptionStorage.addSubscription(subscription)
                     subscriptions.append(subscription)
                     isLoading = false
                     showSuccess = true
@@ -128,7 +129,9 @@ public class BitkitSubscriptionsViewModel: ObservableObject {
     func deleteSubscriptions(at offsets: IndexSet) {
         let toDelete = offsets.map { subscriptions[$0] }
         subscriptions.remove(atOffsets: offsets)
-        // Bitkit should delete from storage
+        for subscription in toDelete {
+            subscriptionStorage.deleteSubscription(id: subscription.subscriptionId)
+        }
     }
     
     private func resetForm() {
@@ -144,10 +147,11 @@ public class BitkitSubscriptionsViewModel: ObservableObject {
 /// Subscriptions view component
 public struct BitkitSubscriptionsView: View {
     @ObservedObject var viewModel: BitkitSubscriptionsViewModel
-    @State private var myPublicKey: String = "" // Bitkit should provide this
+    private let myPublicKey: String
     
-    public init(viewModel: BitkitSubscriptionsViewModel) {
+    public init(viewModel: BitkitSubscriptionsViewModel, myPublicKey: String) {
         self.viewModel = viewModel
+        self.myPublicKey = myPublicKey
     }
     
     public var body: some View {

@@ -4,6 +4,44 @@ All notable changes to the paykit-mobile crate are documented in this file.
 
 ## [Unreleased]
 
+### Added - Bitkit Core UI Components (Phase 2)
+
+This release adds reusable UI components for core Paykit features, ported from the demo apps for Bitkit integration.
+
+**iOS Components (SwiftUI):**
+- `BitkitDashboardView` - Dashboard with stats, quick actions, and recent activity
+- `BitkitPaymentView` - Send payment form with method selection
+- `BitkitReceivePaymentView` - Receive payment with server mode
+- `BitkitContactsView` - Contact management with search
+- `BitkitReceiptsView` - Receipt history with filtering
+- `BitkitPaymentMethodsView` - Payment method listing with health monitoring
+- `BitkitMainNavigationView` - Complete navigation structure example
+
+**Android Components (Jetpack Compose):**
+- `BitkitDashboardScreen` - Dashboard with Material 3 design
+- `BitkitPaymentScreen` - Send payment form
+- `BitkitContactsScreen` - Contact management
+- `BitkitReceiptsScreen` - Receipt history
+- `BitkitPaymentMethodsScreen` - Payment methods listing
+- `BitkitMainNavigation` - Navigation structure example
+
+**Architecture:**
+- Protocol-based storage interfaces for easy Bitkit integration
+- Callback-based navigation (no hardcoded navigation)
+- ViewModel pattern for business logic separation
+- Empty states and loading indicators
+- Consistent component structure
+
+**Documentation:**
+- `BITKIT_UI_INTEGRATION.md` - Complete integration guide with styling instructions
+- `PHASE2_SUMMARY.md` - Implementation summary
+
+**Integration Requirements:**
+- Bitkit must implement storage protocols
+- Bitkit must apply their design system/styling
+- Bitkit must set up navigation structure
+- Bitkit must handle endpoint resolution
+
 ### Added - Bitkit Payment Request Waking with Autopay (Phase 1)
 
 This release adds payment request handling with autopay evaluation for Bitkit integration.

@@ -90,6 +90,7 @@ class BitkitSubscriptionsViewModel(
                     terms = terms
                 )
                 
+                subscriptionStorage.addSubscription(subscription)
                 subscriptions = subscriptions + subscription
                 isLoading = false
                 showSuccess = true
@@ -128,8 +129,11 @@ class BitkitSubscriptionsViewModel(
     }
     
     fun deleteSubscriptions(indices: List<Int>) {
+        val toDelete = indices.map { subscriptions[it] }
         subscriptions = subscriptions.filterIndexed { index, _ -> index !in indices }
-        // Bitkit should delete from storage
+        for (subscription in toDelete) {
+            subscriptionStorage.deleteSubscription(id = subscription.subscriptionId)
+        }
     }
     
     private fun resetForm() {
@@ -149,7 +153,7 @@ class BitkitSubscriptionsViewModel(
 @Composable
 fun BitkitSubscriptionsScreen(
     viewModel: BitkitSubscriptionsViewModel,
-    myPublicKey: String = "" // Bitkit should provide this
+    myPublicKey: String
 ) {
     val scope = rememberCoroutineScope()
     

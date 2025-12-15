@@ -18,7 +18,7 @@ import com.paykit.mobile.paykit_mobile.ScannedUri
 
 /**
  * QR Scanner screen component for Bitkit integration
- * Note: Bitkit should integrate a QR scanning library (ML Kit or ZXing)
+ * Note: Bitkit must integrate a QR scanning library (ML Kit or ZXing) for production use
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,15 +91,15 @@ fun BitkitQRScannerScreen(
                     )
                 }
             } else {
-                // Bitkit should integrate QR scanner here
-                // For now, show placeholder
+                // QR scanner integration point
+                // Bitkit must integrate ML Kit or ZXing here
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("QR Scanner Placeholder")
+                    Text("QR Scanner")
                     Text(
-                        "Bitkit should integrate ML Kit or ZXing for QR scanning",
+                        "Integrate ML Kit or ZXing for QR code scanning",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

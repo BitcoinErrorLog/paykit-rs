@@ -1,8 +1,8 @@
 //! Binary to generate UniFFI bindings using uniffi_bindgen as a library
-//! This works around the issue where uniffi-bindgen binary isn't available in 0.25
+//! Updated for uniffi 0.29.x API
 
+use camino::Utf8PathBuf;
 use clap::{Parser, ValueEnum};
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "generate-bindings")]
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 struct Cli {
     /// Path to the compiled library (.dylib, .so, or .a file)
     #[arg(long, default_value = "../target/release/libpaykit_mobile.dylib")]
-    library: PathBuf,
+    library: Utf8PathBuf,
 
     /// Output language
     #[arg(short = 'l', long = "language", default_value = "swift")]
@@ -18,7 +18,7 @@ struct Cli {
 
     /// Output directory
     #[arg(short = 'o', long = "out-dir")]
-    out_dir: Option<PathBuf>,
+    out_dir: Option<Utf8PathBuf>,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
 
     // Determine output directory
     let out_dir = cli.out_dir.unwrap_or_else(|| {
-        let mut dir = PathBuf::from(".");
+        let mut dir = Utf8PathBuf::from(".");
         match cli.language {
             Language::Swift => dir.push("swift/generated"),
             Language::Kotlin => dir.push("kotlin/generated"),
@@ -49,53 +49,55 @@ fn main() -> anyhow::Result<()> {
         "Generating {} bindings...",
         format!("{:?}", cli.language).to_lowercase()
     );
-    println!("Library: {}", cli.library.display());
-    println!("Output: {}", out_dir.display());
-
-    // Use uniffi_bindgen's library API
-    // Note: uniffi_bindgen 0.25's API is internal, so we need to use the CLI interface
-    // For now, we'll use a workaround by calling the library's internal functions
+    println!("Library: {}", cli.library);
+    println!("Output: {}", out_dir);
 
     // Check if library exists
     if !cli.library.exists() {
-        anyhow::bail!("Library not found: {}", cli.library.display());
+        anyhow::bail!("Library not found: {}", cli.library);
     }
 
-    // Use uniffi_bindgen's generate_bindings function
-    // This is a simplified version - the actual API is more complex
-    let language_str = match cli.language {
-        Language::Swift => "swift",
-        Language::Kotlin => "kotlin",
-        Language::Python => "python",
-    };
+    // Use uniffi_bindgen's library_mode API for 0.29.x
+    use uniffi_bindgen::bindings::{KotlinBindingGenerator, PythonBindingGenerator, SwiftBindingGenerator};
+    use uniffi_bindgen::library_mode::generate_bindings;
 
-    // Call uniffi_bindgen's main function with the right arguments
-    // Since uniffi_bindgen 0.25 doesn't expose a clean API, we'll need to
-    // use the command-line interface through std::process
+    println!("Calling uniffi_bindgen::library_mode::generate_bindings...");
 
-    // Actually, let's try using the uniffi crate's built-in functionality
-    // The uniffi crate with "cli" feature should provide bindgen functionality
-
-    // Use uniffi_bindgen's library API
-    // The library provides a generate_bindings function we can call
-    use uniffi_bindgen::generate_bindings;
-
-    let language_enum = match cli.language {
-        Language::Swift => uniffi_bindgen::BindingGeneratorLang::Swift,
-        Language::Kotlin => uniffi_bindgen::BindingGeneratorLang::Kotlin,
-        Language::Python => uniffi_bindgen::BindingGeneratorLang::Python,
-    };
-
-    println!("Calling uniffi_bindgen::generate_bindings...");
-
-    // Call the actual bindgen function
-    generate_bindings(
-        &cli.library,
-        language_enum,
-        None, // config_file
-        &out_dir,
-        false, // only_one_binding_file
-    )?;
+    match cli.language {
+        Language::Swift => {
+            generate_bindings(
+                &cli.library,
+                None,
+                &SwiftBindingGenerator,
+                &uniffi_bindgen::EmptyCrateConfigSupplier,
+                None,
+                &out_dir,
+                false,
+            )?;
+        }
+        Language::Kotlin => {
+            generate_bindings(
+                &cli.library,
+                None,
+                &KotlinBindingGenerator,
+                &uniffi_bindgen::EmptyCrateConfigSupplier,
+                None,
+                &out_dir,
+                false,
+            )?;
+        }
+        Language::Python => {
+            generate_bindings(
+                &cli.library,
+                None,
+                &PythonBindingGenerator,
+                &uniffi_bindgen::EmptyCrateConfigSupplier,
+                None,
+                &out_dir,
+                false,
+            )?;
+        }
+    }
 
     println!("✅ Bindings generated successfully!");
     Ok(())

@@ -121,6 +121,17 @@ void uniffi_paykit_mobile_fn_method_directoryoperationsasync_remove_contact(void
 );
 void uniffi_paykit_mobile_fn_method_directoryoperationsasync_remove_payment_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer method_id, RustCallStatus *_Nonnull out_status
 );
+void*_Nonnull uniffi_paykit_mobile_fn_clone_executorasyncbridge(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_free_executorasyncbridge(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+void*_Nonnull uniffi_paykit_mobile_fn_constructor_executorasyncbridge_new(RustCallStatus *_Nonnull out_status
+    
+);
+void*_Nonnull uniffi_paykit_mobile_fn_constructor_executorasyncbridge_with_timeout(uint64_t timeout_ms, RustCallStatus *_Nonnull out_status
+);
+uint64_t uniffi_paykit_mobile_fn_method_executorasyncbridge_default_timeout_ms(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
 void*_Nonnull uniffi_paykit_mobile_fn_clone_paykitclient(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 void uniffi_paykit_mobile_fn_free_paykitclient(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -128,7 +139,11 @@ void uniffi_paykit_mobile_fn_free_paykitclient(void*_Nonnull ptr, RustCallStatus
 void*_Nonnull uniffi_paykit_mobile_fn_constructor_paykitclient_new(RustCallStatus *_Nonnull out_status
     
 );
+void*_Nonnull uniffi_paykit_mobile_fn_constructor_paykitclient_new_with_network(RustBuffer bitcoin_network, RustBuffer lightning_network, RustCallStatus *_Nonnull out_status
+);
 void uniffi_paykit_mobile_fn_method_paykitclient_add_contact(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer contact_pubkey, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_bitcoin_network(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_calculate_proration(void*_Nonnull ptr, int64_t current_amount_sats, int64_t new_amount_sats, int64_t period_start, int64_t period_end, int64_t change_date, RustCallStatus *_Nonnull out_status
 );
@@ -150,6 +165,8 @@ uint32_t uniffi_paykit_mobile_fn_method_paykitclient_days_remaining_in_period(vo
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer recipient_pubkey, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_execute_payment(void*_Nonnull ptr, RustBuffer method_id, RustBuffer endpoint, uint64_t amount_sats, RustBuffer metadata_json, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_extract_key_from_qr(void*_Nonnull ptr, RustBuffer scanned_data, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_extract_method_from_qr(void*_Nonnull ptr, RustBuffer scanned_data, RustCallStatus *_Nonnull out_status
@@ -160,15 +177,23 @@ RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_fetch_payment_endpoint(vo
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_fetch_supported_payments(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer owner_pubkey, RustCallStatus *_Nonnull out_status
 );
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_generate_payment_proof(void*_Nonnull ptr, RustBuffer method_id, RustBuffer execution_data_json, RustCallStatus *_Nonnull out_status
+);
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_get_health_status(void*_Nonnull ptr, RustBuffer method_id, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_get_in_progress_payments(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_get_payment_status(void*_Nonnull ptr, RustBuffer receipt_id, RustCallStatus *_Nonnull out_status
 );
+int8_t uniffi_paykit_mobile_fn_method_paykitclient_has_bitcoin_executor(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+int8_t uniffi_paykit_mobile_fn_method_paykitclient_has_lightning_executor(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
 int8_t uniffi_paykit_mobile_fn_method_paykitclient_is_method_usable(void*_Nonnull ptr, RustBuffer method_id, RustCallStatus *_Nonnull out_status
 );
 int8_t uniffi_paykit_mobile_fn_method_paykitclient_is_paykit_qr(void*_Nonnull ptr, RustBuffer scanned_data, RustCallStatus *_Nonnull out_status
+);
+RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_lightning_network(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_list_contacts(void*_Nonnull ptr, void*_Nonnull transport, RustCallStatus *_Nonnull out_status
 );
@@ -183,6 +208,10 @@ RustBuffer uniffi_paykit_mobile_fn_method_paykitclient_parse_scanned_qr(void*_No
 void uniffi_paykit_mobile_fn_method_paykitclient_publish_noise_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer host, uint16_t port, RustBuffer noise_pubkey, RustBuffer metadata, RustCallStatus *_Nonnull out_status
 );
 void uniffi_paykit_mobile_fn_method_paykitclient_publish_payment_endpoint(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer method_id, RustBuffer endpoint_data, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_method_paykitclient_register_bitcoin_executor(void*_Nonnull ptr, uint64_t executor, RustCallStatus *_Nonnull out_status
+);
+void uniffi_paykit_mobile_fn_method_paykitclient_register_lightning_executor(void*_Nonnull ptr, uint64_t executor, RustCallStatus *_Nonnull out_status
 );
 void uniffi_paykit_mobile_fn_method_paykitclient_remove_contact(void*_Nonnull ptr, void*_Nonnull transport, RustBuffer contact_pubkey, RustCallStatus *_Nonnull out_status
 );
@@ -287,6 +316,10 @@ int8_t uniffi_paykit_mobile_fn_method_unauthenticatedtransportffi_is_mock(void*_
 );
 RustBuffer uniffi_paykit_mobile_fn_method_unauthenticatedtransportffi_list(void*_Nonnull ptr, RustBuffer owner_pubkey, RustBuffer prefix, RustCallStatus *_Nonnull out_status
 );
+void uniffi_paykit_mobile_fn_init_callback_bitcoinexecutorffi(ForeignCallback _Nonnull handle
+);
+void uniffi_paykit_mobile_fn_init_callback_lightningexecutorffi(ForeignCallback _Nonnull handle
+);
 void uniffi_paykit_mobile_fn_init_callback_pubkyauthenticatedstoragecallback(ForeignCallback _Nonnull handle
 );
 void uniffi_paykit_mobile_fn_init_callback_pubkyunauthenticatedstoragecallback(ForeignCallback _Nonnull handle
@@ -300,6 +333,11 @@ void*_Nonnull uniffi_paykit_mobile_fn_func_create_directory_operations_async(Rus
     
 );
 RustBuffer uniffi_paykit_mobile_fn_func_create_error_message(RustBuffer code, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+void*_Nonnull uniffi_paykit_mobile_fn_func_create_executor_async_bridge(RustCallStatus *_Nonnull out_status
+    
+);
+void*_Nonnull uniffi_paykit_mobile_fn_func_create_executor_async_bridge_with_timeout(uint64_t timeout_ms, RustCallStatus *_Nonnull out_status
 );
 void*_Nonnull uniffi_paykit_mobile_fn_func_create_interactive_manager(void*_Nonnull store, RustCallStatus *_Nonnull out_status
 );
@@ -477,6 +515,12 @@ uint16_t uniffi_paykit_mobile_checksum_func_create_directory_operations_async(vo
 uint16_t uniffi_paykit_mobile_checksum_func_create_error_message(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_func_create_executor_async_bridge(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_func_create_executor_async_bridge_with_timeout(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_func_create_interactive_manager(void
     
 );
@@ -618,7 +662,13 @@ uint16_t uniffi_paykit_mobile_checksum_method_directoryoperationsasync_remove_co
 uint16_t uniffi_paykit_mobile_checksum_method_directoryoperationsasync_remove_payment_endpoint(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_executorasyncbridge_default_timeout_ms(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_add_contact(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_bitcoin_network(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_calculate_proration(void
@@ -651,6 +701,9 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_per
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_execute_payment(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr(void
     
 );
@@ -666,6 +719,9 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_fetch_payment_endpoin
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_fetch_supported_payments(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_generate_payment_proof(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_get_health_status(void
     
 );
@@ -675,10 +731,19 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_get_in_progress_payme
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_get_payment_status(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_has_bitcoin_executor(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_has_lightning_executor(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_is_method_usable(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_is_paykit_qr(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_lightning_network(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_list_contacts(void
@@ -700,6 +765,12 @@ uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_publish_noise_endpoin
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_publish_payment_endpoint(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_register_bitcoin_executor(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_register_lightning_executor(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_paykitclient_remove_contact(void
@@ -822,7 +893,16 @@ uint16_t uniffi_paykit_mobile_checksum_constructor_contactcacheffi_new(void
 uint16_t uniffi_paykit_mobile_checksum_constructor_directoryoperationsasync_new(void
     
 );
+uint16_t uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_new(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_constructor_executorasyncbridge_with_timeout(void
+    
+);
 uint16_t uniffi_paykit_mobile_checksum_constructor_paykitclient_new(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_constructor_paykitclient_new_with_network(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_constructor_paykitinteractivemanagerffi_new(void
@@ -844,6 +924,33 @@ uint16_t uniffi_paykit_mobile_checksum_constructor_unauthenticatedtransportffi_f
     
 );
 uint16_t uniffi_paykit_mobile_checksum_constructor_unauthenticatedtransportffi_new_mock(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_send_to_address(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_estimate_fee(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_get_transaction(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_bitcoinexecutorffi_verify_transaction(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_lightningexecutorffi_pay_invoice(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_lightningexecutorffi_decode_invoice(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_lightningexecutorffi_estimate_fee(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_lightningexecutorffi_get_payment(void
+    
+);
+uint16_t uniffi_paykit_mobile_checksum_method_lightningexecutorffi_verify_preimage(void
     
 );
 uint16_t uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_put(void

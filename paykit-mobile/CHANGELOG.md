@@ -4,6 +4,37 @@ All notable changes to the paykit-mobile crate are documented in this file.
 
 ## [Unreleased]
 
+### Added - Bitkit Payment Request Waking with Autopay (Phase 1)
+
+This release adds payment request handling with autopay evaluation for Bitkit integration.
+
+**New Services:**
+- `PaymentRequestService` (Swift/Kotlin) - Service for handling incoming payment requests with autopay support
+  - `handleIncomingRequest()` - Process incoming payment requests
+  - `evaluateAutopay()` - Evaluate if payment meets autopay requirements
+  - `executePayment()` - Execute payment requests via PaykitClient
+
+**New Protocols/Interfaces:**
+- `AutopayEvaluator` - Protocol for autopay evaluation logic
+  - `AutoPayViewModel` (iOS) already conforms to this protocol
+  - Android `AutoPayViewModel` can implement the interface
+
+**Integration Support:**
+- Deep link/URL scheme handler examples for iOS and Android
+- Background processing examples using BGTaskScheduler (iOS) and WorkManager (Android)
+- Comprehensive integration guide: `BITKIT_AUTOPAY_INTEGRATION.md`
+
+**Files Added:**
+- `swift/PaymentRequestService.swift` - iOS payment request service
+- `kotlin/PaymentRequestService.kt` - Android payment request service
+- `BITKIT_AUTOPAY_INTEGRATION.md` - Complete integration guide
+
+**Note:** Bitkit must implement:
+- Payment request fetching from storage/network
+- Endpoint resolution for payment requests
+- Deep link/notification handlers in their app
+- Background processing integration
+
 ### Added - Bitkit Executor FFI Integration
 
 This release adds comprehensive support for integrating external wallet implementations (like Bitkit) through FFI callback interfaces.

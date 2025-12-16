@@ -774,8 +774,8 @@ mod tests {
         );
         assert!(result.is_err());
         match result {
-            Err(PaykitMobileError::Transport { message }) => {
-                assert!(message.contains("Network error"));
+            Err(PaykitMobileError::Transport { msg }) => {
+                assert!(msg.contains("Network error"));
             }
             _ => panic!("Expected Transport error"),
         }
@@ -793,8 +793,8 @@ mod tests {
         );
         assert!(result.is_err());
         match result {
-            Err(PaykitMobileError::Transport { message }) => {
-                assert!(message.contains("timed out"));
+            Err(PaykitMobileError::Transport { msg }) => {
+                assert!(msg.contains("timed out"));
             }
             _ => panic!("Expected timeout error"),
         }

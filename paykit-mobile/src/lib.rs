@@ -22,6 +22,7 @@ pub mod interactive_ffi;
 pub mod keys;
 pub mod noise_ffi;
 pub mod scanner;
+pub mod spending_ffi;
 pub mod storage;
 pub mod transport_ffi;
 
@@ -53,6 +54,11 @@ pub use executor_ffi::{
     BitcoinExecutorBridge, BitcoinExecutorFFI, BitcoinNetworkFFI, BitcoinTxResultFFI,
     DecodedInvoiceFFI, LightningExecutorBridge, LightningExecutorFFI, LightningNetworkFFI,
     LightningPaymentResultFFI, LightningPaymentStatusFFI,
+};
+
+// Re-export spending FFI types for atomic spending limit operations
+pub use spending_ffi::{
+    PeerSpendingLimitFFI, SpendingCheckResultFFI, SpendingManagerFFI, SpendingReservationFFI,
 };
 
 use std::sync::{Arc, RwLock};
@@ -2400,8 +2406,8 @@ mod tests {
 
         assert!(result.is_err());
         match result {
-            Err(PaykitMobileError::NotFound { message }) => {
-                assert!(message.contains("unknown_method"));
+            Err(PaykitMobileError::NotFound { msg }) => {
+                assert!(msg.contains("unknown_method"));
             }
             _ => panic!("Expected NotFound error"),
         }

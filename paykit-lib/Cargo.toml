@@ -25,7 +25,7 @@ http-executor = ["dep:reqwest"]
 async-trait = "0.1.89"
 chrono = "0.4"
 md5 = { version = "0.7", optional = true }
-pubky = { version = "0.6.0-rc.6", optional = true }
+pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", optional = true }
 thiserror = "2.0"
 tokio = "1.48.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -82,7 +82,7 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 serde-wasm-bindgen = "0.6"
 
 [dev-dependencies]
-pubky-testnet = { version = "0.6.0-rc.6" }
+pubky-testnet = { git = "https://github.com/BitcoinErrorLog/pubky-core" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive" }
 tempfile = "3.10"

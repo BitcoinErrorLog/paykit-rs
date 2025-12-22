@@ -400,27 +400,97 @@ In `Info.plist`, add URL schemes:
 Handle in `AppDelegate` or `SceneDelegate`:
 
 ```swift
-func application(_ app: UIApplication, open url: URL, options: ...) -> Bool {
-    if url.scheme == "pubky" || url.scheme == "paykit" {
+// In your SceneDelegate.swift or AppDelegate.swift
+func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+    guard let url = URLContexts.first?.url else { return }
+    handleIncomingURL(url)
+}
+
+func application(_ app: UIApplication, 
+                 open url: URL, 
+                 options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+    handleIncomingURL(url)
+    return true
+}
+
+private func handleIncomingURL(_ url: URL) {
+    // Handle different URL schemes
+    switch url.scheme {
+    case "pubky", "paykit":
         Task {
             await handlePaykitDeepLink(url)
         }
-        return true
+    case "bitkit":
+        Task {
+            await handleBitkitDeepLink(url)
+        }
+    default:
+        break
     }
-    return false
 }
 
 func handlePaykitDeepLink(_ url: URL) async {
-    // pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo
-    guard let host = url.host else { return }
+    // Parse Pubky URI: pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo
+    // or payment URI: paykit://8pinxxgqs41n4aidi.../pay?amount=50000&memo=coffee
     
-    // Discover payment methods for this pubkey
-    let methods = try await PaykitManager.shared.discoverMethods(pubkey: host)
-    
-    // Show smart checkout
-    await MainActor.run {
-        NavigationViewModel.shared.navigate(to: .smartCheckout(pubkey: host, methods: methods))
+    guard let host = url.host else {
+        Logger.error("Invalid Paykit URL: no host")
+        return
     }
+    
+    // Validate pubkey format (z-base-32 encoded Ed25519 key)
+    guard isValidPubkey(host) else {
+        Logger.error("Invalid pubkey format: \(host)")
+        await MainActor.run {
+            showError("Invalid Pubky ID")
+        }
+        return
+    }
+    
+    do {
+        // Discover available payment methods for this pubkey
+        let methods = try await PaykitManager.shared.discoverMethods(pubkey: host)
+        
+        guard !methods.entries.isEmpty else {
+            await MainActor.run {
+                showError("No payment methods found for this user")
+            }
+            return
+        }
+        
+        // Parse optional parameters
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let amount = components?.queryItems?
+            .first(where: { $0.name == "amount" })?.value
+            .flatMap { UInt64($0) }
+        let memo = components?.queryItems?
+            .first(where: { $0.name == "memo" })?.value
+        
+        // Navigate to smart checkout with pre-filled data
+        await MainActor.run {
+            NavigationViewModel.shared.navigate(
+                to: .smartCheckout(
+                    pubkey: host,
+                    methods: methods,
+                    amount: amount,
+                    memo: memo
+                )
+            )
+        }
+    } catch {
+        Logger.error("Failed to discover methods: \(error)")
+        await MainActor.run {
+            showError("Could not connect to payment provider")
+        }
+    }
+}
+
+private func isValidPubkey(_ pubkey: String) -> Bool {
+    // z-base-32 encoded Ed25519 keys are 52 characters
+    // Valid charset: ybndrfg8ejkmcpqxot1uwisza345h769
+    let validCharset = CharacterSet(charactersIn: "ybndrfg8ejkmcpqxot1uwisza345h769")
+    return pubkey.count == 52 && 
+           pubkey.rangeOfCharacter(from: validCharset.inverted) == nil
 }
 ```
 
@@ -631,8 +701,21 @@ class PubkyRingBridge {
         // Use URL scheme to open Ring and get callback
         await UIApplication.shared.open(url)
         
-        // Ring will callback with: bitkit://pubky-identity?pubkey=...
-        // Handle in deep link handler
+        // Ring will callback with: bitkit://pubky-identity?pubkey=<52-char-z-base32>&timestamp=<unix-ts>
+        // Handle in deep link handler (see Section 5, Step 4)
+        // Store the callback expectation and return via continuation
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            // Set up callback expectation
+            self.pendingIdentityCallback = continuation
+            // Timeout after 30 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                if self.pendingIdentityCallback != nil {
+                    self.pendingIdentityCallback = nil
+                    continuation.resume(throwing: RingError.timeout)
+                }
+            }
+        }
     }
     
     /// Request signature from Ring
@@ -641,7 +724,18 @@ class PubkyRingBridge {
         let url = URL(string: "pubkyring://sign?message=\(messageB64)&callback=bitkit://signature")!
         
         await UIApplication.shared.open(url)
-        // Ring will callback with: bitkit://signature?sig=...
+        // Ring will callback with: bitkit://signature?sig=<base64-signature>&pubkey=<signer-pubkey>
+        // Signature is 64-byte Ed25519 signature, base64-encoded
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            self.pendingSignatureCallback = continuation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                if self.pendingSignatureCallback != nil {
+                    self.pendingSignatureCallback = nil
+                    continuation.resume(throwing: RingError.timeout)
+                }
+            }
+        }
     }
 }
 ```
@@ -678,13 +772,35 @@ class PubkyRingBridge(private val context: Context) {
 // Bitkit requests a session from Ring
 let session = try await PubkyRingBridge.shared.requestSession()
 
-// Session contains:
-// - pubkey: User's Ed25519 public key (z-base-32 encoded)
-// - sessionToken: Signed session token for homeserver auth
-// - expiresAt: Session expiration timestamp
+// Session structure contains three critical components:
+// 1. pubkey: User's Ed25519 public key (z-base-32 encoded, 52 characters)
+//    Example: "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo"
+//    This is the user's Pubky identity - their globally unique identifier
+//
+// 2. sessionToken: Signed session token for homeserver authentication
+//    Format: base64-encoded JSON containing:
+//    {
+//      "pubkey": "<user-pubkey>",
+//      "homeserver": "https://homeserver.pubky.org",
+//      "issued_at": 1703001234,
+//      "expires_at": 1703087634,
+//      "signature": "<ed25519-signature-of-above>"
+//    }
+//    The signature is created by Ring using the user's private key
+//    Homeserver verifies this signature to authenticate requests
+//
+// 3. expiresAt: Session expiration timestamp (Unix epoch seconds)
+//    Typically 24 hours from issuance
+//    After expiration, must request new session from Ring
 
 // Initialize transport with session
-let transport = AuthenticatedTransportFfi.fromCallback(callback: DirectoryCallback(session: session))
+let transport = AuthenticatedTransportFfi.fromCallback(
+    callback: DirectoryCallback(session: session)
+)
+
+// The transport uses the session token in the Authorization header:
+// Authorization: Bearer <sessionToken>
+// Homeserver validates the signature and checks expiration
 ```
 
 ---
@@ -702,10 +818,14 @@ try await paykitClient.publishPaymentMethod(
     endpoint: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
 )
 
-// Publish Lightning node
+// Publish Lightning node with detailed endpoint
 try await paykitClient.publishPaymentMethod(
     methodId: "lightning",
-    endpoint: "03abc...@node.example.com:9735"
+    endpoint: "03abc123def456789012345678901234567890123456789012345678901234@node.example.com:9735"
+    // Format: <node_pubkey>@<host>:<port>
+    // - node_pubkey: 66 hex character Lightning node public key
+    // - host: Domain name or IP address
+    // - port: Lightning P2P port (typically 9735)
 )
 ```
 
@@ -742,27 +862,142 @@ case "noise":
 
 ### 8.3 Noise Protocol Payments
 
+**Overview:** Noise Protocol provides end-to-end encrypted payment channels. The implementation uses Noise_IK (Interactive Knowledge) handshake pattern, which provides:
+- Forward secrecy
+- Identity hiding for the responder
+- Mutual authentication
+- Protection against replay attacks
+
+**Complete Payment Flow:**
+
 ```swift
-// 1. Establish encrypted channel
+// Step 1: Establish encrypted channel
+// The Noise_IK handshake requires:
+// - Initiator (payer) knows responder's (payee) static public key
+// - Responder doesn't know initiator's identity until after handshake
 let channel = try await NoiseChannelManager.shared.connect(
-    peerPubkey: pubkey,
-    peerEndpoint: "wss://peer.example.com/noise"
+    peerPubkey: pubkey,                    // Payee's X25519 static public key
+    peerEndpoint: "wss://peer.example.com/noise"  // WebSocket endpoint for Noise transport
 )
 
-// 2. Request receipt (invoice)
+// Handshake sequence (automatic, shown for reference):
+// 1. Initiator → Responder: e, es, s, ss
+//    - e: Initiator's ephemeral public key
+//    - es: DH(initiator_ephemeral, responder_static)
+//    - s: Initiator's encrypted static public key
+//    - ss: DH(initiator_static, responder_static)
+// 2. Responder → Initiator: e, ee, se
+//    - e: Responder's ephemeral public key
+//    - ee: DH(responder_ephemeral, initiator_ephemeral)
+//    - se: DH(responder_static, initiator_ephemeral)
+// After these two messages, both parties have a shared secret
+
+// Step 2: Request receipt (invoice)
+// This is the first application-level message over the encrypted channel
 let receipt = try await channel.requestReceipt(
-    amount: 50000,
-    memo: "Payment for services"
+    amount: 50000,              // Amount in satoshis
+    currency: "SAT",            // Currency code (SAT, BTC, USD)
+    memo: "Payment for services"  // Optional memo/description
 )
 
-// 3. Pay the invoice via Lightning
-let paymentResult = try await LightningService.shared.pay(invoice: receipt.invoice)
+// Receipt structure:
+// {
+//   "id": "<unique-receipt-id>",
+//   "amount": 50000,
+//   "currency": "SAT",
+//   "invoice": "lnbc500n1...",  // Actual Lightning invoice or Bitcoin address
+//   "created_at": 1703001234,
+//   "expires_at": 1703001534,   // Typically 5 minutes
+//   "memo": "Payment for services",
+//   "payee_pubkey": "<payee-pubkey>",
+//   "status": "pending"
+// }
 
-// 4. Send payment confirmation
+// Step 3: Validate receipt
+guard receipt.expiresAt > Date().timeIntervalSince1970 else {
+    throw PaymentError.receiptExpired
+}
+guard receipt.amount == 50000 else {
+    throw PaymentError.amountMismatch
+}
+
+// Step 4: Execute payment via Lightning or onchain
+// The actual payment happens OUTSIDE the Noise channel
+// This maintains separation of concerns and allows different payment methods
+let paymentResult: PaymentResult
+
+switch detectPaymentType(receipt.invoice) {
+case .lightning:
+    // Pay Lightning invoice via LDK
+    paymentResult = try await LightningService.shared.pay(
+        invoice: receipt.invoice,
+        amountMsat: receipt.amount * 1000  // Convert sats to millisats
+    )
+    // paymentResult contains: preimage, payment_hash, fee_msat, route
+    
+case .onchain:
+    // Send to Bitcoin address
+    paymentResult = try await BitcoinService.shared.send(
+        address: receipt.invoice,
+        amountSats: receipt.amount,
+        feeRate: .medium
+    )
+    // paymentResult contains: txid, vsize, fee_sats, confirmations
+}
+
+// Step 5: Send payment confirmation over Noise channel
+// This proves to the payee that we completed the payment
 try await channel.confirmPayment(
     receiptId: receipt.id,
-    txid: paymentResult.txid
+    txid: paymentResult.txid,           // Transaction ID or payment hash
+    proof: paymentResult.proof,          // Payment proof (preimage for LN, tx for onchain)
+    timestamp: Date().timeIntervalSince1970
 )
+
+// The payee verifies the proof and marks the receipt as "completed"
+// Both parties now have cryptographic proof of the payment
+
+// Step 6: Store receipt for records
+try await ReceiptStore.shared.save(receipt, status: .completed, proof: paymentResult.proof)
+
+// Step 7: Close channel (optional - can reuse for multiple payments)
+try await channel.close()
+```
+
+**Error Handling:**
+
+```swift
+do {
+    let result = try await executeNoisePayment(pubkey: pubkey, amount: amount)
+} catch NoiseError.handshakeFailed(let reason) {
+    // Handshake failure reasons:
+    // - "invalid_static_key": Peer's pubkey doesn't match expected
+    // - "timeout": Handshake didn't complete within 10 seconds
+    // - "version_mismatch": Incompatible Noise protocol version
+    Logger.error("Noise handshake failed: \(reason)")
+    showError("Could not establish secure channel")
+    
+} catch NoiseError.channelClosed {
+    // Channel closed by peer or network issue
+    // Safe to retry - idempotent operations
+    Logger.warn("Channel closed unexpectedly, retrying...")
+    retry()
+    
+} catch PaymentError.receiptExpired {
+    // Receipt expired before payment was executed
+    // Request a new receipt
+    Logger.warn("Receipt expired, requesting new receipt")
+    requestNewReceipt()
+    
+} catch PaymentError.insufficientFunds(let needed, let available) {
+    // Not enough balance
+    Logger.error("Insufficient funds: need \(needed) sats, have \(available) sats")
+    showError("Insufficient balance")
+    
+} catch {
+    Logger.error("Payment failed: \(error)")
+    showError("Payment failed")
+}
 ```
 
 ### 8.4 Subscriptions
@@ -992,21 +1227,179 @@ assert!(!transport.is_mock());  // Returns false
 
 ### Production Transport Implementation
 
-For production, implement the callback interface:
+For production, you must implement the callback interface with real homeserver operations:
 
 ```swift
-// iOS
+// iOS Production Implementation
 class ProductionTransportCallback: AuthenticatedTransportCallback {
     private let session: PubkySession
+    private let homeserverURL: String
     
-    func upsertPaymentEndpoint(methodId: String, endpointData: String) async throws {
-        // Real homeserver call
-        try await session.put(
-            path: "/pub/paykit.app/v0/\(methodId)",
-            data: endpointData.data(using: .utf8)!
-        )
+    init(session: PubkySession, homeserverURL: String = "https://homeserver.pubky.org") {
+        self.session = session
+        self.homeserverURL = homeserverURL
     }
-    // ... implement other methods
+    
+    // Write payment endpoint to homeserver
+    func upsertPaymentEndpoint(methodId: String, endpointData: String) async throws {
+        // Construct path: /pub/paykit.app/v0/{methodId}
+        let path = "/pub/paykit.app/v0/\(methodId)"
+        
+        // Convert endpoint data to Data
+        guard let data = endpointData.data(using: .utf8) else {
+            throw TransportError.invalidData
+        }
+        
+        // PUT request to homeserver with authentication
+        let url = URL(string: "\(homeserverURL)\(path)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.httpBody = data
+        request.addValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TransportError.invalidResponse
+        }
+        
+        // Handle response codes
+        switch httpResponse.statusCode {
+        case 200, 201:
+            // Success
+            Logger.info("Published \(methodId) to \(path)")
+        case 401:
+            // Unauthorized - session expired or invalid
+            throw TransportError.unauthorized
+        case 403:
+            // Forbidden - not allowed to write to this path
+            throw TransportError.forbidden
+        case 413:
+            // Payload too large
+            throw TransportError.payloadTooLarge
+        case 429:
+            // Rate limited
+            throw TransportError.rateLimited
+        case 500...599:
+            // Server error
+            throw TransportError.serverError(httpResponse.statusCode)
+        default:
+            throw TransportError.unexpectedStatus(httpResponse.statusCode)
+        }
+    }
+    
+    // Delete payment endpoint from homeserver
+    func removePaymentEndpoint(methodId: String) async throws {
+        let path = "/pub/paykit.app/v0/\(methodId)"
+        let url = URL(string: "\(homeserverURL)\(path)")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.addValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TransportError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200, 204:
+            // Successfully deleted
+            Logger.info("Removed \(methodId) from \(path)")
+        case 404:
+            // Already doesn't exist - this is OK
+            Logger.debug("\(methodId) not found, already removed")
+        case 401:
+            throw TransportError.unauthorized
+        default:
+            throw TransportError.unexpectedStatus(httpResponse.statusCode)
+        }
+    }
+    
+    // Fetch single payment endpoint
+    func fetchPaymentEndpoint(methodId: String) async throws -> String? {
+        let path = "/pub/paykit.app/v0/\(methodId)"
+        let url = URL(string: "\(homeserverURL)\(path)")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        // Note: GET requests don't require authentication for public data
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TransportError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            // Found - return the data
+            return String(data: data, encoding: .utf8)
+        case 404:
+            // Not found - this is OK, return nil
+            return nil
+        default:
+            throw TransportError.unexpectedStatus(httpResponse.statusCode)
+        }
+    }
+    
+    // List all payment endpoints for a user
+    func fetchSupportedPayments(pubkey: String) async throws -> SupportedPayments {
+        let path = "/pub/paykit.app/v0/"
+        let url = URL(string: "\(homeserverURL)/pub/\(pubkey)/paykit.app/v0/")!
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TransportError.invalidResponse
+        }
+        
+        switch httpResponse.statusCode {
+        case 200:
+            // Parse directory listing
+            // Response format: array of filenames
+            // ["onchain", "lightning", "lnurl"]
+            let decoder = JSONDecoder()
+            let methodIds = try decoder.decode([String].self, from: data)
+            
+            // Fetch each method's endpoint data
+            var entries: [PaymentMethodEntry] = []
+            for methodId in methodIds {
+                if let endpointData = try await fetchPaymentEndpoint(methodId) {
+                    entries.append(PaymentMethodEntry(
+                        methodId: methodId,
+                        endpoint: endpointData
+                    ))
+                }
+            }
+            
+            return SupportedPayments(entries: entries)
+            
+        case 404:
+            // User has no published methods
+            return SupportedPayments(entries: [])
+            
+        default:
+            throw TransportError.unexpectedStatus(httpResponse.statusCode)
+        }
+    }
+}
+
+// Error types
+enum TransportError: Error {
+    case invalidData
+    case invalidResponse
+    case unauthorized              // 401 - session expired
+    case forbidden                 // 403 - not allowed
+    case payloadTooLarge          // 413 - data too big
+    case rateLimited              // 429 - too many requests
+    case serverError(Int)         // 5xx - homeserver issue
+    case unexpectedStatus(Int)    // Other status codes
 }
 ```
 

@@ -66,7 +66,7 @@ rustup target list --installed | grep wasm32
 ### Step 5: Build Web Demo
 
 ```bash
-cd "/Users/johncarvalho/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-demo-web"
+cd "/Users/john/vibes-dev/paykit-rs-master/paykit-demo-web"
 
 # Build with wasm-pack
 wasm-pack build --target web --out-dir www/pkg

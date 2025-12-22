@@ -9,3 +9,10 @@ docs/archive/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+
+# Android/Gradle build artifacts
+.gradle/
+build/
+*.apk
+*.aab
+local.properties

@@ -42,7 +42,7 @@ swift --version
 From the workspace root:
 
 ```bash
-cd /Users/john/Library/Mobile\ Documents/com~apple~CloudDocs/vibes/paykit-rs-master
+cd /Users/john/vibes-dev/paykit-rs-master
 
 # Build the library in release mode
 cargo build --release -p paykit-mobile

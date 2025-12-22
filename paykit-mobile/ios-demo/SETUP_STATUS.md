@@ -54,7 +54,7 @@ uniffi-bindgen --version
 Once `uniffi-bindgen` is installed, run:
 
 ```bash
-cd "/Users/john/Library/Mobile Documents/com~apple~CloudDocs/vibes/paykit-rs-master/paykit-mobile"
+cd "/Users/john/vibes-dev/paykit-rs-master/paykit-mobile"
 ./generate-bindings.sh
 ```
 

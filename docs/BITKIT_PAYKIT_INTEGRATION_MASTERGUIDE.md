@@ -994,6 +994,22 @@ Also create `local.properties` in Android project:
 sdk.dir=/Users/YOUR_USER/Library/Android/sdk
 ```
 
+#### ⚠️ iOS XCFramework workflow (PaykitMobile.xcframework)
+
+Bitkit iOS consumes `PaykitMobile.xcframework`, not a raw `.a` file. The correct rebuild command is:
+
+```bash
+cd paykit-rs/paykit-mobile
+./build-ios.sh --framework
+```
+
+Then copy:
+- `paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/Frameworks/PaykitMobile.xcframework`
+to:
+- `bitkit-ios/Bitkit/PaykitIntegration/Frameworks/`
+
+If you forget `--framework`, the build will succeed but Bitkit won’t have a consumable XCFramework (common footgun).
+
 ### 9.2 Runtime Issues
 
 #### ⚠️ Thread Safety with Noise Channels
@@ -1044,6 +1060,38 @@ viewModelScope.launch {
     paykitClient.discoverAsync(pubkey)
 }
 ```
+
+#### ⚠️ Executor bridging (Bitkit executors are synchronous)
+
+Paykit’s executor interfaces are synchronous at the FFI boundary. Bitkit bridges to async payment systems by blocking on background threads:
+
+- iOS: `bitkit-ios/Bitkit/PaykitIntegration/Executors/BitkitLightningExecutor.swift`
+  - Uses `DispatchSemaphore` to wait for `LightningService.send(...)`.
+  - Polls `lightningService.payments` to extract the preimage.
+  - Enforces a timeout (default 60s).
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/executors/BitkitLightningExecutor.kt`
+  - Uses `runBlocking(Dispatchers.IO)` + `withTimeout`.
+  - Polls `LightningRepo.getPayments()` to extract preimage/proof.
+
+Production blueprint requirements:
+- Ensure the executor never runs on the main thread (deadlock risk).
+- Treat timeouts as first-class failures (surface actionable error to user).
+- Prefer structured concurrency over global blocking primitives where possible.
+
+#### ⚠️ Homeserver base URL naming confusion
+
+In Bitkit, configuration strings are sometimes labeled “homeserver pubkey”, but the HTTP storage adapters build URLs by concatenating:
+- `"$homeserverBaseURL/pubky$ownerPubkey$path"` (unauthenticated reads)
+- `"$homeserverBaseURL$path"` (authenticated writes)
+
+Production blueprint requirements:
+- If using the HTTP adapters, ensure `homeserverBaseURL` is a real URL (e.g., `https://homeserver.pubky.app`).
+- If relying on `pubky://` URIs + DHT/Pkarr resolution, leave `homeserverBaseURL` unset and use `pubky://<pubkey><path>` reads (see `DirectoryService.fetchPaymentRequest` on iOS/Android).
+
+#### ⚠️ Android GlobalScope usage in PubkyRingBridge
+
+`PubkyRingBridge.kt` persists sessions using `GlobalScope.launch(Dispatchers.IO)` which is not production-safe. Blueprint requirement:
+- Replace `GlobalScope` persistence with an injected `CoroutineScope` tied to app lifecycle or a repository/service scope.
 
 ### 9.3 Platform-Specific Issues
 
@@ -1287,6 +1335,29 @@ object PaykitConfig {
 | Pubky Homeserver | Directory storage | 2 CPU, 4GB RAM |
 | Lightning Node | Payment execution | 4 CPU, 8GB RAM |
 | Bitcoin Node | Onchain payments | 8 CPU, 16GB RAM |
+
+### Feature flags (Paykit rollout controls)
+
+Reference implementations:
+- iOS: `bitkit-ios/Bitkit/PaykitIntegration/PaykitFeatureFlags.swift`
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/PaykitFeatureFlags.kt`
+
+Blueprint requirements:
+- Initialize defaults on first launch (`PaykitFeatureFlags.setDefaults()` / `PaykitFeatureFlags.init(context)`).
+- Gate Paykit UI entry points behind `PaykitFeatureFlags.isEnabled`.
+- Support remote-config overrides (keys are already defined).
+- Ensure `emergencyRollback()` resets Paykit state and disables Paykit immediately.
+
+### Observability: PaykitLogger and config
+
+Reference implementations:
+- iOS: `bitkit-ios/Bitkit/PaykitIntegration/PaykitLogger.swift` and `PaykitConfigManager`
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/PaykitLogger.kt` and `PaykitConfigManager`
+
+Blueprint requirements:
+- Route Paykit logs through a single structured logger (avoid ad-hoc `print` / `Log.d`).
+- Ensure payment details logging is disabled in production (`logPaymentDetails = false`) for privacy.
+- Wire `errorReporter` into your monitoring pipeline (Sentry, Crashlytics, etc.).
 
 ---
 

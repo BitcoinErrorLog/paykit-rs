@@ -365,7 +365,6 @@ In `Info.plist`, add URL schemes:
         <array>
             <string>bitkit</string>
             <string>paykit</string>
-            <string>pubky</string>
         </array>
     </dict>
 </array>
@@ -380,102 +379,81 @@ Supported formats:
 The publish-side creates a deep link like:
 - `bitkit://payment-request?requestId=<request-id>&from=<our-pubkey>`
 
-Important: Bitkit currently uses **payment requests + autopay evaluation**. Do not assume a “smart checkout” URI like `paykit://<pubkey>/pay?...` exists in Bitkit.
+Important: Bitkit currently uses **payment requests + autopay evaluation**. Do not assume a “smart checkout” URI like `paykit://<pubkey>/pay?amount=<amount-sats>&memo=<memo>` exists in Bitkit.
 
 ```swift
-// In your SceneDelegate.swift or AppDelegate.swift
-func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-    guard let url = URLContexts.first?.url else { return }
-    handleIncomingURL(url)
-}
-
-func application(_ app: UIApplication, 
-                 open url: URL, 
-                 options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-    handleIncomingURL(url)
-    return true
-}
+// Reference implementation: bitkit-ios/Bitkit/MainNavView.swift
+// Supported formats:
+// - paykit://payment-request?requestId=<request-id>&from=<sender-pubkey>
+// - bitkit://payment-request?requestId=<request-id>&from=<sender-pubkey>
 
 private func handleIncomingURL(_ url: URL) {
-    // Handle different URL schemes
-    switch url.scheme {
-    case "pubky", "paykit":
+    if url.scheme == "paykit" || (url.scheme == "bitkit" && url.host == "payment-request") {
         Task {
-            await handlePaykitDeepLink(url)
+            await handlePaymentRequestDeepLink(url: url)
         }
-    case "bitkit":
-        Task {
-            await handleBitkitDeepLink(url)
-        }
-    default:
-        break
+        return
     }
+
+    // Handle other Bitkit deep links (bitcoin:, lightning:, lnurl*, internal routes)
 }
 
-func handlePaykitDeepLink(_ url: URL) async {
-    // Parse Pubky URI: pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo
-    // Bitkit currently uses payment-request deep links, not smart-checkout URIs:
-    // - paykit://payment-request?requestId=<request-id>&from=<sender-pubkey>
-    // - bitkit://payment-request?requestId=<request-id>&from=<sender-pubkey>
-    
-    guard let host = url.host else {
-        Logger.error("Invalid Paykit URL: no host")
+private func handlePaymentRequestDeepLink(url: URL) async {
+    guard
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        let queryItems = components.queryItems,
+        let requestId = queryItems.first(where: { $0.name == "requestId" })?.value,
+        let fromPubkey = queryItems.first(where: { $0.name == "from" })?.value
+    else {
+        // Show error to user: invalid deep link
         return
     }
-    
-    // Validate pubkey format (z-base-32 encoded Ed25519 key)
-    guard isValidPubkey(host) else {
-        Logger.error("Invalid pubkey format: \(host)")
-        await MainActor.run {
-            showError("Invalid Pubky ID")
-        }
+
+    // Validate Pubky sender pubkey (z-base-32, 52 chars)
+    if !isValidZBase32Pubkey(fromPubkey) {
+        // Show error to user: invalid sender pubkey
         return
     }
-    
-    do {
-        // Discover available payment methods for this pubkey
-        let methods = try await PaykitManager.shared.discoverMethods(pubkey: host)
-        
-        guard !methods.entries.isEmpty else {
-            await MainActor.run {
-                showError("No payment methods found for this user")
-            }
+
+    // Ensure Paykit is ready (this can fail if Ring isn't connected)
+    if !PaykitManager.shared.isInitialized {
+        do {
+            try PaykitManager.shared.initialize()
+            try PaykitManager.shared.registerExecutors()
+        } catch {
+            // “Please connect to Pubky Ring first”
             return
         }
-        
-        // Parse optional parameters
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let amount = components?.queryItems?
-            .first(where: { $0.name == "amount" })?.value
-            .flatMap { UInt64($0) }
-        let memo = components?.queryItems?
-            .first(where: { $0.name == "memo" })?.value
-        
-        // Navigate to smart checkout with pre-filled data
-        await MainActor.run {
-            NavigationViewModel.shared.navigate(
-                to: .smartCheckout(
-                    pubkey: host,
-                    methods: methods,
-                    amount: amount,
-                    memo: memo
-                )
-            )
-        }
-    } catch {
-        Logger.error("Failed to discover methods: \(error)")
-        await MainActor.run {
-            showError("Could not connect to payment provider")
+    }
+
+    guard let paykitClient = PaykitManager.shared.client else { return }
+
+    // Policy: autopay evaluation lives in app code
+    let autoPayViewModel = await AutoPayViewModel()
+
+    let paymentRequestService = PaymentRequestService(
+        paykitClient: paykitClient,
+        autopayEvaluator: autoPayViewModel,
+        paymentRequestStorage: PaymentRequestStorage(),
+        directoryService: DirectoryService.shared
+    )
+
+    paymentRequestService.handleIncomingRequest(requestId: requestId, fromPubkey: fromPubkey) { result in
+        Task { @MainActor in
+            // Handle:
+            // - autoPaid(paymentResult)
+            // - needsApproval(request)
+            // - denied(reason)
+            // - error(error)
         }
     }
 }
 
-private func isValidPubkey(_ pubkey: String) -> Bool {
+private func isValidZBase32Pubkey(_ pubkey: String) -> Bool {
     // z-base-32 encoded Ed25519 keys are 52 characters
     // Valid charset: ybndrfg8ejkmcpqxot1uwisza345h769
     let validCharset = CharacterSet(charactersIn: "ybndrfg8ejkmcpqxot1uwisza345h769")
-    return pubkey.count == 52 && 
-           pubkey.rangeOfCharacter(from: validCharset.inverted) == nil
+    return pubkey.count == 52 && pubkey.rangeOfCharacter(from: validCharset.inverted) == nil
 }
 ```
 
@@ -653,7 +631,7 @@ Handle in ViewModel (reference implementation): `bitkit-android/app/src/main/jav
 fun handleDeepLink(uri: Uri) {
     when (uri.scheme) {
         "paykit" -> {
-            // paykit://payment-request?requestId=...&from=...
+            // paykit://payment-request?requestId=<request-id>&from=<sender-pubky>
             // Delegate to payment request handler (see handlePaymentRequestDeepLink)
         }
     }
@@ -681,7 +659,7 @@ Bitkit Android implements the same flows:
 
 #### Callback paths (must match in Bitkit and Ring)
 
-Bitkit expects these callback paths on its own scheme (`bitkit://...`):
+Bitkit expects these callback paths on its own scheme (`bitkit://<callback-path>`):
 - `bitkit://paykit-session`
 - `bitkit://paykit-keypair`
 - `bitkit://paykit-profile`
@@ -694,7 +672,7 @@ Bitkit expects these callback paths on its own scheme (`bitkit://...`):
 1. Bitkit launches Ring with a callback:
    - `pubkyring://session?callback=<urlencoded bitkit://paykit-session>`
 2. Ring prompts the user to select an identity, signs in to the homeserver, then calls back to Bitkit:
-   - `bitkit://paykit-session?...`
+   - `bitkit://paykit-session?pubky=<pubky>&session_secret=<session_secret>&capabilities=<comma-separated>`
 
 #### Combined setup flow: session + noise keys (preferred for Paykit)
 
@@ -717,7 +695,7 @@ Ring completes auth and posts the session to the relay; Bitkit polls the relay f
 
 Relay default:
 - iOS default: `https://relay.pubky.app/sessions` (override with `PUBKY_RELAY_URL`)
-- Android default: `https://relay.pubky.app/sessions` (override with `-DPUBKY_RELAY_URL=...`)
+- Android default: `https://relay.pubky.app/sessions` (override with `-DPUBKY_RELAY_URL=<relay-url>`)
 
 ### Cross-App Communication (Android)
 
@@ -889,7 +867,7 @@ Bitkit implements Noise payments via `NoisePaymentService` and `pubky-noise` bin
 Key details the team must preserve for production:
 - Noise uses `pubky-noise` as the crypto + handshake engine (iOS uses `PubkyNoise.xcframework`, Android uses `libpubky_noise.so`).
 - Noise keypairs are derived via Ring, and Bitkit persists epoch 0 + epoch 1 secrets locally after `requestPaykitSetup()` so rotation can happen without requiring Ring every time.
-- The service discovers the recipient’s Noise endpoint via `DirectoryService.discoverNoiseEndpoint(...)` before connecting.
+- The service discovers the recipient’s Noise endpoint via `DirectoryService.discoverNoiseEndpoint(recipientPubkey)` before connecting.
 
 Reference flow (Android naming, conceptually identical on iOS):
 
@@ -984,9 +962,7 @@ future cannot be sent between threads safely
 ```rust
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait PrivateEndpointStore: Send + Sync {
-    // ...
-}
+pub trait PrivateEndpointStore: Send + Sync
 ```
 
 #### ⚠️ UniFFI Version Mismatch
@@ -1144,8 +1120,8 @@ DirectoryService.shared.initialize(client: paykitClient)
 DirectoryService.shared.configureWithPubkySession(session)
 
 // Internally, DirectoryService wires:
-// - UnauthenticatedTransportFfi.fromCallback(callback: PubkyUnauthenticatedStorageAdapter(...))
-// - AuthenticatedTransportFfi.fromCallback(callback: PubkyAuthenticatedStorageAdapter(sessionId: session.sessionSecret, ...), ownerPubkey: session.pubkey)
+// - UnauthenticatedTransportFfi.fromCallback(callback: PubkyUnauthenticatedStorageAdapter(homeserverBaseURL: <homeserver-pubkey-or-url>))
+// - AuthenticatedTransportFfi.fromCallback(callback: PubkyAuthenticatedStorageAdapter(sessionId: session.sessionSecret, homeserverBaseURL: <homeserver-pubkey-or-url>), ownerPubkey: session.pubkey)
 
 // 2) The authenticated adapter attaches the session via cookie:
 // Cookie: session=<session.sessionSecret>

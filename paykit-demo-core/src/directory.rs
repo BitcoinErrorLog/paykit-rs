@@ -164,4 +164,53 @@ impl DirectoryClient {
             .await
             .context("Failed to signup with token")
     }
+
+    /// Get raw data from a public key's public storage
+    ///
+    /// Used for fetching profiles and other arbitrary data from the directory.
+    pub async fn get_raw(&self, public_key: &PublicKey, path: &str) -> Result<Option<String>> {
+        let storage = PublicStorage::new().context("Failed to create PublicStorage")?;
+
+        // Construct the full URL for the resource
+        let url = format!("pubky://{}{}", public_key, path);
+
+        match storage.get(&url).await {
+            Ok(Some(bytes)) => {
+                let content =
+                    String::from_utf8(bytes).context("Response is not valid UTF-8")?;
+                Ok(Some(content))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(anyhow::anyhow!("Failed to get {}: {}", path, e)),
+        }
+    }
+
+    /// Put raw data to authenticated storage
+    ///
+    /// Used for publishing profiles and other arbitrary data to the directory.
+    pub async fn put_raw(&self, session: &PubkySession, path: &str, content: &str) -> Result<()> {
+        // Get the public key from the session
+        let public_key = session.public_key();
+        let url = format!("pubky://{}{}", public_key, path);
+
+        session
+            .put(&url, content.as_bytes())
+            .await
+            .with_context(|| format!("Failed to put data at {}", path))?;
+
+        Ok(())
+    }
+
+    /// Delete raw data from authenticated storage
+    pub async fn delete_raw(&self, session: &PubkySession, path: &str) -> Result<()> {
+        let public_key = session.public_key();
+        let url = format!("pubky://{}{}", public_key, path);
+
+        session
+            .delete(&url)
+            .await
+            .with_context(|| format!("Failed to delete {}", path))?;
+
+        Ok(())
+    }
 }

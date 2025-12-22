@@ -33,7 +33,7 @@ cargo --version
 
 ```bash
 # From workspace root
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-demo-cli
 
 # Run
@@ -358,7 +358,7 @@ mkdir -p "$HOME/Library/Application Support/paykit-demo"
 
 **Solution**: Build from workspace root:
 ```bash
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-demo-cli
 ```
 

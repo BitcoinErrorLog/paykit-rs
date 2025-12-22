@@ -16,6 +16,10 @@ class DashboardViewModel: ObservableObject {
     @Published var pendingCount: Int = 0
     @Published var isLoading = true
     
+    // Balance properties
+    @Published var bitcoinBalanceSats: UInt64 = 0
+    @Published var lightningBalanceSats: UInt64 = 0
+    
     // Setup checklist properties
     @Published var hasPaymentMethods: Bool = false
     @Published var hasPublishedMethods: Bool = false
@@ -28,6 +32,10 @@ class DashboardViewModel: ObservableObject {
     // Directory and Health status
     @Published var publishedMethodsCount: Int = 0
     @Published var overallHealthStatus: String = "Unknown"
+    
+    var totalBalanceSats: UInt64 {
+        bitcoinBalanceSats + lightningBalanceSats
+    }
     
     var isSetupComplete: Bool {
         contactCount > 0 && hasPaymentMethods && hasPublishedMethods
@@ -113,10 +121,17 @@ class DashboardViewModel: ObservableObject {
         
         isLoading = false
     }
+    
+    func updateBalances(from paymentService: PaymentService) {
+        bitcoinBalanceSats = paymentService.bitcoinBalanceSats
+        lightningBalanceSats = paymentService.lightningBalanceSats
+    }
 }
 
 struct DashboardView: View {
+    @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = DashboardViewModel()
+    @ObservedObject private var pubkyRingBridge = PubkyRingBridge.shared
     @State private var showingQRScanner = false
     @State private var showingPaymentView = false
     @State private var showingReceiveView = false
@@ -124,11 +139,18 @@ struct DashboardView: View {
     @State private var showingSubscriptions = false
     @State private var showingPaymentRequests = false
     @State private var showingContactDiscovery = false
+    @State private var showingPubkyRingAuth = false
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Pubky Ring Connection Card
+                    connectionStatusCard
+                    
+                    // Wallet Balance Card
+                    balanceCard
+                    
                     // Setup Checklist (show if incomplete)
                     if !viewModel.isSetupComplete {
                         setupChecklistSection
@@ -154,9 +176,11 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .onAppear {
                 viewModel.loadDashboard()
+                viewModel.updateBalances(from: appState.paymentService)
             }
             .refreshable {
                 viewModel.loadDashboard()
+                viewModel.updateBalances(from: appState.paymentService)
             }
             .sheet(isPresented: $showingQRScanner) {
                 QRScannerView()
@@ -177,9 +201,145 @@ struct DashboardView: View {
                 PaymentRequestsView()
             }
             .sheet(isPresented: $showingContactDiscovery) {
-                ContactDiscoveryView()
+                NavigationStack {
+                    ContactDiscoveryView()
+                }
+            }
+            .sheet(isPresented: $showingPubkyRingAuth) {
+                PubkyRingAuthView { session in
+                    // Session received, state updates automatically
+                }
             }
         }
+    }
+    
+    // MARK: - Connection Status Card
+    
+    private var connectionStatusCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: connectionIcon)
+                    .foregroundColor(connectionColor)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pubky Ring")
+                        .font(.headline)
+                    
+                    Text(pubkyRingBridge.connectionState.displayText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if pubkyRingBridge.connectionState.isConnected {
+                    Button {
+                        pubkyRingBridge.disconnect()
+                    } label: {
+                        Text("Disconnect")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                } else {
+                    Button {
+                        showingPubkyRingAuth = true
+                    } label: {
+                        Text("Connect")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            
+            if !pubkyRingBridge.isPubkyRingInstalled && !pubkyRingBridge.connectionState.isConnected {
+                Text("Pubky-ring not installed. Use QR code for cross-device auth.")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+    }
+    
+    private var connectionIcon: String {
+        switch pubkyRingBridge.connectionState {
+        case .disconnected: return "circle"
+        case .connecting: return "circle.dotted"
+        case .connected: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
+        }
+    }
+    
+    private var connectionColor: Color {
+        switch pubkyRingBridge.connectionState {
+        case .disconnected: return .gray
+        case .connecting: return .orange
+        case .connected: return .green
+        case .error: return .red
+        }
+    }
+    
+    // MARK: - Balance Card
+    
+    private var balanceCard: some View {
+        VStack(spacing: 16) {
+            // Total Balance
+            VStack(spacing: 4) {
+                Text("Total Balance")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(formatSats(viewModel.totalBalanceSats))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+            }
+            
+            // Breakdown
+            HStack(spacing: 24) {
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bitcoinsign.circle.fill")
+                            .foregroundColor(.orange)
+                        Text("On-chain")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(formatSatsShort(viewModel.bitcoinBalanceSats))
+                        .font(.subheadline.bold())
+                }
+                
+                Divider()
+                    .frame(height: 30)
+                
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .foregroundColor(.yellow)
+                        Text("Lightning")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(formatSatsShort(viewModel.lightningBalanceSats))
+                        .font(.subheadline.bold())
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(
+            LinearGradient(
+                colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(16)
     }
     
     // MARK: - Stats Section
@@ -236,7 +396,7 @@ struct DashboardView: View {
                 
                 Spacer()
                 
-                NavigationLink(destination: ReceiptsView()) {
+                NavigationLink(destination: ActivityListView()) {
                     Text("See All")
                         .font(.subheadline)
                         .foregroundColor(.blue)
@@ -455,6 +615,16 @@ struct DashboardView: View {
         formatter.numberStyle = .decimal
         return "\(formatter.string(from: NSNumber(value: amount)) ?? "\(amount)") sats"
     }
+    
+    private func formatSatsShort(_ amount: UInt64) -> String {
+        if amount >= 1_000_000 {
+            return String(format: "%.2fM", Double(amount) / 1_000_000)
+        } else if amount >= 1_000 {
+            return String(format: "%.1fk", Double(amount) / 1_000)
+        } else {
+            return "\(amount)"
+        }
+    }
 }
 
 // MARK: - Supporting Views
@@ -640,67 +810,8 @@ struct QuickAccessCard: View {
     }
 }
 
-struct ContactDiscoveryView: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
-    @StateObject private var contactsViewModel = ContactsViewModel()
-    @State private var isDiscovering = false
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                if isDiscovering {
-                    ProgressView("Discovering contacts...")
-                        .padding()
-                } else if contactsViewModel.showingDiscoveryResults {
-                    DiscoveryResultsView(
-                        contacts: contactsViewModel.discoveredContacts,
-                        onImport: { contacts in
-                            contactsViewModel.importDiscovered(contacts)
-                            dismiss()
-                        },
-                        onDismiss: {
-                            contactsViewModel.showingDiscoveryResults = false
-                            dismiss()
-                        }
-                    )
-                } else {
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        Text("Discover Contacts")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text("Find contacts from Pubky follows directory")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        Button("Start Discovery") {
-                            Task {
-                                isDiscovering = true
-                                await contactsViewModel.discoverContacts(directoryService: appState.paykitClient.createDirectoryService())
-                                isDiscovering = false
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isDiscovering)
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Discover Contacts")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
 #Preview {
     DashboardView()
+        .environmentObject(AppState())
 }
 

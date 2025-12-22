@@ -1131,6 +1131,16 @@ function switchTab(tabName) {
             activeTab.focus();
         }
         
+        // Update URL hash for deep linking
+        updateUrlHash(tabName);
+        
+        // Load tab-specific content
+        if (tabName === 'activity') {
+            updateActivityTimeline();
+        } else if (tabName === 'profile') {
+            loadCurrentProfile();
+        }
+        
         console.log('Tab switched successfully');
     } catch (error) {
         console.error('Error switching tab:', error);
@@ -3605,6 +3615,555 @@ async function updateRecentActivity() {
     }
 }
 
+// ========================================
+// Profile Management
+// ========================================
+
+let currentProfile = null;
+
+async function loadCurrentProfile() {
+    if (!currentIdentity) return;
+    
+    const profileEl = document.getElementById('current-profile');
+    if (!profileEl) return;
+    
+    try {
+        // Load from localStorage
+        const profileKey = `paykit_profile:${currentIdentity.publicKey()}`;
+        const profileJson = localStorage.getItem(profileKey);
+        
+        if (profileJson) {
+            currentProfile = JSON.parse(profileJson);
+            displayProfile(currentProfile, profileEl);
+            
+            // Populate form fields
+            document.getElementById('profile-name-input').value = currentProfile.name || '';
+            document.getElementById('profile-bio-input').value = currentProfile.bio || '';
+            document.getElementById('profile-image-input').value = currentProfile.image || '';
+            document.getElementById('profile-links-input').value = (currentProfile.links || []).join('\n');
+        } else {
+            profileEl.innerHTML = '<p class="empty-state">No profile published yet. Create one below.</p>';
+        }
+    } catch (error) {
+        console.error('Failed to load profile:', error);
+        profileEl.innerHTML = '<p class="empty-state">Error loading profile</p>';
+    }
+}
+
+function displayProfile(profile, element) {
+    const avatarHtml = profile.image 
+        ? `<img src="${profile.image}" alt="Avatar" class="profile-avatar" onerror="this.style.display='none'">`
+        : '<div class="profile-avatar-placeholder">👤</div>';
+    
+    const linksHtml = (profile.links || []).length > 0
+        ? `<div class="profile-links">${profile.links.map(link => `<a href="${link}" target="_blank">${link}</a>`).join('<br>')}</div>`
+        : '';
+    
+    element.innerHTML = `
+        <div class="profile-card">
+            ${avatarHtml}
+            <div class="profile-info">
+                <h4>${profile.name || 'Unnamed'}</h4>
+                <p>${profile.bio || 'No bio'}</p>
+                ${linksHtml}
+            </div>
+        </div>
+    `;
+}
+
+async function saveProfile() {
+    if (!currentIdentity) {
+        showNotification('Please create an identity first', 'error');
+        return;
+    }
+    
+    try {
+        const profile = {
+            name: document.getElementById('profile-name-input').value.trim(),
+            bio: document.getElementById('profile-bio-input').value.trim(),
+            image: document.getElementById('profile-image-input').value.trim(),
+            links: document.getElementById('profile-links-input').value.split('\n').filter(l => l.trim())
+        };
+        
+        // Save to localStorage
+        const profileKey = `paykit_profile:${currentIdentity.publicKey()}`;
+        localStorage.setItem(profileKey, JSON.stringify(profile));
+        
+        currentProfile = profile;
+        showNotification('Profile saved locally', 'success');
+        await loadCurrentProfile();
+    } catch (error) {
+        handleError(error, 'save profile');
+    }
+}
+
+async function publishProfile() {
+    if (!currentIdentity) {
+        showNotification('Please create an identity first', 'error');
+        return;
+    }
+    
+    // First save locally
+    await saveProfile();
+    
+    if (!currentProfile) {
+        showNotification('Please save your profile first', 'error');
+        return;
+    }
+    
+    try {
+        const homeserver = document.getElementById('homeserver-input')?.value || 'https://demo.httprelay.io';
+        const client = new DirectoryClient(homeserver);
+        
+        const result = await client.publishProfile(
+            currentIdentity.publicKey(),
+            JSON.stringify(currentProfile),
+            null // auth token
+        );
+        
+        if (result.success) {
+            showNotification(`Profile published! ${result.message}`, 'success');
+        } else {
+            showNotification(`Publish failed: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        handleError(error, 'publish profile');
+    }
+}
+
+async function fetchExternalProfile() {
+    const uri = document.getElementById('import-profile-uri').value.trim();
+    if (!uri) {
+        showNotification('Please enter a Pubky URI or public key', 'error');
+        return;
+    }
+    
+    try {
+        // Extract public key from URI
+        const pubkey = uri.replace('pubky://', '').split('/')[0];
+        const homeserver = document.getElementById('homeserver-input')?.value || 'https://demo.httprelay.io';
+        const client = new DirectoryClient(homeserver);
+        
+        const profileData = await client.fetchProfile(pubkey);
+        
+        if (!profileData || profileData === null) {
+            showNotification('Profile not found', 'error');
+            return;
+        }
+        
+        // Show preview
+        const previewEl = document.getElementById('imported-profile-preview');
+        const contentEl = document.getElementById('imported-profile-content');
+        
+        if (previewEl && contentEl) {
+            displayProfile(profileData, contentEl);
+            previewEl.style.display = 'block';
+            previewEl.dataset.profile = JSON.stringify(profileData);
+        }
+        
+        showNotification('Profile fetched successfully', 'success');
+    } catch (error) {
+        handleError(error, 'fetch profile');
+    }
+}
+
+function applyImportedProfile() {
+    const previewEl = document.getElementById('imported-profile-preview');
+    if (!previewEl || !previewEl.dataset.profile) {
+        showNotification('No imported profile to apply', 'error');
+        return;
+    }
+    
+    try {
+        const profile = JSON.parse(previewEl.dataset.profile);
+        
+        document.getElementById('profile-name-input').value = profile.name || '';
+        document.getElementById('profile-bio-input').value = profile.bio || '';
+        document.getElementById('profile-image-input').value = profile.image || '';
+        document.getElementById('profile-links-input').value = (profile.links || []).join('\n');
+        
+        previewEl.style.display = 'none';
+        showNotification('Profile applied to form. Click Save to keep it.', 'success');
+    } catch (error) {
+        handleError(error, 'apply imported profile');
+    }
+}
+
+// ========================================
+// Activity Timeline
+// ========================================
+
+async function updateActivityTimeline() {
+    const timelineEl = document.getElementById('activity-timeline');
+    if (!timelineEl) return;
+    
+    try {
+        const filterType = document.getElementById('activity-filter-type')?.value || 'all';
+        const filterDirection = document.getElementById('activity-filter-direction')?.value || 'all';
+        
+        let activities = [];
+        
+        // Collect receipts
+        if (filterType === 'all' || filterType === 'payment') {
+            const receipts = await receiptStorage.list_all();
+            for (const receipt of receipts) {
+                activities.push({
+                    type: 'payment',
+                    id: receipt.id,
+                    timestamp: receipt.timestamp,
+                    amount: receipt.amount,
+                    currency: receipt.currency,
+                    direction: receipt.direction || 'sent',
+                    counterparty: receipt.counterparty || 'Unknown',
+                    method: receipt.method,
+                    icon: '💸'
+                });
+            }
+        }
+        
+        // Collect subscriptions
+        if (filterType === 'all' || filterType === 'subscription') {
+            const subs = await subscriptionStorage.list_all();
+            for (const sub of subs) {
+                activities.push({
+                    type: 'subscription',
+                    id: sub.id,
+                    timestamp: sub.created_at,
+                    amount: sub.amount,
+                    currency: sub.currency || 'SAT',
+                    direction: 'outgoing',
+                    counterparty: sub.provider || 'Unknown',
+                    method: null,
+                    icon: '🔄'
+                });
+            }
+        }
+        
+        // Collect requests
+        if (filterType === 'all' || filterType === 'request') {
+            const requests = await requestStorage.list_all();
+            for (const req of requests) {
+                activities.push({
+                    type: 'request',
+                    id: req.request_id,
+                    timestamp: req.created_at,
+                    amount: req.amount,
+                    currency: req.currency || 'SAT',
+                    direction: 'incoming',
+                    counterparty: req.from_pubkey || 'Unknown',
+                    method: null,
+                    icon: '📨'
+                });
+            }
+        }
+        
+        // Filter by direction
+        if (filterDirection !== 'all') {
+            activities = activities.filter(a => 
+                a.direction === filterDirection || 
+                (filterDirection === 'sent' && a.direction === 'outgoing') ||
+                (filterDirection === 'received' && a.direction === 'incoming')
+            );
+        }
+        
+        // Sort by timestamp (most recent first)
+        activities.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        
+        // Limit to 50
+        activities = activities.slice(0, 50);
+        
+        if (activities.length === 0) {
+            timelineEl.innerHTML = '<p class="empty-state">No activity matches your filters.</p>';
+            return;
+        }
+        
+        timelineEl.innerHTML = activities.map(activity => {
+            const timestamp = activity.timestamp 
+                ? new Date(activity.timestamp * 1000).toLocaleString()
+                : 'Unknown';
+            const directionClass = activity.direction === 'sent' || activity.direction === 'outgoing' 
+                ? 'sent' : 'received';
+            const abbreviatedCounterparty = activity.counterparty.length > 16 
+                ? activity.counterparty.slice(0, 8) + '...' + activity.counterparty.slice(-4)
+                : activity.counterparty;
+            
+            return `
+                <div class="activity-item ${directionClass}">
+                    <div class="activity-icon">${activity.icon}</div>
+                    <div class="activity-content">
+                        <div class="activity-header">
+                            <span class="activity-type">${activity.type}</span>
+                            <span class="activity-time">${timestamp}</span>
+                        </div>
+                        <div class="activity-details">
+                            <span class="activity-amount">${activity.amount || '?'} ${activity.currency}</span>
+                            <span class="activity-counterparty">${directionClass === 'sent' ? 'to' : 'from'} ${abbreviatedCounterparty}</span>
+                        </div>
+                        ${activity.method ? `<div class="activity-method">via ${activity.method}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Failed to update activity timeline:', error);
+        timelineEl.innerHTML = '<p class="empty-state">Error loading activity</p>';
+    }
+}
+
+function exportActivity() {
+    const timelineEl = document.getElementById('activity-timeline');
+    if (!timelineEl) return;
+    
+    // Get all activity items and create a simple export
+    const items = timelineEl.querySelectorAll('.activity-item');
+    const activities = Array.from(items).map(item => {
+        return {
+            type: item.querySelector('.activity-type')?.textContent || '',
+            time: item.querySelector('.activity-time')?.textContent || '',
+            amount: item.querySelector('.activity-amount')?.textContent || '',
+            counterparty: item.querySelector('.activity-counterparty')?.textContent || ''
+        };
+    });
+    
+    const blob = new Blob([JSON.stringify(activities, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `paykit-activity-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showNotification('Activity exported', 'success');
+}
+
+// ========================================
+// Smart Checkout
+// ========================================
+
+async function runSmartCheckout() {
+    const recipientInput = document.getElementById('smart-checkout-recipient');
+    const amountInput = document.getElementById('smart-checkout-amount');
+    const strategySelect = document.getElementById('smart-checkout-strategy');
+    const resultsDiv = document.getElementById('smart-checkout-results');
+    const methodsList = document.getElementById('smart-checkout-methods-list');
+    
+    if (!recipientInput || !resultsDiv || !methodsList) return;
+    
+    const recipient = recipientInput.value.trim();
+    const amount = parseInt(amountInput?.value || '0', 10);
+    const strategy = strategySelect?.value || 'balanced';
+    
+    if (!recipient) {
+        showNotification('Please enter a recipient', 'error');
+        return;
+    }
+    
+    try {
+        const pubkey = recipient.replace('pubky://', '').split('/')[0];
+        const homeserver = document.getElementById('homeserver-input')?.value || 'https://demo.httprelay.io';
+        const client = new DirectoryClient(homeserver);
+        
+        showNotification('Discovering payment methods...', 'info');
+        
+        const methods = await client.getPaymentList(pubkey, null);
+        
+        if (!methods || methods.length === 0) {
+            showNotification('No payment methods found for this recipient', 'error');
+            resultsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Score and rank methods
+        const scoredMethods = methods.map(m => {
+            const methodId = m.method_id || m.methodId || 'unknown';
+            const endpoint = m.endpoint || '';
+            
+            // Calculate scores based on method type
+            let costScore = 0.5, speedScore = 0.5, privacyScore = 0.5;
+            
+            if (methodId.toLowerCase() === 'lightning') {
+                costScore = 0.9;
+                speedScore = 1.0;
+                privacyScore = 0.7;
+            } else if (methodId.toLowerCase() === 'onchain' || methodId.toLowerCase() === 'bitcoin') {
+                costScore = 0.6;
+                speedScore = 0.3;
+                privacyScore = 0.5;
+            } else if (methodId.toLowerCase() === 'noise') {
+                costScore = 1.0;
+                speedScore = 0.9;
+                privacyScore = 1.0;
+            }
+            
+            // Calculate composite score based on strategy
+            let score;
+            switch (strategy) {
+                case 'lowest-fee':
+                    score = costScore;
+                    break;
+                case 'fastest':
+                    score = speedScore;
+                    break;
+                case 'most-private':
+                    score = privacyScore;
+                    break;
+                default: // balanced
+                    score = (costScore + speedScore + privacyScore) / 3;
+            }
+            
+            return { methodId, endpoint, score, costScore, speedScore, privacyScore };
+        });
+        
+        // Sort by score (highest first)
+        scoredMethods.sort((a, b) => b.score - a.score);
+        
+        // Display results
+        methodsList.innerHTML = scoredMethods.map((m, i) => {
+            const isRecommended = i === 0;
+            const truncatedEndpoint = m.endpoint.length > 30 
+                ? m.endpoint.slice(0, 30) + '...' 
+                : m.endpoint;
+            
+            return `
+                <div class="checkout-method ${isRecommended ? 'recommended' : ''}" data-method="${m.methodId}" data-endpoint="${m.endpoint}">
+                    <div class="method-header">
+                        <span class="method-name">${isRecommended ? '⭐ ' : ''}${m.methodId}</span>
+                        <span class="method-score">Score: ${(m.score * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="method-endpoint">${truncatedEndpoint}</div>
+                    <div class="method-scores">
+                        <span title="Cost efficiency">💰 ${(m.costScore * 100).toFixed(0)}%</span>
+                        <span title="Speed">⚡ ${(m.speedScore * 100).toFixed(0)}%</span>
+                        <span title="Privacy">🔒 ${(m.privacyScore * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Add click handlers
+        methodsList.querySelectorAll('.checkout-method').forEach(el => {
+            el.addEventListener('click', () => {
+                methodsList.querySelectorAll('.checkout-method').forEach(e => e.classList.remove('selected'));
+                el.classList.add('selected');
+                document.getElementById('smart-checkout-proceed-btn').style.display = 'block';
+            });
+        });
+        
+        resultsDiv.style.display = 'block';
+        showNotification(`Found ${methods.length} payment method(s)`, 'success');
+        
+    } catch (error) {
+        handleError(error, 'smart checkout');
+        resultsDiv.style.display = 'none';
+    }
+}
+
+function proceedWithSmartCheckout() {
+    const selected = document.querySelector('.checkout-method.selected');
+    if (!selected) {
+        showNotification('Please select a payment method', 'error');
+        return;
+    }
+    
+    const method = selected.dataset.method;
+    const endpoint = selected.dataset.endpoint;
+    const recipient = document.getElementById('smart-checkout-recipient').value.trim();
+    const amount = document.getElementById('smart-checkout-amount').value;
+    
+    // Pre-fill the manual payment form
+    document.getElementById('recipient-input').value = recipient;
+    document.getElementById('amount-input').value = amount;
+    
+    // Select the method in the dropdown
+    const methodSelect = document.getElementById('method-select');
+    if (methodSelect) {
+        const option = Array.from(methodSelect.options).find(o => o.value.toLowerCase() === method.toLowerCase());
+        if (option) {
+            methodSelect.value = option.value;
+        }
+    }
+    
+    showNotification(`Selected ${method} method. Ready to initiate payment.`, 'success');
+    validatePaymentForm();
+}
+
+// ========================================
+// URL Routing for Deep Links
+// ========================================
+
+function handleUrlRouting() {
+    const hash = window.location.hash.slice(1); // Remove '#'
+    if (!hash) return;
+    
+    // Parse route and params
+    const [route, ...paramParts] = hash.split('/');
+    const params = {};
+    
+    // Parse query-style params if present
+    if (window.location.search) {
+        const urlParams = new URLSearchParams(window.location.search);
+        for (const [key, value] of urlParams) {
+            params[key] = value;
+        }
+    }
+    
+    // Handle specific routes
+    switch (route) {
+        case 'dashboard':
+        case 'activity':
+        case 'identity':
+        case 'profile':
+        case 'contacts':
+        case 'directory':
+        case 'payments':
+        case 'receipts':
+        case 'requests':
+        case 'subscriptions':
+        case 'autopay':
+        case 'about':
+            switchTab(route);
+            break;
+            
+        case 'smart-checkout':
+            switchTab('payments');
+            if (params.recipient) {
+                document.getElementById('smart-checkout-recipient').value = params.recipient;
+            }
+            if (params.amount) {
+                document.getElementById('smart-checkout-amount').value = params.amount;
+            }
+            break;
+            
+        case 'pay':
+            switchTab('payments');
+            if (params.recipient) {
+                document.getElementById('recipient-input').value = params.recipient;
+            }
+            if (params.amount) {
+                document.getElementById('amount-input').value = params.amount;
+            }
+            break;
+            
+        case 'import-profile':
+            switchTab('profile');
+            if (params.uri) {
+                document.getElementById('import-profile-uri').value = params.uri;
+            }
+            break;
+            
+        default:
+            console.log('Unknown route:', route);
+    }
+}
+
+// Update URL when switching tabs
+function updateUrlHash(tabName) {
+    if (history.replaceState) {
+        history.replaceState(null, '', `#${tabName}`);
+    }
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOMContentLoaded - Setting up event listeners');
@@ -3809,6 +4368,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial validation
     validatePaymentForm();
     
+    // Profile actions
+    const saveProfileBtn = document.getElementById('save-profile-btn');
+    if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
+    
+    const publishProfileBtn = document.getElementById('publish-profile-btn');
+    if (publishProfileBtn) publishProfileBtn.addEventListener('click', publishProfile);
+    
+    const fetchProfileBtn = document.getElementById('fetch-profile-btn');
+    if (fetchProfileBtn) fetchProfileBtn.addEventListener('click', fetchExternalProfile);
+    
+    const applyImportedProfileBtn = document.getElementById('apply-imported-profile-btn');
+    if (applyImportedProfileBtn) applyImportedProfileBtn.addEventListener('click', applyImportedProfile);
+    
+    // Activity actions
+    const refreshActivityBtn = document.getElementById('refresh-activity-btn');
+    if (refreshActivityBtn) refreshActivityBtn.addEventListener('click', updateActivityTimeline);
+    
+    const exportActivityBtn = document.getElementById('export-activity-btn');
+    if (exportActivityBtn) exportActivityBtn.addEventListener('click', exportActivity);
+    
+    const applyActivityFiltersBtn = document.getElementById('apply-activity-filters-btn');
+    if (applyActivityFiltersBtn) applyActivityFiltersBtn.addEventListener('click', updateActivityTimeline);
+    
+    const resetActivityFiltersBtn = document.getElementById('reset-activity-filters-btn');
+    if (resetActivityFiltersBtn) {
+        resetActivityFiltersBtn.addEventListener('click', () => {
+            document.getElementById('activity-filter-type').value = 'all';
+            document.getElementById('activity-filter-direction').value = 'all';
+            updateActivityTimeline();
+        });
+    }
+    
+    // Smart checkout actions
+    const smartCheckoutBtn = document.getElementById('smart-checkout-btn');
+    if (smartCheckoutBtn) smartCheckoutBtn.addEventListener('click', runSmartCheckout);
+    
+    const smartCheckoutProceedBtn = document.getElementById('smart-checkout-proceed-btn');
+    if (smartCheckoutProceedBtn) smartCheckoutProceedBtn.addEventListener('click', proceedWithSmartCheckout);
+    
     // Initialize app (don't block on errors)
     initializeApp().catch(err => {
         console.error('Failed to initialize app:', err);
@@ -3820,7 +4418,16 @@ document.addEventListener('DOMContentLoaded', () => {
         initRotationSettingsUI();
         // Initialize security settings UI
         initSecuritySettings();
+        // Load profile if identity exists
+        loadCurrentProfile();
+        // Load activity timeline
+        updateActivityTimeline();
+        // Handle URL routing for deep links
+        handleUrlRouting();
     });
+    
+    // Listen for hash changes (back/forward navigation)
+    window.addEventListener('hashchange', handleUrlRouting);
     
     // Ensure tab navigation works even if initialization fails
     console.log('Event listeners attached, tab navigation should work');

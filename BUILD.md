@@ -24,7 +24,7 @@ cargo --version
 
 ```bash
 # Build entire workspace
-cd paykit-rs-master
+cd paykit-rs
 cargo build --workspace
 
 # Run all tests
@@ -119,8 +119,8 @@ sudo dnf install -y \
 
 ```bash
 # Clone (if not already done)
-git clone <repository-url> paykit-rs-master
-cd paykit-rs-master
+git clone <repository-url> paykit-rs
+cd paykit-rs
 ```
 
 ---
@@ -255,7 +255,7 @@ See [paykit-demo-web/START_HERE.md](./paykit-demo-web/START_HERE.md) for complet
 ## Workspace Structure
 
 ```
-paykit-rs-master/
+paykit-rs/
 ├── paykit-lib/              # Core Paykit library
 ├── paykit-interactive/      # Interactive payment protocol
 ├── paykit-subscriptions/    # Subscription protocol
@@ -575,7 +575,7 @@ After building successfully:
 # Complete setup from scratch
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
-cd paykit-rs-master
+cd paykit-rs
 cargo build --workspace
 cargo test --workspace --lib
 

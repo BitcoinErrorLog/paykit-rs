@@ -285,8 +285,14 @@ struct ReceiptsView: View {
                     .disabled(viewModel.receipts.isEmpty)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showFilterSheet = true }) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    HStack(spacing: 12) {
+                        NavigationLink(destination: ReceiptLookupView()) {
+                            Image(systemName: "magnifyingglass.circle")
+                        }
+                        
+                        Button(action: { showFilterSheet = true }) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        }
                     }
                 }
             }
@@ -566,85 +572,8 @@ struct FilterSheet: View {
     }
 }
 
-// MARK: - Receipt Detail View
-
-struct ReceiptDetailView: View {
-    let receipt: PaymentReceipt
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Amount Header
-                VStack(spacing: 8) {
-                    Image(systemName: receipt.direction == .sent ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(receipt.direction == .sent ? .red : .green)
-                    
-                    Text(receipt.formattedAmount)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(receipt.direction == .sent ? .red : .green)
-                    
-                    StatusBadge(status: receipt.status)
-                }
-                .padding(.top, 20)
-                
-                // Details Card
-                VStack(alignment: .leading, spacing: 16) {
-                    DetailRow(label: "Counterparty", value: receipt.displayName)
-                    DetailRow(label: "Public Key", value: receipt.abbreviatedCounterparty)
-                    DetailRow(label: "Payment Method", value: receipt.paymentMethod)
-                    DetailRow(label: "Created", value: formatDate(receipt.createdAt))
-                    
-                    if let completedAt = receipt.completedAt {
-                        DetailRow(label: "Completed", value: formatDate(completedAt))
-                    }
-                    
-                    if let memo = receipt.memo, !memo.isEmpty {
-                        DetailRow(label: "Memo", value: memo)
-                    }
-                    
-                    if let txId = receipt.txId, !txId.isEmpty {
-                        DetailRow(label: "Transaction ID", value: txId)
-                    }
-                }
-                .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-        }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("Receipt Details")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-}
-
-struct DetailRow: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Text(value)
-                .font(.body)
-        }
-    }
-}
+// Note: ReceiptDetailView is now in ReceiptDetailView.swift with enhanced features
+// including payment hash display, verification, and receipt lookup
 
 // MARK: - Share Sheet
 

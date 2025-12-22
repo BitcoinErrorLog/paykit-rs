@@ -1,5 +1,6 @@
 //! CLI command implementations
 
+pub mod activity;
 pub mod backup;
 pub mod contacts;
 pub mod dashboard;
@@ -8,12 +9,14 @@ pub mod endpoints;
 pub mod list;
 pub mod migrate;
 pub mod pay;
+pub mod profile;
 pub mod publish;
 pub mod qr;
 pub mod receipts;
 pub mod receive;
 pub mod rotation;
 pub mod setup;
+pub mod smart_checkout;
 pub mod subscriptions;
 pub mod switch;
 pub mod wallet;

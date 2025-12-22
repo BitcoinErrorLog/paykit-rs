@@ -64,7 +64,7 @@ wasm-pack --version
 
 ```bash
 # Navigate to web demo
-cd "/Users/john/vibes-dev/paykit-rs-master/paykit-demo-web"
+cd "/Users/john/vibes-dev/paykit-rs/paykit-demo-web"
 
 # Build WASM module
 wasm-pack build --target web --out-dir www/pkg

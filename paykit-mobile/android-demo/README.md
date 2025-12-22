@@ -299,7 +299,7 @@ The demo uses:
 ### 1. Build Native Libraries
 
 ```bash
-cd paykit-rs-master/paykit-mobile
+cd paykit-rs/paykit-mobile
 
 # Install cargo-ndk if needed
 cargo install cargo-ndk

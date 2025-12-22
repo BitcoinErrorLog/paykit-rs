@@ -19,7 +19,9 @@
         <!-- Tab Navigation -->
         <nav class="tabs" role="tablist" aria-label="Main navigation">
             <button class="tab active" data-tab="dashboard" role="tab" aria-selected="true" aria-controls="dashboard-tab" id="tab-dashboard">Dashboard</button>
+            <button class="tab" data-tab="activity" role="tab" aria-selected="false" aria-controls="activity-tab" id="tab-activity">Activity</button>
             <button class="tab" data-tab="identity" role="tab" aria-selected="false" aria-controls="identity-tab" id="tab-identity">Identity</button>
+            <button class="tab" data-tab="profile" role="tab" aria-selected="false" aria-controls="profile-tab" id="tab-profile">Profile</button>
             <button class="tab" data-tab="contacts" role="tab" aria-selected="false" aria-controls="contacts-tab" id="tab-contacts">Contacts</button>
             <button class="tab" data-tab="directory" role="tab" aria-selected="false" aria-controls="directory-tab" id="tab-directory">Directory</button>
             <button class="tab" data-tab="payments" role="tab" aria-selected="false" aria-controls="payments-tab" id="tab-payments">Payments</button>
@@ -108,6 +110,14 @@
                 <div class="card dashboard-actions">
                     <h3>Quick Actions</h3>
                     <div class="quick-actions">
+                        <button class="action-btn" onclick="switchTab('activity')">
+                            <span class="action-icon">📊</span>
+                            <span class="action-text">All Activity</span>
+                        </button>
+                        <button class="action-btn" onclick="switchTab('profile')">
+                            <span class="action-icon">👤</span>
+                            <span class="action-text">My Profile</span>
+                        </button>
                         <button class="action-btn" onclick="switchTab('identity')">
                             <span class="action-icon">🔐</span>
                             <span class="action-text">Manage Identity</span>
@@ -182,6 +192,101 @@
                             <button class="btn btn-secondary" onclick="switchTab('directory')">Discover Methods →</button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activity Tab -->
+        <section id="activity-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-activity" hidden>
+            <h2>Activity Timeline</h2>
+            <p>Unified view of all your payment activity</p>
+
+            <div class="card">
+                <h3>Filters</h3>
+                <div class="filter-controls">
+                    <div class="form-group">
+                        <label for="activity-filter-type">Type</label>
+                        <select id="activity-filter-type">
+                            <option value="all">All</option>
+                            <option value="payment">Payments</option>
+                            <option value="subscription">Subscriptions</option>
+                            <option value="request">Requests</option>
+                            <option value="autopay">Auto-Pay</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="activity-filter-direction">Direction</label>
+                        <select id="activity-filter-direction">
+                            <option value="all">All</option>
+                            <option value="sent">Sent</option>
+                            <option value="received">Received</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <button id="apply-activity-filters-btn" class="btn btn-primary">Apply</button>
+                        <button id="reset-activity-filters-btn" class="btn btn-secondary">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Timeline</h3>
+                <div class="form-group">
+                    <button id="refresh-activity-btn" class="btn btn-secondary">Refresh</button>
+                    <button id="export-activity-btn" class="btn btn-secondary">Export</button>
+                </div>
+                <div id="activity-timeline" class="activity-timeline">
+                    <p class="empty-state">No activity yet. Complete a payment to see activity here.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Profile Tab -->
+        <section id="profile-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-profile" hidden>
+            <h2>Profile Management</h2>
+            <p>Manage your Pubky profile for the directory</p>
+
+            <div class="card">
+                <h3>My Profile</h3>
+                <div class="profile-display" id="current-profile">
+                    <p class="empty-state">No profile published yet. Create one below.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Edit Profile</h3>
+                <div class="form-group">
+                    <label for="profile-name-input">Display Name</label>
+                    <input type="text" id="profile-name-input" placeholder="Your display name">
+                </div>
+                <div class="form-group">
+                    <label for="profile-bio-input">Bio</label>
+                    <textarea id="profile-bio-input" rows="3" placeholder="Tell people about yourself..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="profile-image-input">Avatar URL</label>
+                    <input type="text" id="profile-image-input" placeholder="https://example.com/avatar.png">
+                </div>
+                <div class="form-group">
+                    <label for="profile-links-input">Links (one per line)</label>
+                    <textarea id="profile-links-input" rows="3" placeholder="https://twitter.com/yourhandle&#10;https://github.com/yourhandle"></textarea>
+                </div>
+                <button id="save-profile-btn" class="btn btn-primary">Save Profile</button>
+                <button id="publish-profile-btn" class="btn btn-secondary">Publish to Directory</button>
+            </div>
+
+            <div class="card">
+                <h3>Import Profile</h3>
+                <p>Import profile data from another Pubky user</p>
+                <div class="form-group">
+                    <label for="import-profile-uri">Pubky URI or Public Key</label>
+                    <input type="text" id="import-profile-uri" placeholder="pubky://... or public key">
+                </div>
+                <button id="fetch-profile-btn" class="btn btn-primary">Fetch Profile</button>
+                <div id="imported-profile-preview" class="profile-preview" style="display: none;">
+                    <h4>Preview</h4>
+                    <div id="imported-profile-content"></div>
+                    <button id="apply-imported-profile-btn" class="btn btn-secondary">Apply to My Profile</button>
                 </div>
             </div>
         </section>
@@ -441,8 +546,38 @@
             </div>
 
             <div class="card">
-                <h3>Payment Simulation</h3>
-                <p>Simulate a payment flow</p>
+                <h3>🧠 Smart Checkout</h3>
+                <p>Automatically discover the best payment method for a recipient</p>
+
+                <div class="form-group">
+                    <label for="smart-checkout-recipient">Recipient Pubky URI</label>
+                    <input type="text" id="smart-checkout-recipient" placeholder="pubky://...">
+                </div>
+                <div class="form-group">
+                    <label for="smart-checkout-amount">Amount (sats)</label>
+                    <input type="number" id="smart-checkout-amount" placeholder="1000">
+                </div>
+                <div class="form-group">
+                    <label for="smart-checkout-strategy">Selection Strategy</label>
+                    <select id="smart-checkout-strategy">
+                        <option value="balanced">Balanced (cost + speed + privacy)</option>
+                        <option value="lowest-fee">Lowest Fee</option>
+                        <option value="fastest">Fastest</option>
+                        <option value="most-private">Most Private</option>
+                    </select>
+                </div>
+                <button id="smart-checkout-btn" class="btn btn-primary">Discover Best Method</button>
+                
+                <div id="smart-checkout-results" class="smart-checkout-results" style="display: none;">
+                    <h4>Recommended Methods</h4>
+                    <div id="smart-checkout-methods-list"></div>
+                    <button id="smart-checkout-proceed-btn" class="btn btn-primary" style="display: none;">Proceed with Selected</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Manual Payment</h3>
+                <p>Manually select payment method and initiate payment</p>
 
                 <div class="form-group">
                     <label for="recipient-input">Recipient Pubky URI</label>

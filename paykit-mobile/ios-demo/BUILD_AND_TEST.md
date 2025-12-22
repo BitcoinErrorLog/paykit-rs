@@ -42,7 +42,7 @@ swift --version
 From the workspace root:
 
 ```bash
-cd /Users/john/vibes-dev/paykit-rs-master
+cd /Users/john/vibes-dev/paykit-rs
 
 # Build the library in release mode
 cargo build --release -p paykit-mobile
@@ -102,7 +102,7 @@ swift/generated/
 
 1. **Copy Swift source files** from `paykit-mobile/ios-demo/PaykitDemo/`:
    ```bash
-   # From paykit-rs-master root
+   # From paykit-rs root
    cp -r paykit-mobile/ios-demo/PaykitDemo/* <YourXcodeProject>/PaykitDemo/
    ```
 

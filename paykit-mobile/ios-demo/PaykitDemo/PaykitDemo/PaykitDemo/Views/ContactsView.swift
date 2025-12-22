@@ -270,10 +270,44 @@ struct ContactDetailSheet: View {
     let contact: Contact
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
+    @State private var showingSmartCheckout = false
+    @State private var paymentAmount: String = ""
+    @State private var showingAmountInput = false
     
     var body: some View {
         NavigationView {
             List {
+                // Quick Pay Section
+                Section {
+                    Button {
+                        showingAmountInput = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "paperplane.fill")
+                                .foregroundColor(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Color.blue)
+                                .cornerRadius(8)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Send Payment")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Smart checkout with method discovery")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Actions")
+                }
+                
                 Section {
                     HStack {
                         Text("Name")
@@ -303,6 +337,8 @@ struct ContactDetailSheet: View {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         }
                     }
+                } header: {
+                    Text("Contact Info")
                 }
                 
                 if let notes = contact.notes {
@@ -343,6 +379,34 @@ struct ContactDetailSheet: View {
                     Button("Done") {
                         dismiss()
                     }
+                }
+            }
+            .alert("Enter Amount", isPresented: $showingAmountInput) {
+                TextField("Amount in sats", text: $paymentAmount)
+                    .keyboardType(.numberPad)
+                Button("Cancel", role: .cancel) {
+                    paymentAmount = ""
+                }
+                Button("Continue") {
+                    if let amount = UInt64(paymentAmount), amount > 0 {
+                        showingSmartCheckout = true
+                    }
+                }
+            } message: {
+                Text("How many sats to send to \(contact.name)?")
+            }
+            .sheet(isPresented: $showingSmartCheckout) {
+                SmartCheckoutView(
+                    recipientPubkey: contact.publicKeyZ32,
+                    recipientName: contact.name,
+                    amount: UInt64(paymentAmount) ?? 1000
+                ) { result in
+                    print("Payment completed: \(result.selectedMethod) for \(result.amount) sats")
+                    showingSmartCheckout = false
+                    paymentAmount = ""
+                    dismiss()
+                } onCancel: {
+                    showingSmartCheckout = false
                 }
             }
         }
@@ -498,27 +562,7 @@ class ContactsViewModel: ObservableObject {
     }
 }
 
-/// A discovered contact from Pubky follows
-struct DiscoveredContact: Identifiable {
-    let id: String
-    let publicKeyZ32: String
-    let hasPaymentMethods: Bool
-    let supportedMethods: [String]
-    
-    init(publicKeyZ32: String, hasPaymentMethods: Bool, supportedMethods: [String]) {
-        self.id = publicKeyZ32
-        self.publicKeyZ32 = publicKeyZ32
-        self.hasPaymentMethods = hasPaymentMethods
-        self.supportedMethods = supportedMethods
-    }
-    
-    var abbreviatedKey: String {
-        guard publicKeyZ32.count > 16 else { return publicKeyZ32 }
-        let prefix = publicKeyZ32.prefix(8)
-        let suffix = publicKeyZ32.suffix(8)
-        return "\(prefix)...\(suffix)"
-    }
-}
+// Note: DiscoveredContact model is now in Models/DiscoveredContact.swift
 
 /// View for displaying discovered contacts and allowing import
 struct DiscoveryResultsView: View {

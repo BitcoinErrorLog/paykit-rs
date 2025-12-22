@@ -96,7 +96,7 @@ If you have all prerequisites installed:
 
 ```bash
 # Navigate to web demo directory
-cd /path/to/paykit-rs-master/paykit-demo-web
+cd /path/to/paykit-rs/paykit-demo-web
 
 # Option 1: Using npm scripts (recommended)
 npm run dev
@@ -138,7 +138,7 @@ If any of these fail, go back to the Prerequisites section.
 ### Step 2: Navigate to Project
 
 ```bash
-cd "/Users/john/vibes-dev/paykit-rs-master/paykit-demo-web"
+cd "/Users/john/vibes-dev/paykit-rs/paykit-demo-web"
 
 # Verify you're in the right directory
 ls -la

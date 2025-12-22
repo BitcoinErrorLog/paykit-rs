@@ -1,29 +1,46 @@
 # Paykit iOS Demo
 
-A comprehensive iOS demo application showcasing Paykit features including key management, auto-pay, subscriptions, and payment requests.
+A comprehensive iOS demo application showcasing Paykit features including key management, auto-pay, subscriptions, and payment requests. **Now with full feature parity with Bitkit's Paykit integration!**
+
+## What's New (Feature Parity Update)
+
+This demo has been upgraded to match Bitkit's Paykit integration patterns:
+
+- **Payment Executor Pattern**: Abstract protocol for swappable Bitcoin/Lightning implementations
+- **Pubky Ring Authentication**: Same-device, cross-device (QR), and manual auth flows
+- **Contact Discovery with Health Indicators**: Visual health status per payment method
+- **Enhanced Dashboard**: Connection status card, balance breakdown, quick actions
+- **Deep Link Handling**: Full support for `paykit://` and `paykitdemo://` URIs
+- **Background Processing Patterns**: iOS BGTaskScheduler examples for production use
+
+See [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md) for detailed implementation guidance.
 
 ## Current Status
 
-> **Demo Application**: This is a demonstration app. Some features use real implementations while others use sample data for UI demonstration.
+> **Demo Application**: This is a demonstration app that serves as a reference for implementing Paykit in production mobile applications.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Dashboard | **Real** | Overview with stats, recent activity, quick actions |
+| Dashboard | **Real** | Stats, activity, connection status, balance cards |
+| Payment Executors | **Real** | Abstract protocol with mock implementations |
+| Pubky Ring Auth | **Real** | Same-device, QR, and manual authentication |
+| Contact Discovery | **Real** | Health indicators, method filters, profile import |
+| Deep Link Handling | **Real** | Full `paykit://` and `paykitdemo://` URI support |
+| Background Processing | **Pattern** | BGTaskScheduler examples for production |
 | Key Management | **Real** | Ed25519/X25519 via Rust FFI, Keychain storage |
 | Key Backup/Restore | **Real** | Argon2 + AES-GCM encrypted exports |
 | Contacts | **Real** | Keychain-backed contact storage, identity-scoped |
-| Contact Discovery | **Real** | Discover contacts from Pubky follows directory |
-| Receipts | **Real** | FFI-backed creation, Keychain storage, search/filtering, identity-scoped |
+| Receipts | **Real** | FFI-backed creation, Keychain storage, search/filtering |
 | Payment Methods | **Real** | Lists methods via PaykitClient FFI, validates endpoints |
 | Health Monitoring | **Real** | Real health checks via PaykitClient.checkHealth() |
 | Method Selection | **Real** | Smart method selection with strategy options |
 | Subscriptions | **Real** | Keychain-backed subscription storage, identity-scoped |
-| Auto-Pay | **Real** | Keychain-backed settings, limits, and rules, identity-scoped |
-| Payment Requests | **Real** | Keychain-backed storage with FFI integration, identity-scoped |
-| QR Scanner | **Real** | AVFoundation-based QR code scanning with Paykit URI parsing |
+| Auto-Pay | **Real** | Keychain-backed settings, limits, and rules |
+| Payment Requests | **Real** | Keychain-backed storage with FFI integration |
+| QR Scanner | **Real** | AVFoundation-based QR code scanning |
 | Multiple Identities | **Real** | Create, switch, and manage multiple identities |
-| Directory Operations | **Configurable** | DirectoryService supports mock or callback-based Pubky transport |
-| Noise Payments | **Real** | Send/receive payments over encrypted Noise protocol channels |
+| Directory Operations | **Configurable** | Mock or callback-based Pubky transport |
+| Noise Payments | **Real** | Send/receive over encrypted Noise channels |
 
 ## Features
 
@@ -220,6 +237,11 @@ PaykitDemo/
 ├── PaykitMobileFFI.h            # C header for FFI
 ├── PubkyNoise.swift             # Noise protocol FFI bindings
 ├── PubkyNoiseFFI.h              # Noise FFI header
+├── Executors/
+│   ├── PaymentExecutorProtocol.swift  # Abstract executor protocols
+│   ├── MockBitcoinExecutor.swift      # Mock on-chain executor
+│   ├── MockLightningExecutor.swift    # Mock Lightning executor
+│   └── PaymentService.swift           # High-level payment coordination
 ├── Models/
 │   ├── AutoPayModels.swift      # Auto-pay data models
 │   ├── Contact.swift            # Contact data model
@@ -227,9 +249,11 @@ PaykitDemo/
 ├── Services/
 │   ├── NoisePaymentService.swift    # Core Noise payment coordination
 │   ├── NoiseKeyCache.swift          # X25519 key caching
-│   ├── PubkyRingIntegration.swift   # Remote key manager integration
+│   ├── PubkyRingBridge.swift        # Pubky Ring URL scheme bridge
+│   ├── PubkyRingIntegration.swift   # FFI-based key derivation
 │   ├── MockPubkyRingService.swift   # Demo/testing key derivation
-│   └── DirectoryService.swift       # Endpoint discovery/publishing
+│   ├── DirectoryService.swift       # Endpoint discovery/publishing
+│   └── BackgroundProcessing.swift   # Background task patterns
 ├── Storage/
 │   ├── ContactStorage.swift     # Keychain-backed contact storage
 │   └── ReceiptStorage.swift     # Keychain-backed receipt storage
@@ -237,8 +261,10 @@ PaykitDemo/
 │   ├── AutoPayViewModel.swift   # Auto-pay business logic
 │   └── NoisePaymentViewModel.swift  # Payment flow state management
 └── Views/
-    ├── ContentView.swift        # Main tab navigation (Send/Receive tabs)
-    ├── DashboardView.swift      # Dashboard with stats and activity
+    ├── ContentView.swift        # Main navigation with deep links
+    ├── DashboardView.swift      # Dashboard with connection status
+    ├── PubkyRingAuthView.swift  # 3-method Pubky Ring authentication
+    ├── ContactDiscoveryView.swift   # Discovery with health indicators
     ├── PaymentView.swift        # Send payment UI
     ├── ReceivePaymentView.swift # Receive payment UI (server mode)
     ├── PaymentMethodsView.swift # Payment methods UI
@@ -262,7 +288,7 @@ PaykitDemo/
 ### 1. Build Paykit Mobile Library
 
 ```bash
-cd paykit-rs-master/paykit-mobile
+cd paykit-rs/paykit-mobile
 
 # Add iOS simulator target
 rustup target add aarch64-apple-ios-sim

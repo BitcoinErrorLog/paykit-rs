@@ -72,9 +72,9 @@ This directory contains additional documentation for the Paykit project.
 ## Archive
 
 Historical development artifacts are preserved in:
-- **[archive/status-reports/](./archive/status-reports/)** - Status and completion reports
-- **[archive/implementation-reports/](./archive/implementation-reports/)** - Phase completion reports
-- **[archive/audit-reports/](./archive/audit-reports/)** - Audit documents
+- **[archive/planning-documents/](./archive/planning-documents/)** - Feature parity plans, roadmaps, and integration readiness reviews
+- **[archive/phase-summaries/](./archive/phase-summaries/)** - Phase completion summaries (Phase 1, 2, 3+4)
+- **[archive/status-reports/](./archive/status-reports/)** - Build status and E2E test results
 
 ## Contributing Documentation
 

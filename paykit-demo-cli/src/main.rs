@@ -97,6 +97,34 @@ enum Commands {
         homeserver: String,
     },
 
+    /// Profile operations (fetch, publish, import)
+    Profile {
+        #[command(subcommand)]
+        action: ProfileAction,
+    },
+
+    /// Smart checkout - discover and select best payment method
+    SmartCheckout {
+        /// Recipient Pubky URI
+        recipient: String,
+
+        /// Amount in sats
+        #[arg(short, long)]
+        amount: Option<u64>,
+
+        /// Selection strategy: balanced, lowest-fee, fastest, private
+        #[arg(short, long, default_value = "balanced")]
+        strategy: String,
+
+        /// Execute the payment with the selected method
+        #[arg(short, long)]
+        execute: bool,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+
     /// Manage contacts
     Contacts {
         #[command(subcommand)]
@@ -157,6 +185,21 @@ enum Commands {
 
     /// Show dashboard with summary statistics
     Dashboard,
+
+    /// Show unified activity timeline
+    Activity {
+        /// Filter by activity type: payment, subscription, request, autopay
+        #[arg(short, long)]
+        r#type: Option<String>,
+
+        /// Filter by direction: all, sent, received
+        #[arg(short, long, default_value = "all")]
+        direction: String,
+
+        /// Maximum number of activities to show
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
 
     /// Manage private endpoints exchanged with peers
     Endpoints {
@@ -608,6 +651,56 @@ enum ContactAction {
     },
 }
 
+#[derive(Subcommand)]
+enum ProfileAction {
+    /// Fetch a profile from the directory
+    Fetch {
+        /// Pubky URI to fetch profile for
+        uri: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+
+    /// Publish your profile to the directory
+    Publish {
+        /// Display name
+        #[arg(short, long)]
+        name: String,
+
+        /// Bio / about text
+        #[arg(short, long)]
+        bio: Option<String>,
+
+        /// Avatar image URL
+        #[arg(short, long)]
+        image: Option<String>,
+
+        /// Links (can be repeated)
+        #[arg(short, long)]
+        link: Vec<String>,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+
+    /// Import a profile from another pubkey and publish as your own
+    Import {
+        /// Source Pubky URI to import from
+        from: String,
+
+        /// Homeserver URL
+        #[arg(long, default_value = "https://demo.httprelay.io")]
+        homeserver: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -711,6 +804,58 @@ async fn main() -> Result<()> {
         Commands::Discover { uri, homeserver } => {
             commands::discover::run(&storage_dir, &uri, &homeserver, cli.verbose).await?;
         }
+        Commands::Profile { action } => match action {
+            ProfileAction::Fetch {
+                uri,
+                json,
+                homeserver,
+            } => {
+                commands::profile::fetch(&storage_dir, &uri, &homeserver, json, cli.verbose)
+                    .await?;
+            }
+            ProfileAction::Publish {
+                name,
+                bio,
+                image,
+                link,
+                homeserver,
+            } => {
+                commands::profile::publish(
+                    &storage_dir,
+                    name,
+                    bio,
+                    image,
+                    link,
+                    &homeserver,
+                    cli.verbose,
+                )
+                .await?;
+            }
+            ProfileAction::Import { from, homeserver } => {
+                commands::profile::import(&storage_dir, &from, &homeserver, cli.verbose).await?;
+            }
+        },
+        Commands::SmartCheckout {
+            recipient,
+            amount,
+            strategy,
+            execute,
+            homeserver,
+        } => {
+            let strategy = strategy
+                .parse::<commands::smart_checkout::Strategy>()
+                .unwrap_or(commands::smart_checkout::Strategy::Balanced);
+            commands::smart_checkout::run(
+                &storage_dir,
+                &recipient,
+                amount,
+                strategy,
+                &homeserver,
+                execute,
+                cli.verbose,
+            )
+            .await?;
+        }
         Commands::Contacts { action } => match action {
             ContactAction::Add { name, uri, notes } => {
                 commands::contacts::add(&storage_dir, &name, &uri, notes.as_deref(), cli.verbose)
@@ -785,6 +930,20 @@ async fn main() -> Result<()> {
         },
         Commands::Dashboard => {
             commands::dashboard::run(&storage_dir, cli.verbose).await?;
+        }
+        Commands::Activity {
+            r#type,
+            direction,
+            limit,
+        } => {
+            let filter_type = r#type
+                .map(|t| t.parse::<commands::activity::ActivityType>())
+                .transpose()?;
+            let direction = direction
+                .parse::<commands::activity::Direction>()
+                .unwrap_or(commands::activity::Direction::All);
+            commands::activity::run(&storage_dir, filter_type, direction, limit, cli.verbose)
+                .await?;
         }
         Commands::Endpoints { action } => match action {
             EndpointAction::List => {

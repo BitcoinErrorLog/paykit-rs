@@ -34,7 +34,7 @@ cargo --version
 
 ```bash
 # From workspace root
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-subscriptions
 
 # Or from this directory
@@ -367,7 +367,7 @@ cargo test -p paykit-subscriptions amount_serialization_preserves_value
 
 **Solution**: Build from workspace root:
 ```bash
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-subscriptions
 ```
 

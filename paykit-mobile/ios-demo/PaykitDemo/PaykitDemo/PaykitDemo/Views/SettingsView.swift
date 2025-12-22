@@ -16,6 +16,59 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                // Session & Identity Section
+                Section {
+                    NavigationLink {
+                        SessionManagementView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "person.badge.key.fill")
+                                .foregroundColor(.blue)
+                                .frame(width: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pubky Ring Sessions")
+                                if PubkyRingBridge.shared.currentSession != nil {
+                                    Text("Connected")
+                                        .font(.caption2)
+                                        .foregroundColor(.green)
+                                } else {
+                                    Text("Not connected")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    
+                    NavigationLink {
+                        ProfileImportView { profile in
+                            print("Imported profile: \(profile.name)")
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                                .foregroundColor(.purple)
+                                .frame(width: 30)
+                            Text("Import Profile")
+                        }
+                    }
+                    
+                    NavigationLink {
+                        PubkyRingAuthView { session in
+                            print("Authenticated: \(session.pubkey)")
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .foregroundColor(.green)
+                                .frame(width: 30)
+                            Text("Connect Pubky Ring")
+                        }
+                    }
+                } header: {
+                    Text("Identity & Sessions")
+                }
+                
                 // Quick Access Section
                 Section {
                     NavigationLink {

@@ -631,6 +631,199 @@ impl DirectoryClient {
         }
     }
 
+    /// Fetch a profile from the Pubky directory
+    ///
+    /// Returns the profile JSON if found, or null if not found.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - The public key to fetch the profile for
+    #[wasm_bindgen(js_name = fetchProfile)]
+    pub async fn fetch_profile(&self, public_key: &str) -> Result<JsValue, JsValue> {
+        utils::log(&format!("Fetching profile for {}", public_key));
+
+        let url = format!(
+            "{}/pub/{}/pubky.app/profile.json",
+            self.homeserver, public_key
+        );
+
+        let fetch_url = if let Some(ref proxy) = self.proxy_url {
+            format!("{}/{}", proxy, url)
+        } else {
+            url
+        };
+
+        let window = web_sys::window().ok_or_else(|| utils::js_error("No window object"))?;
+        let resp_value = JsFuture::from(window.fetch_with_str(&fetch_url))
+            .await
+            .map_err(|e| utils::js_error(&format!("Fetch failed: {:?}", e)))?;
+
+        let resp: Response = resp_value
+            .dyn_into()
+            .map_err(|_| utils::js_error("Failed to cast to Response"))?;
+
+        if !resp.ok() {
+            if resp.status() == 404 {
+                return Ok(JsValue::NULL);
+            }
+            return Err(utils::js_error(&format!("HTTP error: {}", resp.status())));
+        }
+
+        let json = JsFuture::from(resp.json().map_err(|_| utils::js_error("No JSON method"))?)
+            .await
+            .map_err(|_| utils::js_error("Failed to parse JSON"))?;
+
+        Ok(json)
+    }
+
+    /// Publish a profile to the Pubky directory
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - Your public key
+    /// * `profile_json` - The profile data as a JSON string
+    /// * `auth_token` - Authentication token for the homeserver
+    #[wasm_bindgen(js_name = publishProfile)]
+    pub async fn publish_profile(
+        &self,
+        public_key: &str,
+        profile_json: &str,
+        auth_token: Option<String>,
+    ) -> Result<PublishResult, JsValue> {
+        utils::log(&format!(
+            "Publishing profile for {} (mode: {:?})",
+            public_key, self.mode
+        ));
+
+        match self.mode {
+            PublishMode::Mock => self.mock_publish_profile(public_key, profile_json).await,
+            PublishMode::Direct => {
+                self.direct_publish_profile(public_key, profile_json, auth_token)
+                    .await
+            }
+            PublishMode::Proxy => {
+                self.proxy_publish_profile(public_key, profile_json, auth_token)
+                    .await
+            }
+        }
+    }
+
+    async fn mock_publish_profile(
+        &self,
+        public_key: &str,
+        profile_json: &str,
+    ) -> Result<PublishResult, JsValue> {
+        let window = web_sys::window().ok_or_else(|| utils::js_error("No window object"))?;
+        let storage = window
+            .local_storage()?
+            .ok_or_else(|| utils::js_error("No localStorage"))?;
+
+        let key = format!("paykit_profile:{}", public_key);
+        storage
+            .set_item(&key, profile_json)
+            .map_err(|e| utils::js_error(&format!("localStorage error: {:?}", e)))?;
+
+        Ok(PublishResult {
+            success: true,
+            message: "MOCK: Profile saved to localStorage. Not published to real homeserver."
+                .to_string(),
+            mode: PublishMode::Mock,
+        })
+    }
+
+    async fn direct_publish_profile(
+        &self,
+        public_key: &str,
+        profile_json: &str,
+        auth_token: Option<String>,
+    ) -> Result<PublishResult, JsValue> {
+        let url = format!(
+            "{}/pub/{}/pubky.app/profile.json",
+            self.homeserver, public_key
+        );
+
+        self.http_put_json(&url, profile_json, auth_token, PublishMode::Direct)
+            .await
+    }
+
+    async fn proxy_publish_profile(
+        &self,
+        public_key: &str,
+        profile_json: &str,
+        auth_token: Option<String>,
+    ) -> Result<PublishResult, JsValue> {
+        let proxy = self
+            .proxy_url
+            .as_ref()
+            .ok_or_else(|| utils::js_error("Proxy mode requires proxy_url to be set"))?;
+
+        let target_url = format!(
+            "{}/pub/{}/pubky.app/profile.json",
+            self.homeserver, public_key
+        );
+        let url = format!("{}/{}", proxy, target_url);
+
+        self.http_put_json(&url, profile_json, auth_token, PublishMode::Proxy)
+            .await
+    }
+
+    async fn http_put_json(
+        &self,
+        url: &str,
+        body: &str,
+        auth_token: Option<String>,
+        mode: PublishMode,
+    ) -> Result<PublishResult, JsValue> {
+        let window = web_sys::window().ok_or_else(|| utils::js_error("No window object"))?;
+
+        let headers = Headers::new().map_err(|e| utils::js_error(&format!("{:?}", e)))?;
+        headers
+            .set("Content-Type", "application/json")
+            .map_err(|e| utils::js_error(&format!("{:?}", e)))?;
+
+        if let Some(token) = auth_token {
+            headers
+                .set("Authorization", &format!("Bearer {}", token))
+                .map_err(|e| utils::js_error(&format!("{:?}", e)))?;
+        }
+
+        let opts = RequestInit::new();
+        opts.set_method("PUT");
+        opts.set_headers(&headers);
+        opts.set_body(&JsValue::from_str(body));
+        opts.set_mode(RequestMode::Cors);
+
+        let request = web_sys::Request::new_with_str_and_init(url, &opts)
+            .map_err(|e| utils::js_error(&format!("Request creation failed: {:?}", e)))?;
+
+        let resp_value = JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .map_err(|e| {
+                utils::js_error(&format!(
+                    "Fetch failed (CORS issue?): {:?}. Consider using proxy mode.",
+                    e
+                ))
+            })?;
+
+        let resp: Response = resp_value
+            .dyn_into()
+            .map_err(|_| utils::js_error("Failed to cast to Response"))?;
+
+        if resp.ok() || resp.status() == 201 || resp.status() == 204 {
+            Ok(PublishResult {
+                success: true,
+                message: format!("Published successfully to {}", self.homeserver),
+                mode,
+            })
+        } else {
+            Ok(PublishResult {
+                success: false,
+                message: format!("HTTP error {}: Failed to publish", resp.status()),
+                mode,
+            })
+        }
+    }
+
     async fn http_delete(
         &self,
         url: &str,

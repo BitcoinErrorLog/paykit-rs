@@ -4,6 +4,21 @@
 
 Paykit enables seamless payment discovery, negotiation, and coordination through public directories and private encrypted channels. It provides a unified interface for managing payments across different methods while maintaining privacy and cryptographic security.
 
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Architecture](#architecture)
+- [Components](#components)
+- [Installation](#installation)
+- [Testing](#testing)
+- [Documentation](#documentation)
+- [Security](#security-considerations)
+- [Contributing](#contributing)
+
+---
+
 ## Key Features
 
 ### Core Capabilities
@@ -35,7 +50,7 @@ Paykit enables seamless payment discovery, negotiation, and coordination through
 ## Project Structure
 
 ```
-paykit-rs-master/
+paykit-rs/
 ├── paykit-lib/              # Core library (directory, transport traits, executors)
 ├── paykit-interactive/      # Interactive payment protocol (Noise + receipts)
 ├── paykit-subscriptions/    # Subscription management and auto-pay
@@ -260,33 +275,32 @@ See the [Mobile README](paykit-mobile/README.md) for complete setup instructions
 
 ## Architecture
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for complete architecture documentation with interactive Mermaid diagrams.
+
 ### Payment Discovery Flow
 
-```
-User A                    Pubky Homeserver              User B
-  |                              |                         |
-  |--Publish Methods------------>|                         |
-  |  (onchain, lightning)        |                         |
-  |                              |                         |
-  |                              |<---Query Methods--------|
-  |                              |                         |
-  |                              |----Return Methods------>|
+```mermaid
+sequenceDiagram
+    participant A as User A
+    participant HS as Pubky Homeserver
+    participant B as User B
+    A->>HS: Publish Methods (onchain, lightning)
+    B->>HS: Query Methods
+    HS-->>B: Return Available Methods
 ```
 
 ### Interactive Payment Flow
 
-```
-Payer                    Noise Channel                 Payee
-  |                              |                         |
-  |--Connect (Noise_IK)----------|------------------------>|
-  |                              |                         |
-  |--RequestReceipt--------------|------------------------>|
-  |  (provisional)               |                         |
-  |                              |                         |
-  |<-ConfirmReceipt--------------|-------------------------|
-  |  (with invoice)              |                         |
-  |                              |                         |
-  |--Execute Payment (off-protocol)                        |
+```mermaid
+sequenceDiagram
+    participant Payer
+    participant Channel as Noise Channel
+    participant Payee
+    Payer->>Channel: Connect (Noise_IK handshake)
+    Channel->>Payee: Encrypted session
+    Payer->>Payee: RequestReceipt (provisional)
+    Payee-->>Payer: ConfirmReceipt (with invoice)
+    Payer->>Payee: Execute Payment (off-protocol)
 ```
 
 ## Components
@@ -429,7 +443,7 @@ See [paykit-mobile README](paykit-mobile/README.md) and [Mobile Integration Guid
 
 ```bash
 git clone <repo-url>
-cd paykit-rs-master
+cd paykit-rs
 cargo build --release
 ```
 
@@ -654,7 +668,9 @@ MIT
 ## Related Projects
 
 - [Pubky](https://pubky.org) - Decentralized identity and data protocol
-- [Pubky Noise](../pubky-noise-main/) - Noise Protocol implementation
+- [Pubky Core](https://github.com/pubky/pubky-core) - Pubky protocol SDK and homeserver
+- [Pubky Ring](https://github.com/pubky/pubky-ring) - Key manager for the Pubky ecosystem
+- [Pubky Noise](https://github.com/synonymdev/pubky-noise) - Noise Protocol implementation with Pubky integration
 - [Bitkit](https://bitkit.to) - Reference wallet implementation
 
 ## Contact

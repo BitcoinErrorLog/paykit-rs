@@ -397,6 +397,116 @@ public final class DirectoryService {
         }
     }
     
+    // MARK: - Profile Operations
+    
+    private static let profilePath = "/pub/pubky.app/profile.json"
+    
+    /// Fetch profile from Pubky directory
+    public func fetchProfile(for pubkey: String) async throws -> DirectoryProfile? {
+        if useMockMode {
+            return try await fetchProfileMock(for: pubkey)
+        }
+        return try await fetchProfilePubky(for: pubkey)
+    }
+    
+    /// Mock implementation for demo
+    private func fetchProfileMock(for pubkey: String) async throws -> DirectoryProfile? {
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        
+        // Check mock storage
+        if let userStorage = mockStorage[pubkey],
+           let profileJson = userStorage[Self.profilePath],
+           let data = profileJson.data(using: .utf8),
+           let profile = try? JSONDecoder().decode(DirectoryProfile.self, from: data) {
+            return profile
+        }
+        
+        // Return mock profile for demo purposes
+        return DirectoryProfile(
+            name: "Demo User (\(String(pubkey.prefix(8))))",
+            bio: "Imported from Pubky directory",
+            image: nil,
+            status: nil,
+            links: []
+        )
+    }
+    
+    /// Pubky SDK implementation
+    private func fetchProfilePubky(for pubkey: String) async throws -> DirectoryProfile? {
+        guard let adapter = PubkyStorageAdapter.shared.unauthAdapter else {
+            // Fall back to mock if not configured
+            return try await fetchProfileMock(for: pubkey)
+        }
+        
+        let result = adapter.get(ownerPubkey: pubkey, path: Self.profilePath)
+        
+        switch result {
+        case .success(let data):
+            guard let jsonData = data.data(using: .utf8) else { return nil }
+            return try JSONDecoder().decode(DirectoryProfile.self, from: jsonData)
+        case .notFound:
+            return nil
+        case .error(let msg):
+            throw DirectoryError.networkError(msg)
+        }
+    }
+    
+    /// Publish profile to Pubky directory
+    public func publishProfile(_ profile: DirectoryProfile) async throws {
+        if useMockMode {
+            try await publishProfileMock(profile)
+            return
+        }
+        try await publishProfilePubky(profile)
+    }
+    
+    /// Mock implementation for demo
+    private func publishProfileMock(_ profile: DirectoryProfile) async throws {
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        
+        guard let session = PubkyRingBridge.shared.currentSession else {
+            throw DirectoryError.notConfigured
+        }
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        let data = try encoder.encode(profile)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw DirectoryError.publishFailed("Failed to encode profile")
+        }
+        
+        // Store in mock storage
+        if mockStorage[session.pubkey] == nil {
+            mockStorage[session.pubkey] = [:]
+        }
+        mockStorage[session.pubkey]?[Self.profilePath] = json
+    }
+    
+    /// Pubky SDK implementation
+    private func publishProfilePubky(_ profile: DirectoryProfile) async throws {
+        guard let transport = authenticatedTransport else {
+            throw DirectoryError.notConfigured
+        }
+        
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(profile)
+        
+        guard let adapter = PubkyStorageAdapter.shared.authAdapter else {
+            throw DirectoryError.notConfigured
+        }
+        
+        let result = adapter.put(path: Self.profilePath, content: data)
+        
+        switch result {
+        case .success:
+            return
+        case .error(let msg):
+            throw DirectoryError.publishFailed(msg)
+        }
+    }
+    
     // MARK: - Demo Helpers
     
     /// Set up demo data for testing
@@ -409,13 +519,48 @@ public final class DirectoryService {
                 {"host":"127.0.0.1","port":8888,"pubkey":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
                 """,
             "\(Self.paykitPathPrefix)lightning": "lnbc1...",
-            "\(Self.paykitPathPrefix)onchain": "bc1q..."
+            "\(Self.paykitPathPrefix)onchain": "bc1q...",
+            Self.profilePath: """
+                {"name":"Demo Recipient","bio":"Test profile for development"}
+                """
         ]
     }
     
     /// Clear all mock data
     public func clearMockData() {
         mockStorage.removeAll()
+    }
+}
+
+// MARK: - Directory Profile Model
+
+/// Profile data from Pubky directory
+public struct DirectoryProfile: Codable, Equatable {
+    public let name: String?
+    public let bio: String?
+    public let image: String?
+    public let status: String?
+    public let links: [String]
+    
+    public init(name: String?, bio: String?, image: String?, status: String?, links: [String]) {
+        self.name = name
+        self.bio = bio
+        self.image = image
+        self.status = status
+        self.links = links
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case name, bio, image, status, links
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        bio = try container.decodeIfPresent(String.self, forKey: .bio)
+        image = try container.decodeIfPresent(String.self, forKey: .image)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        links = try container.decodeIfPresent([String].self, forKey: .links) ?? []
     }
 }
 

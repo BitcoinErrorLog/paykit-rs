@@ -11,8 +11,11 @@ A WebAssembly application demonstrating Paykit capabilities in the browser: iden
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Identity Management | **Real** | Ed25519 keypairs, localStorage persistence |
+| Profile Management | **Real** | Fetch, publish, import from other users |
 | Contact Management | **Real** | Full CRUD, localStorage persistence |
 | Receipt Management | **Real** | Full history with filtering, localStorage |
+| Activity Timeline | **Real** | Unified view of all payment activity |
+| Smart Checkout | **Real** | Method discovery with ranking strategies |
 | Dashboard | **Real** | Statistics from real stored data |
 | Noise Payments | **Real** | WebSocket-based encrypted payments |
 | Payment Methods | **Real** | Configured locally with real publishing options |
@@ -21,6 +24,7 @@ A WebAssembly application demonstrating Paykit capabilities in the browser: iden
 | Subscriptions | **Real** | Full P2P lifecycle, localStorage |
 | Auto-Pay | **Real** | Rules and limits, localStorage |
 | Spending Limits | **Real** | Per-peer limits with period reset |
+| URL Routing | **Real** | Deep link support with hash-based routing |
 
 ### Directory Publishing Modes
 
@@ -78,6 +82,34 @@ await storage.unpublishFromDirectory(client, publicKey, authToken);
 - Recent activity feed
 - Getting started guide for new users
 - See [DASHBOARD.md](./DASHBOARD.md) for details
+
+### 📊 Activity Timeline
+- Unified view of all payment activity
+- Filter by type (payments, subscriptions, requests, auto-pay)
+- Filter by direction (sent, received)
+- Chronological timeline with icons and details
+- Export activity to JSON
+
+### 👤 Profile Management
+- Create and edit your Pubky profile
+- Publish profile to directory (with CORS proxy support)
+- Import profiles from other Pubky users
+- Preview before applying imported profiles
+
+### 🧠 Smart Checkout
+- Automatic payment method discovery for recipients
+- Ranking by strategy: balanced, lowest-fee, fastest, most-private
+- Visual scoring for cost, speed, and privacy
+- One-click selection and payment initiation
+
+### 🔗 URL Routing / Deep Links
+- Hash-based routing for all tabs
+- Deep link support for specific features
+- Examples:
+  - `#activity` - Activity timeline
+  - `#profile` - Profile management
+  - `#smart-checkout?recipient=pubky://...&amount=1000` - Pre-filled checkout
+  - `#pay?recipient=pubky://...` - Pre-filled payment
 
 ### 🔐 Identity Management
 - Ed25519 keypair generation and management

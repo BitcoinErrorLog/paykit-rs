@@ -37,7 +37,8 @@ pub type StorageResult<T> = std::result::Result<T, StorageError>;
 /// Trait for persisting private endpoints.
 ///
 /// Implementations should ensure thread-safety and handle concurrent access.
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait PrivateEndpointStore: Send + Sync {
     /// Save a private endpoint.
     async fn save(&self, endpoint: PrivateEndpoint) -> StorageResult<()>;

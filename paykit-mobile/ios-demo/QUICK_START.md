@@ -13,7 +13,7 @@
 Run the automated installer:
 
 ```bash
-cd "/Users/john/vibes-dev/paykit-rs-master/paykit-mobile/ios-demo"
+cd "/Users/john/vibes-dev/paykit-rs/paykit-mobile/ios-demo"
 ./install-uniffi-bindgen.sh
 ```
 
@@ -29,7 +29,7 @@ cargo install --path . --force
 ### Step 2: Generate Swift Bindings
 
 ```bash
-cd "/Users/john/vibes-dev/paykit-rs-master/paykit-mobile"
+cd "/Users/john/vibes-dev/paykit-rs/paykit-mobile"
 ./generate-bindings.sh
 ```
 
@@ -54,7 +54,7 @@ This creates:
 
 **Copy demo files:**
 ```bash
-# From paykit-rs-master root
+# From paykit-rs root
 cp -r paykit-mobile/ios-demo/PaykitDemo/* <YourXcodeProjectPath>/PaykitDemo/
 ```
 

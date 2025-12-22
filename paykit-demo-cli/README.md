@@ -14,6 +14,9 @@ A feature-rich CLI application showcasing Paykit capabilities: public directory 
 | Contact Management | **Real** | Full CRUD operations |
 | Directory Publish | **Real** | Pubky homeserver integration |
 | Directory Discover | **Real** | HTTP queries to homeservers |
+| Profile Management | **Real** | Fetch, publish, import profiles |
+| Smart Checkout | **Real** | Method discovery with ranking strategies |
+| Activity Timeline | **Real** | Unified view of all payment activity |
 | Noise Handshake | **Real** | TCP-based encrypted channel |
 | Payment Coordination | **Real** | Request/receipt exchange |
 | Wallet Configuration | **Real** | LND and Esplora setup |
@@ -152,6 +155,47 @@ Configure payment execution backends to enable real payments.
 |---------|-------------|---------|
 | `publish` | Publish payment methods | `paykit-demo publish --method lightning --endpoint "noise://..."` |
 | `discover` | Query payment methods | `paykit-demo discover pubky://...` |
+
+### Profile Management
+
+Manage your Pubky profile in the directory.
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `profile fetch` | Fetch a profile | `paykit-demo profile fetch pubky://...` |
+| `profile fetch --json` | Fetch as JSON | `paykit-demo profile fetch pubky://... --json` |
+| `profile publish` | Publish your profile | `paykit-demo profile publish --name "Alice" --bio "Bitcoin enthusiast"` |
+| `profile import` | Import and publish another user's profile | `paykit-demo profile import --from pubky://...` |
+
+### Smart Checkout
+
+Discover and select the best payment method automatically.
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `smart-checkout` | Discover best payment method | `paykit-demo smart-checkout pubky://... --amount 1000` |
+| `smart-checkout --strategy` | Use specific strategy | `paykit-demo smart-checkout pubky://... --strategy lowest-fee` |
+| `smart-checkout --execute` | Execute with selected method | `paykit-demo smart-checkout pubky://... --amount 1000 --execute` |
+
+**Available strategies:**
+- `balanced` (default) - Balance cost, speed, and privacy
+- `lowest-fee` - Prefer lowest transaction fees
+- `fastest` - Prefer fastest confirmation
+- `private` - Prefer maximum privacy
+
+### Activity Timeline
+
+View unified activity across all payment types.
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `activity` | Show activity timeline | `paykit-demo activity` |
+| `activity --type` | Filter by type | `paykit-demo activity --type payment` |
+| `activity --direction` | Filter by direction | `paykit-demo activity --direction sent` |
+| `activity --limit` | Limit results | `paykit-demo activity --limit 50` |
+
+**Activity types:** `payment`, `subscription`, `request`, `autopay`
+**Directions:** `all`, `sent`, `received`
 
 ### Contact Management
 

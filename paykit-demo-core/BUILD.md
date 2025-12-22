@@ -34,7 +34,7 @@ cargo --version
 
 ```bash
 # From workspace root
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-demo-core
 
 # Or from this directory
@@ -361,7 +361,7 @@ cargo doc -p paykit-demo-core --no-deps --open
 
 **Solution**: Build from workspace root:
 ```bash
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-demo-core
 ```
 

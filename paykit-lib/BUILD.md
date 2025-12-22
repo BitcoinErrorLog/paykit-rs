@@ -32,7 +32,7 @@ cargo --version
 
 ```bash
 # From workspace root
-cd paykit-rs-master
+cd paykit-rs
 cargo build -p paykit-lib
 
 # Or from this directory

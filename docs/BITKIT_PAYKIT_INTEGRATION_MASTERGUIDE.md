@@ -49,7 +49,7 @@ Paykit is a decentralized payment protocol built on Pubky that enables:
 | Subscriptions | ✅ | ✅ | N/A |
 | Auto-Pay Rules | ✅ | ✅ | N/A |
 | Spending Limits | ✅ | ✅ | N/A |
-| Smart Checkout | ✅ | ✅ | N/A |
+| Smart Checkout | ⚠️ Not integrated (Bitkit) | ⚠️ Not integrated (Bitkit) | N/A |
 | Cross-App Key Sharing | ✅ | ✅ | ✅ |
 
 ### Current Status
@@ -194,7 +194,7 @@ rustup target add wasm32-unknown-unknown
 
 ### Repository Setup
 
-Clone all required repositories:
+Clone all required repositories (use your internal remotes/forks as appropriate):
 
 ```bash
 mkdir -p ~/vibes-dev && cd ~/vibes-dev
@@ -232,20 +232,16 @@ ls -la target/release/libpaykit_mobile.*
 ### Step 2: Generate FFI Bindings
 
 ```bash
-# Install uniffi-bindgen if not installed
+# Install uniffi-bindgen if not installed (must match the UniFFI version in paykit-mobile)
 cargo install uniffi-bindgen-cli@0.25
 
-# Generate Swift bindings
-uniffi-bindgen generate \
-    --library target/release/libpaykit_mobile.dylib \
-    -l swift \
-    -o generated-bindings/swift/
+# Generate bindings using the repo script (preferred)
+cd paykit-mobile
+./generate-bindings.sh
 
-# Generate Kotlin bindings
-uniffi-bindgen generate \
-    --library target/release/libpaykit_mobile.dylib \
-    -l kotlin \
-    -o generated-bindings/uniffi/
+# Outputs (host platform):
+# - paykit-mobile/swift/generated/PaykitMobile.swift + PaykitMobileFFI.h + PaykitMobileFFI.modulemap
+# - paykit-mobile/kotlin/generated/paykit_mobile.kt
 ```
 
 ### Step 3: Build for iOS (All Architectures)
@@ -253,14 +249,25 @@ uniffi-bindgen generate \
 ```bash
 cd paykit-mobile
 
-# Run the iOS build script
-./build-ios.sh
+# Build and create an XCFramework (this is what Bitkit iOS consumes)
+./build-ios.sh --framework
 
-# This creates:
-# - target/aarch64-apple-ios/release/libpaykit_mobile.a
-# - target/aarch64-apple-ios-sim/release/libpaykit_mobile.a
-# - target/x86_64-apple-ios/release/libpaykit_mobile.a
+# Outputs:
+# - paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/Frameworks/PaykitMobile.xcframework
+# - headers/modulemap inside the XCFramework from paykit-mobile/swift/generated/
 ```
+
+### Step 3.1: Copy XCFramework into Bitkit iOS
+
+```bash
+# Copy PaykitMobile.xcframework into Bitkit iOS integration frameworks directory
+cp -R \
+  ../paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/Frameworks/PaykitMobile.xcframework \
+  ../../bitkit-ios/Bitkit/PaykitIntegration/Frameworks/
+```
+
+Bitkit iOS currently treats this as an interim approach (copied binary). See:
+- `bitkit-ios/Bitkit/PaykitIntegration/Frameworks/FRAMEWORKS_README.md`
 
 ### Step 4: Build for Android (All ABIs)
 
@@ -289,10 +296,12 @@ export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
    Bitkit/
    └── PaykitIntegration/
        ├── FFI/
-       │   ├── paykit_mobile.swift      # Generated bindings
-       │   └── PaykitMobileFFI.h        # C header
+       │   ├── PaykitMobile.swift           # Generated UniFFI Swift bindings
+       │   ├── PaykitMobileFFI.h            # UniFFI-generated C header
+       │   └── PaykitMobileFFI.modulemap    # Module map used by the XCFramework
        ├── Frameworks/
-       │   └── libpaykit_mobile.a       # Static library
+       │   ├── PaykitMobile.xcframework     # From paykit-rs/paykit-mobile (build-ios.sh --framework)
+       │   └── PubkyNoise.xcframework       # From pubky-noise (iOS build script)
        └── Services/
            ├── PaykitManager.swift
            ├── DirectoryService.swift
@@ -300,84 +309,49 @@ export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
    ```
 
 2. **Configure Xcode project:**
-   - Add `PaykitIntegration` folder to project
-   - Go to **Build Settings** → **Library Search Paths**:
-     ```
-     $(PROJECT_DIR)/Bitkit/PaykitIntegration/Frameworks
-     ```
-   - Go to **Build Settings** → **Other Linker Flags**:
-     ```
-     -lpaykit_mobile
-     ```
-
-3. **Add bridging header** (if not already present):
-   ```c
-   // Bitkit-Bridging-Header.h
-   #import "PaykitMobileFFI.h"
-   ```
+   - Add `Bitkit/PaykitIntegration/Frameworks/PaykitMobile.xcframework` to the project.
+   - Ensure the XCFramework is linked in the Bitkit target under:
+     - **General** → **Frameworks, Libraries, and Embedded Content**
+   - Do not manually add `-lpaykit_mobile` when using the XCFramework approach.
+   - Keep the UniFFI generated Swift file in the app target (Bitkit imports PaykitMobile types through `Bitkit/PaykitIntegration/FFI/PaykitMobile.swift`).
 
 ### Step 2: Initialize PaykitManager
 
 ```swift
-// In AppScene.swift or app initialization
-import PaykitMobile
+// This is the real Bitkit integration pattern:
+// - Initialize PaykitClient with the correct network
+// - Restore Pubky sessions from Keychain
+// - Configure Pubky SDK
+// - Register Bitcoin + Lightning executors so Paykit can execute payments
+//
+// Reference implementation:
+// - bitkit-ios/Bitkit/PaykitIntegration/PaykitManager.swift
+// - bitkit-ios/Bitkit/PaykitIntegration/PaykitIntegrationHelper.swift
 
-@main
-struct BitkitApp: App {
-    init() {
-        // Initialize Paykit early
-        Task {
-            await PaykitManager.shared.initialize()
-        }
-    }
-}
-
-// PaykitManager.swift
-@Observable
-public class PaykitManager {
-    public static let shared = PaykitManager()
-    
-    private var client: PaykitClient?
-    public var isReady: Bool = false
-    
-    public func initialize() async {
-        do {
-            client = try PaykitClient()
-            isReady = true
-        } catch {
-            Logger.error("Paykit init failed: \(error)")
-        }
-    }
+do {
+    try PaykitManager.shared.initialize()
+    try PaykitManager.shared.registerExecutors()
+} catch {
+    Logger.error("Paykit setup failed: \(error)", context: "Paykit")
 }
 ```
 
 ### Step 3: Implement Transport Callbacks
 
-The transport layer bridges Paykit to actual Pubky homeserver operations:
+Bitkit does not implement a bespoke URLSession “transport callback” in the app layer. Instead it uses the UniFFI callback-based transports directly, wired through `DirectoryService`:
 
-```swift
-// DirectoryService.swift
-class DirectoryTransportCallback: AuthenticatedTransportCallback {
-    func upsertPaymentEndpoint(methodId: String, endpointData: String) async throws {
-        // Call Pubky SDK to write to homeserver
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        try await PubkySession.shared.put(path: path, data: endpointData.data(using: .utf8)!)
-    }
-    
-    func removePaymentEndpoint(methodId: String) async throws {
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        try await PubkySession.shared.delete(path: path)
-    }
-    
-    func fetchPaymentEndpoint(methodId: String) async throws -> String? {
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        guard let data = try await PubkySession.shared.get(path: path) else {
-            return nil
-        }
-        return String(data: data, encoding: .utf8)
-    }
-}
-```
+- `bitkit-ios/Bitkit/PaykitIntegration/Services/DirectoryService.swift`
+- `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkyStorageAdapter.swift`
+
+The real pattern is:
+
+1. Create a `PubkyUnauthenticatedStorageAdapter` (read-only) and wrap it:
+   - `UnauthenticatedTransportFfi.fromCallback(callback: adapter)`
+2. Create a `PubkyAuthenticatedStorageAdapter` (write) and wrap it:
+   - `AuthenticatedTransportFfi.fromCallback(callback: adapter, ownerPubkey: <pubkey>)`
+3. Pass these transports into Paykit directory operations.
+
+In Bitkit iOS, the session secret is transported as a cookie header: `Cookie: session=<sessionSecret>`.
 
 ### Step 4: Register Deep Links
 
@@ -397,7 +371,16 @@ In `Info.plist`, add URL schemes:
 </array>
 ```
 
-Handle in `AppDelegate` or `SceneDelegate`:
+Handle in the Bitkit deep link layer. The reference implementation handles **payment request deep links** in `bitkit-ios/Bitkit/MainNavView.swift`.
+
+Supported formats:
+- `paykit://payment-request?requestId=<request-id>&from=<sender-pubkey>`
+- `bitkit://payment-request?requestId=<request-id>&from=<sender-pubkey>`
+
+The publish-side creates a deep link like:
+- `bitkit://payment-request?requestId=<request-id>&from=<our-pubkey>`
+
+Important: Bitkit currently uses **payment requests + autopay evaluation**. Do not assume a “smart checkout” URI like `paykit://<pubkey>/pay?...` exists in Bitkit.
 
 ```swift
 // In your SceneDelegate.swift or AppDelegate.swift
@@ -431,7 +414,9 @@ private func handleIncomingURL(_ url: URL) {
 
 func handlePaykitDeepLink(_ url: URL) async {
     // Parse Pubky URI: pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo
-    // or payment URI: paykit://8pinxxgqs41n4aidi.../pay?amount=50000&memo=coffee
+    // Bitkit currently uses payment-request deep links, not smart-checkout URIs:
+    // - paykit://payment-request?requestId=<request-id>&from=<sender-pubkey>
+    // - bitkit://payment-request?requestId=<request-id>&from=<sender-pubkey>
     
     guard let host = url.host else {
         Logger.error("Invalid Paykit URL: no host")
@@ -654,23 +639,22 @@ class PaykitSecureStorage(context: Context) {
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="bitkit" />
         <data android:scheme="paykit" />
-        <data android:scheme="pubky" />
+        <data android:scheme="bitcoin" />
+        <data android:scheme="lightning" />
+        <data android:scheme="lnurl" />
     </intent-filter>
 </activity>
 ```
 
-Handle in ViewModel:
+Handle in ViewModel (reference implementation): `bitkit-android/app/src/main/java/to/bitkit/viewmodels/AppViewModel.kt`
 
 ```kotlin
 // AppViewModel.kt
 fun handleDeepLink(uri: Uri) {
     when (uri.scheme) {
-        "pubky", "paykit" -> {
-            val pubkey = uri.host ?: return
-            viewModelScope.launch {
-                val methods = paykitManager.discoverMethods(pubkey)
-                _uiState.update { it.copy(smartCheckoutData = SmartCheckoutData(pubkey, methods)) }
-            }
+        "paykit" -> {
+            // paykit://payment-request?requestId=...&from=...
+            // Delegate to payment request handler (see handlePaymentRequestDeepLink)
         }
     }
 }
@@ -687,58 +671,53 @@ Pubky Ring is a separate app that manages identity keys. Bitkit communicates wit
 2. Request signatures for subscriptions
 3. Establish authenticated sessions with homeservers
 
-### Cross-App Communication (iOS)
+### Cross-App Communication Protocol (Reference Implementation)
 
-```swift
-// PubkyRingBridge.swift
-class PubkyRingBridge {
-    static let shared = PubkyRingBridge()
-    
-    /// Request current identity from Ring
-    func requestIdentity() async throws -> String {
-        let url = URL(string: "pubkyring://identity/current")!
-        
-        // Use URL scheme to open Ring and get callback
-        await UIApplication.shared.open(url)
-        
-        // Ring will callback with: bitkit://pubky-identity?pubkey=<52-char-z-base32>&timestamp=<unix-ts>
-        // Handle in deep link handler (see Section 5, Step 4)
-        // Store the callback expectation and return via continuation
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            // Set up callback expectation
-            self.pendingIdentityCallback = continuation
-            // Timeout after 30 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                if self.pendingIdentityCallback != nil {
-                    self.pendingIdentityCallback = nil
-                    continuation.resume(throwing: RingError.timeout)
-                }
-            }
-        }
-    }
-    
-    /// Request signature from Ring
-    func requestSignature(message: Data) async throws -> Data {
-        let messageB64 = message.base64EncodedString()
-        let url = URL(string: "pubkyring://sign?message=\(messageB64)&callback=bitkit://signature")!
-        
-        await UIApplication.shared.open(url)
-        // Ring will callback with: bitkit://signature?sig=<base64-signature>&pubkey=<signer-pubkey>
-        // Signature is 64-byte Ed25519 signature, base64-encoded
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            self.pendingSignatureCallback = continuation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                if self.pendingSignatureCallback != nil {
-                    self.pendingSignatureCallback = nil
-                    continuation.resume(throwing: RingError.timeout)
-                }
-            }
-        }
-    }
-}
-```
+Bitkit iOS implements a full bridge with same-device and cross-device auth:
+- `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkyRingBridge.swift`
+
+Bitkit Android implements the same flows:
+- `bitkit-android/app/src/main/java/to/bitkit/paykit/services/PubkyRingBridge.kt`
+
+#### Callback paths (must match in Bitkit and Ring)
+
+Bitkit expects these callback paths on its own scheme (`bitkit://...`):
+- `bitkit://paykit-session`
+- `bitkit://paykit-keypair`
+- `bitkit://paykit-profile`
+- `bitkit://paykit-follows`
+- `bitkit://paykit-cross-session`
+- `bitkit://paykit-setup` (preferred: session + noise keys in one request)
+
+#### Same-device flow (preferred when Ring is installed)
+
+1. Bitkit launches Ring with a callback:
+   - `pubkyring://session?callback=<urlencoded bitkit://paykit-session>`
+2. Ring prompts the user to select an identity, signs in to the homeserver, then calls back to Bitkit:
+   - `bitkit://paykit-session?...`
+
+#### Combined setup flow: session + noise keys (preferred for Paykit)
+
+Bitkit uses `requestPaykitSetup()` which launches:
+- `pubkyring://paykit-connect?deviceId=<device-id>&callback=<urlencoded bitkit://paykit-setup>`
+
+Why this matters:
+- It minimizes user context switching (one Ring interaction).
+- It returns **both epoch 0 and epoch 1** Noise keypairs for rotation.
+- Bitkit caches/persists the Noise secret keys locally so Paykit can operate even if Ring is unavailable later.
+
+#### Cross-device flow (Ring installed on a different device)
+
+Bitkit generates a web URL for QR / link:
+- `https://pubky.app/auth?request_id=<uuid>&callback_scheme=bitkit&app_name=Bitkit&relay_url=<relay-url>`
+
+Ring completes auth and posts the session to the relay; Bitkit polls the relay for up to 5 minutes:
+- iOS: `PubkyRingBridge.pollForCrossDeviceSession(requestId:timeout:)`
+- Android: `PubkyRingBridge.pollForCrossDeviceSession(requestId, timeoutMs)`
+
+Relay default:
+- iOS default: `https://relay.pubky.app/sessions` (override with `PUBKY_RELAY_URL`)
+- Android default: `https://relay.pubky.app/sessions` (override with `-DPUBKY_RELAY_URL=...`)
 
 ### Cross-App Communication (Android)
 
@@ -766,42 +745,18 @@ class PubkyRingBridge(private val context: Context) {
 }
 ```
 
-### Session Management
+### Session material in Bitkit (what Bitkit actually persists)
 
-```swift
-// Bitkit requests a session from Ring
-let session = try await PubkyRingBridge.shared.requestSession()
+Bitkit does not use a JSON bearer token model here. The reference implementation uses:
+- `session.pubkey`: 52-char z-base-32 pubkey
+- `session.sessionSecret`: opaque session secret string (used as cookie value)
 
-// Session structure contains three critical components:
-// 1. pubkey: User's Ed25519 public key (z-base-32 encoded, 52 characters)
-//    Example: "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo"
-//    This is the user's Pubky identity - their globally unique identifier
-//
-// 2. sessionToken: Signed session token for homeserver authentication
-//    Format: base64-encoded JSON containing:
-//    {
-//      "pubkey": "<user-pubkey>",
-//      "homeserver": "https://homeserver.pubky.org",
-//      "issued_at": 1703001234,
-//      "expires_at": 1703087634,
-//      "signature": "<ed25519-signature-of-above>"
-//    }
-//    The signature is created by Ring using the user's private key
-//    Homeserver verifies this signature to authenticate requests
-//
-// 3. expiresAt: Session expiration timestamp (Unix epoch seconds)
-//    Typically 24 hours from issuance
-//    After expiration, must request new session from Ring
+The storage adapters attach the session to authenticated requests via:
+- `Cookie: session=<sessionSecret>`
 
-// Initialize transport with session
-let transport = AuthenticatedTransportFfi.fromCallback(
-    callback: DirectoryCallback(session: session)
-)
-
-// The transport uses the session token in the Authorization header:
-// Authorization: Bearer <sessionToken>
-// Homeserver validates the signature and checks expiration
-```
+Reference:
+- iOS: `PubkyAuthenticatedStorageAdapter` in `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkyStorageAdapter.swift`
+- Android: `PubkyAuthenticatedStorageAdapter` in `bitkit-android/app/src/main/java/to/bitkit/paykit/services/PubkyStorageAdapter.kt`
 
 ---
 
@@ -821,7 +776,7 @@ try await paykitClient.publishPaymentMethod(
 // Publish Lightning node with detailed endpoint
 try await paykitClient.publishPaymentMethod(
     methodId: "lightning",
-    endpoint: "03abc123def456789012345678901234567890123456789012345678901234@node.example.com:9735"
+    endpoint: "03abc123def4567890123456789012345678901234567890123456789012345678@node.example.com:9735"
     // Format: <node_pubkey>@<host>:<port>
     // - node_pubkey: 66 hex character Lightning node public key
     // - host: Domain name or IP address
@@ -840,163 +795,117 @@ for method in methods.entries {
 }
 ```
 
-### 8.2 Smart Checkout
+### 8.2 Payment Requests (Bitkit core flow)
+
+Bitkit’s production-facing “paykit://” experience is **payment requests**, not smart checkout.
+
+Reference implementations:
+- iOS: `bitkit-ios/Bitkit/MainNavView.swift` and `bitkit-ios/Bitkit/PaykitIntegration/Services/PaymentRequestService.swift`
+- Android: `bitkit-android/app/src/main/java/to/bitkit/viewmodels/AppViewModel.kt`
+
+#### 8.2.1 Publishing a payment request (sender flow)
+
+Where it is implemented (iOS): `DirectoryService.publishPaymentRequest(_:)` stores at:
+- `/pub/paykit.app/v0/requests/<requestId>` on the sender’s Pubky storage.
+
+End-to-end steps:
+
+1. Ensure Paykit is initialized and executors are registered:
+   - iOS: `PaykitIntegrationHelper.setup()` / `PaykitManager.initialize()` + `registerExecutors()`
+   - Android: `PaykitIntegrationHelper.setup(lightningRepo)` / `PaykitManager.initialize()` + `registerExecutors(lightningRepo)`
+2. Ensure you have a Pubky session (Ring):
+   - Preferred: `PubkyRingBridge.requestPaykitSetup()` (session + noise keys)
+3. Import/restore the session into the Pubky SDK layer.
+4. Configure `DirectoryService` with the session.
+5. Publish the request JSON to `/pub/paykit.app/v0/requests/<requestId>`.
+6. Generate a receiver deep link:
+   - `bitkit://payment-request?requestId=<requestId>&from=<senderPubkey>`
+
+#### 8.2.2 Receiving + processing a payment request deep link (receiver flow)
+
+Supported formats:
+- `paykit://payment-request?requestId=<requestId>&from=<senderPubkey>`
+- `bitkit://payment-request?requestId=<requestId>&from=<senderPubkey>`
+
+Reference flow (iOS, simplified but accurate):
 
 ```swift
-// Get optimal payment method for amount
-let result = try await paykitClient.smartCheckout(
-    peerPubkey: pubkey,
-    amountSats: 50000,
-    strategy: .balanced  // or .cost, .speed, .privacy
-)
+func handlePaymentRequestDeepLink(url: URL) async {
+    guard
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        let queryItems = components.queryItems,
+        let requestId = queryItems.first(where: { $0.name == "requestId" })?.value,
+        let fromPubkey = queryItems.first(where: { $0.name == "from" })?.value
+    else {
+        // Show error to user
+        return
+    }
 
-switch result.method {
-case "lightning":
-    // Request invoice and pay via LDK
-case "onchain":
-    // Send to Bitcoin address
-case "noise":
-    // Establish Noise channel for private payment
+    // Paykit must be initialized (and will fail if Ring isn't connected yet)
+    if !PaykitManager.shared.isInitialized {
+        do {
+            try PaykitManager.shared.initialize()
+            try PaykitManager.shared.registerExecutors()
+        } catch {
+            // “Please connect to Pubky Ring first”
+            return
+        }
+    }
+
+    guard let paykitClient = PaykitManager.shared.client else { return }
+
+    // Autopay evaluation is app policy
+    let autoPayViewModel = await AutoPayViewModel()
+
+    let paymentRequestService = PaymentRequestService(
+        paykitClient: paykitClient,
+        autopayEvaluator: autoPayViewModel,
+        paymentRequestStorage: PaymentRequestStorage(),
+        directoryService: DirectoryService.shared
+    )
+
+    paymentRequestService.handleIncomingRequest(requestId: requestId, fromPubkey: fromPubkey) { result in
+        Task { @MainActor in
+            // Handle:
+            // - autoPaid(paymentResult)
+            // - needsApproval(request)
+            // - denied(reason)
+            // - error(error)
+        }
+    }
 }
 ```
+
+Production gaps to call out explicitly:
+- iOS currently has a TODO to show an approval UI for `.needsApproval`.
+- Android navigates to the Payment Requests screen for manual review.
 
 ### 8.3 Noise Protocol Payments
 
-**Overview:** Noise Protocol provides end-to-end encrypted payment channels. The implementation uses Noise_IK (Interactive Knowledge) handshake pattern, which provides:
-- Forward secrecy
-- Identity hiding for the responder
-- Mutual authentication
-- Protection against replay attacks
+Bitkit implements Noise payments via `NoisePaymentService` and `pubky-noise` bindings:
+- iOS: `bitkit-ios/Bitkit/PaykitIntegration/Services/NoisePaymentService.swift`
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/services/NoisePaymentService.kt`
 
-**Complete Payment Flow:**
+Key details the team must preserve for production:
+- Noise uses `pubky-noise` as the crypto + handshake engine (iOS uses `PubkyNoise.xcframework`, Android uses `libpubky_noise.so`).
+- Noise keypairs are derived via Ring, and Bitkit persists epoch 0 + epoch 1 secrets locally after `requestPaykitSetup()` so rotation can happen without requiring Ring every time.
+- The service discovers the recipient’s Noise endpoint via `DirectoryService.discoverNoiseEndpoint(...)` before connecting.
 
-```swift
-// Step 1: Establish encrypted channel
-// The Noise_IK handshake requires:
-// - Initiator (payer) knows responder's (payee) static public key
-// - Responder doesn't know initiator's identity until after handshake
-let channel = try await NoiseChannelManager.shared.connect(
-    peerPubkey: pubkey,                    // Payee's X25519 static public key
-    peerEndpoint: "wss://peer.example.com/noise"  // WebSocket endpoint for Noise transport
+Reference flow (Android naming, conceptually identical on iOS):
+
+```kotlin
+val request = NoisePaymentRequest(
+    payerPubkey = payerPubkey,
+    payeePubkey = payeePubkey,
+    methodId = "lightning",
+    amount = "50000",
+    currency = "SAT",
+    description = "Payment for services",
 )
 
-// Handshake sequence (automatic, shown for reference):
-// 1. Initiator → Responder: e, es, s, ss
-//    - e: Initiator's ephemeral public key
-//    - es: DH(initiator_ephemeral, responder_static)
-//    - s: Initiator's encrypted static public key
-//    - ss: DH(initiator_static, responder_static)
-// 2. Responder → Initiator: e, ee, se
-//    - e: Responder's ephemeral public key
-//    - ee: DH(responder_ephemeral, initiator_ephemeral)
-//    - se: DH(responder_static, initiator_ephemeral)
-// After these two messages, both parties have a shared secret
-
-// Step 2: Request receipt (invoice)
-// This is the first application-level message over the encrypted channel
-let receipt = try await channel.requestReceipt(
-    amount: 50000,              // Amount in satoshis
-    currency: "SAT",            // Currency code (SAT, BTC, USD)
-    memo: "Payment for services"  // Optional memo/description
-)
-
-// Receipt structure:
-// {
-//   "id": "<unique-receipt-id>",
-//   "amount": 50000,
-//   "currency": "SAT",
-//   "invoice": "lnbc500n1...",  // Actual Lightning invoice or Bitcoin address
-//   "created_at": 1703001234,
-//   "expires_at": 1703001534,   // Typically 5 minutes
-//   "memo": "Payment for services",
-//   "payee_pubkey": "<payee-pubkey>",
-//   "status": "pending"
-// }
-
-// Step 3: Validate receipt
-guard receipt.expiresAt > Date().timeIntervalSince1970 else {
-    throw PaymentError.receiptExpired
-}
-guard receipt.amount == 50000 else {
-    throw PaymentError.amountMismatch
-}
-
-// Step 4: Execute payment via Lightning or onchain
-// The actual payment happens OUTSIDE the Noise channel
-// This maintains separation of concerns and allows different payment methods
-let paymentResult: PaymentResult
-
-switch detectPaymentType(receipt.invoice) {
-case .lightning:
-    // Pay Lightning invoice via LDK
-    paymentResult = try await LightningService.shared.pay(
-        invoice: receipt.invoice,
-        amountMsat: receipt.amount * 1000  // Convert sats to millisats
-    )
-    // paymentResult contains: preimage, payment_hash, fee_msat, route
-    
-case .onchain:
-    // Send to Bitcoin address
-    paymentResult = try await BitcoinService.shared.send(
-        address: receipt.invoice,
-        amountSats: receipt.amount,
-        feeRate: .medium
-    )
-    // paymentResult contains: txid, vsize, fee_sats, confirmations
-}
-
-// Step 5: Send payment confirmation over Noise channel
-// This proves to the payee that we completed the payment
-try await channel.confirmPayment(
-    receiptId: receipt.id,
-    txid: paymentResult.txid,           // Transaction ID or payment hash
-    proof: paymentResult.proof,          // Payment proof (preimage for LN, tx for onchain)
-    timestamp: Date().timeIntervalSince1970
-)
-
-// The payee verifies the proof and marks the receipt as "completed"
-// Both parties now have cryptographic proof of the payment
-
-// Step 6: Store receipt for records
-try await ReceiptStore.shared.save(receipt, status: .completed, proof: paymentResult.proof)
-
-// Step 7: Close channel (optional - can reuse for multiple payments)
-try await channel.close()
-```
-
-**Error Handling:**
-
-```swift
-do {
-    let result = try await executeNoisePayment(pubkey: pubkey, amount: amount)
-} catch NoiseError.handshakeFailed(let reason) {
-    // Handshake failure reasons:
-    // - "invalid_static_key": Peer's pubkey doesn't match expected
-    // - "timeout": Handshake didn't complete within 10 seconds
-    // - "version_mismatch": Incompatible Noise protocol version
-    Logger.error("Noise handshake failed: \(reason)")
-    showError("Could not establish secure channel")
-    
-} catch NoiseError.channelClosed {
-    // Channel closed by peer or network issue
-    // Safe to retry - idempotent operations
-    Logger.warn("Channel closed unexpectedly, retrying...")
-    retry()
-    
-} catch PaymentError.receiptExpired {
-    // Receipt expired before payment was executed
-    // Request a new receipt
-    Logger.warn("Receipt expired, requesting new receipt")
-    requestNewReceipt()
-    
-} catch PaymentError.insufficientFunds(let needed, let available) {
-    // Not enough balance
-    Logger.error("Insufficient funds: need \(needed) sats, have \(available) sats")
-    showError("Insufficient balance")
-    
-} catch {
-    Logger.error("Payment failed: \(error)")
-    showError("Payment failed")
+val response = noisePaymentService.sendPaymentRequest(request)
+if (!response.success) {
+    // Handle error_code / error_message
 }
 ```
 
@@ -1227,180 +1136,47 @@ assert!(!transport.is_mock());  // Returns false
 
 ### Production Transport Implementation
 
-For production, you must implement the callback interface with real homeserver operations:
+For Bitkit, the “production transport implementation” is the pair of storage adapters + UniFFI callback transports. This matches the code the team should follow.
 
 ```swift
-// iOS Production Implementation
-class ProductionTransportCallback: AuthenticatedTransportCallback {
-    private let session: PubkySession
-    private let homeserverURL: String
-    
-    init(session: PubkySession, homeserverURL: String = "https://homeserver.pubky.org") {
-        self.session = session
-        self.homeserverURL = homeserverURL
-    }
-    
-    // Write payment endpoint to homeserver
-    func upsertPaymentEndpoint(methodId: String, endpointData: String) async throws {
-        // Construct path: /pub/paykit.app/v0/{methodId}
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        
-        // Convert endpoint data to Data
-        guard let data = endpointData.data(using: .utf8) else {
-            throw TransportError.invalidData
-        }
-        
-        // PUT request to homeserver with authentication
-        let url = URL(string: "\(homeserverURL)\(path)")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.httpBody = data
-        request.addValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let (responseData, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TransportError.invalidResponse
-        }
-        
-        // Handle response codes
-        switch httpResponse.statusCode {
-        case 200, 201:
-            // Success
-            Logger.info("Published \(methodId) to \(path)")
-        case 401:
-            // Unauthorized - session expired or invalid
-            throw TransportError.unauthorized
-        case 403:
-            // Forbidden - not allowed to write to this path
-            throw TransportError.forbidden
-        case 413:
-            // Payload too large
-            throw TransportError.payloadTooLarge
-        case 429:
-            // Rate limited
-            throw TransportError.rateLimited
-        case 500...599:
-            // Server error
-            throw TransportError.serverError(httpResponse.statusCode)
-        default:
-            throw TransportError.unexpectedStatus(httpResponse.statusCode)
-        }
-    }
-    
-    // Delete payment endpoint from homeserver
-    func removePaymentEndpoint(methodId: String) async throws {
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        let url = URL(string: "\(homeserverURL)\(path)")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.addValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
-        
-        let (_, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TransportError.invalidResponse
-        }
-        
-        switch httpResponse.statusCode {
-        case 200, 204:
-            // Successfully deleted
-            Logger.info("Removed \(methodId) from \(path)")
-        case 404:
-            // Already doesn't exist - this is OK
-            Logger.debug("\(methodId) not found, already removed")
-        case 401:
-            throw TransportError.unauthorized
-        default:
-            throw TransportError.unexpectedStatus(httpResponse.statusCode)
-        }
-    }
-    
-    // Fetch single payment endpoint
-    func fetchPaymentEndpoint(methodId: String) async throws -> String? {
-        let path = "/pub/paykit.app/v0/\(methodId)"
-        let url = URL(string: "\(homeserverURL)\(path)")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        // Note: GET requests don't require authentication for public data
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TransportError.invalidResponse
-        }
-        
-        switch httpResponse.statusCode {
-        case 200:
-            // Found - return the data
-            return String(data: data, encoding: .utf8)
-        case 404:
-            // Not found - this is OK, return nil
-            return nil
-        default:
-            throw TransportError.unexpectedStatus(httpResponse.statusCode)
-        }
-    }
-    
-    // List all payment endpoints for a user
-    func fetchSupportedPayments(pubkey: String) async throws -> SupportedPayments {
-        let path = "/pub/paykit.app/v0/"
-        let url = URL(string: "\(homeserverURL)/pub/\(pubkey)/paykit.app/v0/")!
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TransportError.invalidResponse
-        }
-        
-        switch httpResponse.statusCode {
-        case 200:
-            // Parse directory listing
-            // Response format: array of filenames
-            // ["onchain", "lightning", "lnurl"]
-            let decoder = JSONDecoder()
-            let methodIds = try decoder.decode([String].self, from: data)
-            
-            // Fetch each method's endpoint data
-            var entries: [PaymentMethodEntry] = []
-            for methodId in methodIds {
-                if let endpointData = try await fetchPaymentEndpoint(methodId) {
-                    entries.append(PaymentMethodEntry(
-                        methodId: methodId,
-                        endpoint: endpointData
-                    ))
-                }
-            }
-            
-            return SupportedPayments(entries: entries)
-            
-        case 404:
-            // User has no published methods
-            return SupportedPayments(entries: [])
-            
-        default:
-            throw TransportError.unexpectedStatus(httpResponse.statusCode)
-        }
-    }
-}
+// 1) Configure DirectoryService with session and build the transports
+DirectoryService.shared.initialize(client: paykitClient)
+DirectoryService.shared.configureWithPubkySession(session)
 
-// Error types
-enum TransportError: Error {
-    case invalidData
-    case invalidResponse
-    case unauthorized              // 401 - session expired
-    case forbidden                 // 403 - not allowed
-    case payloadTooLarge          // 413 - data too big
-    case rateLimited              // 429 - too many requests
-    case serverError(Int)         // 5xx - homeserver issue
-    case unexpectedStatus(Int)    // Other status codes
-}
+// Internally, DirectoryService wires:
+// - UnauthenticatedTransportFfi.fromCallback(callback: PubkyUnauthenticatedStorageAdapter(...))
+// - AuthenticatedTransportFfi.fromCallback(callback: PubkyAuthenticatedStorageAdapter(sessionId: session.sessionSecret, ...), ownerPubkey: session.pubkey)
+
+// 2) The authenticated adapter attaches the session via cookie:
+// Cookie: session=<session.sessionSecret>
+```
+
+### Background polling (Bitkit production blueprint)
+
+Bitkit iOS implements a full polling service:
+- `bitkit-ios/Bitkit/PaykitIntegration/Services/PaykitPollingService.swift`
+
+What the team must do for production:
+- Add `to.bitkit.paykit.polling` to `BGTaskSchedulerPermittedIdentifiers` in Info.plist.
+- Call `PaykitPollingService.shared.registerBackgroundTask()` at startup.
+- Call `PaykitPollingService.shared.startForegroundPolling()` when entering foreground.
+- Call `PaykitPollingService.shared.scheduleBackgroundPoll()` when entering background.
+
+Bitkit Android implements WorkManager polling:
+- `bitkit-android/app/src/main/java/to/bitkit/paykit/workers/PaykitPollingWorker.kt`
+
+What the team must do for production:
+- Call `PaykitPollingWorker.schedule(context)` once the wallet is ready and Paykit is enabled.
+- Ensure notification channel permissions and runtime permissions are handled for Android 13+.
+
+### ProGuard / R8 rules (Android production)
+
+Bitkit Android currently has an essentially empty `app/proguard-rules.pro`. For release builds using UniFFI + JNA you should add rules to avoid stripping:
+
+```proguard
+-keep class com.sun.jna.** { *; }
+-keep class uniffi.paykit_mobile.** { *; }
+-keep class com.pubky.noise.** { *; }
 ```
 
 ### What Needs Real Implementation

@@ -1,2 +1,0 @@
-12-14 14:20:13.976  9089  9104 I TestRunner: started: testNoCurrentIdentityInitially(com.paykit.demo.KeyManagementE2ETest)
-12-14 14:20:13.977  9089  9104 I TestRunner: finished: testNoCurrentIdentityInitially(com.paykit.demo.KeyManagementE2ETest)

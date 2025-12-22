@@ -1,2 +1,0 @@
-12-14 14:20:14.025  9089  9104 I TestRunner: started: testServerWithEndpointPublishing(com.paykit.demo.ServerModeE2ETest)
-12-14 14:20:14.027  9089  9104 I TestRunner: finished: testServerWithEndpointPublishing(com.paykit.demo.ServerModeE2ETest)

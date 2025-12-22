@@ -1,2 +1,0 @@
-12-14 14:20:14.036  9089  9104 I TestRunner: started: testServerLifecycle(com.paykit.demo.ServerModeE2ETest)
-12-14 14:20:14.037  9089  9104 I TestRunner: finished: testServerLifecycle(com.paykit.demo.ServerModeE2ETest)

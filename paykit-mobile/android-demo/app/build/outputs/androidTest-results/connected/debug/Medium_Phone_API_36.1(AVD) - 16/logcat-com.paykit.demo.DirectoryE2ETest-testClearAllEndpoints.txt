@@ -1,2 +1,0 @@
-12-14 14:20:13.845  9089  9104 I TestRunner: started: testClearAllEndpoints(com.paykit.demo.DirectoryE2ETest)
-12-14 14:20:13.852  9089  9104 I TestRunner: finished: testClearAllEndpoints(com.paykit.demo.DirectoryE2ETest)

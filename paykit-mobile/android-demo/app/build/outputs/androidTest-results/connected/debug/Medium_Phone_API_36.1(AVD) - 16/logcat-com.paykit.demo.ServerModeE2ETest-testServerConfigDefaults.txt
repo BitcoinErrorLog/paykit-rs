@@ -1,2 +1,0 @@
-12-14 14:20:14.023  9089  9104 I TestRunner: started: testServerConfigDefaults(com.paykit.demo.ServerModeE2ETest)
-12-14 14:20:14.024  9089  9104 I TestRunner: finished: testServerConfigDefaults(com.paykit.demo.ServerModeE2ETest)

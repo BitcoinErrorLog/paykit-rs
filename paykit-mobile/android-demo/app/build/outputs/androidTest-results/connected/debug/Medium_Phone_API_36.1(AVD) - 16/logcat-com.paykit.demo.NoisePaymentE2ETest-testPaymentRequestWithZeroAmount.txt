@@ -1,2 +1,0 @@
-12-14 14:20:14.008  9089  9104 I TestRunner: started: testPaymentRequestWithZeroAmount(com.paykit.demo.NoisePaymentE2ETest)
-12-14 14:20:14.010  9089  9104 I TestRunner: finished: testPaymentRequestWithZeroAmount(com.paykit.demo.NoisePaymentE2ETest)

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
-    <!-- Exclude encrypted preferences from cloud backup for security -->
-    <exclude domain="sharedpref" path="paykit_demo_storage.xml"/>
-    <exclude domain="sharedpref" path="paykit_secure_storage.xml"/>
-</full-backup-content>

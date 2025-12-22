@@ -1,2 +1,0 @@
-12-14 14:20:14.012  9089  9104 I TestRunner: started: testReceiptStorage(com.paykit.demo.NoisePaymentE2ETest)
-12-14 14:20:14.013  9089  9104 I TestRunner: finished: testReceiptStorage(com.paykit.demo.NoisePaymentE2ETest)

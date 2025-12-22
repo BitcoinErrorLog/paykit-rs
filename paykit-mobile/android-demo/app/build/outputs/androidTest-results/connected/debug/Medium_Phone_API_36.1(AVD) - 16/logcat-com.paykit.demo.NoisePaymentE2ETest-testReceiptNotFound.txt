@@ -1,2 +1,0 @@
-12-14 14:20:14.003  9089  9104 I TestRunner: started: testReceiptNotFound(com.paykit.demo.NoisePaymentE2ETest)
-12-14 14:20:14.005  9089  9104 I TestRunner: finished: testReceiptNotFound(com.paykit.demo.NoisePaymentE2ETest)

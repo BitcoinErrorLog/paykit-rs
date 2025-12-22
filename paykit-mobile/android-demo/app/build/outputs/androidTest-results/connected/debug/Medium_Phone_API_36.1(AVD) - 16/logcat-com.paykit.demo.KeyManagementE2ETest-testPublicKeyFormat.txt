@@ -1,2 +1,0 @@
-12-14 14:20:13.949  9089  9104 I TestRunner: started: testPublicKeyFormat(com.paykit.demo.KeyManagementE2ETest)
-12-14 14:20:13.951  9089  9104 I TestRunner: finished: testPublicKeyFormat(com.paykit.demo.KeyManagementE2ETest)

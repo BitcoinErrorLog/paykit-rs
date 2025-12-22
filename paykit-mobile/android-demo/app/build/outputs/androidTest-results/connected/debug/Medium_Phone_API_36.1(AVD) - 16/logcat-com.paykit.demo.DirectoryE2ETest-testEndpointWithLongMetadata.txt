@@ -1,2 +1,0 @@
-12-14 14:20:13.937  9089  9104 I TestRunner: started: testEndpointWithLongMetadata(com.paykit.demo.DirectoryE2ETest)
-12-14 14:20:13.939  9089  9104 I TestRunner: finished: testEndpointWithLongMetadata(com.paykit.demo.DirectoryE2ETest)

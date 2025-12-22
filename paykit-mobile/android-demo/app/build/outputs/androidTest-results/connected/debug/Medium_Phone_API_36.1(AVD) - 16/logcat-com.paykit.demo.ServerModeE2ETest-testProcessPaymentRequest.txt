@@ -1,2 +1,0 @@
-12-14 14:20:14.038  9089  9104 I TestRunner: started: testProcessPaymentRequest(com.paykit.demo.ServerModeE2ETest)
-12-14 14:20:14.039  9089  9104 I TestRunner: finished: testProcessPaymentRequest(com.paykit.demo.ServerModeE2ETest)

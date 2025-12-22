@@ -9,7 +9,7 @@ paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
 paykit-interactive = { path = "../paykit-interactive" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 pubky = "0.6.0-rc.6"
-pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
+pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ed25519-dalek = "2"

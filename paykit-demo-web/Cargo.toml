@@ -74,7 +74,7 @@ async-trait = "0.1"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 rand = "0.8"
 pkarr = "3"
-pubky-noise = { path = "../../pubky-noise-main" }
+pubky-noise = { path = "../../pubky-noise" }
 hex = "0.4"
 argon2 = "0.5"
 aes-gcm = "0.10"

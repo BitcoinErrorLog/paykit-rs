@@ -24,16 +24,58 @@ struct PaykitDemoApp: App {
 /// Global application state
 class AppState: ObservableObject {
     @Published var paykitClient: PaykitClientWrapper
+    @Published var paymentService: PaymentService
     @Published var isInitialized = false
     @Published var errorMessage: String?
+    @Published var pubkyRingConnectionState: PubkyRingConnectionState = .notConnected
     
     init() {
+        // Initialize PaymentService with mock executors
+        let bitcoinExecutor = MockBitcoinExecutor(configuration: .default)
+        let lightningExecutor = MockLightningExecutor(configuration: .default)
+        self.paymentService = PaymentService(
+            bitcoinExecutor: bitcoinExecutor,
+            lightningExecutor: lightningExecutor
+        )
+        
         do {
             self.paykitClient = try PaykitClientWrapper()
             self.isInitialized = true
         } catch {
             self.paykitClient = PaykitClientWrapper.placeholder()
             self.errorMessage = "Failed to initialize Paykit: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Get combined balance (Bitcoin + Lightning)
+    var totalBalanceSats: UInt64 {
+        paymentService.bitcoinBalanceSats + paymentService.lightningBalanceSats
+    }
+}
+
+/// Pubky Ring connection state
+enum PubkyRingConnectionState: Equatable {
+    case notConnected
+    case connecting
+    case connected(pubkey: String)
+    case error(String)
+    
+    var isConnected: Bool {
+        if case .connected = self { return true }
+        return false
+    }
+    
+    var displayText: String {
+        switch self {
+        case .notConnected:
+            return "Not Connected"
+        case .connecting:
+            return "Connecting..."
+        case .connected(let pubkey):
+            let short = pubkey.count > 16 ? "\(pubkey.prefix(8))..." : pubkey
+            return "Connected: \(short)"
+        case .error(let msg):
+            return "Error: \(msg)"
         }
     }
 }

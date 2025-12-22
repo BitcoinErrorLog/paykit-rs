@@ -21,7 +21,7 @@ paykit-lib = { path = "../paykit-lib", features = ["pubky", "file-storage"] }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive", features = ["http-executor"] }
 pubky = "0.6.0-rc.6"
-pubky-noise = { path = "../../pubky-noise-main", features = ["pubky-sdk"] }
+pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 clap = { version = "4", features = ["derive", "color"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
@@ -55,6 +55,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tempfile = "3"
 tokio-test = "0.4"
 pubky-testnet = { version = "0.6.0-rc.6" }
-pubky-noise = { path = "../../pubky-noise-main" }
+pubky-noise = { path = "../../pubky-noise" }
 proptest = "1.4"
 

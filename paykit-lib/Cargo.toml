@@ -95,7 +95,7 @@ x25519-dalek = "2"
 hkdf = "0.12"
 sha2 = "0.10"
 blake2 = "0.10"
-pubky-noise = { path = "../../pubky-noise-main" }
+pubky-noise = { path = "../../pubky-noise" }
 # Mock HTTP server for executor integration tests
 wiremock = "0.6"
 

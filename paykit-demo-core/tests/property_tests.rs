@@ -23,8 +23,8 @@ proptest! {
     ) {
         let identity = Identity::generate();
 
-        let key1 = identity.derive_x25519_key(&device_id, epoch);
-        let key2 = identity.derive_x25519_key(&device_id, epoch);
+        let key1 = identity.derive_x25519_key(&device_id, epoch).unwrap();
+        let key2 = identity.derive_x25519_key(&device_id, epoch).unwrap();
 
         prop_assert_eq!(key1, key2);
     }
@@ -36,8 +36,8 @@ proptest! {
     ) {
         let identity = Identity::generate();
 
-        let key1 = identity.derive_x25519_key(&device_id, 0);
-        let key2 = identity.derive_x25519_key(&device_id, 1);
+        let key1 = identity.derive_x25519_key(&device_id, 0).unwrap();
+        let key2 = identity.derive_x25519_key(&device_id, 1).unwrap();
 
         prop_assert_ne!(key1, key2);
     }
@@ -88,7 +88,7 @@ proptest! {
 #[test]
 fn test_x25519_key_length() {
     let identity = Identity::generate();
-    let key = identity.derive_x25519_key(b"device", 0);
+    let key = identity.derive_x25519_key(b"device", 0).unwrap();
     assert_eq!(key.len(), 32);
 }
 

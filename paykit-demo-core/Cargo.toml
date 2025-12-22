@@ -8,7 +8,7 @@ description = "Shared core functionality for Paykit demos"
 paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
 paykit-interactive = { path = "../paykit-interactive" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
-pubky = "0.6.0-rc.6"
+pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
 pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -31,7 +31,10 @@ tokio = { version = "1", features = ["sync"] }
 uuid = { version = "1.0", features = ["v4", "js"] }
 
 [dev-dependencies]
-pubky-testnet = "0.6.0-rc.6"
+# Ensure dependencies are available for doc tests
+paykit-interactive = { path = "../paykit-interactive" }
+paykit-subscriptions = { path = "../paykit-subscriptions" }
+pubky-testnet = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
 tokio-test = "0.4"
 tempfile = "3.8"
 proptest = "1.4"

@@ -116,17 +116,23 @@ impl NonceStore {
     }
 
     /// Get the count of tracked nonces (for monitoring/debugging)
-    pub fn count(&self) -> usize {
-        let nonces = self.used_nonces.read().expect("NonceStore lock poisoned");
-        nonces.len()
+    pub fn count(&self) -> Result<usize> {
+        let nonces = self
+            .used_nonces
+            .read()
+            .map_err(|e| anyhow::anyhow!("NonceStore lock poisoned: {}", e))?;
+        Ok(nonces.len())
     }
 
     /// Check if a nonce has been used (read-only, doesn't mark)
     ///
     /// This is useful for testing or validation without modifying state.
-    pub fn has_nonce(&self, nonce: &[u8; 32]) -> bool {
-        let nonces = self.used_nonces.read().expect("NonceStore lock poisoned");
-        nonces.contains_key(nonce)
+    pub fn has_nonce(&self, nonce: &[u8; 32]) -> Result<bool> {
+        let nonces = self
+            .used_nonces
+            .read()
+            .map_err(|e| anyhow::anyhow!("NonceStore lock poisoned: {}", e))?;
+        Ok(nonces.contains_key(nonce))
     }
 }
 
@@ -192,14 +198,14 @@ mod tests {
         store.check_and_mark(&old_nonce, now - 1000).unwrap(); // Expired
         store.check_and_mark(&recent_nonce, now + 1000).unwrap(); // Valid
 
-        assert_eq!(store.count(), 2, "Should have 2 nonces");
+        assert_eq!(store.count().unwrap(), 2, "Should have 2 nonces");
 
         // Clean up expired nonces
         store.cleanup_expired(now).unwrap();
 
-        assert_eq!(store.count(), 1, "Should have 1 nonce after cleanup");
-        assert!(store.has_nonce(&recent_nonce), "Recent nonce should remain");
-        assert!(!store.has_nonce(&old_nonce), "Old nonce should be removed");
+        assert_eq!(store.count().unwrap(), 1, "Should have 1 nonce after cleanup");
+        assert!(store.has_nonce(&recent_nonce).unwrap(), "Recent nonce should remain");
+        assert!(!store.has_nonce(&old_nonce).unwrap(), "Old nonce should be removed");
     }
 
     #[test]
@@ -207,13 +213,13 @@ mod tests {
         let store = NonceStore::new();
         let expires_at = Utc::now().timestamp() + 3600;
 
-        assert_eq!(store.count(), 0, "Should start empty");
+        assert_eq!(store.count().unwrap(), 0, "Should start empty");
 
         store.check_and_mark(&[1u8; 32], expires_at).unwrap();
-        assert_eq!(store.count(), 1);
+        assert_eq!(store.count().unwrap(), 1);
 
         store.check_and_mark(&[2u8; 32], expires_at).unwrap();
-        assert_eq!(store.count(), 2);
+        assert_eq!(store.count().unwrap(), 2);
     }
 
     #[test]
@@ -222,11 +228,11 @@ mod tests {
         let nonce = [42u8; 32];
         let expires_at = Utc::now().timestamp() + 3600;
 
-        assert!(!store.has_nonce(&nonce), "Should not have nonce initially");
+        assert!(!store.has_nonce(&nonce).unwrap(), "Should not have nonce initially");
 
         store.check_and_mark(&nonce, expires_at).unwrap();
 
-        assert!(store.has_nonce(&nonce), "Should have nonce after marking");
+        assert!(store.has_nonce(&nonce).unwrap(), "Should have nonce after marking");
     }
 
     #[test]

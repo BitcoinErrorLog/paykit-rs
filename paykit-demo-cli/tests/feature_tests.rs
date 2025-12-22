@@ -145,7 +145,7 @@ mod rotation_tests {
         run_cli(&temp_dir, &["setup", "--name", "test"]);
 
         // Enable auto-rotation
-        let (stdout, stderr, success) = run_cli(&temp_dir, &["rotation", "auto-rotate", "--enable", "true"]);
+        let (stdout, stderr, success) = run_cli(&temp_dir, &["rotation", "auto-rotate", "--enable"]);
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
@@ -154,8 +154,8 @@ mod rotation_tests {
             stdout, stderr
         );
 
-        // Disable auto-rotation
-        let (stdout2, stderr2, success2) = run_cli(&temp_dir, &["rotation", "auto-rotate", "--enable", "false"]);
+        // Disable auto-rotation (without --enable flag means disabled)
+        let (stdout2, stderr2, success2) = run_cli(&temp_dir, &["rotation", "auto-rotate"]);
         let combined2 = format!("{}{}", stdout2, stderr2).to_lowercase();
 
         assert!(

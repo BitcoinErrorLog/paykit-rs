@@ -4,6 +4,7 @@
 //! including line items, tax information, and shipping details.
 
 use crate::Amount;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// A line item in an invoice.
@@ -64,8 +65,9 @@ impl InvoiceItem {
 pub struct TaxInfo {
     /// Tax description (e.g., "Sales Tax", "VAT").
     pub description: String,
-    /// Tax rate as a percentage (e.g., 8.25 for 8.25%).
-    pub rate: f64,
+    /// Tax rate as a percentage (e.g., dec!(8.25) for 8.25%).
+    /// Uses Decimal for exact precision in financial calculations.
+    pub rate: Decimal,
     /// Tax amount.
     pub amount: Amount,
     /// Jurisdiction (e.g., "CA", "EU", "UK").
@@ -76,7 +78,7 @@ pub struct TaxInfo {
 
 impl TaxInfo {
     /// Create new tax info.
-    pub fn new(description: impl Into<String>, rate: f64, amount: Amount) -> Self {
+    pub fn new(description: impl Into<String>, rate: Decimal, amount: Amount) -> Self {
         Self {
             description: description.into(),
             rate,
@@ -88,11 +90,25 @@ impl TaxInfo {
 
     /// Calculate tax from a subtotal.
     ///
-    /// Note: Uses f64 for rate, which may have minor precision loss.
-    /// For exact precision, construct the tax amount manually with Decimal.
-    pub fn from_subtotal(description: impl Into<String>, rate: f64, subtotal: &Amount) -> Self {
-        let tax_amount = subtotal.percentage_f64(rate);
+    /// Uses Decimal for exact precision in financial calculations.
+    pub fn from_subtotal(description: impl Into<String>, rate: Decimal, subtotal: &Amount) -> Self {
+        let tax_amount = subtotal.percentage(rate);
         Self::new(description, rate, tax_amount)
+    }
+    
+    /// Create new tax info from an f64 rate (convenience method).
+    /// Note: Uses f64 for rate, which may introduce minor precision loss.
+    /// For exact precision, use `new` with a Decimal rate.
+    pub fn new_f64(description: impl Into<String>, rate: f64, amount: Amount) -> Self {
+        Self::new(description, Decimal::from_f64_retain(rate).unwrap_or(Decimal::ZERO), amount)
+    }
+
+    /// Calculate tax from a subtotal using an f64 rate (convenience method).
+    /// Note: Uses f64 for rate, which may introduce minor precision loss.
+    /// For exact precision, use `from_subtotal` with a Decimal rate.
+    pub fn from_subtotal_f64(description: impl Into<String>, rate: f64, subtotal: &Amount) -> Self {
+        let rate_decimal = Decimal::from_f64_retain(rate).unwrap_or(Decimal::ZERO);
+        Self::from_subtotal(description, rate_decimal, subtotal)
     }
 
     /// Set jurisdiction.
@@ -512,9 +528,10 @@ mod tests {
 
     #[test]
     fn test_tax_from_subtotal() {
+        use rust_decimal_macros::dec;
         let subtotal = Amount::from_sats(10000);
-        let tax = TaxInfo::from_subtotal("Sales Tax", 8.25, &subtotal);
-        assert_eq!(tax.rate, 8.25);
+        let tax = TaxInfo::from_subtotal("Sales Tax", dec!(8.25), &subtotal);
+        assert_eq!(tax.rate, dec!(8.25));
         // 8.25% of 10000 = 825
         assert_eq!(tax.amount, Amount::from_sats(825));
     }
@@ -545,9 +562,10 @@ mod tests {
 
     #[test]
     fn test_invoice_with_tax_and_shipping() {
+        use rust_decimal_macros::dec;
         let items = vec![InvoiceItem::new("Product", 1, Amount::from_sats(10000))];
 
-        let tax = TaxInfo::from_subtotal("Tax", 10.0, &Amount::from_sats(10000));
+        let tax = TaxInfo::from_subtotal("Tax", dec!(10.0), &Amount::from_sats(10000));
         let shipping = ShippingInfo::new(
             ShippingAddress::new("Customer", "123 St", "City", "00000", "US"),
             ShippingMethod::Standard,

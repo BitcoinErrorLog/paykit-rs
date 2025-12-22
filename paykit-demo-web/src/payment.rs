@@ -8,8 +8,78 @@ use crate::utils;
 use crate::websocket_transport::WebSocketNoiseChannel;
 use paykit_lib::{MethodId, PublicKey};
 use pubky_noise::NoiseClient;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+
+/// Payment proof types for WASM (mirrors paykit_interactive::proof)
+pub mod proof {
+    use super::*;
+    
+    /// Type of payment proof
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(tag = "type", rename_all = "snake_case")]
+    pub enum ProofType {
+        /// Lightning payment proof with preimage
+        LightningPreimage {
+            preimage: String,
+            payment_hash: String,
+        },
+        /// Bitcoin on-chain proof with transaction ID
+        BitcoinTxid {
+            txid: String,
+            vout: Option<u32>,
+        },
+        /// Custom proof type
+        Custom {
+            proof_type: String,
+            data: serde_json::Value,
+        },
+    }
+    
+    /// Payment proof
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PaymentProof {
+        /// Proof type with data
+        #[serde(flatten)]
+        pub proof_type: ProofType,
+        /// Timestamp of proof creation
+        pub created_at: Option<i64>,
+        /// Optional metadata
+        pub metadata: Option<serde_json::Value>,
+    }
+    
+    /// Result of proof verification
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct VerificationResult {
+        /// Whether proof is valid
+        pub valid: bool,
+        /// Errors if invalid
+        pub errors: Vec<String>,
+        /// Additional verification details
+        pub details: Option<serde_json::Value>,
+    }
+    
+    impl VerificationResult {
+        /// Create a valid result
+        pub fn valid() -> Self {
+            Self {
+                valid: true,
+                errors: vec![],
+                details: None,
+            }
+        }
+        
+        /// Create an invalid result with errors
+        pub fn invalid(errors: Vec<String>) -> Self {
+            Self {
+                valid: false,
+                errors,
+                details: None,
+            }
+        }
+    }
+}
 
 /// Receipt storage in browser localStorage
 #[wasm_bindgen]
@@ -314,9 +384,7 @@ impl WasmReceiptStorage {
     /// let result = storage.verify_proof("receipt_123").await?;
     /// ```
     pub async fn verify_proof(&self, receipt_id: &str) -> Result<JsValue, JsValue> {
-        use paykit_interactive::proof::{PaymentProof, ProofType};
-        #[cfg(feature = "http-executor")]
-        use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
+        use crate::payment::proof::{PaymentProof, ProofType, VerificationResult};
         
         // Get receipt
         let receipt_json = self.get_receipt(receipt_id).await?
@@ -340,7 +408,6 @@ impl WasmReceiptStorage {
             ProofType::LightningPreimage { preimage, payment_hash } => {
                 // Basic cryptographic verification: SHA256(preimage) == payment_hash
                 use sha2::{Digest, Sha256};
-                use hex;
                 
                 let preimage_bytes = hex::decode(preimage)
                     .map_err(|e| utils::js_error(&format!("Invalid preimage hex: {}", e)))?;
@@ -352,9 +419,9 @@ impl WasmReceiptStorage {
                 let computed = hasher.finalize();
                 
                 if computed.as_slice() == hash_bytes.as_slice() {
-                    paykit_interactive::proof::VerificationResult::valid()
+                    VerificationResult::valid()
                 } else {
-                    paykit_interactive::proof::VerificationResult::invalid(vec![
+                    VerificationResult::invalid(vec![
                         "Preimage hash mismatch".to_string()
                     ])
                 }

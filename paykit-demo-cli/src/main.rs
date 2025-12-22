@@ -275,7 +275,7 @@ enum RotationAction {
 
     /// Enable or disable auto-rotation after payments
     AutoRotate {
-        /// Enable (true) or disable (false)
+        /// Enable auto-rotation (omit to disable)
         #[arg(long)]
         enable: bool,
     },

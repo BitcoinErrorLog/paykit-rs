@@ -28,6 +28,6 @@ http-executor = ["paykit-lib/http-executor"]
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
 rand = "0.8"
-pubky = "0.6.0-rc.6"
+pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
 ed25519-dalek = "2.1"
 sha2 = "0.10"

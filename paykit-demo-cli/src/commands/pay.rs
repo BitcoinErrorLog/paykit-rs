@@ -4,12 +4,11 @@
 //! Falls back to direct payment when a Lightning invoice or Bitcoin address is provided.
 
 use anyhow::{Context, Result};
-use paykit_demo_core::{DemoStorage, DirectoryClient};
+use paykit_demo_core::DemoStorage;
 use paykit_interactive::{PaykitNoiseMessage, PaykitReceipt};
 use paykit_lib::MethodId;
 use paykit_lib::rotation::{EndpointRotationManager, RotationConfig};
 use paykit_lib::prelude::*;
-use std::str::FromStr;
 use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
 use pubky_noise::{DummyRing, NoiseClient};
 use std::path::Path;
@@ -314,6 +313,7 @@ async fn execute_noise_payment(
     };
 
     struct PayStorageAdapter {
+        #[allow(dead_code)]
         storage: DemoStorage,
         endpoint_manager: Option<paykit_lib::private_endpoints::PrivateEndpointManager<paykit_lib::private_endpoints::FileStore>>,
     }
@@ -569,7 +569,7 @@ async fn execute_noise_payment(
 }
 
 async fn execute_lightning_payment(
-    storage_dir: &Path,
+    _storage_dir: &Path,
     wallet_config: &Option<WalletConfig>,
     payee_uri: &str,
     amount: Option<&str>,

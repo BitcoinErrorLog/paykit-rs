@@ -20,7 +20,7 @@ paykit-demo-core = { path = "../paykit-demo-core" }
 paykit-lib = { path = "../paykit-lib", features = ["pubky", "file-storage"] }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 paykit-interactive = { path = "../paykit-interactive", features = ["http-executor"] }
-pubky = "0.6.0-rc.6"
+pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
 pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 clap = { version = "4", features = ["derive", "color"] }
 tokio = { version = "1", features = ["full"] }
@@ -54,7 +54,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 tempfile = "3"
 tokio-test = "0.4"
-pubky-testnet = { version = "0.6.0-rc.6" }
+pubky-testnet = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
 pubky-noise = { path = "../../pubky-noise" }
 proptest = "1.4"
 

@@ -203,7 +203,7 @@ impl Identity {
     }
 
     /// Derive X25519 key for Noise protocol from Ed25519 keypair
-    pub fn derive_x25519_key(&self, device_id: &[u8], epoch: u32) -> [u8; 32] {
+    pub fn derive_x25519_key(&self, device_id: &[u8], epoch: u32) -> Result<[u8; 32], pubky_noise::NoiseError> {
         let seed = self.keypair.secret_key();
         pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, epoch)
     }
@@ -489,14 +489,14 @@ mod tests {
     fn test_x25519_derivation() {
         let identity = Identity::generate();
         let device_id = b"test_device";
-        let key1 = identity.derive_x25519_key(device_id, 0);
-        let key2 = identity.derive_x25519_key(device_id, 0);
+        let key1 = identity.derive_x25519_key(device_id, 0).unwrap();
+        let key2 = identity.derive_x25519_key(device_id, 0).unwrap();
 
         // Same inputs should produce same output
         assert_eq!(key1, key2);
 
         // Different epoch should produce different key
-        let key3 = identity.derive_x25519_key(device_id, 1);
+        let key3 = identity.derive_x25519_key(device_id, 1).unwrap();
         assert_ne!(key1, key3);
     }
 }

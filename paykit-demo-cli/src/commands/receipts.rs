@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use paykit_demo_core::DemoStorage;
 use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
-use paykit_interactive::proof::verifiers::{RealBitcoinProofVerifier, RealLightningProofVerifier};
+use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
 #[cfg(feature = "http-executor")]
 use paykit_lib::executors::{EsploraConfig, EsploraExecutor};
 use std::path::Path;

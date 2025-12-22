@@ -110,7 +110,7 @@ impl StorageMigration {
 
         // Migrate each key
         let mut migrated_count = 0u32;
-        for (key, value) in keys_to_migrate {
+        for (key, value) in &keys_to_migrate {
             // Store in secure storage
             let key_data = value.as_bytes();
             #[cfg(target_arch = "wasm32")]

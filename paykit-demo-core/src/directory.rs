@@ -175,13 +175,34 @@ impl DirectoryClient {
         let url = format!("pubky://{}{}", public_key, path);
 
         match storage.get(&url).await {
-            Ok(Some(bytes)) => {
+            Ok(response) => {
+                // Check if response indicates not found (404 status)
+                if response.status().as_u16() == 404 {
+                    return Ok(None);
+                }
+                
+                // Get bytes from response
+                let bytes = response
+                    .bytes()
+                    .await
+                    .context("Failed to read response bytes")?;
+                
+                if bytes.is_empty() {
+                    return Ok(None);
+                }
+                
                 let content =
-                    String::from_utf8(bytes).context("Response is not valid UTF-8")?;
+                    String::from_utf8(bytes.to_vec()).context("Response is not valid UTF-8")?;
                 Ok(Some(content))
             }
-            Ok(None) => Ok(None),
-            Err(e) => Err(anyhow::anyhow!("Failed to get {}: {}", path, e)),
+            Err(e) => {
+                // Check if error is a 404 (not found)
+                let err_str = e.to_string();
+                if err_str.contains("404") || err_str.contains("not found") {
+                    return Ok(None);
+                }
+                Err(anyhow::anyhow!("Failed to get {}: {}", path, e))
+            }
         }
     }
 
@@ -189,12 +210,9 @@ impl DirectoryClient {
     ///
     /// Used for publishing profiles and other arbitrary data to the directory.
     pub async fn put_raw(&self, session: &PubkySession, path: &str, content: &str) -> Result<()> {
-        // Get the public key from the session
-        let public_key = session.public_key();
-        let url = format!("pubky://{}{}", public_key, path);
-
         session
-            .put(&url, content.as_bytes())
+            .storage()
+            .put(path, content.as_bytes().to_vec())
             .await
             .with_context(|| format!("Failed to put data at {}", path))?;
 
@@ -203,11 +221,9 @@ impl DirectoryClient {
 
     /// Delete raw data from authenticated storage
     pub async fn delete_raw(&self, session: &PubkySession, path: &str) -> Result<()> {
-        let public_key = session.public_key();
-        let url = format!("pubky://{}{}", public_key, path);
-
         session
-            .delete(&url)
+            .storage()
+            .delete(path)
             .await
             .with_context(|| format!("Failed to delete {}", path))?;
 

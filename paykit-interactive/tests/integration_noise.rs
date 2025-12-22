@@ -39,9 +39,7 @@ impl RingKeyProvider for DummyRing {
         _epoch: u32,
     ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
         // Use pubky-noise's KDF for proper key derivation
-        Ok(pubky_noise::kdf::derive_x25519_for_device_epoch(
-            &self.seed, device_id, 0,
-        ))
+        pubky_noise::kdf::derive_x25519_for_device_epoch(&self.seed, device_id, 0)
     }
 
     fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {

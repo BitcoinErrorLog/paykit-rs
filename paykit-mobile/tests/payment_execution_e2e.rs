@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 struct MockBitcoinExecutorE2E {
     send_count: AtomicU32,
     should_fail: bool,
-    failure_message: String,
+    failure_msg: String,
 }
 
 impl MockBitcoinExecutorE2E {
@@ -26,15 +26,15 @@ impl MockBitcoinExecutorE2E {
         Self {
             send_count: AtomicU32::new(0),
             should_fail: false,
-            failure_message: String::new(),
+            failure_msg: String::new(),
         }
     }
 
-    fn failing(message: &str) -> Self {
+    fn failing(msg: &str) -> Self {
         Self {
             send_count: AtomicU32::new(0),
             should_fail: true,
-            failure_message: message.to_string(),
+            failure_msg: msg.to_string(),
         }
     }
 }
@@ -48,7 +48,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
     ) -> Result<BitcoinTxResultFFI> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
 
@@ -73,7 +73,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
     fn estimate_fee(&self, _address: String, _amount_sats: u64, target_blocks: u32) -> Result<u64> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
         // Higher fee for faster confirmation
@@ -83,7 +83,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
     fn get_transaction(&self, txid: String) -> Result<Option<BitcoinTxResultFFI>> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
 
@@ -110,7 +110,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
     ) -> Result<bool> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
         Ok(txid.starts_with("e2e_txid_"))
@@ -121,7 +121,7 @@ impl BitcoinExecutorFFI for MockBitcoinExecutorE2E {
 struct MockLightningExecutorE2E {
     pay_count: AtomicU32,
     should_fail: bool,
-    failure_message: String,
+    failure_msg: String,
 }
 
 impl MockLightningExecutorE2E {
@@ -129,15 +129,15 @@ impl MockLightningExecutorE2E {
         Self {
             pay_count: AtomicU32::new(0),
             should_fail: false,
-            failure_message: String::new(),
+            failure_msg: String::new(),
         }
     }
 
-    fn failing(message: &str) -> Self {
+    fn failing(msg: &str) -> Self {
         Self {
             pay_count: AtomicU32::new(0),
             should_fail: true,
-            failure_message: message.to_string(),
+            failure_msg: msg.to_string(),
         }
     }
 }
@@ -151,7 +151,7 @@ impl LightningExecutorFFI for MockLightningExecutorE2E {
     ) -> Result<LightningPaymentResultFFI> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
 
@@ -171,7 +171,7 @@ impl LightningExecutorFFI for MockLightningExecutorE2E {
     fn decode_invoice(&self, invoice: String) -> Result<DecodedInvoiceFFI> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
 
@@ -200,7 +200,7 @@ impl LightningExecutorFFI for MockLightningExecutorE2E {
     fn estimate_fee(&self, _invoice: String) -> Result<u64> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
         Ok(100) // 100 msat
@@ -209,7 +209,7 @@ impl LightningExecutorFFI for MockLightningExecutorE2E {
     fn get_payment(&self, payment_hash: String) -> Result<Option<LightningPaymentResultFFI>> {
         if self.should_fail {
             return Err(PaykitMobileError::Transport {
-                message: self.failure_message.clone(),
+                msg: self.failure_msg.clone(),
             });
         }
 
@@ -395,8 +395,8 @@ fn test_e2e_payment_method_not_found() {
 
     assert!(result.is_err());
     match result {
-        Err(PaykitMobileError::NotFound { message }) => {
-            assert!(message.contains("unknown_method"));
+        Err(PaykitMobileError::NotFound { msg }) => {
+            assert!(msg.contains("unknown_method"));
         }
         _ => panic!("Expected NotFound error"),
     }

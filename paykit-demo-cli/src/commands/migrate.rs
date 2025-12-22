@@ -1,7 +1,7 @@
 //! Migrate command - migrate identities from plaintext to secure storage
 
 use anyhow::Result;
-use paykit_demo_core::{Identity, IdentityManager, SecureIdentityManager};
+use paykit_demo_core::{IdentityManager, SecureIdentityManager};
 use std::path::Path;
 
 use crate::ui;

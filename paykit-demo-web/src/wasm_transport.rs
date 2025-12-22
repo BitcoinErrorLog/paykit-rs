@@ -52,27 +52,26 @@ impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
             })?;
 
         // Convert JsValue to SupportedPayments
-        let mut methods = Vec::new();
+        let mut entries = std::collections::HashMap::new();
         
         if methods_js.is_object() {
             let obj = Object::from(methods_js);
-            let entries = Object::entries(&obj);
+            let obj_entries = Object::entries(&obj);
             
-            for i in 0..entries.length() {
-                if let Some(entry) = entries.get(i).dyn_ref::<js_sys::Array>() {
+            for i in 0..obj_entries.length() {
+                if let Some(entry) = obj_entries.get(i).dyn_ref::<js_sys::Array>() {
                     if entry.length() >= 2 {
                         let method_id_str = entry.get(0).as_string().unwrap_or_default();
                         let endpoint_str = entry.get(1).as_string().unwrap_or_default();
                         
-                        if let Ok(method_id) = MethodId::new(&method_id_str) {
-                            methods.push((method_id, EndpointData::new(endpoint_str)));
-                        }
+                        let method_id = MethodId::new(&method_id_str);
+                        entries.insert(method_id, EndpointData::new(endpoint_str));
                     }
                 }
             }
         }
 
-        Ok(SupportedPayments { methods })
+        Ok(SupportedPayments { entries })
     }
 
     async fn fetch_payment_endpoint(
@@ -112,7 +111,7 @@ impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
         let owner_str = owner.to_string();
         let follows_path = "/pub/pubky.app/follows/";
         
-        let entries_js = self
+        let entries_vec = self
             .directory_client
             .list_directory(&owner_str, follows_path)
             .await
@@ -127,12 +126,11 @@ impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
 
         let mut contacts = Vec::new();
         
-        if let Ok(entries_array) = entries_js.dyn_into::<js_sys::Array>() {
-            for i in 0..entries_array.length() {
-                if let Some(entry_str) = entries_array.get(i).as_string() {
-                    if let Ok(pubkey) = PublicKey::from_str(&entry_str) {
-                        contacts.push(pubkey);
-                    }
+        // entries_vec is already a Vec<JsValue>
+        for entry_js in entries_vec {
+            if let Some(entry_str) = entry_js.as_string() {
+                if let Ok(pubkey) = PublicKey::from_str(&entry_str) {
+                    contacts.push(pubkey);
                 }
             }
         }
@@ -140,16 +138,62 @@ impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
         Ok(contacts)
     }
 
-    async fn get(&self, _owner: &PublicKey, _path: &str) -> Result<Option<String>> {
-        // TODO: Implement file retrieval using DirectoryClient
-        // For now, return None as this is not critical for payment endpoint resolution
-        Ok(None)
+    async fn get(&self, owner: &PublicKey, path: &str) -> Result<Option<String>> {
+        let owner_str = owner.to_string();
+        
+        // Use the directory client's homeserver to construct URL
+        let homeserver = self.directory_client.homeserver();
+        let proxy_url = self.directory_client.proxy_url();
+        
+        // Construct the URL for the file
+        let url = format!("{}/pub/{}{}", homeserver, owner_str, path);
+        let fetch_url = if let Some(proxy) = proxy_url {
+            format!("{}/{}", proxy, url)
+        } else {
+            url
+        };
+        
+        // Make the fetch call
+        let window = web_sys::window()
+            .ok_or_else(|| PaykitError::Transport("No window object".to_string()))?;
+        
+        let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(&fetch_url))
+            .await
+            .map_err(|e| PaykitError::Transport(format!("Fetch failed: {:?}", e)))?;
+        
+        let resp: web_sys::Response = resp_value
+            .dyn_into()
+            .map_err(|_| PaykitError::Transport("Failed to cast to Response".to_string()))?;
+        
+        if resp.status() == 404 {
+            return Ok(None);
+        }
+        
+        if !resp.ok() {
+            return Err(PaykitError::Transport(format!("HTTP error: {}", resp.status())));
+        }
+        
+        // Get text content
+        let text_promise = resp.text()
+            .map_err(|_| PaykitError::Transport("No text method".to_string()))?;
+        let text = wasm_bindgen_futures::JsFuture::from(text_promise)
+            .await
+            .map_err(|_| PaykitError::Transport("Failed to get text".to_string()))?;
+        
+        let content = text.as_string()
+            .ok_or_else(|| PaykitError::Transport("Response is not a string".to_string()))?;
+        
+        if content.is_empty() {
+            return Ok(None);
+        }
+        
+        Ok(Some(content))
     }
 
     async fn list_directory(&self, owner: &PublicKey, path: &str) -> Result<Vec<String>> {
         let owner_str = owner.to_string();
         
-        let entries_js = self
+        let entries_vec = self
             .directory_client
             .list_directory(&owner_str, path)
             .await
@@ -164,19 +208,15 @@ impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
 
         let mut entries = Vec::new();
         
-        if let Ok(entries_array) = entries_js.dyn_into::<js_sys::Array>() {
-            for i in 0..entries_array.length() {
-                let entry = entries_array.get(i);
-                if let Some(entry_str) = entry.as_string() {
-                    entries.push(entry_str);
-                } else if entry.is_object() {
-                    // Some directory listings return objects, extract name if available
-                    if let Ok(obj) = entry.dyn_into::<Object>() {
-                        if let Ok(name) = Reflect::get(&obj, &"name".into()) {
-                            if let Some(name_str) = name.as_string() {
-                                entries.push(name_str);
-                            }
-                        }
+        // entries_vec is already a Vec<JsValue>
+        for entry_js in entries_vec {
+            if let Some(entry_str) = entry_js.as_string() {
+                entries.push(entry_str);
+            } else if entry_js.is_object() {
+                // Some directory listings return objects, extract name if available
+                if let Ok(name) = Reflect::get(&entry_js.into(), &"name".into()) {
+                    if let Some(name_str) = name.as_string() {
+                        entries.push(name_str);
                     }
                 }
             }

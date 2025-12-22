@@ -2,6 +2,9 @@
 //!
 //! This module provides the SubscriptionCoordinator for managing subscriptions,
 //! auto-pay rules, and spending limits in demo applications.
+//!
+//! NOTE: This demo code uses `block_on_async` to run async operations in sync contexts.
+//! Production code should use proper async/await patterns throughout.
 
 use anyhow::{Context, Result};
 use paykit_lib::{MethodId, PublicKey};
@@ -11,7 +14,24 @@ use paykit_subscriptions::{
     SubscriptionTerms,
 };
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::path::Path;
+
+/// Helper to run async operations in sync contexts.
+/// NOTE: This is for demo purposes only. Production code should use async/await.
+fn block_on_async<F, T>(future: F) -> Result<T>
+where
+    F: Future<Output = Result<T>>,
+{
+    // Try to get existing runtime handle, otherwise create a temporary runtime
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => handle.block_on(future),
+        Err(_) => {
+            let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+            rt.block_on(future)
+        }
+    }
+}
 
 /// Demo subscription wrapper with additional metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,14 +93,12 @@ impl SubscriptionCoordinator {
         };
 
         // Save subscription (blocking for simplicity in demo)
-        tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.save_subscription(&demo_sub.inner)))
-            .unwrap_or_else(|_| {
-                // If no runtime, create a temporary one
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.save_subscription(&demo_sub.inner))
-            })
-            .context("Failed to save subscription")?;
+        block_on_async(async {
+            self.storage
+                .save_subscription(&demo_sub.inner)
+                .await
+                .context("Failed to save subscription")
+        })?;
 
         Ok(demo_sub)
     }
@@ -125,13 +143,12 @@ impl SubscriptionCoordinator {
         }
 
         // Save rule
-        tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.save_autopay_rule(&rule)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.save_autopay_rule(&rule))
-            })
-            .context("Failed to save auto-pay rule")?;
+        block_on_async(async {
+            self.storage
+                .save_autopay_rule(&rule)
+                .await
+                .context("Failed to save auto-pay rule")
+        })?;
 
         Ok(rule)
     }
@@ -146,28 +163,24 @@ impl SubscriptionCoordinator {
         let limit = PeerSpendingLimit::new(peer, Amount::from_sats(limit_sats), period);
 
         // Save limit
-        tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.save_peer_limit(&limit)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.save_peer_limit(&limit))
-            })
-            .context("Failed to save spending limit")?;
+        block_on_async(async {
+            self.storage
+                .save_peer_limit(&limit)
+                .await
+                .context("Failed to save spending limit")
+        })?;
 
         Ok(limit)
     }
 
     /// Get spending limit for a peer
     pub fn get_spending_limit(&self, peer: &PublicKey) -> Result<Option<PeerSpendingLimit>> {
-        let result = tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.get_peer_limit(peer)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.get_peer_limit(peer))
-            })
-            .context("Failed to get spending limit")?;
-
-        Ok(result)
+        block_on_async(async {
+            self.storage
+                .get_peer_limit(peer)
+                .await
+                .context("Failed to get spending limit")
+        })
     }
 
     /// Check if an auto-pay would be approved for a peer/amount
@@ -196,13 +209,12 @@ impl SubscriptionCoordinator {
         limit.add_spent(&amount).context("Failed to add spent")?;
 
         // Save updated limit
-        tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.save_peer_limit(&limit)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.save_peer_limit(&limit))
-            })
-            .context("Failed to save updated limit")?;
+        block_on_async(async {
+            self.storage
+                .save_peer_limit(&limit)
+                .await
+                .context("Failed to save updated limit")
+        })?;
 
         Ok(())
     }
@@ -216,28 +228,24 @@ impl SubscriptionCoordinator {
         limit.reset();
 
         // Save updated limit
-        tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.save_peer_limit(&limit)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.save_peer_limit(&limit))
-            })
-            .context("Failed to save reset limit")?;
+        block_on_async(async {
+            self.storage
+                .save_peer_limit(&limit)
+                .await
+                .context("Failed to save reset limit")
+        })?;
 
         Ok(())
     }
 
     /// Get auto-pay rule for a subscription
     pub fn get_autopay_rule(&self, subscription_id: &str) -> Result<Option<AutoPayRule>> {
-        let result = tokio::runtime::Handle::try_current()
-            .map(|handle| handle.block_on(self.storage.get_autopay_rule(subscription_id)))
-            .unwrap_or_else(|_| {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(self.storage.get_autopay_rule(subscription_id))
-            })
-            .context("Failed to get auto-pay rule")?;
-
-        Ok(result)
+        block_on_async(async {
+            self.storage
+                .get_autopay_rule(subscription_id)
+                .await
+                .context("Failed to get auto-pay rule")
+        })
     }
 }
 

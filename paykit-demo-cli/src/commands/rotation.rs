@@ -383,9 +383,9 @@ fn parse_policy(policy_str: &str) -> Result<RotationPolicy> {
         let seconds: u64 = interval_str
             .parse()
             .context("Invalid interval in policy")?;
-        return Ok(RotationPolicy::periodic(std::time::Duration::from_secs(
-            seconds,
-        )));
+        return Ok(RotationPolicy::RotatePeriodic {
+            interval_secs: seconds,
+        });
     }
 
     anyhow::bail!(
@@ -399,8 +399,8 @@ fn format_policy(policy: &RotationPolicy) -> String {
         RotationPolicy::RotateOnThreshold { threshold } => {
             format!("Rotate after {} uses", threshold)
         }
-        RotationPolicy::RotatePeriodic { interval } => {
-            format!("Rotate every {} seconds", interval.as_secs())
+        RotationPolicy::RotatePeriodic { interval_secs } => {
+            format!("Rotate every {} seconds", interval_secs)
         }
         RotationPolicy::Manual => "Manual rotation only".to_string(),
     }

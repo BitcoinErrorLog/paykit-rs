@@ -2391,22 +2391,6 @@ dependencies = [
 [[package]]
 name = "http-relay"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42593e99cc11615a459454e0278f89d31b0501af077322dd29f0b0832470294c"
-dependencies = [
- "anyhow",
- "axum",
- "axum-server",
- "futures-util",
- "tokio",
- "tower-http",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "http-relay"
-version = "0.5.1"
 source = "git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801#290d8016678c58d77fe9c0fab293bdac22e76933"
 dependencies = [
  "anyhow",
@@ -3381,9 +3365,9 @@ dependencies = [
  "paykit-lib",
  "paykit-subscriptions",
  "proptest",
- "pubky 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pubky",
  "pubky-noise",
- "pubky-testnet 0.6.0-rc.6exp",
+ "pubky-testnet",
  "qrcode",
  "rand 0.8.5",
  "rpassword",
@@ -3413,9 +3397,9 @@ dependencies = [
  "paykit-lib",
  "paykit-subscriptions",
  "proptest",
- "pubky 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pubky",
  "pubky-noise",
- "pubky-testnet 0.6.0-rc.6exp",
+ "pubky-testnet",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -3440,7 +3424,6 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "js-sys",
- "paykit-interactive",
  "paykit-lib",
  "pkarr",
  "pubky-noise",
@@ -3465,7 +3448,7 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "paykit-lib",
- "pubky 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pubky",
  "pubky-noise",
  "rand 0.8.5",
  "serde",
@@ -3494,9 +3477,9 @@ dependencies = [
  "md5",
  "paykit-interactive",
  "paykit-subscriptions",
- "pubky 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "pubky",
  "pubky-noise",
- "pubky-testnet 0.6.0-rc.6",
+ "pubky-testnet",
  "rand 0.8.5",
  "reqwest",
  "secret-service",
@@ -3569,7 +3552,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "proptest",
- "pubky 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pubky",
  "rand 0.8.5",
  "rust_decimal",
  "rust_decimal_macros",
@@ -3751,25 +3734,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "pkarr-republisher"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "552e84a5f8c1120b49ea38a95dd835d10b5a5ee7b6e8fad69ece426a82b0e3b0"
-dependencies = [
- "anyhow",
- "clap",
- "ctrlc",
- "futures-lite",
- "hex",
- "pkarr",
- "rand 0.9.2",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -4063,30 +4027,6 @@ dependencies = [
 [[package]]
 name = "pubky"
 version = "0.6.0-rc.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1db16263a3ebeb88de3bfa26c264ac947f943967bc08c8032fe0bdd6f7b6d5db"
-dependencies = [
- "base64",
- "cookie",
- "flume",
- "futures-lite",
- "futures-util",
- "httpdate",
- "log",
- "pkarr",
- "pubky-common 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest",
- "serde",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "url",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "pubky"
-version = "0.6.0-rc.6"
 source = "git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801#290d8016678c58d77fe9c0fab293bdac22e76933"
 dependencies = [
  "base64",
@@ -4097,7 +4037,7 @@ dependencies = [
  "httpdate",
  "log",
  "pkarr",
- "pubky-common 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "pubky-common",
  "reqwest",
  "serde",
  "thiserror 2.0.17",
@@ -4106,28 +4046,6 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
  "web-time",
-]
-
-[[package]]
-name = "pubky-common"
-version = "0.6.0-rc.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "966b2d70da88a7a98e369276ae784e9187a0ddddc42d528e15aed12d24e6ccf5"
-dependencies = [
- "argon2",
- "base32",
- "blake3",
- "crypto_secretbox",
- "ed25519-dalek",
- "js-sys",
- "once_cell",
- "pkarr",
- "postcard",
- "pubky-timestamp",
- "rand 0.9.2",
- "serde",
- "thiserror 2.0.17",
- "url",
 ]
 
 [[package]]
@@ -4189,10 +4107,10 @@ dependencies = [
  "page_size",
  "percent-encoding",
  "pkarr",
- "pkarr-republisher 0.5.1 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "pkarr-republisher",
  "postcard",
  "prometheus",
- "pubky-common 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "pubky-common",
  "pubky_test_utils",
  "reqwest",
  "sea-query",
@@ -4215,58 +4133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pubky-homeserver"
-version = "0.6.0-rc.6exp"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00dd817f3f465c5b215d9311b0b9f3155169ecd70c668ca4c1e6e5c1541a2f25"
-dependencies = [
- "anyhow",
- "axum",
- "axum-extra",
- "axum-server",
- "axum-test",
- "base32",
- "base64",
- "bytes",
- "clap",
- "dav-server",
- "dav-server-opendalfs",
- "dirs 6.0.0",
- "dyn-clone",
- "fast-glob",
- "flume",
- "futures-util",
- "governor 0.10.2",
- "heed",
- "hex",
- "hostname-validator",
- "httpdate",
- "infer",
- "mime_guess",
- "opendal",
- "page_size",
- "percent-encoding",
- "pkarr",
- "pkarr-republisher 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "postcard",
- "pubky-common 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "reqwest",
- "serde",
- "serde_valid",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "tokio-util",
- "toml 0.8.23",
- "tower",
- "tower-cookies",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "pubky-noise"
 version = "1.0.0"
 dependencies = [
@@ -4276,7 +4142,7 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "hkdf",
- "pubky 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "pubky",
  "secrecy",
  "serde",
  "serde_bytes",
@@ -4297,39 +4163,15 @@ dependencies = [
  "anyhow",
  "clap",
  "dirs 6.0.0",
- "http-relay 0.5.1 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
+ "http-relay",
  "mainline",
  "once_cell",
  "pkarr",
  "pkarr-relay",
- "pubky 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
- "pubky-common 0.6.0-rc.6 (git+https://github.com/BitcoinErrorLog/pubky-core?rev=290d801)",
- "pubky-homeserver 0.6.0-rc.6",
+ "pubky",
+ "pubky-common",
+ "pubky-homeserver",
  "pubky_test_utils",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "pubky-testnet"
-version = "0.6.0-rc.6exp"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a983acd5960c3a90889eba3e42691af18a4e7a06dac817d591e8d66b5786ed3d"
-dependencies = [
- "anyhow",
- "clap",
- "dirs 6.0.0",
- "http-relay 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "mainline",
- "once_cell",
- "pkarr",
- "pkarr-relay",
- "pubky 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "pubky-common 0.6.0-rc.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "pubky-homeserver 0.6.0-rc.6exp",
  "tempfile",
  "tokio",
  "tracing",

@@ -100,6 +100,21 @@ impl SecureStorageError {
         )
     }
 
+    /// Create an "internal" error.
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::new(SecureStorageErrorCode::Internal, message)
+    }
+
+    /// Create an "encryption failed" error.
+    pub fn encryption_failed(message: impl Into<String>) -> Self {
+        Self::new(SecureStorageErrorCode::EncryptionFailed, message)
+    }
+
+    /// Create a "decryption failed" error.
+    pub fn decryption_failed(message: impl Into<String>) -> Self {
+        Self::new(SecureStorageErrorCode::DecryptionFailed, message)
+    }
+
     /// Check if this error indicates the key wasn't found.
     pub fn is_not_found(&self) -> bool {
         self.code == SecureStorageErrorCode::NotFound
@@ -230,18 +245,12 @@ impl StoreOptions {
 /// - Zeroize sensitive data from memory when possible
 /// - Never log or expose key material
 /// - Support access control via biometrics/device unlock where available
+///
+/// Note: On native platforms, implementations must be `Send + Sync` for multi-threaded
+/// usage. On WASM, these bounds are not required since JavaScript is single-threaded.
+#[cfg(not(target_arch = "wasm32"))]
 pub trait SecureKeyStorage: Send + Sync {
     /// Store a key with the given identifier.
-    ///
-    /// # Arguments
-    /// * `key_id` - Unique identifier for the key
-    /// * `key_data` - The secret key material to store
-    /// * `options` - Storage options (overwrite, auth requirements, etc.)
-    ///
-    /// # Errors
-    /// - `AlreadyExists` if key exists and overwrite is false
-    /// - `QuotaExceeded` if storage is full
-    /// - `EncryptionFailed` if platform encryption fails
     fn store(
         &self,
         key_id: &str,
@@ -250,64 +259,70 @@ pub trait SecureKeyStorage: Send + Sync {
     ) -> impl Future<Output = SecureStorageResult<()>> + Send;
 
     /// Retrieve a key by its identifier.
-    ///
-    /// # Arguments
-    /// * `key_id` - Unique identifier for the key
-    ///
-    /// # Returns
-    /// The key data, or None if not found.
-    ///
-    /// # Errors
-    /// - `AccessDenied` if authentication fails
-    /// - `DecryptionFailed` if platform decryption fails
     fn retrieve(
         &self,
         key_id: &str,
     ) -> impl Future<Output = SecureStorageResult<Option<Vec<u8>>>> + Send;
 
     /// Delete a key by its identifier.
-    ///
-    /// # Arguments
-    /// * `key_id` - Unique identifier for the key
-    ///
-    /// # Errors
-    /// - `NotFound` if key doesn't exist
     fn delete(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<()>> + Send;
 
     /// Check if a key exists.
-    ///
-    /// # Arguments
-    /// * `key_id` - Unique identifier for the key
     fn exists(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<bool>> + Send;
 
     /// Get metadata for a key.
-    ///
-    /// # Arguments
-    /// * `key_id` - Unique identifier for the key
-    ///
-    /// # Returns
-    /// Key metadata, or None if not found.
     fn get_metadata(
         &self,
         key_id: &str,
     ) -> impl Future<Output = SecureStorageResult<Option<KeyMetadata>>> + Send;
 
     /// List all stored key IDs.
-    ///
-    /// # Returns
-    /// Vector of key identifiers.
     fn list_keys(&self) -> impl Future<Output = SecureStorageResult<Vec<String>>> + Send;
 
     /// Clear all stored keys.
-    ///
-    /// Use with caution - this is irreversible.
     fn clear_all(&self) -> impl Future<Output = SecureStorageResult<()>> + Send;
 }
 
-/// Extension trait for convenience methods.
+/// Platform-agnostic secure key storage trait (WASM version).
 ///
-/// Provides common patterns like `store_simple` that don't require
-/// specifying all options. Part of the public API for SDK consumers.
+/// WASM does not require `Send + Sync` since JavaScript is single-threaded.
+#[cfg(target_arch = "wasm32")]
+pub trait SecureKeyStorage {
+    /// Store a key with the given identifier.
+    fn store(
+        &self,
+        key_id: &str,
+        key_data: &[u8],
+        options: StoreOptions,
+    ) -> impl Future<Output = SecureStorageResult<()>>;
+
+    /// Retrieve a key by its identifier.
+    fn retrieve(
+        &self,
+        key_id: &str,
+    ) -> impl Future<Output = SecureStorageResult<Option<Vec<u8>>>>;
+
+    /// Delete a key by its identifier.
+    fn delete(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<()>>;
+
+    /// Check if a key exists.
+    fn exists(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<bool>>;
+
+    /// Get metadata for a key.
+    fn get_metadata(
+        &self,
+        key_id: &str,
+    ) -> impl Future<Output = SecureStorageResult<Option<KeyMetadata>>>;
+
+    /// List all stored key IDs.
+    fn list_keys(&self) -> impl Future<Output = SecureStorageResult<Vec<String>>>;
+
+    /// Clear all stored keys.
+    fn clear_all(&self) -> impl Future<Output = SecureStorageResult<()>>;
+}
+
+/// Extension trait for convenience methods (native platforms).
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(dead_code)] // Public API for external consumers
 pub trait SecureKeyStorageExt: SecureKeyStorage {
     /// Store a key with default options (no overwrite, no auth required).
@@ -345,6 +360,49 @@ pub trait SecureKeyStorageExt: SecureKeyStorage {
         &self,
         key_id: &str,
     ) -> impl Future<Output = SecureStorageResult<()>> + Send {
+        async move {
+            match self.delete(key_id).await {
+                Ok(()) => Ok(()),
+                Err(e) if e.is_not_found() => Ok(()),
+                Err(e) => Err(e),
+            }
+        }
+    }
+}
+
+/// Extension trait for convenience methods (WASM).
+#[cfg(target_arch = "wasm32")]
+#[allow(dead_code)] // Public API for external consumers
+pub trait SecureKeyStorageExt: SecureKeyStorage {
+    /// Store a key with default options (no overwrite, no auth required).
+    fn store_simple(
+        &self,
+        key_id: &str,
+        key_data: &[u8],
+    ) -> impl Future<Output = SecureStorageResult<()>> {
+        self.store(key_id, key_data, StoreOptions::default())
+    }
+
+    /// Store or update a key (overwrite if exists).
+    fn upsert(
+        &self,
+        key_id: &str,
+        key_data: &[u8],
+    ) -> impl Future<Output = SecureStorageResult<()>> {
+        self.store(key_id, key_data, StoreOptions::new().overwrite())
+    }
+
+    /// Retrieve a key, returning error if not found.
+    fn retrieve_required(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<Vec<u8>>> {
+        async move {
+            self.retrieve(key_id)
+                .await?
+                .ok_or_else(|| SecureStorageError::not_found(key_id))
+        }
+    }
+
+    /// Delete a key if it exists (no error if missing).
+    fn delete_if_exists(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<()>> {
         async move {
             match self.delete(key_id).await {
                 Ok(()) => Ok(()),

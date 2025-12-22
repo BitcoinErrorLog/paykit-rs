@@ -153,16 +153,16 @@ fn test_backward_compat_executor_methods_optional() {
 fn test_backward_compat_error_types() {
     // All existing error types should still work
     let transport_err = PaykitMobileError::Transport {
-        message: "test".to_string(),
+        msg: "test".to_string(),
     };
     let validation_err = PaykitMobileError::Validation {
-        message: "test".to_string(),
+        msg: "test".to_string(),
     };
     let not_found_err = PaykitMobileError::NotFound {
-        message: "test".to_string(),
+        msg: "test".to_string(),
     };
     let internal_err = PaykitMobileError::Internal {
-        message: "test".to_string(),
+        msg: "test".to_string(),
     };
 
     // All should be usable

@@ -37,9 +37,46 @@ pub type StorageResult<T> = std::result::Result<T, StorageError>;
 /// Trait for persisting private endpoints.
 ///
 /// Implementations should ensure thread-safety and handle concurrent access.
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+/// On WASM, Send + Sync bounds are not required since JavaScript is single-threaded.
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait]
 pub trait PrivateEndpointStore: Send + Sync {
+    /// Save a private endpoint.
+    async fn save(&self, endpoint: PrivateEndpoint) -> StorageResult<()>;
+
+    /// Get a private endpoint for a peer and method.
+    async fn get(
+        &self,
+        peer: &PublicKey,
+        method_id: &MethodId,
+    ) -> StorageResult<Option<PrivateEndpoint>>;
+
+    /// List all private endpoints for a peer.
+    async fn list_for_peer(&self, peer: &PublicKey) -> StorageResult<Vec<PrivateEndpoint>>;
+
+    /// List all peers that have private endpoints.
+    async fn list_peers(&self) -> StorageResult<Vec<PublicKey>>;
+
+    /// Remove a specific private endpoint.
+    async fn remove(&self, peer: &PublicKey, method_id: &MethodId) -> StorageResult<()>;
+
+    /// Remove all private endpoints for a peer.
+    async fn remove_all_for_peer(&self, peer: &PublicKey) -> StorageResult<()>;
+
+    /// Clean up all expired endpoints.
+    async fn cleanup_expired(&self) -> StorageResult<usize>;
+
+    /// Update a private endpoint (e.g., to record usage).
+    async fn update(&self, endpoint: PrivateEndpoint) -> StorageResult<()>;
+
+    /// Count total number of endpoints.
+    async fn count(&self) -> StorageResult<usize>;
+}
+
+/// Trait for persisting private endpoints (WASM version).
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait PrivateEndpointStore {
     /// Save a private endpoint.
     async fn save(&self, endpoint: PrivateEndpoint) -> StorageResult<()>;
 
@@ -103,7 +140,8 @@ impl Default for InMemoryStore {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PrivateEndpointStore for InMemoryStore {
     async fn save(&self, endpoint: PrivateEndpoint) -> StorageResult<()> {
         let key = Self::make_key(&endpoint.peer, &endpoint.method_id);
@@ -421,7 +459,8 @@ impl FileStore {
 }
 
 #[cfg(feature = "file-storage")]
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PrivateEndpointStore for FileStore {
     async fn save(&self, endpoint: PrivateEndpoint) -> StorageResult<()> {
         let path = self.endpoint_path(&endpoint.peer, &endpoint.method_id);

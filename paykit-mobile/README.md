@@ -19,6 +19,19 @@ This crate provides UniFFI-based bindings that expose Paykit functionality to mo
 - **Endpoint Rotation**: Configurable rotation policies for enhanced privacy
 - **Secure Storage**: Platform-native encryption (Keychain/EncryptedSharedPreferences)
 
+## Production Integration Guide
+
+**For Bitkit iOS, Bitkit Android, and Pubky Ring integration, see the comprehensive production guide:**
+- **[Bitkit + Paykit Integration Master Guide](../docs/BITKIT_PAYKIT_INTEGRATION_MASTERGUIDE.md)**
+
+This guide covers:
+- Complete build instructions (paykit-rs + pubky-noise)
+- iOS/Android integration step-by-step
+- Pubky Ring communication protocols
+- Session management and key derivation
+- Noise protocol payment flows
+- Production configuration and security checklist
+
 ## Building
 
 ### Prerequisites

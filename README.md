@@ -586,6 +586,19 @@ cd paykit-mobile && cargo test --lib
 
 ## Documentation
 
+### Production Integration Guide
+
+- **[Bitkit + Paykit Integration Master Guide](docs/BITKIT_PAYKIT_INTEGRATION_MASTERGUIDE.md)** - **Complete production integration blueprint for Bitkit iOS, Bitkit Android, and Pubky Ring** (616+ lines covering build instructions, session management, Noise protocol flows, and production checklist)
+
+### Architecture & API Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - System architecture overview with Mermaid diagrams
+- [API Reference](docs/API_REFERENCE.md) - Rust API documentation
+- [Autopay Guide](docs/autopay-guide.md) - Auto-pay configuration and spending limits
+- [Mobile Integration](docs/mobile-integration.md) - iOS and Android integration guides
+- [Build Instructions](BUILD.md) - Build and development setup guide
+- [Security](SECURITY.md) - Security considerations and best practices
+
 ### Component Documentation
 - [paykit-lib](paykit-lib/README.md) - Core library API reference
 - [paykit-interactive](paykit-interactive/README.md) - Interactive payment protocol
@@ -600,6 +613,8 @@ cd paykit-mobile && cargo test --lib
 - [Web Demo](paykit-demo-web/README.md) - Browser application guide
 - [iOS Demo](paykit-mobile/ios-demo/README.md) - iOS app documentation
 - [Android Demo](paykit-mobile/android-demo/README.md) - Android app documentation
+
+See [docs/README.md](docs/README.md) for the complete documentation index.
 
 ### Feature Guides
 - [Auto-Pay Guide](docs/autopay-guide.md) - Auto-pay rules and spending limits

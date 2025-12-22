@@ -14,6 +14,7 @@ This directory contains additional documentation for the Paykit project.
 
 ### Architecture & Design
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and component relationships
+- **[BITKIT_PAYKIT_INTEGRATION_MASTERGUIDE.md](./BITKIT_PAYKIT_INTEGRATION_MASTERGUIDE.md)** - **Complete production integration guide for Bitkit iOS, Bitkit Android, and Pubky Ring**
 
 ### Production & Security
 - **[PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md)** - Production deployment guide

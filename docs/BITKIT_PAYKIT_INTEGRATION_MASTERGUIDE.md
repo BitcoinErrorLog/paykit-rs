@@ -15,9 +15,13 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 2. [Architecture Overview](#2-architecture-overview)
 3. [Prerequisites](#3-prerequisites)
 4. [Building paykit-rs](#4-building-paykit-rs)
+   - [4.5 Building pubky-noise](#45-building-pubky-noise-required-for-noise-payments)
 5. [iOS Integration](#5-ios-integration)
 6. [Android Integration](#6-android-integration)
 7. [Pubky Ring Integration](#7-pubky-ring-integration)
+   - [7.1 Native Module Architecture](#71-native-module-architecture-pubky-noise-in-ring)
+   - [7.2 Paykit Connect Action](#72-paykit-connect-action-ring-side-implementation)
+   - [7.3 Bitkit-side Session and Key Handling](#73-bitkit-side-session-and-key-handling)
 8. [Feature Implementation Guide](#8-feature-implementation-guide)
 9. [Known Quirks & Footguns](#9-known-quirks--footguns)
 10. [Stubs & Mocks Inventory](#10-stubs--mocks-inventory)
@@ -26,6 +30,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 13. [Security Checklist](#13-security-checklist)
 14. [Troubleshooting](#14-troubleshooting)
 15. [Future Work](#15-future-work)
+16. [Production Implementation Checklist](#16-production-implementation-checklist)
 
 ---
 
@@ -283,6 +288,106 @@ export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
 # - jniLibs/armeabi-v7a/libpaykit_mobile.so
 # - jniLibs/x86/libpaykit_mobile.so
 # - jniLibs/x86_64/libpaykit_mobile.so
+```
+
+---
+
+## 4.5 Building pubky-noise (Required for Noise Payments)
+
+Bitkit and Ring both require `pubky-noise` for encrypted channels. **pubky-noise is a separate repository** from paykit-rs.
+
+### Step 1: Build for iOS
+
+```bash
+cd ~/vibes-dev/pubky-noise
+
+# Build XCFramework (device + simulator)
+./build-ios.sh
+
+# Outputs:
+# - platforms/ios/PubkyNoise.xcframework/
+# - generated-swift/PubkyNoise.swift (UniFFI bindings)
+# - generated-swift/PubkyNoiseFFI.h + .modulemap
+```
+
+### Step 2: Build for Android
+
+```bash
+cd ~/vibes-dev/pubky-noise
+
+# Ensure NDK is set
+export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
+
+./build-android.sh
+
+# Outputs:
+# - platforms/android/src/main/jniLibs/arm64-v8a/libpubky_noise.so
+# - platforms/android/src/main/jniLibs/x86_64/libpubky_noise.so
+# - generated-kotlin/com/pubky/noise/pubky_noise.kt
+```
+
+### Step 3: Copy to Target Projects
+
+**For Bitkit iOS:**
+```bash
+cp -R pubky-noise/platforms/ios/PubkyNoise.xcframework \
+      bitkit-ios/Bitkit/PaykitIntegration/Frameworks/
+
+cp pubky-noise/generated-swift/PubkyNoise.swift \
+   bitkit-ios/Bitkit/PaykitIntegration/FFI/
+```
+
+**For Bitkit Android:**
+```bash
+cp pubky-noise/platforms/android/src/main/jniLibs/arm64-v8a/libpubky_noise.so \
+   bitkit-android/app/src/main/jniLibs/arm64-v8a/
+
+cp pubky-noise/platforms/android/src/main/jniLibs/x86_64/libpubky_noise.so \
+   bitkit-android/app/src/main/jniLibs/x86_64/
+
+cp pubky-noise/generated-kotlin/com/pubky/noise/pubky_noise.kt \
+   bitkit-android/app/src/main/java/com/pubky/noise/
+```
+
+**For Pubky Ring iOS:**
+```bash
+cp -R pubky-noise/platforms/ios/PubkyNoise.xcframework \
+      pubky-ring/ios/
+
+cp pubky-noise/generated-swift/PubkyNoise.swift \
+   pubky-ring/ios/pubkyring/
+```
+
+**For Pubky Ring Android:**
+```bash
+cp pubky-noise/platforms/android/src/main/jniLibs/arm64-v8a/libpubky_noise.so \
+   pubky-ring/android/app/src/main/jniLibs/arm64-v8a/
+
+cp pubky-noise/generated-kotlin/com/pubky/noise/pubky_noise.kt \
+   pubky-ring/android/app/src/main/java/com/pubky/noise/
+```
+
+### pubky-noise Version Compatibility
+
+| Component | Minimum Version | Notes |
+|-----------|-----------------|-------|
+| pubky-noise | 1.0.0+ | Has `deriveDeviceKey` throwing variant |
+| Bitkit iOS | Swift 5.5+ | Uses XCFramework |
+| Bitkit Android | Kotlin 1.8+ | Uses JNI .so |
+| Ring iOS | Swift 5.5+ | Uses XCFramework via CocoaPods |
+| Ring Android | Kotlin 1.8+ | Uses JNI .so |
+
+**Key API (pubky-noise 1.0+):**
+
+```rust
+// From pubky-noise Rust API (what UniFFI exposes)
+pub fn derive_device_key(
+    seed: &[u8],      // 32-byte Ed25519 seed
+    device_id: &[u8], // Arbitrary device identifier
+    epoch: u32        // Rotation epoch (0, 1, 2...)
+) -> Result<[u8; 32], NoiseError>;
+
+pub fn public_key_from_secret(secret: &[u8]) -> [u8; 32];
 ```
 
 ---
@@ -644,10 +749,242 @@ fun handleDeepLink(uri: Uri) {
 
 ### Overview
 
-Pubky Ring is a separate app that manages identity keys. Bitkit communicates with Ring to:
+Pubky Ring is a separate React Native app that manages identity keys. Bitkit communicates with Ring to:
 1. Get the user's Pubky identity (Ed25519 public key)
-2. Request signatures for subscriptions
+2. Derive X25519 noise keypairs for encrypted channels
 3. Establish authenticated sessions with homeservers
+4. Request profile and follows data
+
+**Repository Structure (Ring):**
+- `pubky-ring/` - React Native app
+- `pubky-ring/ios/pubkyring/PubkyNoiseModule.swift` - iOS native module for pubky-noise
+- `pubky-ring/android/app/src/main/java/to/pubkyring/PubkyNoiseModule.kt` - Android native module
+- `pubky-ring/src/utils/actions/paykitConnectAction.ts` - Paykit setup handler
+- `pubky-ring/src/utils/inputParser.ts` - Deep link parsing
+- `pubky-ring/src/utils/inputRouter.ts` - Action routing
+
+### 7.1 Native Module Architecture (pubky-noise in Ring)
+
+Ring embeds `pubky-noise` as a native module (not a React Native npm package):
+
+**iOS Integration:**
+```
+ios/PubkyNoise.xcframework/     <- Pre-built static library
+ios/pubkyring/PubkyNoise.swift  <- UniFFI-generated Swift bindings
+ios/pubkyring/PubkyNoiseModule.swift <- React Native bridge
+ios/pubkyring/PubkyNoiseModule.m    <- Objective-C declarations
+```
+
+**Android Integration:**
+```
+android/app/src/main/jniLibs/arm64-v8a/libpubky_noise.so  <- Native library
+android/app/src/main/java/com/pubky/noise/pubky_noise.kt  <- UniFFI-generated Kotlin bindings
+android/app/src/main/java/to/pubkyring/PubkyNoiseModule.kt <- React Native bridge
+```
+
+**Key Native Module Methods (exposed to JavaScript):**
+
+```swift
+// PubkyNoiseModule.swift (iOS example)
+
+/// Derive X25519 keypair from Ed25519 seed using pubky-noise KDF
+@objc(deriveX25519ForDeviceEpoch:deviceIdHex:epoch:resolver:rejecter:)
+func deriveX25519ForDeviceEpoch(
+    _ seedHex: String,        // Ed25519 secret key (64 hex chars)
+    deviceIdHex: String,      // Device ID (hex string)
+    epoch: UInt32,            // Epoch for key rotation (0, 1, 2...)
+    resolve: RCTPromiseResolveBlock,
+    reject: RCTPromiseRejectBlock
+)
+// Returns: { secretKey: string, publicKey: string } (hex)
+
+/// Create a Noise manager for client-side connections
+@objc(createClientManager:clientKid:deviceIdHex:configType:resolver:rejecter:)
+func createClientManager(...)
+// Returns: { managerId: string }
+
+/// Initiate IK handshake with server
+@objc(initiateConnection:serverPkHex:hint:resolver:rejecter:)
+func initiateConnection(...)
+// Returns: { sessionId: string, firstMessage: string (hex) }
+
+/// Complete handshake with server response
+@objc(completeConnection:serverResponse:resolver:rejecter:)
+func completeConnection(...)
+// Returns: sessionId (string)
+
+/// Encrypt/decrypt with established session
+@objc(encrypt:plaintext:resolver:rejecter:)
+@objc(decrypt:ciphertext:resolver:rejecter:)
+```
+
+**How `deriveDeviceKey` works (from pubky-noise):**
+
+```rust
+// pubky-noise/src/kdf.rs (conceptual)
+pub fn derive_device_key(
+    ed25519_seed: [u8; 32],   // Master Ed25519 seed
+    device_id: &[u8],         // Unique device identifier
+    epoch: u32                // Rotation epoch
+) -> [u8; 32] {
+    // HKDF-SHA256 derivation
+    let ikm = ed25519_seed;
+    let salt = device_id;
+    let info = format!("noise-device-key-{}", epoch);
+    
+    hkdf_sha256(ikm, salt, info.as_bytes())
+}
+```
+
+### 7.2 Paykit Connect Action (Ring-side implementation)
+
+When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...`, Ring processes it via:
+
+**File:** `pubky-ring/src/utils/actions/paykitConnectAction.ts`
+
+```typescript
+// Simplified flow
+export const handlePaykitConnectAction = async (
+    data: PaykitConnectActionData,
+    context: ActionContext
+): Promise<Result<string>> => {
+    const { pubky, dispatch } = context;
+    const { deviceId, callback, includeEpoch1 = true } = data.params;
+
+    // Step 1: Sign in to homeserver (gets session)
+    const signInResult = await signInToHomeserver({ pubky, dispatch });
+    const sessionInfo = signInResult.value;
+    // sessionInfo: { pubky, session_secret, capabilities }
+
+    // Step 2: Get Ed25519 secret key from secure storage
+    const { secretKey: ed25519SecretKey } = await getPubkySecretKey(pubky);
+
+    // Step 3: Derive X25519 keypairs via native module
+    const keypair0 = await deriveX25519Keypair(ed25519SecretKey, deviceId, 0);
+    const keypair1 = includeEpoch1 
+        ? await deriveX25519Keypair(ed25519SecretKey, deviceId, 1) 
+        : null;
+
+    // Step 4: Build callback URL with all data
+    const callbackParams = {
+        pubky: sessionInfo.pubky,
+        session_secret: sessionInfo.session_secret,
+        capabilities: sessionInfo.capabilities.join(','),
+        device_id: deviceId,
+        noise_public_key_0: keypair0.publicKey,
+        noise_secret_key_0: keypair0.secretKey,
+        noise_public_key_1: keypair1?.publicKey,
+        noise_secret_key_1: keypair1?.secretKey,
+    };
+
+    // Step 5: Return to Bitkit
+    await Linking.openURL(buildCallbackUrl(callback, callbackParams));
+};
+```
+
+### 7.3 Bitkit-side Session and Key Handling
+
+**PubkySDKService - Direct homeserver operations via pubky-core-ffi:**
+
+Bitkit uses `PubkySDKService` (not just Ring) for direct homeserver operations:
+- iOS: `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkySDKService.swift`
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/services/PubkySDKService.kt`
+
+```swift
+// iOS PubkySDKService - importing a session from Ring
+public func importSession(pubkey: String, sessionSecret: String) throws -> BitkitCore.PubkySessionInfo {
+    ensureInitialized()
+    // Uses BitkitCore FFI (which wraps pubky-core) to import the session
+    let session = try BitkitCore.pubkyImportSession(pubkey: pubkey, sessionSecret: sessionSecret)
+    Logger.info("Imported session for \(session.pubkey.prefix(12))...", context: "PubkySDKService")
+    return session
+}
+
+// Direct homeserver operations (after session is imported)
+public func sessionPut(pubkey: String, path: String, content: Data) async throws {
+    try await pubkySessionPut(pubkey: pubkey, path: path, content: content)
+}
+
+public func sessionGet(pubkey: String, path: String) async throws -> Data {
+    return try await pubkySessionGet(pubkey: pubkey, path: path)
+}
+
+public func publicGet(uri: String) async throws -> Data {
+    ensureInitialized()
+    return try await BitkitCore.pubkyPublicGet(uri: uri)
+}
+```
+
+**NoiseKeyCache - Persistent noise key storage:**
+
+Bitkit caches noise keys to avoid repeated Ring requests:
+- iOS: `PaykitIntegration/Storage/NoiseKeyCache.swift`
+- Android: `paykit/storage/NoiseKeyCache.kt`
+
+```swift
+// iOS NoiseKeyCache
+class NoiseKeyCache {
+    static let shared = NoiseKeyCache()
+    private let keychain = PaykitKeychainStorage()
+    
+    func setKey(_ keyData: Data, deviceId: String, epoch: UInt32) {
+        let key = "noise.key.\(deviceId).\(epoch)"
+        keychain.set(key: key, value: keyData)
+    }
+    
+    func getKey(deviceId: String, epoch: UInt32) -> Data? {
+        let key = "noise.key.\(deviceId).\(epoch)"
+        return keychain.get(key: key)
+    }
+}
+```
+
+**Session Refresh - Background lifecycle management:**
+
+Bitkit implements background session refresh to keep sessions alive:
+- iOS: `SessionRefreshService` using `BGAppRefreshTask`
+- Android: `SessionRefreshWorker` using WorkManager
+
+```swift
+// iOS - Register in AppDelegate/AppScene
+SessionRefreshService.shared.registerBackgroundTask()
+
+// Schedule hourly refresh
+SessionRefreshService.shared.scheduleSessionRefresh()
+
+// Manual trigger (foreground)
+await SessionRefreshService.shared.refreshSessionsNow()
+```
+
+```kotlin
+// Android - Schedule from Application or MainActivity
+SessionRefreshWorker.schedule(context)
+
+// Worker runs every hour via WorkManager
+// Calls pubkySDKService.refreshExpiringSessions()
+```
+
+**Session expiration handling (Android PubkySDKService):**
+
+```kotlin
+fun isSessionExpired(session: PubkyCoreSession, bufferSeconds: Long = 300): Boolean {
+    val expiresAt = session.expiresAt ?: return false
+    val bufferMs = bufferSeconds * 1000
+    return System.currentTimeMillis() + bufferMs >= expiresAt
+}
+
+suspend fun refreshExpiringSessions() {
+    sessionMutex.withLock {
+        sessionCache.values.filter { isSessionExpired(it, 600) }.forEach { session ->
+            try {
+                revalidateSession(session.sessionSecret)
+            } catch (e: Exception) {
+                Logger.warn("Failed to refresh session ${session.pubkey.take(12)}", e, TAG)
+            }
+        }
+    }
+}
+```
 
 ### Cross-App Communication Protocol (Reference Implementation)
 
@@ -864,14 +1201,170 @@ Bitkit implements Noise payments via `NoisePaymentService` and `pubky-noise` bin
 - iOS: `bitkit-ios/Bitkit/PaykitIntegration/Services/NoisePaymentService.swift`
 - Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/services/NoisePaymentService.kt`
 
-Key details the team must preserve for production:
-- Noise uses `pubky-noise` as the crypto + handshake engine (iOS uses `PubkyNoise.xcframework`, Android uses `libpubky_noise.so`).
-- Noise keypairs are derived via Ring, and Bitkit persists epoch 0 + epoch 1 secrets locally after `requestPaykitSetup()` so rotation can happen without requiring Ring every time.
-- The service discovers the recipient’s Noise endpoint via `DirectoryService.discoverNoiseEndpoint(recipientPubkey)` before connecting.
+**Key integration details for production:**
 
-Reference flow (Android naming, conceptually identical on iOS):
+1. **Native library dependency:**
+   - iOS: `PubkyNoise.xcframework` (pre-built, includes arm64 + simulator)
+   - Android: `libpubky_noise.so` in `jniLibs/` (arm64-v8a, x86_64)
+
+2. **Noise keypair origin:**
+   - Keypairs are derived in Ring via `pubky-noise` KDF (see Section 7.2)
+   - Bitkit receives epoch 0 + epoch 1 keys via `paykit-setup` callback
+   - Keys are persisted in `NoiseKeyCache` (Keychain/EncryptedSharedPreferences)
+
+3. **FfiNoiseManager initialization:**
+
+```swift
+// iOS - NoisePaymentService.swift
+private func getNoiseManager(isServer: Bool) throws -> FfiNoiseManager {
+    guard let seedData = PaykitKeyManager.shared.getSecretKeyBytes() else {
+        throw NoisePaymentError.noIdentity
+    }
+    
+    let deviceId = PaykitKeyManager.shared.getDeviceId()
+    let deviceIdData = deviceId.data(using: .utf8) ?? Data()
+    
+    let config = FfiMobileConfig(
+        autoReconnect: false,    // Manual connection management
+        maxReconnectAttempts: 0,
+        reconnectDelayMs: 0,
+        batterySaver: false,
+        chunkSize: 32768         // 32KB chunks for mobile networks
+    )
+    
+    if isServer {
+        return try FfiNoiseManager.newServer(
+            config: config,
+            serverSeed: seedData,
+            serverKid: "bitkit-ios-server",
+            deviceId: deviceIdData
+        )
+    } else {
+        return try FfiNoiseManager.newClient(
+            config: config,
+            clientSeed: seedData,
+            clientKid: "bitkit-ios",
+            deviceId: deviceIdData
+        )
+    }
+}
+```
+
+4. **Noise IK handshake flow (client-side):**
+
+```swift
+// iOS - Complete handshake sequence
+func sendRequestOverNoise(...) async throws -> NoisePaymentResponse {
+    let manager = try getNoiseManager(isServer: false)
+    
+    // Step 1: Parse server's static public key from Noise endpoint
+    guard let serverPk = recipientNoisePubkey.hexaData as Data? else {
+        throw NoisePaymentError.invalidEndpoint("Invalid recipient noise pubkey")
+    }
+    
+    // Step 2: Generate first handshake message (IK pattern - we know server's key)
+    let initResult = try manager.initiateConnection(serverPk: serverPk, hint: nil)
+    // initResult: { sessionId: String, firstMessage: Data }
+    
+    // Step 3: Send first message over TCP
+    try await sendRawData(initResult.firstMessage, connection: connection)
+    
+    // Step 4: Receive server's response
+    let serverResponse = try await receiveRawData(connection: connection)
+    
+    // Step 5: Complete handshake - session is now encrypted
+    let sessionId = try manager.completeConnection(
+        sessionId: initResult.sessionId, 
+        serverResponse: serverResponse
+    )
+    
+    Logger.info("Noise handshake completed, session: \(sessionId)", context: "NoisePaymentService")
+    
+    // Step 6: Encrypt payment request
+    let jsonData = try JSONEncoder().encode(paymentMessage)
+    let ciphertext = try manager.encrypt(sessionId: sessionId, plaintext: jsonData)
+    
+    // Step 7: Send encrypted message
+    try await sendRawData(ciphertext, connection: connection)
+    
+    // Step 8: Receive and decrypt response
+    let responseCiphertext = try await receiveRawData(connection: connection)
+    let responsePlaintext = try manager.decrypt(sessionId: sessionId, ciphertext: responseCiphertext)
+    
+    return try JSONDecoder().decode(NoisePaymentResponse.self, from: responsePlaintext)
+}
+```
+
+5. **Endpoint discovery before connection:**
+
+```swift
+// Discover recipient's Noise endpoint from their Pubky directory
+guard let endpoint = try? await DirectoryService.shared.discoverNoiseEndpoint(
+    for: request.payeePubkey
+) else {
+    // Fallback to async payment request (Section 8.2)
+    throw NoisePaymentError.endpointNotFound
+}
+
+// endpoint: NoiseEndpointInfo {
+//     host: "192.168.1.100:9737",      // Host:port for TCP connection
+//     serverNoisePubkey: "abcd1234..." // 64 hex chars X25519 public key
+// }
+```
+
+6. **Server mode (receiving Noise payments):**
 
 ```kotlin
+// Android - NoisePaymentService.kt
+private var serverSocket: java.net.ServerSocket? = null
+private var isServerRunning = false
+
+suspend fun startServer(port: Int, onRequest: (NoisePaymentRequest) -> Unit) {
+    val manager = getNoiseManager(isServer = true)
+    
+    serverSocket = ServerSocket(port)
+    isServerRunning = true
+    
+    while (isServerRunning) {
+        val clientSocket = serverSocket?.accept() ?: break
+        
+        // Handle in coroutine
+        scope.launch {
+            handleClientConnection(clientSocket, manager, onRequest)
+        }
+    }
+}
+
+private suspend fun handleClientConnection(
+    socket: Socket,
+    manager: FfiNoiseManager,
+    onRequest: (NoisePaymentRequest) -> Unit
+) {
+    // Server-side handshake (respond to client's IK initiation)
+    val clientFirstMessage = receiveRawData(socket)
+    
+    val respondResult = try {
+        manager.respondToConnection(clientFirstMessage, null)
+    } catch (e: Exception) {
+        socket.close()
+        return
+    }
+    
+    sendRawData(socket, respondResult.responseMessage)
+    
+    // Session established - receive encrypted payment request
+    val ciphertext = receiveRawData(socket)
+    val plaintext = manager.decrypt(respondResult.sessionId, ciphertext)
+    val request = Json.decodeFromString<NoisePaymentRequest>(plaintext.decodeToString())
+    
+    onRequest(request)
+}
+```
+
+**Reference high-level API (simplified for app developers):**
+
+```kotlin
+// Android
 val request = NoisePaymentRequest(
     payerPubkey = payerPubkey,
     payeePubkey = payeePubkey,
@@ -883,7 +1376,7 @@ val request = NoisePaymentRequest(
 
 val response = noisePaymentService.sendPaymentRequest(request)
 if (!response.success) {
-    // Handle error_code / error_message
+    // Handle error_code / error_message from response
 }
 ```
 
@@ -1482,6 +1975,119 @@ When updating UniFFI:
 
 ---
 
+## 16. Production Implementation Checklist
+
+This comprehensive checklist covers everything the production team must verify before shipping Paykit integration.
+
+### 16.1 Build & Dependencies
+
+- [ ] **Rust toolchain** is via Rustup (NOT Homebrew)
+- [ ] **Rust targets** added for all platforms:
+  - `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios`
+  - `aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`
+- [ ] **UniFFI version** matches across all crates (check `Cargo.toml` versions)
+- [ ] **paykit-mobile** builds successfully: `cargo build --release -p paykit-mobile`
+- [ ] **pubky-noise** builds successfully for all targets
+- [ ] **XCFrameworks** generated and copied to iOS projects (PaykitMobile + PubkyNoise)
+- [ ] **.so files** generated and copied to Android jniLibs (both paykit_mobile + pubky_noise)
+- [ ] **Swift/Kotlin bindings** regenerated after any Rust changes
+
+### 16.2 iOS Integration
+
+- [ ] `PaykitMobile.xcframework` added to Xcode project
+- [ ] `PubkyNoise.xcframework` added to Xcode project
+- [ ] `PaykitMobile.swift` FFI bindings compile without errors
+- [ ] `PubkyNoise.swift` FFI bindings compile without errors
+- [ ] URL schemes registered in `Info.plist`: `bitkit`, `paykit`
+- [ ] Keychain entitlements configured for Paykit storage
+- [ ] Background task registered: `to.bitkit.paykit.session-refresh`
+- [ ] Background task registered: `to.bitkit.paykit.polling`
+- [ ] `SessionRefreshService.registerBackgroundTask()` called at startup
+- [ ] `PaykitPollingService.registerBackgroundTask()` called at startup
+- [ ] Deep link handling routes `paykit://` and `bitkit://paykit-*` correctly
+
+### 16.3 Android Integration
+
+- [ ] `libpaykit_mobile.so` present in jniLibs for all ABIs
+- [ ] `libpubky_noise.so` present in jniLibs for all ABIs
+- [ ] `local.properties` has correct `sdk.dir` path
+- [ ] ProGuard rules added for JNA and UniFFI classes
+- [ ] Intent filters registered for `bitkit`, `paykit` schemes
+- [ ] `SessionRefreshWorker.schedule(context)` called at startup
+- [ ] `PaykitPollingWorker.schedule(context)` called when Paykit enabled
+- [ ] Deep link handling in `AppViewModel.handleDeepLink()` works
+
+### 16.4 Pubky Ring Integration
+
+- [ ] `PubkyNoiseModule` native module builds and links (iOS + Android)
+- [ ] `pubkyring://paykit-connect` deep link handler works
+- [ ] Session + noise keys returned correctly via callback
+- [ ] Cross-device QR code generation works
+- [ ] Cross-device relay polling works (5-minute timeout)
+- [ ] Ring correctly derives X25519 keys using `deriveDeviceKey`
+
+### 16.5 Session Management
+
+- [ ] `PubkyRingBridge.requestPaykitSetup()` returns session + noise keys
+- [ ] Session imported into `PubkySDKService.importSession()`
+- [ ] Session persisted to Keychain/EncryptedSharedPreferences
+- [ ] Noise keys (epoch 0 + 1) cached in `NoiseKeyCache`
+- [ ] Session refresh runs in background (hourly)
+- [ ] Expired sessions trigger re-authentication flow
+
+### 16.6 Feature Implementation
+
+- [ ] Payment method publishing works (`paykitClient.publishPaymentMethod`)
+- [ ] Payment method discovery works (`paykitClient.discoverMethods`)
+- [ ] Payment request publishing works (DirectoryService)
+- [ ] Payment request receiving works (deep link + polling)
+- [ ] Noise IK handshake completes successfully (client + server mode)
+- [ ] Encrypted Noise messages exchange works
+- [ ] Lightning executor connected to real LDK/LND/CLN
+- [ ] Onchain executor connected to real Esplora/Electrum
+- [ ] Subscriptions create and persist correctly
+- [ ] Auto-pay evaluates rules and executes payments
+- [ ] Spending limits enforce correctly
+
+### 16.7 Error Handling
+
+- [ ] Network failures show user-friendly messages
+- [ ] Session expiration prompts re-authentication
+- [ ] Ring not installed shows install prompt
+- [ ] Noise connection failures fallback to async payments
+- [ ] Payment failures show specific error codes
+
+### 16.8 Security
+
+- [ ] No hardcoded secrets in source code
+- [ ] Session secrets stored in Keychain/Keystore only
+- [ ] Noise private keys stored in Keychain/Keystore only
+- [ ] ProGuard rules prevent reflection stripping
+- [ ] Log level set to `info` in production (not `debug`)
+- [ ] Payment details logging disabled (`logPaymentDetails = false`)
+- [ ] Rate limiting enabled on Noise server endpoints
+
+### 16.9 Testing
+
+- [ ] Unit tests pass: `cargo test --all --all-features`
+- [ ] iOS tests pass: `xcodebuild test`
+- [ ] Android tests pass: `./gradlew testDevDebugUnitTest`
+- [ ] Manual test checklist completed (Section 11.4)
+- [ ] Two-device Noise payment tested
+- [ ] Cross-device Ring authentication tested
+- [ ] Background polling verified with Xcode/Android Studio debugger
+
+### 16.10 Production Config
+
+- [ ] Homeserver URL configured (not localhost)
+- [ ] Relay URL configured for cross-device auth
+- [ ] Feature flags default to enabled
+- [ ] Emergency rollback function tested
+- [ ] Error reporting wired to monitoring (Sentry/Crashlytics)
+- [ ] Analytics events defined for key flows
+
+---
+
 ## Appendices
 
 ### A. File Manifest
@@ -1525,7 +2131,8 @@ app/src/main/java/
 | Rust | 1.75+ | Via Rustup |
 | UniFFI | 0.25.3 | Must match across all crates |
 | Pubky SDK | 0.6.0-rc.6 | API breaking changes pending |
-| pubky-noise | latest | Used for Noise protocol |
+| pubky-noise | 1.0.0+ | `deriveDeviceKey` throws in 1.1+ |
+| pubky-core | 0.6.0-rc.6 | Used via BitkitCore for homeserver ops |
 | LDK Node | 0.3.0 | Lightning payments |
 
 ### C. Glossary

@@ -31,6 +31,12 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 14. [Troubleshooting](#14-troubleshooting)
 15. [Future Work](#15-future-work)
 16. [Production Implementation Checklist](#16-production-implementation-checklist)
+17. [Architectural Hardening](#17-architectural-hardening) ⭐ NEW
+
+**Related Documents**:
+- 📘 [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md) - Detailed implementation summary
+- 🔒 [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) - Security model and threat analysis
+- 🔔 [PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md) - Push relay service specification
 
 ---
 
@@ -2085,6 +2091,125 @@ This comprehensive checklist covers everything the production team must verify b
 - [ ] Emergency rollback function tested
 - [ ] Error reporting wired to monitoring (Sentry/Crashlytics)
 - [ ] Analytics events defined for key flows
+
+---
+
+## 17. Architectural Hardening
+
+The following architectural improvements were implemented to enhance security, reliability, and maintainability.
+
+### 17.1 Ring-Only Identity Model (Phase 1)
+
+**Problem**: Bitkit storing Ed25519 secrets created unclear key ownership and security boundaries.
+
+**Solution**: Ed25519 master keys now owned exclusively by Pubky Ring.
+
+**Benefits**:
+- Clear security boundary: Ring = identity, Bitkit = payments
+- Reduced attack surface: Bitkit compromise doesn't expose master key
+- Better separation of concerns
+
+**Key Changes**:
+- Removed Ed25519 secret generation and storage from `KeyManager` (iOS + Android)
+- Added cache miss recovery via `getOrRefreshKeypair()`
+- Added key rotation support via `checkKeyRotation()` and `setCurrentEpoch()`
+
+**Implementation Details**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#phase-1-ring-only-identity-model)
+
+### 17.2 Secure Handoff Protocol (Phase 2)
+
+**Problem**: Session secrets passed in callback URLs are vulnerable to logging/leaks.
+
+**Solution**: Store handoff payload on homeserver at unguessable path, return only `request_id` in URL.
+
+**Benefits**:
+- No secrets in URLs (immune to logging attacks)
+- 256-bit random path (unguessable, 2^256 combinations)
+- 5-minute TTL (time-limited exposure)
+- Immediate deletion after fetch (defense in depth)
+
+**Protocol**:
+1. Ring stores encrypted payload at `/pub/paykit.app/v0/handoff/{request_id}`
+2. Ring returns: `bitkit://paykit-setup?mode=secure_handoff&pubky=...&request_id=...`
+3. Bitkit fetches payload from homeserver using `request_id`
+4. Bitkit deletes payload immediately (iOS) or relies on TTL (Android)
+
+**Protocol Flow Diagram**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#protocol-flow)
+
+### 17.3 Private Push Relay (Phase 3)
+
+**Problem**: Publishing device tokens publicly enables DoS via notification spam and privacy leaks.
+
+**Solution**: Server-side token storage with authenticated wake requests and rate limiting.
+
+**Benefits**:
+- Tokens never exposed publicly (no DoS risk)
+- Rate limiting at relay level (10/min per sender, 100/hour per recipient)
+- Ed25519 signature authentication required
+- Privacy: relay sees only routing metadata, not message content
+
+**API Specification**: See [PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md)
+
+**Key Components**:
+- `PushRelayService` (iOS + Android): Client for registration and wake requests
+- Ed25519 signing via Ring: `requestSignature(message:)` method added
+- Deprecated public publishing methods in `DirectoryService`
+
+**Ed25519 Signing Flow**:
+```swift
+// iOS
+let signature = try await PubkyRingBridge.shared.requestSignature(message: message)
+
+// Android
+val signature = pubkyRingBridge.requestSignature(context, message)
+```
+
+### 17.4 Type-Safe Identifiers (Phase 4)
+
+**Problem**: Raw strings used for both pubkeys and URLs, causing confusion and potential bugs.
+
+**Solution**: Distinct types with validation, normalization, and centralized resolution.
+
+**Types Introduced**:
+- `HomeserverPubkey`: z32 Ed25519 pubkey identifying a homeserver
+- `HomeserverURL`: Resolved HTTPS URL for API requests
+- `OwnerPubkey`: z32 Ed25519 pubkey identifying a user
+- `SessionSecret`: Secure wrapper for session credentials (auto-redacts when logged)
+
+**HomeserverResolver**:
+- Centralized pubkey→URL mapping with caching (1-hour TTL)
+- Known homeserver mappings preloaded
+- Supports custom mappings via `addMapping()`
+- Override support for testing/development
+
+**Adoption**:
+- `DirectoryService` now uses `HomeserverURL` and `OwnerPubkey`
+- `PubkyStorageAdapter` constructors accept `HomeserverURL`
+- Type safety prevents passing pubkeys where URLs expected (and vice versa)
+
+**Usage**:
+```swift
+// iOS
+let pubkey = HomeserverPubkey("8um71us3fyw6h...")
+let url = HomeserverResolver.shared.resolve(pubkey: pubkey)
+directoryService.configurePubkyTransport(homeserverURL: url)
+
+// Android
+val pubkey = HomeserverPubkey("8um71us3fyw6h...")
+val url = HomeserverResolver.resolve(pubkey)
+directoryService.configurePubkyTransport(homeserverURL = url)
+```
+
+### 17.5 Security Model Summary
+
+For comprehensive security documentation, including threat model, attack surface analysis, and cryptographic protocols, see [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md).
+
+**Key Security Properties**:
+- **Identity confidentiality**: Ed25519 secrets never leave Ring
+- **Forward secrecy**: X25519 ephemeral keys for Noise channels
+- **Authenticity**: Ed25519 signatures on all sensitive operations
+- **Availability**: Rate limiting prevents DoS attacks
+- **Defense in depth**: Multiple layers (TTL, deletion, encryption, authentication)
 
 ---
 

@@ -2248,9 +2248,7 @@ val signature = pubkyRingBridge.requestSignature(context, message)
 
 **Adoption**:
 - `DirectoryService` now uses `HomeserverURL` and `OwnerPubkey` (iOS + Android)
-- `PubkyStorageAdapter`:
-  - **iOS**: Constructors accept `HomeserverURL` type
-  - **Android**: Still uses `String?` (type-safe wrapper adoption pending)
+- `PubkyStorageAdapter` constructors accept `HomeserverURL` type (iOS + Android)
 - Type safety prevents passing pubkeys where URLs expected (and vice versa)
 
 **Usage**:

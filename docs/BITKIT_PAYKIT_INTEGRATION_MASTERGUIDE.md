@@ -849,7 +849,7 @@ When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...`, Ring p
 **File:** `pubky-ring/src/utils/actions/paykitConnectAction.ts`
 
 ```typescript
-// Simplified flow
+// Current implementation uses SECURE HANDOFF (no secrets in URL)
 export const handlePaykitConnectAction = async (
     data: PaykitConnectActionData,
     context: ActionContext
@@ -860,7 +860,6 @@ export const handlePaykitConnectAction = async (
     // Step 1: Sign in to homeserver (gets session)
     const signInResult = await signInToHomeserver({ pubky, dispatch });
     const sessionInfo = signInResult.value;
-    // sessionInfo: { pubky, session_secret, capabilities }
 
     // Step 2: Get Ed25519 secret key from secure storage
     const { secretKey: ed25519SecretKey } = await getPubkySecretKey(pubky);
@@ -871,22 +870,47 @@ export const handlePaykitConnectAction = async (
         ? await deriveX25519Keypair(ed25519SecretKey, deviceId, 1) 
         : null;
 
-    // Step 4: Build callback URL with all data
-    const callbackParams = {
+    // Step 4: Store payload on homeserver at unguessable path
+    const requestId = generateRequestId(); // 256-bit random
+    const handoffPath = `pubky://${pubky}/pub/paykit.app/v0/handoff/${requestId}`;
+    
+    const payload = {
+        version: 1,
         pubky: sessionInfo.pubky,
         session_secret: sessionInfo.session_secret,
-        capabilities: sessionInfo.capabilities.join(','),
+        capabilities: sessionInfo.capabilities,
         device_id: deviceId,
-        noise_public_key_0: keypair0.publicKey,
-        noise_secret_key_0: keypair0.secretKey,
-        noise_public_key_1: keypair1?.publicKey,
-        noise_secret_key_1: keypair1?.secretKey,
+        noise_keypairs: [
+            { epoch: 0, public_key: keypair0.publicKey, secret_key: keypair0.secretKey },
+            keypair1 && { epoch: 1, public_key: keypair1.publicKey, secret_key: keypair1.secretKey },
+        ].filter(Boolean),
+        created_at: Date.now(),
+        expires_at: Date.now() + 5 * 60 * 1000, // 5 minutes
     };
+    
+    await put(handoffPath, payload, ed25519SecretKey);
 
-    // Step 5: Return to Bitkit
-    await Linking.openURL(buildCallbackUrl(callback, callbackParams));
+    // Step 5: Return to Bitkit with ONLY request_id (no secrets!)
+    const callbackUrl = buildCallbackUrl(callback, {
+        mode: 'secure_handoff',
+        pubky: sessionInfo.pubky,
+        request_id: requestId,
+    });
+    
+    await Linking.openURL(callbackUrl);
 };
 ```
+
+**Callback URL Format (Secure Handoff)**:
+```
+bitkit://paykit-setup?mode=secure_handoff&pubky=<z32_pubkey>&request_id=<256bit_hex>
+```
+
+**Bitkit then**:
+1. Fetches payload from `pubky://<pubky>/pub/paykit.app/v0/handoff/<request_id>`
+2. Parses session and noise keypairs from JSON
+3. Deletes the handoff file immediately (iOS) to minimize exposure window
+4. Caches session and keypairs locally
 
 ### 7.3 Bitkit-side Session and Key Handling
 
@@ -1042,29 +1066,57 @@ Relay default:
 
 ### Cross-App Communication (Android)
 
+Android uses **deep links** (not Intent actions) for Ring communication:
+
 ```kotlin
-// PubkyRingBridge.kt
-class PubkyRingBridge(private val context: Context) {
-    
-    fun requestIdentity(): String? {
-        val intent = Intent().apply {
-            action = "to.pubky.ring.ACTION_GET_IDENTITY"
-            addCategory(Intent.CATEGORY_DEFAULT)
-        }
-        
-        // Use startActivityForResult pattern
-        // Ring returns: intent.getStringExtra("pubkey")
+// PubkyRingBridge.kt - Deep link approach (actual implementation)
+@Singleton
+class PubkyRingBridge @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
+    companion object {
+        private const val PUBKY_RING_SCHEME = "pubkyring"
+        private const val BITKIT_SCHEME = "bitkit"
+        private const val CALLBACK_PATH_SIGNATURE_RESULT = "signature-result"
     }
-    
-    fun requestSignature(message: ByteArray): ByteArray? {
-        val intent = Intent().apply {
-            action = "to.pubky.ring.ACTION_SIGN"
-            putExtra("message", message)
+
+    // Request Ed25519 signature from Ring
+    suspend fun requestSignature(context: Context, message: String): String = 
+        suspendCancellableCoroutine { continuation ->
+            val callbackUrl = "$BITKIT_SCHEME://$CALLBACK_PATH_SIGNATURE_RESULT"
+            val encodedMessage = URLEncoder.encode(message, "UTF-8")
+            val encodedCallback = URLEncoder.encode(callbackUrl, "UTF-8")
+            
+            // Deep link to Ring
+            val requestUrl = "$PUBKY_RING_SCHEME://sign-message?message=$encodedMessage&callback=$encodedCallback"
+            
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(requestUrl))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            
+            // Ring returns via: bitkit://signature-result?signature=<hex>&pubkey=<z32>
+            pendingSignatureContinuation = continuation
         }
-        // Ring returns: intent.getByteArrayExtra("signature")
+
+    // Handle callback from Ring
+    fun handleCallback(uri: Uri): Boolean {
+        if (uri.scheme != BITKIT_SCHEME) return false
+        
+        return when (uri.host) {
+            CALLBACK_PATH_SIGNATURE_RESULT -> handleSignatureCallback(uri)
+            // ... other callback handlers
+            else -> false
+        }
     }
 }
 ```
+
+**Ring Deep Link Formats**:
+| Action | Deep Link | Callback |
+|--------|-----------|----------|
+| Sign message | `pubkyring://sign-message?message={msg}&callback={url}` | `bitkit://signature-result?signature={hex}&pubkey={z32}` |
+| Paykit setup | `pubkyring://paykit-connect?deviceId={id}&callback={url}` | `bitkit://paykit-setup?mode=secure_handoff&pubky={z32}&request_id={hex}` |
+| Get session | `pubkyring://session?callback={url}` | `bitkit://paykit-session?pubky={z32}&session_secret={secret}` |
 
 ### Session material in Bitkit (what Bitkit actually persists)
 
@@ -2114,6 +2166,11 @@ The following architectural improvements were implemented to enhance security, r
 - Added cache miss recovery via `getOrRefreshKeypair()`
 - Added key rotation support via `checkKeyRotation()` and `setCurrentEpoch()`
 
+**Key Rotation Status**: Rotation infrastructure is implemented but **manual only**.
+- Call `checkKeyRotation(forceRotation: true)` to rotate from epoch 0 to epoch 1
+- Automatic time-based rotation is planned but not yet implemented
+- Production deployments should schedule periodic rotation checks or trigger on security events
+
 **Implementation Details**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#phase-1-ring-only-identity-model)
 
 ### 17.2 Secure Handoff Protocol (Phase 2)
@@ -2129,10 +2186,17 @@ The following architectural improvements were implemented to enhance security, r
 - Immediate deletion after fetch (defense in depth)
 
 **Protocol**:
-1. Ring stores encrypted payload at `/pub/paykit.app/v0/handoff/{request_id}`
+1. Ring stores handoff payload as JSON at `/pub/paykit.app/v0/handoff/{request_id}`
 2. Ring returns: `bitkit://paykit-setup?mode=secure_handoff&pubky=...&request_id=...`
 3. Bitkit fetches payload from homeserver using `request_id`
 4. Bitkit deletes payload immediately (iOS) or relies on TTL (Android)
+
+**Security Properties** (Note: payload is NOT encrypted at rest):
+- **Path unguessability**: 256-bit random request_id makes brute-force infeasible
+- **Time-limited**: 5-minute `expires_at` timestamp in payload
+- **Transport encryption**: TLS protects data in transit
+- **Immediate cleanup**: iOS deletes after fetch; homeserver should honor TTL
+- **Access control**: Authenticated write, public read (security via obscurity of path)
 
 **Protocol Flow Diagram**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#protocol-flow)
 
@@ -2183,8 +2247,10 @@ val signature = pubkyRingBridge.requestSignature(context, message)
 - Override support for testing/development
 
 **Adoption**:
-- `DirectoryService` now uses `HomeserverURL` and `OwnerPubkey`
-- `PubkyStorageAdapter` constructors accept `HomeserverURL`
+- `DirectoryService` now uses `HomeserverURL` and `OwnerPubkey` (iOS + Android)
+- `PubkyStorageAdapter`:
+  - **iOS**: Constructors accept `HomeserverURL` type
+  - **Android**: Still uses `String?` (type-safe wrapper adoption pending)
 - Type safety prevents passing pubkeys where URLs expected (and vice versa)
 
 **Usage**:

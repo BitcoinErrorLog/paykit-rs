@@ -1,11 +1,17 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.0  
-> **Last Updated**: December 22, 2025  
-> **Status**: Reference Implementation Complete
+> **Version**: 1.1  
+> **Last Updated**: December 23, 2025  
+> **Status**: Reference Implementation - Production Verification Required
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
+
+**Implementation Status**:
+- Core architecture and features implemented
+- Security hardening applied (Phases 1-4)
+- Documentation accurate to current code state
+- End-to-end verification required before production deployment
 
 ---
 
@@ -71,9 +77,22 @@ Paykit is a decentralized payment protocol built on Pubky that enables:
 | `paykit-interactive` | ✅ Production-Ready | Noise payments |
 | `paykit-subscriptions` | ✅ Production-Ready | Recurring payments |
 | `paykit-mobile` | ✅ Production-Ready | FFI bindings |
-| Bitkit iOS Integration | ✅ Demo Complete | Needs production testing |
-| Bitkit Android Integration | ✅ Demo Complete | Needs production testing |
-| Ring Integration | ✅ Key Sharing Working | Session management complete |
+| Bitkit iOS Integration | ⚠️ Verification Required | Core features + security hardening complete |
+| Bitkit Android Integration | ⚠️ Verification Required | Core features + security hardening complete |
+| Ring Integration | ⚠️ Verification Required | Secure handoff + signing implemented |
+
+### Pre-Production Verification Checklist
+
+Before deploying to production, verify end-to-end:
+- [ ] Secure handoff flow works (no secrets in URLs)
+- [ ] iOS push relay Ed25519 signing completes successfully
+- [ ] Android push relay Ed25519 signing completes successfully
+- [ ] Key rotation from epoch 0 to epoch 1 succeeds
+- [ ] Cache miss recovery auto-requests from Ring
+- [ ] Cross-device authentication via QR works
+- [ ] All deep link callbacks handled correctly
+- [ ] Session persistence survives app restart
+- [ ] Type-safe HomeserverURL prevents pubkey/URL confusion
 
 ---
 

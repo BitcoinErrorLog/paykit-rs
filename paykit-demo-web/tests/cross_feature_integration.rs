@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Cross-feature integration tests
 //!
 //! Tests that verify proper integration between different Paykit features,

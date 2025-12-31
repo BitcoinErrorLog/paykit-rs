@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Edge case and validation tests
 //!
 //! This test suite covers edge cases, boundary conditions, and validation

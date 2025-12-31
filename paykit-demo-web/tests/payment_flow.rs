@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Payment flow integration tests
 //!
 //! Tests the complete payment workflow including receipt exchange.

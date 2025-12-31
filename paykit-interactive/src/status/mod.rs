@@ -165,7 +165,7 @@ impl PaymentStatusTracker {
         let mut callbacks = self
             .callbacks
             .write()
-            .expect("PaymentStatusTracker: lock poisoned during on_status_change");
+            .unwrap_or_else(|e| e.into_inner());
         callbacks.push(callback);
     }
 
@@ -177,7 +177,7 @@ impl PaymentStatusTracker {
             let mut statuses = self
                 .statuses
                 .write()
-                .expect("PaymentStatusTracker: lock poisoned during track");
+                .unwrap_or_else(|e| e.into_inner());
             statuses.insert(receipt.receipt_id.clone(), status.clone());
         }
 
@@ -189,7 +189,7 @@ impl PaymentStatusTracker {
         let statuses = self
             .statuses
             .read()
-            .expect("PaymentStatusTracker: lock poisoned during get");
+            .unwrap_or_else(|e| e.into_inner());
         statuses.get(receipt_id).cloned()
     }
 
@@ -198,7 +198,7 @@ impl PaymentStatusTracker {
         let mut statuses = self
             .statuses
             .write()
-            .expect("PaymentStatusTracker: lock poisoned during update");
+            .unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update(new_status);
@@ -221,7 +221,7 @@ impl PaymentStatusTracker {
         let mut statuses = self
             .statuses
             .write()
-            .expect("PaymentStatusTracker: lock poisoned during update_confirmations");
+            .unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update_confirmations(confirmations, required);
@@ -243,7 +243,7 @@ impl PaymentStatusTracker {
         let mut statuses = self
             .statuses
             .write()
-            .expect("PaymentStatusTracker: lock poisoned during mark_failed");
+            .unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.mark_failed(error);
@@ -261,7 +261,7 @@ impl PaymentStatusTracker {
         let statuses = self
             .statuses
             .read()
-            .expect("PaymentStatusTracker: lock poisoned during get_in_progress");
+            .unwrap_or_else(|e| e.into_inner());
         statuses
             .values()
             .filter(|s| s.status.is_in_progress())
@@ -274,7 +274,7 @@ impl PaymentStatusTracker {
         let statuses = self
             .statuses
             .read()
-            .expect("PaymentStatusTracker: lock poisoned during get_by_status");
+            .unwrap_or_else(|e| e.into_inner());
         statuses
             .values()
             .filter(|s| s.status == status)
@@ -287,7 +287,7 @@ impl PaymentStatusTracker {
         let mut statuses = self
             .statuses
             .write()
-            .expect("PaymentStatusTracker: lock poisoned during cleanup_old");
+            .unwrap_or_else(|e| e.into_inner());
         let count = statuses.len();
         statuses.retain(|_, status| {
             !status.status.is_terminal() || status.updated_at >= before_timestamp
@@ -299,7 +299,7 @@ impl PaymentStatusTracker {
         let callbacks = self
             .callbacks
             .read()
-            .expect("PaymentStatusTracker: lock poisoned during notify");
+            .unwrap_or_else(|e| e.into_inner());
         for callback in callbacks.iter() {
             callback(status);
         }

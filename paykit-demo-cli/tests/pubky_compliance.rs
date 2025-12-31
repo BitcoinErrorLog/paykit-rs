@@ -33,7 +33,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // 1. Create session
@@ -81,7 +81,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         let keypair = Keypair::random();
@@ -138,7 +138,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         let keypair = Keypair::random();

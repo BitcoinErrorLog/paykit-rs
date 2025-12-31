@@ -100,45 +100,49 @@ if [ "$CREATE_FRAMEWORK" = true ]; then
     
     mkdir -p "$FRAMEWORK_DIR"
     
-    # Create framework structure for each target
-    for target in "${BUILT_TARGETS[@]}"; do
-        case $target in
-            aarch64-apple-ios)
-                PLATFORM="ios-arm64"
-                ;;
-            aarch64-apple-ios-sim)
-                PLATFORM="ios-arm64_x86_64-simulator"
-                ;;
-            x86_64-apple-ios)
-                # x86_64 simulator is included in aarch64-apple-ios-sim universal
-                continue
-                ;;
-            *)
-                continue
-                ;;
-        esac
-        
-        LIB_PATH="target/$target/release/libpaykit_mobile.a"
-        if [ -f "$LIB_PATH" ]; then
-            echo "Adding $target to XCFramework ($PLATFORM)..."
-            
-            PLATFORM_DIR="$XCFRAMEWORK_PATH/$PLATFORM"
-            mkdir -p "$PLATFORM_DIR/Headers"
-            
-            # Copy library
-            cp "$LIB_PATH" "$PLATFORM_DIR/libpaykit_mobile.a"
-            
-            # Copy headers and modulemap
-            if [ -f "paykit-mobile/swift/generated/PaykitMobileFFI.h" ]; then
-                cp "paykit-mobile/swift/generated/PaykitMobileFFI.h" "$PLATFORM_DIR/Headers/"
-            fi
-            
-            if [ -f "paykit-mobile/swift/generated/PaykitMobileFFI.modulemap" ]; then
-                cp "paykit-mobile/swift/generated/PaykitMobileFFI.modulemap" "$PLATFORM_DIR/"
-            fi
-            
-            # Create Info.plist
-            cat > "$PLATFORM_DIR/Info.plist" <<EOF
+    # Prepare libraries
+    DEVICE_LIB="target/aarch64-apple-ios/release/libpaykit_mobile.a"
+    SIM_ARM64_LIB="target/aarch64-apple-ios-sim/release/libpaykit_mobile.a"
+    SIM_X86_64_LIB="target/x86_64-apple-ios/release/libpaykit_mobile.a"
+    UNIVERSAL_SIM_LIB="$FRAMEWORK_DIR/universal-sim-libpaykit_mobile.a"
+
+    # Create universal simulator lib if both simulator architectures were built
+    if [ -f "$SIM_ARM64_LIB" ] && [ -f "$SIM_X86_64_LIB" ]; then
+        echo "Creating universal simulator library (arm64 + x86_64)..."
+        lipo -create "$SIM_ARM64_LIB" "$SIM_X86_64_LIB" -output "$UNIVERSAL_SIM_LIB"
+    elif [ -f "$SIM_ARM64_LIB" ]; then
+        echo "Only arm64 simulator library available; using arm64-only simulator lib"
+        cp "$SIM_ARM64_LIB" "$UNIVERSAL_SIM_LIB"
+    else
+        echo "Warning: No simulator library found; simulator slice will be missing"
+    fi
+
+    # Copy headers and modulemap (prefer the lowercase module used by generated Swift bindings)
+    FFI_HEADER=""
+    FFI_MODULEMAP=""
+
+    if [ -f "paykit-mobile/swift/generated/paykit_mobileFFI.h" ] && [ -f "paykit-mobile/swift/generated/paykit_mobileFFI.modulemap" ]; then
+        FFI_HEADER="paykit-mobile/swift/generated/paykit_mobileFFI.h"
+        FFI_MODULEMAP="paykit-mobile/swift/generated/paykit_mobileFFI.modulemap"
+    elif [ -f "paykit-mobile/swift/generated/PaykitMobileFFI.h" ] && [ -f "paykit-mobile/swift/generated/PaykitMobileFFI.modulemap" ]; then
+        FFI_HEADER="paykit-mobile/swift/generated/PaykitMobileFFI.h"
+        FFI_MODULEMAP="paykit-mobile/swift/generated/PaykitMobileFFI.modulemap"
+    fi
+
+    # Device slice
+    if [ -f "$DEVICE_LIB" ]; then
+        echo "Adding device slice (ios-arm64)..."
+        PLATFORM_DIR="$XCFRAMEWORK_PATH/ios-arm64"
+        mkdir -p "$PLATFORM_DIR/Headers"
+        cp "$DEVICE_LIB" "$PLATFORM_DIR/libpaykit_mobile.a"
+        if [ -n "$FFI_HEADER" ]; then
+            cp "$FFI_HEADER" "$PLATFORM_DIR/Headers/"
+        fi
+        if [ -n "$FFI_MODULEMAP" ]; then
+            cp "$FFI_MODULEMAP" "$PLATFORM_DIR/"
+        fi
+
+        cat > "$PLATFORM_DIR/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -152,8 +156,36 @@ if [ "$CREATE_FRAMEWORK" = true ]; then
 </dict>
 </plist>
 EOF
+    fi
+
+    # Simulator slice
+    if [ -f "$UNIVERSAL_SIM_LIB" ]; then
+        echo "Adding simulator slice (ios-arm64_x86_64-simulator)..."
+        PLATFORM_DIR="$XCFRAMEWORK_PATH/ios-arm64_x86_64-simulator"
+        mkdir -p "$PLATFORM_DIR/Headers"
+        cp "$UNIVERSAL_SIM_LIB" "$PLATFORM_DIR/libpaykit_mobile.a"
+        if [ -n "$FFI_HEADER" ]; then
+            cp "$FFI_HEADER" "$PLATFORM_DIR/Headers/"
         fi
-    done
+        if [ -n "$FFI_MODULEMAP" ]; then
+            cp "$FFI_MODULEMAP" "$PLATFORM_DIR/"
+        fi
+
+        cat > "$PLATFORM_DIR/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneSimulator</string>
+    </array>
+    <key>MinimumOSVersion</key>
+    <string>13.0</string>
+</dict>
+</plist>
+EOF
+    fi
     
     # Create root Info.plist
     cat > "$XCFRAMEWORK_PATH/Info.plist" <<EOF

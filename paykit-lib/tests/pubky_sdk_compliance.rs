@@ -39,7 +39,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // Create a test identity
@@ -162,7 +162,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // Create identity and session
@@ -232,7 +232,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // Create identity and session
@@ -379,7 +379,7 @@ mod pubky_tests {
         let testnet = EphemeralTestnet::start()
             .await
             .expect("Failed to start testnet");
-        let homeserver = testnet.homeserver();
+        let homeserver = testnet.homeserver_app();
         let sdk = testnet.sdk().expect("Failed to get SDK");
 
         // Create identity and session

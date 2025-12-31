@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Subscription lifecycle integration tests
 //!
 //! Tests the complete subscription workflow including creation, storage, and management.

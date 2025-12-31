@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Paykit Web Demo - WebAssembly bindings
 //!
 //! This crate provides JavaScript bindings for Paykit functionality,

@@ -408,7 +408,7 @@ mod tests {
             let testnet = EphemeralTestnet::start()
                 .await
                 .map_err(|e| TestSetupError(format!("Failed to start testnet: {}", e)))?;
-            let homeserver = testnet.homeserver();
+            let homeserver = testnet.homeserver_app();
             let sdk = testnet
                 .sdk()
                 .map_err(|e| TestSetupError(format!("Failed to get SDK: {}", e)))?;

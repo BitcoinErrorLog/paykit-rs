@@ -182,7 +182,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(request)?;
         std::fs::write(path, json)?;
 
-        let mut requests = self.requests.lock().unwrap();
+        let mut requests = self.requests.lock().unwrap_or_else(|e| e.into_inner());
         requests.insert(
             request.request_id.clone(),
             (request.clone(), RequestStatus::Pending),
@@ -239,7 +239,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
     }
 
     async fn update_request_status(&self, id: &str, status: RequestStatus) -> Result<()> {
-        let mut requests = self.requests.lock().unwrap();
+        let mut requests = self.requests.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((_req, old_status)) = requests.get_mut(id) {
             *old_status = status;
         }
@@ -251,7 +251,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(sub)?;
         std::fs::write(path, json)?;
 
-        let mut subscriptions = self.subscriptions.lock().unwrap();
+        let mut subscriptions = self.subscriptions.lock().unwrap_or_else(|e| e.into_inner());
         subscriptions.insert(sub.subscription_id.clone(), sub.clone());
 
         Ok(())
@@ -273,7 +273,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(sub)?;
         std::fs::write(path, json)?;
 
-        let mut signed_subs = self.signed_subscriptions.lock().unwrap();
+        let mut signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
         signed_subs.insert(sub.subscription.subscription_id.clone(), sub.clone());
 
         Ok(())
@@ -294,7 +294,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         &self,
         peer: &PublicKey,
     ) -> Result<Vec<SignedSubscription>> {
-        let signed_subs = self.signed_subscriptions.lock().unwrap();
+        let signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
         let result: Vec<SignedSubscription> = signed_subs
             .values()
             .filter(|s| &s.subscription.subscriber == peer || &s.subscription.provider == peer)
@@ -304,7 +304,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
     }
 
     async fn list_active_subscriptions(&self) -> Result<Vec<SignedSubscription>> {
-        let signed_subs = self.signed_subscriptions.lock().unwrap();
+        let signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
         let now = chrono::Utc::now().timestamp();
 
         let result: Vec<SignedSubscription> = signed_subs
@@ -323,7 +323,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(rule)?;
         std::fs::write(path, json)?;
 
-        let mut rules = self.autopay_rules.lock().unwrap();
+        let mut rules = self.autopay_rules.lock().unwrap_or_else(|e| e.into_inner());
         rules.insert(rule.subscription_id.clone(), rule.clone());
 
         Ok(())
@@ -345,7 +345,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(limit)?;
         std::fs::write(path, json)?;
 
-        let mut limits = self.peer_limits.lock().unwrap();
+        let mut limits = self.peer_limits.lock().unwrap_or_else(|e| e.into_inner());
         let peer_str = format!("{:?}", limit.peer);
         limits.insert(peer_str, limit.clone());
 
@@ -420,7 +420,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         std::fs::write(&path, json)?;
 
         // Update in-memory cache
-        let mut limits = self.peer_limits.lock().unwrap();
+        let mut limits = self.peer_limits.lock().unwrap_or_else(|e| e.into_inner());
         let peer_str = format!("{:?}", peer);
         limits.insert(peer_str, limit);
 
@@ -470,7 +470,7 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         std::fs::write(&path, json)?;
 
         // Update in-memory cache
-        let mut limits = self.peer_limits.lock().unwrap();
+        let mut limits = self.peer_limits.lock().unwrap_or_else(|e| e.into_inner());
         let peer_str = format!("{:?}", &token.peer);
         limits.insert(peer_str, limit);
 

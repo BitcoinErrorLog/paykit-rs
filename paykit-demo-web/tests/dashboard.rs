@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Integration tests for dashboard functionality
 //!
 //! These tests verify the dashboard statistics aggregation and overview features.

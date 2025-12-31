@@ -234,7 +234,7 @@ impl Debouncer {
 
     /// Cancel any pending operation.
     pub fn cancel(&self) {
-        let mut pending = self.pending.lock().unwrap();
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(tx) = pending.take() {
             let _ = tx.send(());
         }
@@ -251,7 +251,7 @@ impl Debouncer {
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
         {
-            let mut pending = self.pending.lock().unwrap();
+            let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
             *pending = Some(cancel_tx);
         }
 

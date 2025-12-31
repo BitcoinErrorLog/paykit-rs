@@ -62,27 +62,31 @@ fn check_nonce(&self, nonce: &[u8; 32]) -> Result<bool> {
 - Caller should handle the error appropriately (retry, fail request, etc.)
 - Security properties are maintained even during failures
 
-### Strategy 3: Panic (Critical Internal State)
+### Strategy 3: Availability-First Recovery (Recommended)
 
-Used only where continued operation is impossible and the lock should never be contested.
+Used for most production code where continued operation is preferred over crash-looping.
 
 **Implementation Pattern:**
 ```rust
 fn get_tracker(&self, method: &MethodId) -> Option<&RotationTracker> {
     let callbacks = self.callbacks.read()
-        .expect("RotationManager lock should never be poisoned");
+        .unwrap_or_else(|e| e.into_inner());
     // ...
 }
 ```
 
 **Used In:**
-- Internal state that should never fail
-- Test utilities and development helpers
+- `PaymentMethodRegistry` - All registry operations
+- `HealthMonitor` - All cache operations
+- `PaymentStatusTracker` - All status tracking operations
+- `MemorySubscriptionStorage` - All storage operations
+- Mobile FFI bridge code
 
 **Behavior:**
-- Panics immediately on lock poisoning
-- Only used where poisoning indicates a bug that needs investigation
-- Should be accompanied by logging/alerting in production
+- On lock poisoning, recovers the inner data from the poisoned lock
+- Continues operation with potentially stale data rather than crashing
+- Prioritizes availability for mobile apps where crash-looping is worse than stale data
+- Matches the pattern established in `pubky-noise`
 
 ## Deadlock Prevention
 

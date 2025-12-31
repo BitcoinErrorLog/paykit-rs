@@ -64,7 +64,7 @@ impl PaymentMethodRegistry {
         let mut plugins = self
             .plugins
             .write()
-            .expect("PaymentMethodRegistry: lock poisoned during register");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.insert(method_id, Arc::from(plugin));
     }
 
@@ -75,7 +75,7 @@ impl PaymentMethodRegistry {
         let mut plugins = self
             .plugins
             .write()
-            .expect("PaymentMethodRegistry: lock poisoned during unregister");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.remove(&method_id.0)
     }
 
@@ -84,7 +84,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during get");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.get(&method_id.0).cloned()
     }
 
@@ -100,7 +100,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during list_methods");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.keys().map(|k| MethodId(k.clone())).collect()
     }
 
@@ -109,7 +109,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during len");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.len()
     }
 
@@ -123,7 +123,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during has_method");
+            .unwrap_or_else(|e| e.into_inner());
         plugins.contains_key(&method_id.0)
     }
 
@@ -137,7 +137,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during get_multiple");
+            .unwrap_or_else(|e| e.into_inner());
         method_ids
             .iter()
             .filter_map(|id| plugins.get(&id.0).map(|p| (id.clone(), p.clone())))
@@ -152,7 +152,7 @@ impl PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during filter");
+            .unwrap_or_else(|e| e.into_inner());
         plugins
             .values()
             .filter(|p| predicate(p.as_ref()))
@@ -172,7 +172,7 @@ impl Clone for PaymentMethodRegistry {
         let plugins = self
             .plugins
             .read()
-            .expect("PaymentMethodRegistry: lock poisoned during clone");
+            .unwrap_or_else(|e| e.into_inner());
         Self {
             plugins: RwLock::new(plugins.clone()),
         }

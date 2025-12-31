@@ -19,7 +19,7 @@ impl TestContext {
         let temp_dir = TempDir::new().unwrap();
         let storage_dir = temp_dir.path().to_path_buf();
 
-        let id_manager = IdentityManager::new(storage_dir.join("identities"));
+        let mut id_manager = IdentityManager::new(storage_dir.join("identities"));
 
         let alice = id_manager.create("alice").unwrap();
         let bob = id_manager.create("bob").unwrap();

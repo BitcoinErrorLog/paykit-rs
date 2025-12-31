@@ -713,7 +713,7 @@ impl PaykitClient {
             })
             .unwrap_or_default();
 
-        let selector = PaymentMethodSelector::new(self.registry.read().unwrap().clone());
+        let selector = PaymentMethodSelector::new(self.registry.read().unwrap_or_else(|e| e.into_inner()).clone());
         let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
             PaykitMobileError::Validation {
                 msg: e.to_string(),
@@ -861,7 +861,7 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.write().unwrap().register(Box::new(plugin));
+        self.registry.write().unwrap_or_else(|e| e.into_inner()).register(Box::new(plugin));
 
         Ok(())
     }
@@ -905,7 +905,7 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.write().unwrap().register(Box::new(plugin));
+        self.registry.write().unwrap_or_else(|e| e.into_inner()).register(Box::new(plugin));
 
         Ok(())
     }

@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Integration tests for receipt management
 //!
 //! These tests verify the complete workflow of managing payment receipts,

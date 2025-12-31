@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Storage persistence tests
 //!
 //! Tests localStorage operations for identities, subscriptions, and receipts.

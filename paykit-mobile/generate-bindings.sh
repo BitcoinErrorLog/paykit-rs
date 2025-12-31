@@ -137,25 +137,6 @@ generate_bindings() {
     echo "========================================"
     echo "Generating bindings"
     echo "========================================"
-    
-    # Try using our built-in binary first
-    if cargo run --bin generate-bindings --features bindgen-cli -- --library "$LIB_PATH" -l swift -o paykit-mobile/swift/generated 2>/dev/null; then
-        echo "✅ Used built-in bindings generator"
-    elif command -v uniffi-bindgen &> /dev/null; then
-        echo "Using system uniffi-bindgen..."
-    else
-        echo ""
-        echo "⚠️  uniffi-bindgen not found."
-        echo ""
-        echo "The bindings generator binary isn't available for uniffi 0.25."
-        echo "However, you can still proceed with the Xcode project setup."
-        echo ""
-        echo "The library is built and ready. The bindings are Swift wrappers"
-        echo "that can be added later, or you can use the Rust library directly"
-        echo "via a C bridge if needed."
-        echo ""
-        return 1
-    fi
 
     if [ ! -f "$LIB_PATH" ]; then
         echo "Error: Library not found at $LIB_PATH"
@@ -163,15 +144,40 @@ generate_bindings() {
         return 1
     fi
 
+    # Prefer the built-in generator (kept in sync with our uniffi version).
+    # Only fall back to system `uniffi-bindgen` if the built-in path is unavailable.
+    if cargo run --bin generate-bindings --features bindgen-cli -- \
+        --library "$LIB_PATH" -l swift -o paykit-mobile/swift/generated; then
+        echo "✅ Swift bindings generated via built-in generator"
+    else
+        if ! command -v uniffi-bindgen &> /dev/null; then
+            echo ""
+            echo "⚠️  uniffi-bindgen not found and built-in generator failed."
+            echo "Install uniffi-bindgen or fix the built-in generator build."
+            echo ""
+            return 1
+        fi
+        echo "Built-in generator failed; falling back to system uniffi-bindgen for Swift..."
+        mkdir -p paykit-mobile/swift/generated
+        uniffi-bindgen generate --library "$LIB_PATH" -l swift -o paykit-mobile/swift/generated
+    fi
+
     echo ""
-    echo "Generating Swift bindings..."
-    mkdir -p paykit-mobile/swift/generated
-    uniffi-bindgen generate --library "$LIB_PATH" -l swift -o paykit-mobile/swift/generated
-    
-    echo ""
-    echo "Generating Kotlin bindings..."
-    mkdir -p paykit-mobile/kotlin/generated
-    uniffi-bindgen generate --library "$LIB_PATH" -l kotlin -o paykit-mobile/kotlin/generated
+    if cargo run --bin generate-bindings --features bindgen-cli -- \
+        --library "$LIB_PATH" -l kotlin -o paykit-mobile/kotlin/generated; then
+        echo "✅ Kotlin bindings generated via built-in generator"
+    else
+        if ! command -v uniffi-bindgen &> /dev/null; then
+            echo ""
+            echo "⚠️  uniffi-bindgen not found and built-in generator failed."
+            echo "Install uniffi-bindgen or fix the built-in generator build."
+            echo ""
+            return 1
+        fi
+        echo "Built-in generator failed; falling back to system uniffi-bindgen for Kotlin..."
+        mkdir -p paykit-mobile/kotlin/generated
+        uniffi-bindgen generate --library "$LIB_PATH" -l kotlin -o paykit-mobile/kotlin/generated
+    fi
     
     echo ""
     echo "Bindings generated successfully!"

@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 //! Integration tests for payment method management
 //!
 //! These tests verify the complete workflow of managing payment methods,

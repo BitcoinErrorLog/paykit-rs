@@ -16,3 +16,6 @@ build/
 *.apk
 *.aab
 local.properties
+# Exclude large binaries from git
+paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/Frameworks/PaykitMobile.xcframework/**/*.a
+paykit-mobile/ios-demo/PaykitDemo/PaykitDemo/Frameworks/*.a

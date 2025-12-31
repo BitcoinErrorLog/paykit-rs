@@ -69,6 +69,28 @@ This checklist ensures the Bitkit executor FFI integration is ready for producti
 - [ ] Rate limiting is implemented (if applicable)
 - [ ] Security audit completed
 
+### SecureStorage FFI Bridge (CRITICAL BLOCKER)
+
+**The Rust `SecureStorage` implementations for iOS and Android are NOT connected to native platform APIs.**
+
+Current status:
+- `paykit-lib/src/secure_storage/ios.rs` - Returns `Err(SecureStorageError::unsupported("iOS Keychain FFI not connected"))` for all operations
+- `paykit-lib/src/secure_storage/android.rs` - Returns `Err(SecureStorageError::unsupported("Android Keystore FFI not connected"))` for all operations
+
+**Required for production:**
+- [ ] Implement Swift bridge for iOS Keychain access
+- [ ] Implement Kotlin bridge for Android Keystore access
+- [ ] Wire FFI callbacks from Rust to platform-specific code
+- [ ] Test key storage/retrieval on both platforms
+
+**Workarounds (not recommended for production):**
+- Use `MemorySecureStorage` (in-memory only, keys lost on restart)
+- Store keys in platform-specific code before calling paykit-mobile
+
+See example integration patterns in:
+- `paykit-lib/src/secure_storage/ios.rs` - Swift integration example code
+- `paykit-lib/src/secure_storage/android.rs` - Kotlin integration example code
+
 ### Performance
 - [ ] Payment execution completes within acceptable time
 - [ ] No memory leaks in long-running processes

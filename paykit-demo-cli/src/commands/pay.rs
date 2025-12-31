@@ -12,6 +12,7 @@ use paykit_lib::prelude::*;
 use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
 use pubky_noise::{DummyRing, NoiseClient};
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -569,7 +570,7 @@ async fn execute_noise_payment(
 }
 
 async fn execute_lightning_payment(
-    _storage_dir: &Path,
+    storage_dir: &Path,
     wallet_config: &Option<WalletConfig>,
     payee_uri: &str,
     amount: Option<&str>,

@@ -7,10 +7,11 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,no_run
 //! use paykit_lib::uri::{parse_uri, PaykitUri};
 //!
-//! // Parse a pubky URI
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Parse a pubky URI (requires valid z-base32 encoded public key)
 //! let uri = parse_uri("pubky://abc123...")?;
 //! match uri {
 //!     PaykitUri::Pubky { public_key } => {
@@ -27,6 +28,8 @@
 //!     }
 //!     _ => {}
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::{MethodId, PaykitError, PublicKey, Result};
@@ -100,10 +103,11 @@ impl PaykitUri {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,no_run
 /// use paykit_lib::uri::parse_uri;
 ///
-/// // Parse pubky URI
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // Parse pubky URI (requires valid z-base32 encoded public key)
 /// let uri = parse_uri("pubky://abc123def456")?;
 ///
 /// // Parse Lightning invoice
@@ -111,6 +115,8 @@ impl PaykitUri {
 ///
 /// // Parse Bitcoin address
 /// let btc = parse_uri("bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq")?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn parse_uri(uri: &str) -> Result<PaykitUri> {
     let uri = uri.trim();

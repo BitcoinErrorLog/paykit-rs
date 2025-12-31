@@ -2,6 +2,16 @@
 
 This guide explains how to integrate Paykit with Bitkit iOS and Android applications to enable real Bitcoin and Lightning payments.
 
+> **IMPORTANT: SecureStorage FFI Not Connected**
+>
+> The Rust `SecureStorage` module is NOT connected to platform-native secure storage (iOS Keychain / Android Keystore). All methods currently return `SecureStorageError::unsupported`. 
+>
+> For production, you must either:
+> 1. Implement the FFI bridge to connect Rust to platform-native secure storage
+> 2. Handle key storage in platform-native code before passing keys to PaykitClient
+>
+> See `PRODUCTION_CHECKLIST.md` for detailed integration requirements.
+
 ## Overview
 
 Paykit provides a flexible payment method framework that can use any wallet as the underlying payment executor. For Bitkit integration, you implement two callback interfaces:

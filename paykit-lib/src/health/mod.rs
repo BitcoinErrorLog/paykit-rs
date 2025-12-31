@@ -231,7 +231,7 @@ impl HealthMonitor {
         let cache = self
             .cache
             .read()
-            .expect("HealthMonitor: lock poisoned during get_status");
+            .unwrap_or_else(|e| e.into_inner());
         cache.get(&method_id.0).map(|r| r.status)
     }
 
@@ -240,7 +240,7 @@ impl HealthMonitor {
         let cache = self
             .cache
             .read()
-            .expect("HealthMonitor: lock poisoned during get_result");
+            .unwrap_or_else(|e| e.into_inner());
         cache.get(&method_id.0).cloned()
     }
 
@@ -267,7 +267,7 @@ impl HealthMonitor {
             let mut cache = self
                 .cache
                 .write()
-                .expect("HealthMonitor: lock poisoned during check");
+                .unwrap_or_else(|e| e.into_inner());
             cache.insert(method_id.0.clone(), result.clone());
         }
 
@@ -286,7 +286,7 @@ impl HealthMonitor {
                 let mut cache = self
                     .cache
                     .write()
-                    .expect("HealthMonitor: lock poisoned during check_all");
+                    .unwrap_or_else(|e| e.into_inner());
                 cache.insert(result.method_id.0.clone(), result.clone());
             }
 
@@ -301,7 +301,7 @@ impl HealthMonitor {
         let cache = self
             .cache
             .read()
-            .expect("HealthMonitor: lock poisoned during get_healthy_methods");
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .iter()
             .filter(|(_, r)| r.status.is_healthy())
@@ -314,7 +314,7 @@ impl HealthMonitor {
         let cache = self
             .cache
             .read()
-            .expect("HealthMonitor: lock poisoned during get_usable_methods");
+            .unwrap_or_else(|e| e.into_inner());
         cache
             .iter()
             .filter(|(_, r)| r.status.is_usable())
@@ -327,7 +327,7 @@ impl HealthMonitor {
         let cache = self
             .cache
             .read()
-            .expect("HealthMonitor: lock poisoned during is_stale");
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(result) = cache.get(&method_id.0) {
             let now = current_timestamp();
             (now - result.checked_at) > self.cache_ttl_secs

@@ -94,6 +94,52 @@ Before deploying to production, verify end-to-end:
 - [ ] Session persistence survives app restart
 - [ ] Type-safe HomeserverURL prevents pubkey/URL confusion
 
+### Review Lens (for architecture + assumptions)
+
+This section is meant to help the Bitkit dev team review the project at a high level (challenge assumptions, validate decisions, and spot missing production wiring) before diving into implementation details.
+
+#### What to read first (recommended order)
+
+1. **This Section 1. Executive Summary** (what exists + what still needs verification)
+2. **Section 17. Architectural Hardening** (Phases 1–4: security + reliability changes)
+3. **[SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md)** (threat model, attack surface, security properties)
+4. **[PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md)** (push relay API + auth model)
+5. **Section 16. Production Implementation Checklist** (what production must wire up)
+
+#### Key architectural decisions (with tradeoffs)
+
+| Decision | What we did | Tradeoff / what to challenge |
+|---|---|---|
+| Ring-only identity | Ed25519 master secret never leaves Ring; Bitkit consumes sessions + derived X25519 keys | Requires Ring installation (or cross-device flow) for initial provisioning and for signing requests |
+| Secure handoff | Ring writes handoff JSON at an unguessable homeserver path; Bitkit fetches via `request_id` | Payload is **not encrypted at rest**; security relies on unguessability + TTL + TLS + deletion after fetch |
+| Push relay vs public directory tokens | Push tokens are registered to a relay; wake requests require Ed25519 signatures | Adds backend dependency; requires careful lifecycle wiring for token rotation + session replacement |
+| Type-safe identifiers | Introduced `HomeserverURL`, `HomeserverPubkey`, `OwnerPubkey`, `SessionSecret` | Requires discipline to avoid reintroducing raw strings at boundaries |
+| Key rotation model | Epoch-based X25519 keypairs (epoch 0 + epoch 1) cached locally; rotation is manual-triggered | No automatic cadence; requires product decision on rotation triggers and migration path |
+
+#### Invariants (things the system assumes are true)
+
+- **No secrets in callback URLs** for paykit setup (secure handoff only)
+- **Sessions authenticate via cookie**: `Cookie: session=<sessionSecret>` on authenticated homeserver requests
+- **Ring is the only signer**: Ed25519 signatures used for push relay auth are produced by Ring
+- **Handoff lifecycle**: short TTL + Bitkit deletes after fetch (defense-in-depth)
+
+#### Review prompts (what to scrutinize)
+
+- **Security**:
+  - Are we comfortable with “public read + unguessable path” for handoff payloads, or do we require at-rest encryption / authenticated read?
+  - Are callback schemes and deep link handlers hardened against spoofing and confused-deputy issues?
+  - Are we leaking any secrets via logs, analytics, crash reports, or OS-level deep link telemetry?
+- **Reliability**:
+  - What is the expected behavior when Ring is unavailable, the relay is unavailable, or the homeserver is slow/unreachable?
+  - Do session expiry/refresh paths cover all real session types we rely on?
+  - Do background workers/tasks align with iOS/Android OS constraints for wake + polling?
+- **Maintainability**:
+  - Are boundaries clear (`UI → ViewModel → Repository/Service → FFI/SDK`) and consistent across both platforms?
+  - Are we duplicating HTTP/signing/session logic in multiple services that should be consolidated (see Future Work)?
+- **Product/UX**:
+  - What user-facing flows exist when signing is required (Ring prompts), and are those flows acceptable?
+  - What is the plan for user education and failure recovery (Ring not installed, revoked capabilities, etc.)?
+
 ---
 
 ## 2. Architecture Overview

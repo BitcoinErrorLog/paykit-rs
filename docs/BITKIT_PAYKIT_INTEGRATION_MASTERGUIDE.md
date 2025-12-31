@@ -867,6 +867,8 @@ When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...`, Ring p
 
 **File:** `pubky-ring/src/utils/actions/paykitConnectAction.ts`
 
+**Note**: The header comment in `paykitConnectAction.ts` is stale. The current implementation **always** uses secure handoff, and the handoff payload is **not encrypted at rest** (security relies on the unguessable path + TTL + TLS + deletion after fetch).
+
 ```typescript
 // Current implementation uses SECURE HANDOFF (no secrets in URL)
 export const handlePaykitConnectAction = async (
@@ -928,7 +930,7 @@ bitkit://paykit-setup?mode=secure_handoff&pubky=<z32_pubkey>&request_id=<256bit_
 **Bitkit then**:
 1. Fetches payload from `pubky://<pubky>/pub/paykit.app/v0/handoff/<request_id>`
 2. Parses session and noise keypairs from JSON
-3. Deletes the handoff file immediately (iOS) to minimize exposure window
+3. Deletes the handoff file immediately (iOS + Android) to minimize exposure window
 4. Caches session and keypairs locally
 
 ### 7.3 Bitkit-side Session and Key Handling
@@ -1088,10 +1090,12 @@ Relay default:
 Android uses **deep links** (not Intent actions) for Ring communication:
 
 ```kotlin
-// PubkyRingBridge.kt - Deep link approach (actual implementation)
+// PubkyRingBridge.kt - Deep link approach (excerpt; see full file for all callbacks)
 @Singleton
 class PubkyRingBridge @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val keychainStorage: to.bitkit.paykit.storage.PaykitKeychainStorage,
+    private val noiseKeyCache: NoiseKeyCache,
+    private val pubkyStorageAdapter: PubkyStorageAdapter,
 ) {
     companion object {
         private const val PUBKY_RING_SCHEME = "pubkyring"
@@ -2082,6 +2086,7 @@ This comprehensive checklist covers everything the production team must verify b
 - [ ] `SessionRefreshService.registerBackgroundTask()` called at startup
 - [ ] `PaykitPollingService.registerBackgroundTask()` called at startup
 - [ ] Deep link handling routes `paykit://` and `bitkit://paykit-*` correctly
+- [ ] Push token lifecycle wired: on APNs device token update, call `PushRelayService.register(token:)` (after identity/session exists)
 
 ### 16.3 Android Integration
 
@@ -2093,6 +2098,7 @@ This comprehensive checklist covers everything the production team must verify b
 - [ ] `SessionRefreshWorker.schedule(context)` called at startup
 - [ ] `PaykitPollingWorker.schedule(context)` called when Paykit enabled
 - [ ] Deep link handling in `AppViewModel.handleDeepLink()` works
+- [ ] Push token lifecycle wired: on FCM token update, call `PushRelayService.register(deviceToken)` (after identity/session exists)
 
 ### 16.4 Pubky Ring Integration
 
@@ -2208,13 +2214,13 @@ The following architectural improvements were implemented to enhance security, r
 1. Ring stores handoff payload as JSON at `/pub/paykit.app/v0/handoff/{request_id}`
 2. Ring returns: `bitkit://paykit-setup?mode=secure_handoff&pubky=...&request_id=...`
 3. Bitkit fetches payload from homeserver using `request_id`
-4. Bitkit deletes payload immediately (iOS) or relies on TTL (Android)
+4. Bitkit deletes payload immediately after fetch (iOS + Android)
 
 **Security Properties** (Note: payload is NOT encrypted at rest):
 - **Path unguessability**: 256-bit random request_id makes brute-force infeasible
 - **Time-limited**: 5-minute `expires_at` timestamp in payload
 - **Transport encryption**: TLS protects data in transit
-- **Immediate cleanup**: iOS deletes after fetch; homeserver should honor TTL
+- **Immediate cleanup**: Bitkit deletes after fetch; homeserver should honor TTL
 - **Access control**: Authenticated write, public read (security via obscurity of path)
 
 **Protocol Flow Diagram**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#protocol-flow)
@@ -2237,6 +2243,13 @@ The following architectural improvements were implemented to enhance security, r
 - `PushRelayService` (iOS + Android): Client for registration and wake requests
 - Ed25519 signing via Ring: `requestSignature(message:)` method added
 - Deprecated public publishing methods in `DirectoryService`
+
+**Production wiring required (not automatic in the reference apps)**:
+- Call `PushRelayService.register(...)` after the app has both:
+  - a valid push token (APNs on iOS, FCM on Android), and
+  - an active Pubky identity/session (from Ring setup).
+- Re-register when the push token rotates or the Pubky session is replaced.
+- Do not use the deprecated directory-based push publishing/discovery methods in production.
 
 **Ed25519 Signing Flow**:
 ```swift
@@ -2292,7 +2305,7 @@ For comprehensive security documentation, including threat model, attack surface
 - **Forward secrecy**: X25519 ephemeral keys for Noise channels
 - **Authenticity**: Ed25519 signatures on all sensitive operations
 - **Availability**: Rate limiting prevents DoS attacks
-- **Defense in depth**: Multiple layers (TTL, deletion, encryption, authentication)
+- **Defense in depth**: Multiple layers (TTL, deletion, TLS, authentication)
 
 ---
 

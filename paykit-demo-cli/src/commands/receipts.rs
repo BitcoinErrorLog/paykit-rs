@@ -8,7 +8,7 @@ use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
 use paykit_interactive::proof::verifiers::RealBitcoinProofVerifier;
 use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
 #[cfg(feature = "http-executor")]
-use paykit_lib::executors::{EsploraConfig, EsploraExecutor};
+use paykit_lib::executors::EsploraConfig;
 use std::path::Path;
 
 use crate::ui;

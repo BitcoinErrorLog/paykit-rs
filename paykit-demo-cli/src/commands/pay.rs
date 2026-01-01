@@ -12,7 +12,6 @@ use paykit_lib::prelude::*;
 use pubky_noise::datalink_adapter::{client_complete_ik, client_start_ik_direct};
 use pubky_noise::{DummyRing, NoiseClient};
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -299,7 +298,7 @@ async fn execute_noise_payment(
         } else {
             // Generate new key and save
             let key = encryption::generate_key();
-            std::fs::write(&key_path, &*key).context("Failed to save endpoint encryption key")?;
+            std::fs::write(&key_path, *key).context("Failed to save endpoint encryption key")?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -672,7 +671,7 @@ async fn execute_lightning_payment(
                             uuid::Uuid::new_v4().to_string(),
                             identity.public_key(),
                             payee_uri.parse().unwrap_or_else(|_| {
-                                paykit_lib::PublicKey::from_str("8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo").unwrap()
+                                "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo".parse().unwrap()
                             }),
                             "lightning".to_string(),
                         )

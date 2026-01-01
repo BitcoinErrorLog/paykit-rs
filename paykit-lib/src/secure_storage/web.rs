@@ -33,7 +33,8 @@ use std::cell::RefCell;
 /// for persistence.
 #[cfg(target_arch = "wasm32")]
 pub struct WebCryptoStorage {
-    /// Database name for IndexedDB
+    /// Database name for IndexedDB (reserved for future use)
+    #[allow(dead_code)]
     db_name: String,
     /// In-memory storage for keys (temporary - would use IndexedDB in full impl)
     keys: RefCell<HashMap<String, Vec<u8>>>,

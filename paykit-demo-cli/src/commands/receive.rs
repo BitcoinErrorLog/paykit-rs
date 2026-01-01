@@ -192,7 +192,7 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
             // Generate new key
             let key = encryption::generate_key();
             let key_array = *key; // Dereference Zeroizing wrapper
-            std::fs::write(&key_path, &key_array)
+            std::fs::write(&key_path, key_array)
                 .context("Failed to save endpoint encryption key")?;
             // Set restrictive permissions (Unix only)
             #[cfg(unix)]

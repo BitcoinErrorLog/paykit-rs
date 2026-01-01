@@ -228,7 +228,7 @@ pub async fn run(
                                 counterparty: req
                                     .get("from")
                                     .and_then(|v| v.as_str())
-                                    .map(|s| abbreviate_key(s))
+                                    .map(abbreviate_key)
                                     .unwrap_or_else(|| "unknown".to_string()),
                                 direction: "incoming".to_string(),
                                 status: req
@@ -269,7 +269,7 @@ pub async fn run(
                                 counterparty: event
                                     .get("peer")
                                     .and_then(|v| v.as_str())
-                                    .map(|s| abbreviate_key(s))
+                                    .map(abbreviate_key)
                                     .unwrap_or_else(|| "unknown".to_string()),
                                 direction: "sent".to_string(),
                                 status: event

@@ -24,7 +24,6 @@ mod pubky_tests {
         AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
         PubkyUnauthenticatedTransport, UnauthenticatedTransportRead,
     };
-    use pubky::PublicStorage;
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 
     #[tokio::test]

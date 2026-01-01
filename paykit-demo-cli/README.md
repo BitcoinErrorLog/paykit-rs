@@ -17,7 +17,7 @@ A feature-rich CLI application showcasing Paykit capabilities: public directory 
 | Profile Management | **Real** | Fetch, publish, import profiles |
 | Smart Checkout | **Real** | Method discovery with ranking strategies |
 | Activity Timeline | **Real** | Unified view of all payment activity |
-| Noise Handshake | **Real** | TCP-based encrypted channel |
+| Noise Handshake | **Real** | Used internally by pay/receive commands |
 | Payment Coordination | **Real** | Request/receipt exchange |
 | Wallet Configuration | **Real** | LND and Esplora setup |
 | Payment Execution | **Real (with wallet)** | Requires configured wallet |
@@ -512,15 +512,13 @@ Based on comprehensive code review, the following enhancements are recommended:
 
 The following are documented limitations appropriate for demo applications:
 
-- ⚠️ Private keys stored in plaintext JSON files (not for production)
-- ⚠️ No encryption at rest
-- ⚠️ No OS-level secure storage
-- ⚠️ Some payment flows are simulation-only (documented)
+- ⚠️ Legacy plaintext identity storage still supported (fallback when OS keychain unavailable)
+- ⚠️ No encryption at rest for data files (contacts, receipts, subscription data)
+- ⚠️ Some payment flows require wallet configuration (documented)
 
-**For production use**, implement:
-- Secure key storage (Keychain/KeyStore/Credential Manager)
-- Encryption at rest
+**For production use**, consider:
 - Hardware security modules for high-value keys
+- Encryption at rest for data files
 - Proper session management
 - Rate limiting and DoS protection
 

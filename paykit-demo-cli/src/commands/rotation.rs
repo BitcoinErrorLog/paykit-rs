@@ -206,11 +206,8 @@ pub async fn history(storage_dir: &Path, method: Option<String>, verbose: bool) 
     };
 
     if methods.is_empty() {
-        if method.is_some() {
-            ui::info(&format!(
-                "No rotation history for method: {}",
-                method.unwrap()
-            ));
+        if let Some(m) = method {
+            ui::info(&format!("No rotation history for method: {}", m));
         } else {
             ui::info("No rotation history recorded yet.");
         }

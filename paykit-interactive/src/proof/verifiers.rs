@@ -18,6 +18,13 @@ pub struct RealBitcoinProofVerifier {
 }
 
 #[cfg(feature = "http-executor")]
+impl Default for RealBitcoinProofVerifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "http-executor")]
 impl RealBitcoinProofVerifier {
     /// Create a new verifier with default Esplora configuration.
     pub fn new() -> Self {
@@ -172,6 +179,12 @@ pub struct RealLightningProofVerifier {
     /// Optional LND client for additional verification
     #[allow(dead_code)]
     lnd_client: Option<()>, // Placeholder for future LND integration
+}
+
+impl Default for RealLightningProofVerifier {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RealLightningProofVerifier {

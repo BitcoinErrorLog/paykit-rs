@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Test context with temporary storage and pre-created identities
+#[allow(dead_code)]
 pub struct TestContext {
     pub temp_dir: TempDir,
     pub storage_dir: PathBuf,
@@ -13,6 +14,7 @@ pub struct TestContext {
     pub bob: Identity,
 }
 
+#[allow(dead_code)]
 impl TestContext {
     /// Create a new test context with Alice and Bob identities
     pub fn new() -> Self {
@@ -44,6 +46,7 @@ impl TestContext {
 
 /// Wait for a TCP server to become available on the given port
 /// Returns true if the server is ready within the timeout
+#[allow(dead_code)]
 pub fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
     use std::net::TcpStream;
     use std::time::{Duration, Instant};
@@ -62,6 +65,7 @@ pub fn wait_for_server(port: u16, timeout_secs: u64) -> bool {
 }
 
 /// Create a test payment request
+#[allow(dead_code)]
 pub fn create_test_payment_request(
     from: &paykit_lib::PublicKey,
     to: &paykit_lib::PublicKey,
@@ -80,6 +84,7 @@ pub fn create_test_payment_request(
 }
 
 /// Create a test subscription
+#[allow(dead_code)]
 pub fn create_test_subscription(
     subscriber: &paykit_lib::PublicKey,
     provider: &paykit_lib::PublicKey,

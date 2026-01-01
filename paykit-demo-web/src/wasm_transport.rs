@@ -8,7 +8,7 @@ use paykit_lib::{
     Result, SupportedPayments,
 };
 use js_sys::{Object, Reflect};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 
 use crate::directory::DirectoryClient;
 

@@ -307,7 +307,7 @@ pub async fn stats(storage_dir: &Path, _verbose: bool) -> Result<()> {
             std::collections::HashMap::new();
 
         for peer in &peers_list {
-            let endpoints = store.list_for_peer(&peer).await.unwrap_or_default();
+            let endpoints = store.list_for_peer(peer).await.unwrap_or_default();
             for ep in endpoints {
                 *method_counts.entry(ep.method_id.0.clone()).or_insert(0) += 1;
             }
@@ -343,7 +343,7 @@ fn load_endpoint_manager(
         // Generate new key and save
         let key = encryption::generate_key();
         std::fs::create_dir_all(storage_dir)?;
-        std::fs::write(&key_path, &*key).context("Failed to save endpoint encryption key")?;
+        std::fs::write(&key_path, *key).context("Failed to save endpoint encryption key")?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

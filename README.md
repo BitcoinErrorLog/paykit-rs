@@ -1,5 +1,7 @@
 # Paykit
 
+> ⚠️ **WIP - NOT FOR PRODUCTION** ⚠️
+
 > **A flexible, decentralized payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).**
 
 Paykit enables seamless payment discovery, negotiation, and coordination through public directories and private encrypted channels. It provides a unified interface for managing payments across different methods while maintaining privacy and cryptographic security.

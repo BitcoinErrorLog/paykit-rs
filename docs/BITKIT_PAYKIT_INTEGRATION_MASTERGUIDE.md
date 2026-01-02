@@ -1,10 +1,15 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.6  
+> **Version**: 1.7  
 > **Last Updated**: January 2, 2026  
 > **Status**: Production Ready - E2E Verified
 
+> **v1.7 Changes**: Namespace separation clarification (profiles in `/pub/pubky.app/`, paykit 
+> features in `/pub/paykit.app/v0/`), homeserver URL tracking in sessions, pubky-noise API 
+> documentation for `x25519GenerateKeypair` and `sealedBlobDecrypt`, x86_64 simulator support
+> for iOS XCFrameworks, updated `PubkyAuthenticatedStorageAdapter` constructor with `ownerPubkey`.
+>
 > **v1.6 Changes**: Added PaykitV0Protocol (Rust/Kotlin/Swift), sender-storage model, 
 > recipient-scoped directories, mandatory Sealed Blob v1 encryption, payment method 
 > fallback loop with retryable error classification, cross-platform interop test vectors.
@@ -22,7 +27,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] No GlobalScope usage in Android (uses dedicated CoroutineScope with SupervisorJob)
 - [x] ProGuard/R8 rules added for JNA, UniFFI, and Noise classes
 - [x] Background tasks registered (SessionRefreshWorker, PaykitPollingWorker)
-- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android)
+- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android + iOS)
 - [x] Key rotation (epoch 0 to 1) implemented with NoiseKeyCache persistence
 - [x] Cross-device QR with ephemeral X25519 key + encrypted relay response
 - [x] Plaintext cross-device callbacks DISABLED for security
@@ -39,6 +44,12 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] Mandatory Sealed Blob v1 encryption for payment requests and subscription proposals
 - [x] Payment method fallback loop: retryable vs non-retryable error classification
 - [x] Cross-platform test vectors for scope hashing (INTEROP_TEST_VECTORS.md)
+- [x] Namespace separation: profiles in `/pub/pubky.app/`, paykit in `/pub/paykit.app/v0/`
+- [x] Homeserver URL tracking in sessions (prevents staging/prod mismatch)
+- [x] PubkyAuthenticatedStorageAdapter updated with `ownerPubkey` constructor parameter
+- [x] pubky-noise rebuilt with `x25519GenerateKeypair` and `sealedBlobDecrypt` (Android + iOS)
+- [x] iOS XCFrameworks include x86_64 simulator support for Intel Macs
+- [x] iOS simulator app group fallback implemented
 
 ---
 
@@ -246,6 +257,23 @@ This architecture separates key responsibilities:
 2. Bitkit derives X25519 session keys via HKDF ("hot")
 3. Noise channels use X25519 for encryption
 4. Signatures for subscriptions use Ed25519 from Ring
+
+### Namespace Separation (CRITICAL)
+
+Pubky homeserver storage uses distinct namespaces for different purposes:
+
+| Namespace | Purpose | Examples |
+|-----------|---------|----------|
+| `/pub/pubky.app/` | General Pubky identity data | `profile.json`, `follows/{pubkey}` |
+| `/pub/paykit.app/v0/` | Paykit payment features | `requests/`, `subscriptions/`, `handoff/`, `noise` |
+
+**⚠️ Common Mistake**: Profile data (`profile.json`) belongs in `/pub/pubky.app/profile.json`, NOT in the paykit namespace. The paykit namespace is reserved for:
+- Payment requests (`/pub/paykit.app/v0/requests/`)
+- Subscription proposals (`/pub/paykit.app/v0/subscriptions/proposals/`)
+- Secure handoff blobs (`/pub/paykit.app/v0/handoff/`)
+- Noise endpoints (`/pub/paykit.app/v0/noise`)
+
+Profile publishing should use `DirectoryService.publishProfile()` which writes to the pubky.app namespace.
 
 ### Data Flow: Payment Discovery
 
@@ -486,6 +514,36 @@ cp pubky-noise/generated-kotlin/com/pubky/noise/pubky_noise.kt \
 | Ring iOS | Swift 5.5+ | Uses XCFramework via CocoaPods |
 | Ring Android | Kotlin 1.8+ | Uses JNI .so |
 
+**iOS XCFramework Architecture Requirements:**
+
+XCFrameworks must include all required architectures:
+- `aarch64-apple-ios` - Device builds (arm64)
+- `aarch64-apple-ios-sim` - Apple Silicon simulator (arm64)
+- `x86_64-apple-ios-sim` - Intel Mac simulator (x86_64)
+
+If your `build_ios.sh` script doesn't include `x86_64-apple-ios-sim`, Intel Mac developers will get linker errors. Create a fat library for simulator:
+
+```bash
+# Build both simulator architectures
+cargo build --release --target=aarch64-apple-ios-sim
+cargo build --release --target=x86_64-apple-ios-sim
+
+# Create fat library
+lipo -create \
+  target/aarch64-apple-ios-sim/release/libpubky_noise.a \
+  target/x86_64-apple-ios-sim/release/libpubky_noise.a \
+  -output target/ios-sim-fat/libpubky_noise.a
+```
+
+**Android Package Naming:**
+
+The UniFFI-generated Kotlin bindings use package `com.pubky.noise` (NOT `uniffi.pubky_noise`). Ensure imports match:
+```kotlin
+import com.pubky.noise.x25519GenerateKeypair
+import com.pubky.noise.sealedBlobDecrypt
+import com.pubky.noise.deriveDeviceKey
+```
+
 **Key API (pubky-noise 1.0+):**
 
 ```rust
@@ -497,6 +555,26 @@ pub fn derive_device_key(
 ) -> Result<[u8; 32], NoiseError>;
 
 pub fn public_key_from_secret(secret: &[u8]) -> [u8; 32];
+
+// X25519 keypair generation (for ephemeral keys in secure handoff)
+pub fn x25519_generate_keypair() -> X25519Keypair;
+// Returns: { secret_key: [u8; 32], public_key: [u8; 32] }
+
+// Sealed Blob encryption/decryption (for encrypted handoff payloads)
+pub fn sealed_blob_encrypt(
+    recipient_pk: &[u8],  // Recipient's X25519 public key
+    plaintext: &str,      // JSON payload to encrypt
+    aad: &str,            // Additional authenticated data
+    context: &str         // Context string (e.g., "handoff")
+) -> String;  // Returns encrypted envelope JSON
+
+pub fn sealed_blob_decrypt(
+    recipient_sk: &[u8],  // Recipient's X25519 secret key
+    envelope_json: &str,  // Encrypted envelope from sealed_blob_encrypt
+    aad: &str             // Must match the AAD used during encryption
+) -> Result<Vec<u8>, NoiseError>;  // Returns decrypted plaintext bytes
+
+pub fn is_sealed_blob(json: &str) -> bool;  // Check if JSON is a Sealed Blob envelope
 ```
 
 ---
@@ -1311,6 +1389,13 @@ class PubkyRingBridge @Inject constructor(
 Bitkit does not use a JSON bearer token model here. The reference implementation uses:
 - `session.pubkey`: 52-char z-base-32 pubkey
 - `session.sessionSecret`: opaque session secret string (used as cookie value)
+- `session.homeserverURL`: (optional) the homeserver URL where this session was created - ensures writes go to the correct homeserver (staging vs production)
+
+**Homeserver URL Tracking (January 2026 fix)**:
+Sessions now track which homeserver they belong to. This prevents environment mismatch issues where a staging session could accidentally write to production. The `homeserverURL` is:
+- Extracted from Ring's callback or secure handoff payload
+- Stored in Keychain/EncryptedSharedPreferences with the session
+- Used by `DirectoryService` when configuring authenticated transports
 
 The storage adapters attach the session to authenticated requests via:
 - `Cookie: {ownerPubkey}={sessionSecret}` (if session secret contains `:`, use only the portion after)
@@ -1319,6 +1404,30 @@ The storage adapters attach the session to authenticated requests via:
 Reference:
 - iOS: `PubkyAuthenticatedStorageAdapter` in `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkyStorageAdapter.swift`
 - Android: `PubkyAuthenticatedStorageAdapter` in `bitkit-android/app/src/main/java/to/bitkit/paykit/services/PubkyStorageAdapter.kt`
+
+**PubkyAuthenticatedStorageAdapter Constructor (January 2026 update):**
+
+The adapter now requires `ownerPubkey` in its constructor to properly format headers:
+
+```swift
+// iOS
+PubkyAuthenticatedStorageAdapter(
+    sessionSecret: session.sessionSecret,
+    ownerPubkey: session.pubkey,         // Required for Cookie and pubky-host headers
+    homeserverBaseURL: homeserverURL
+)
+```
+
+```kotlin
+// Android
+PubkyAuthenticatedStorageAdapter(
+    sessionSecret = session.sessionSecret,
+    ownerPubkey = session.pubkey,        // Required for Cookie and pubky-host headers
+    homeserverBaseURL = homeserverURL
+)
+```
+
+This ensures the `Cookie` header uses the correct format (`{pubkey}={secret}`) and the `pubky-host` header is always included.
 
 ---
 
@@ -1978,6 +2087,34 @@ try await adapter.put(path: "/pub/pubky.app/follows/\(targetPubkey)", content: f
     <string>$(AppIdentifierPrefix)to.bitkit.paykit</string>
 </array>
 ```
+
+#### iOS Simulator App Group Container
+
+**Problem:** App crashes on simulator launch with "Could not find documents directory" when `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:)` returns `nil`.
+
+**Symptom:** `fatalError` during static initialization of `Env.appStorageUrl` or `Logger`.
+
+**Solution:** Add fallback to standard documents directory:
+```swift
+static var appStorageUrl: URL {
+    if let groupContainer = FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: "group.bitkit"
+    ) {
+        return groupContainer
+    } else {
+        // Fallback for simulator or when app group is unavailable
+        guard let fallback = FileManager.default.urls(
+            for: .documentDirectory, 
+            in: .userDomainMask
+        ).first else {
+            fatalError("Could not find documents directory")
+        }
+        return fallback
+    }
+}
+```
+
+**Note:** iOS simulators may not have app group entitlements configured. This fallback allows development and testing to proceed.
 
 #### Android ProGuard Rules
 
@@ -2676,37 +2813,86 @@ docs/
 └── opus-paykit-diff.md           # PDF spec vs implementation analysis
 ```
 
-**bitkit-ios files created:**
+**pubky-noise files rebuilt (January 2026):**
 ```
-Bitkit/PaykitIntegration/
-├── FFI/paykit_mobile.swift         # Generated bindings
-├── Protocol/
-│   └── PaykitV0Protocol.swift      # Canonical path/AAD builders (matches Rust)
-├── Services/
-│   ├── PaykitManager.swift
-│   ├── DirectoryService.swift      # Updated for sender-storage model
-│   ├── PaykitPaymentService.swift  # Updated with fallback loop
-│   ├── PaykitPollingService.swift  # Updated for contact polling
-│   └── NoisePaymentService.swift
-├── Storage/PaykitKeychainStorage.swift
-└── Views/*.swift                   # UI components
+pubky-noise/
+├── build-ios.sh                  # Updated for x86_64 simulator support
+├── build-android.sh              # Produces .so files for all ABIs
+├── platforms/
+│   ├── ios/PubkyNoise.xcframework/ # Rebuilt with full API
+│   └── android/src/main/
+│       ├── java/com/pubky/noise/pubky_noise.kt  # Generated Kotlin bindings
+│       └── jniLibs/              # Native .so libraries
+└── generated-swift/PubkyNoise.swift  # Generated Swift bindings
 ```
 
-**bitkit-android files created:**
+**bitkit-core and vss-rust-client-ffi files modified (January 2026):**
+```
+bitkit-core/
+├── Cargo.toml                    # Updated path deps for paykit-lib, pubky-noise
+├── build_ios.sh                  # Updated for x86_64 simulator support
+└── Package.swift                 # Updated for local xcframework
+
+vss-rust-client-ffi/
+├── Cargo.toml                    # Added staticlib crate-type
+├── build_ios.sh                  # Updated for x86_64 simulator support
+└── Package.swift                 # Updated for local xcframework
+```
+
+**bitkit-ios files created/modified:**
+```
+Bitkit/
+├── Constants/
+│   └── Env.swift                   # Added app group fallback for simulator
+└── PaykitIntegration/
+    ├── FFI/
+    │   ├── PaykitMobile.swift      # Generated bindings (paykit-mobile)
+    │   └── PubkyNoise.swift        # Generated bindings (pubky-noise, rebuilt Jan 2026)
+    ├── Frameworks/
+    │   ├── PaykitMobile.xcframework
+    │   └── PubkyNoise.xcframework  # Rebuilt with x25519GenerateKeypair + sealedBlobDecrypt
+    ├── Protocol/
+    │   └── PaykitV0Protocol.swift  # Canonical path/AAD builders (matches Rust)
+    ├── Services/
+    │   ├── PaykitManager.swift
+    │   ├── DirectoryService.swift  # Updated: homeserverURL tracking, adapter init
+    │   ├── PubkyStorageAdapter.swift # Updated: ownerPubkey in constructor
+    │   ├── PubkyRingBridge.swift   # Updated: homeserverURL in session
+    │   ├── SecureHandoffHandler.swift # Updated: uses sealedBlobDecrypt
+    │   ├── PaykitPaymentService.swift
+    │   ├── PaykitPollingService.swift
+    │   └── NoisePaymentService.swift
+    ├── Storage/PaykitKeychainStorage.swift
+    └── Views/*.swift               # UI components
+```
+
+**bitkit-android files created/modified:**
 ```
 app/src/main/java/
+├── com/pubky/noise/
+│   └── pubky_noise.kt              # Generated bindings (rebuilt Jan 2026)
 ├── uniffi/paykit_mobile/           # Generated bindings
 └── to/bitkit/paykit/
     ├── protocol/
     │   └── PaykitV0Protocol.kt     # Canonical path/AAD builders (matches Rust)
     ├── services/
     │   ├── PaykitManager.kt
-    │   ├── DirectoryService.kt     # Updated for sender-storage model
+    │   ├── DirectoryService.kt     # Updated: homeserverURL tracking, adapter init
+    │   ├── PubkyStorageAdapter.kt  # Updated: ownerPubkey in constructor
+    │   ├── PubkyRingBridge.kt      # Updated: x25519GenerateKeypair, homeserverURL
+    │   ├── SecureHandoffHandler.kt # Updated: uses sealedBlobDecrypt
     │   └── PaykitPaymentService.kt # Updated with fallback loop
     ├── workers/
     │   └── PaykitPollingWorker.kt  # Updated for contact polling
-    ├── storage/PaykitSecureStorage.kt
+    ├── storage/
+    │   └── PaykitKeychainStorage.kt # Added setStringSync/deleteSync
+    ├── types/
+    │   └── HomeserverTypes.kt      # Added homeserverURL to PubkySession
     └── ui/screens/*.kt             # UI components
+
+app/src/main/jniLibs/
+├── arm64-v8a/libpubky_noise.so     # Rebuilt Jan 2026
+└── x86_64/libpubky_noise.so        # Rebuilt Jan 2026
 
 app/src/test/java/
 └── to/bitkit/paykit/protocol/

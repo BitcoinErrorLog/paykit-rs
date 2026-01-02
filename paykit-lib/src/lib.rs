@@ -294,6 +294,140 @@ where
         .map_err(|err| map_transport_error("get_payment_list", err))
 }
 
+/// Path for the optional supported payments snapshot file.
+pub const SUPPORTED_SNAPSHOT_PATH: &str = "/pub/paykit.app/v0/supported.json";
+
+/// Entry in the supported payments snapshot array.
+///
+/// This format is compatible with PDF-style clients that expect a single JSON array.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SupportedPaymentEntry {
+    /// Payment method identifier (e.g., "lightning", "onchain")
+    pub method_id: String,
+    /// Payment endpoint data
+    pub endpoint: String,
+    /// Whether this method is currently enabled
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    /// Unix timestamp (milliseconds) of last update
+    #[serde(default)]
+    pub updated_at: u64,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+impl SupportedPaymentEntry {
+    /// Create a new entry from method ID and endpoint.
+    pub fn new(method_id: impl Into<String>, endpoint: impl Into<String>) -> Self {
+        Self {
+            method_id: method_id.into(),
+            endpoint: endpoint.into(),
+            enabled: true,
+            updated_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        }
+    }
+}
+
+/// Generates and publishes a snapshot of all supported payment methods.
+///
+/// This creates/updates the optional `/pub/paykit.app/v0/supported.json` file
+/// with a JSON array of all payment methods. This is supplementary to per-method
+/// files and provides compatibility for clients expecting a single list.
+///
+/// # Examples
+/// ```ignore
+/// # use paykit_lib::{publish_supported_snapshot, MethodId, EndpointData};
+/// # use paykit_lib::AuthenticatedTransport;
+/// # async fn demo(client: &impl AuthenticatedTransport) -> paykit_lib::Result<()> {
+/// let entries = vec![
+///     SupportedPaymentEntry::new("lightning", "lnbc..."),
+///     SupportedPaymentEntry::new("onchain", "bc1q..."),
+/// ];
+/// publish_supported_snapshot(client, &entries).await?;
+/// # Ok(())
+/// # }
+/// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(client, entries), fields(count = entries.len())))]
+pub async fn publish_supported_snapshot<S>(
+    client: &S,
+    entries: &[SupportedPaymentEntry],
+) -> Result<()>
+where
+    S: AuthenticatedTransport,
+{
+    let json = serde_json::to_string(entries).map_err(|e| {
+        PaykitError::InvalidData {
+            field: "entries".into(),
+            reason: format!("failed to serialize snapshot: {}", e),
+        }
+    })?;
+    client
+        .put(SUPPORTED_SNAPSHOT_PATH, &json)
+        .await
+        .map_err(|err| map_transport_error("publish_supported_snapshot", err))
+}
+
+/// Fetches the optional supported payments snapshot for the given payee.
+///
+/// Returns `Ok(None)` if the snapshot file doesn't exist.
+/// Returns `Ok(Some(entries))` if the snapshot exists and is valid JSON.
+///
+/// # Semantics
+/// - This is an optional file; most clients should use `get_payment_list` instead
+/// - The per-method files under `/pub/paykit.app/v0/{method_id}` are the source of truth
+///
+/// # Examples
+/// ```ignore
+/// # use paykit_lib::{get_supported_snapshot, SupportedPaymentEntry};
+/// # use paykit_lib::UnauthenticatedTransportRead;
+/// # async fn demo(reader: &impl UnauthenticatedTransportRead, pk: &paykit_lib::PublicKey) -> paykit_lib::Result<()> {
+/// if let Some(entries) = get_supported_snapshot(reader, pk).await? {
+///     for entry in entries {
+///         println!("method={} enabled={}", entry.method_id, entry.enabled);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(reader)))]
+pub async fn get_supported_snapshot<R>(
+    reader: &R,
+    payee: &PublicKey,
+) -> Result<Option<Vec<SupportedPaymentEntry>>>
+where
+    R: UnauthenticatedTransportRead,
+{
+    match reader.get(payee, SUPPORTED_SNAPSHOT_PATH).await {
+        Ok(Some(content)) => {
+            let entries: Vec<SupportedPaymentEntry> =
+                serde_json::from_str(&content).map_err(|e| PaykitError::InvalidData {
+                    field: "supported.json".into(),
+                    reason: format!("failed to parse snapshot: {}", e),
+                })?;
+            Ok(Some(entries))
+        }
+        Ok(None) => Ok(None),
+        Err(err) => Err(map_transport_error("get_supported_snapshot", err)),
+    }
+}
+
+/// Removes the optional supported payments snapshot file.
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(client)))]
+pub async fn remove_supported_snapshot<S>(client: &S) -> Result<()>
+where
+    S: AuthenticatedTransport,
+{
+    client
+        .delete(SUPPORTED_SNAPSHOT_PATH)
+        .await
+        .map_err(|err| map_transport_error("remove_supported_snapshot", err))
+}
+
 /// Retrieves a specific payment endpoint for `payee` and `method`.
 ///
 /// # Semantics

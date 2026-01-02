@@ -324,6 +324,23 @@ To discover a peer's payment methods:
 2. Filter for known method IDs
 3. Fetch and parse each method file
 
+### Snapshot File (Optional)
+
+For clients that prefer a single JSON array (PDF-style compatibility):
+
+**Path**: `/pub/paykit.app/v0/supported.json`
+
+```json
+[
+  {"method_id": "lightning", "endpoint": "lnbc...", "enabled": true, "updated_at": 1704153600000},
+  {"method_id": "onchain", "endpoint": "bc1q...", "enabled": true, "updated_at": 1704153600000}
+]
+```
+
+- This is **optional** and supplementary to per-method files
+- Per-method files remain the source of truth
+- See [PAYMENT_METHOD_REGISTRY.md](PAYMENT_METHOD_REGISTRY.md) for full details
+
 ---
 
 ## 10. Implementation Requirements

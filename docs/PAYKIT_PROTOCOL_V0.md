@@ -25,6 +25,7 @@ This document is the canonical specification for Paykit Protocol v0. All impleme
 8. [AAD Formats](#8-aad-formats)
 9. [Payment Methods](#9-payment-methods)
 10. [Implementation Requirements](#10-implementation-requirements)
+11. [Payload Schemas](#11-payload-schemas)
 
 ---
 
@@ -371,6 +372,99 @@ All implementations must:
 2. Produce identical scope hashes for identical pubkeys
 3. Produce identical AAD strings for identical inputs
 4. Successfully decrypt blobs encrypted by other implementations
+
+---
+
+## 11. Payload Schemas
+
+This section defines the canonical JSON schemas for encrypted payloads. All implementations **must** use these field names and types for interoperability.
+
+### Payment Request Schema
+
+The plaintext payload (before Sealed Blob v1 encryption):
+
+```json
+{
+  "schema_version": 1,
+  "from_pubkey": "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+  "to_pubkey": "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+  "amount_sats": 10000,
+  "description": "Payment for services",
+  "method_id": "lightning",
+  "created_at": 1704153600000,
+  "expires_at": 1704240000000
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | integer | No | Schema version (default: 1) |
+| `from_pubkey` | string | Yes | Sender's z-base-32 pubkey |
+| `to_pubkey` | string | Yes | Recipient's z-base-32 pubkey |
+| `amount_sats` | integer | Yes | Amount in satoshis |
+| `description` | string | No | Human-readable memo |
+| `method_id` | string | No | Preferred payment method (default: `lightning`) |
+| `created_at` | integer | Yes | Unix timestamp in milliseconds |
+| `expires_at` | integer | No | Expiry timestamp in milliseconds |
+
+### Subscription Proposal Schema
+
+The plaintext payload (before Sealed Blob v1 encryption):
+
+```json
+{
+  "schema_version": 1,
+  "provider_pubkey": "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+  "provider_name": "Acme Services",
+  "amount_sats": 5000,
+  "currency": "SAT",
+  "frequency": "monthly",
+  "description": "Monthly subscription",
+  "method_id": "lightning",
+  "created_at": 1704153600000,
+  "max_payments": null,
+  "start_date": null
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | integer | No | Schema version (default: 1) |
+| `provider_pubkey` | string | Yes | Provider's z-base-32 pubkey |
+| `provider_name` | string | No | Human-readable provider name |
+| `amount_sats` | integer | Yes | Amount per payment in satoshis |
+| `currency` | string | No | Currency code (default: `SAT`) |
+| `frequency` | string | Yes | Payment frequency: `daily`, `weekly`, `monthly`, `yearly` |
+| `description` | string | No | Human-readable subscription description |
+| `method_id` | string | No | Payment method (default: `lightning`) |
+| `created_at` | integer | Yes | Unix timestamp in milliseconds |
+| `max_payments` | integer | No | Maximum number of payments (null = unlimited) |
+| `start_date` | integer | No | Start date as Unix timestamp in milliseconds |
+
+### Provider Identity Binding
+
+**SECURITY REQUIREMENT**: When polling a provider's storage for subscription proposals, clients **must** verify that:
+
+1. The `provider_pubkey` in the decrypted proposal matches the pubkey of the storage being polled
+2. If they don't match, the proposal **must** be rejected
+
+This prevents a malicious provider from publishing proposals that impersonate another provider.
+
+```kotlin
+// Example: Kotlin verification
+fun verifyProviderBinding(proposal: SubscriptionProposal, polledPubkey: String): Boolean {
+    val normalizedProposed = PaykitV0Protocol.normalizePubkeyZ32(proposal.providerPubkey)
+    val normalizedPolled = PaykitV0Protocol.normalizePubkeyZ32(polledPubkey)
+    return normalizedProposed == normalizedPolled
+}
+```
+
+### Parsing Guidelines
+
+1. **Unknown fields**: Ignore unknown fields for forward compatibility
+2. **Missing optional fields**: Use specified defaults
+3. **Missing required fields**: Reject the payload
+4. **Type mismatches**: Reject the payload (no coercion)
 
 ---
 

@@ -1,9 +1,13 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.5  
+> **Version**: 1.6  
 > **Last Updated**: January 2, 2026  
 > **Status**: Production Ready - E2E Verified
+
+> **v1.6 Changes**: Added PaykitV0Protocol (Rust/Kotlin/Swift), sender-storage model, 
+> recipient-scoped directories, mandatory Sealed Blob v1 encryption, payment method 
+> fallback loop with retryable error classification, cross-platform interop test vectors.
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
 
@@ -29,7 +33,12 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] Homeserver `pubky-host` header required for central homeserver
 - [x] PubkyAppFollow `created_at` timestamp requirement documented
 - [x] Android E2E tests verified with Maestro (session, profile, follows)
-- [x] PaykitV0Protocol: canonical path builders and AAD formats
+- [x] PaykitV0Protocol: canonical path builders and AAD formats (Rust, Kotlin, Swift)
+- [x] Sender-storage model: payment requests stored on sender's homeserver
+- [x] Recipient-scoped directories: `hex(sha256(normalized_pubkey))` for privacy
+- [x] Mandatory Sealed Blob v1 encryption for payment requests and subscription proposals
+- [x] Payment method fallback loop: retryable vs non-retryable error classification
+- [x] Cross-platform test vectors for scope hashing (INTEROP_TEST_VECTORS.md)
 
 ---
 
@@ -62,6 +71,8 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - 🔒 [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) - Security model and threat analysis
 - 🔔 [PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md) - Push relay service specification
 - 🔐 [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) - Encrypted handoff protocol (Sealed Blob v1)
+- 🧪 [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) - Cross-platform test vectors for scope hashing
+- 📋 [opus-paykit-diff.md](opus-paykit-diff.md) - Paykit PDF spec vs implementation analysis
 
 ---
 
@@ -1111,33 +1122,52 @@ SessionRefreshWorker.schedule(context)
 
 **PaykitV0Protocol - Canonical Protocol Helpers:**
 
-Bitkit Android provides `PaykitV0Protocol` object for canonical path building and AAD generation:
-- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/protocol/PaykitV0Protocol.kt`
+All three codebases (Rust, Android, iOS) now have `PaykitV0Protocol` implementations that must produce identical outputs:
 
-```kotlin
-// PaykitV0Protocol.kt - Key methods
-object PaykitV0Protocol {
-    const val PAYKIT_V0_PREFIX = "/pub/paykit.app/v0"
-    const val AAD_PREFIX = "paykit:v0"
+- **Rust**: `paykit-rs/paykit-lib/src/protocol/` (scope.rs, paths.rs, aad.rs)
+- **Android**: `bitkit-android/app/src/main/java/to/bitkit/paykit/protocol/PaykitV0Protocol.kt`
+- **iOS**: `bitkit-ios/Bitkit/PaykitIntegration/Protocol/PaykitV0Protocol.swift`
 
-    // Path builders
-    fun paymentRequestPath(recipientPubkeyZ32: String, requestId: String): String
-    fun subscriptionProposalPath(subscriberPubkeyZ32: String, proposalId: String): String
-    fun secureHandoffPath(requestId: String): String
-    fun noiseEndpointPath(): String
-
-    // AAD builders for Sealed Blob v1 encryption
-    fun paymentRequestAad(recipientPubkeyZ32: String, requestId: String): String
-    fun subscriptionProposalAad(subscriberPubkeyZ32: String, proposalId: String): String
-    fun secureHandoffAad(ownerPubkeyZ32: String, requestId: String): String
-    fun relaySessionAad(requestId: String): String
-
-    // Scope derivation (for per-recipient directories)
-    fun recipientScope(pubkeyZ32: String): String  // SHA-256 hash of normalized pubkey
-}
+**Scope Derivation (per-recipient directories):**
+```
+scope = hex(sha256(utf8(normalized_pubkey_z32)))
 ```
 
-All AAD strings follow the format: `paykit:v0:{purpose}:{path}:{id}`
+Normalization:
+1. Trim whitespace
+2. Strip `pk:` prefix if present
+3. Lowercase
+4. Validate: 52 chars, z-base-32 alphabet only
+
+**Path Formats:**
+| Object Type | Path Format |
+|-------------|-------------|
+| Payment Request | `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}` |
+| Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}` |
+| Noise Endpoint | `/pub/paykit.app/v0/noise` |
+| Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
+
+**AAD Formats (for Sealed Blob v1):**
+| Object Type | AAD Format |
+|-------------|------------|
+| Payment Request | `paykit:v0:request:{path}:{request_id}` |
+| Subscription Proposal | `paykit:v0:subscription_proposal:{path}:{proposal_id}` |
+| Secure Handoff | `paykit:v0:handoff:{owner_pubkey}:{path}:{request_id}` |
+
+**Cross-Platform Test Vectors:**
+See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for pubkey→scope hash test cases that all implementations must pass.
+
+```kotlin
+// Kotlin example
+val scope = PaykitV0Protocol.recipientScope("ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u")
+// Result: "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80"
+```
+
+```swift
+// Swift example
+let scope = try PaykitV0Protocol.recipientScope("ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u")
+// Result: "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80"
+```
 
 **Session expiration handling (Android PubkySDKService):**
 
@@ -1327,6 +1357,48 @@ for method in methods.entries {
 }
 ```
 
+### 8.1.1 Payment Method Fallback Execution
+
+Bitkit implements automatic fallback when executing payments via Paykit URIs:
+
+**Flow:**
+1. Discover available payment methods for recipient
+2. Use `PaykitClient.selectMethod()` to get primary + fallback ordering
+3. Attempt payment via primary method
+4. On retryable error, try next fallback
+5. Stop on success OR non-retryable error (to avoid double-spend)
+
+**Error Classification:**
+
+| Error Type | Retryable | Action |
+|------------|-----------|--------|
+| Network timeout | ✅ | Try next method |
+| Connection refused | ✅ | Try next method |
+| No route found | ✅ | Try next method (onchain might work) |
+| Invoice already paid | ❌ | Stop immediately |
+| Duplicate payment | ❌ | Stop immediately |
+| Insufficient balance | ❌ | Stop immediately |
+| Invoice expired | ❌ | Stop immediately |
+
+**Implementation:**
+- **Rust FFI**: `paykit-rs/paykit-mobile/src/lib.rs` - `execute_with_fallbacks()`, `classify_error()`
+- **Android**: `PaykitPaymentService.kt` - `payPaykitUri()`, `isRetryableError()`
+- **iOS**: `PaykitPaymentService.swift` - `payPaykitUri()`, `isRetryableError()`
+
+```swift
+// iOS example - fallback loop
+let orderedMethods = await buildOrderedPaymentMethods(for: pubkey, methods: methods, amountSats: amount)
+for method in orderedMethods {
+    do {
+        let result = try client.executePayment(methodId: method.methodId, ...)
+        if result.success { return success }
+        if !isRetryableError(result.error) { break }
+    } catch {
+        if !isRetryableError(error.localizedDescription) { break }
+    }
+}
+```
+
 ### 8.2 Payment Requests (Bitkit core flow)
 
 Bitkit’s production-facing “paykit://” experience is **payment requests**, not smart checkout.
@@ -1337,8 +1409,19 @@ Reference implementations:
 
 #### 8.2.1 Publishing a payment request (sender flow)
 
-Where it is implemented (iOS): `DirectoryService.publishPaymentRequest(_:)` stores at:
-- `/pub/paykit.app/v0/requests/<requestId>` on the sender’s Pubky storage.
+**Sender-Storage Model (v0 Protocol):**
+Payment requests are stored on the **sender's** homeserver, NOT the recipient's. This:
+- Respects write-only access (sender can write to their own storage)
+- Uses recipient-scoped directories for discovery
+- Requires mandatory Sealed Blob v1 encryption
+
+Where it is implemented:
+- **iOS**: `DirectoryService.publishPaymentRequest(_:)` 
+- **Android**: `DirectoryService.publishPaymentRequest()`
+
+**Storage path:** `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
+- `recipient_scope` = `hex(sha256(normalized_recipient_pubkey))`
+- Stored on **sender's** homeserver (not recipient's)
 
 End-to-end steps:
 
@@ -1352,6 +1435,22 @@ End-to-end steps:
 5. Publish the request JSON to `/pub/paykit.app/v0/requests/<requestId>`.
 6. Generate a receiver deep link:
    - `bitkit://payment-request?requestId=<requestId>&from=<senderPubkey>`
+
+**Discovery (receiver polling known contacts):**
+Recipients discover pending requests by polling known contacts' storage:
+1. Get list of followed pubkeys
+2. For each contact, list `/{contact_pubkey}/pub/paykit.app/v0/requests/{my_scope}/`
+3. Decrypt each request using recipient's Noise secret key
+4. Deduplicate locally (recipient cannot delete from sender's storage)
+
+**Mandatory Encryption:**
+- All payment requests MUST use Sealed Blob v1 encryption
+- Plaintext requests are REJECTED for security
+- AAD format: `paykit:v0:request:{path}:{request_id}`
+
+**Implementation:**
+- **Android**: `PaykitPollingWorker.discoverPendingRequests()` polls contacts
+- **iOS**: `PaykitPollingService.discoverPendingRequests()` polls contacts
 
 #### 8.2.2 Receiving + processing a payment request deep link (receiver flow)
 
@@ -1599,6 +1698,14 @@ if (!response.success) {
 
 ### 8.4 Subscriptions
 
+**Sender-Storage Model for Subscription Proposals:**
+Like payment requests, subscription proposals are stored on the **provider's** homeserver:
+- Path: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
+- `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))`
+- Mandatory Sealed Blob v1 encryption
+- Subscribers poll providers' storage to discover proposals
+- Subscribers cannot delete proposals from provider storage (local dedup only)
+
 ```swift
 // Create subscription
 let subscription = try await paykitClient.createSubscription(
@@ -1616,6 +1723,12 @@ try await paykitClient.enableAutoPay(
     requireConfirmation: false
 )
 ```
+
+**Discovery (subscriber polling providers):**
+1. Get list of known providers (follows, past subscriptions)
+2. For each provider, list `/{provider}/pub/paykit.app/v0/subscriptions/proposals/{my_scope}/`
+3. Decrypt each proposal using subscriber's Noise secret key
+4. Accept/decline locally (cannot delete from provider's storage)
 
 ### 8.5 Spending Limits
 
@@ -2540,34 +2653,64 @@ For comprehensive security documentation, including threat model, attack surface
 
 **paykit-rs files created/modified:**
 ```
+paykit-lib/
+├── src/lib.rs                    # Re-exports protocol module
+└── src/protocol/
+    ├── mod.rs                    # Protocol constants
+    ├── scope.rs                  # Pubkey normalization + SHA-256 scope hashing
+    ├── paths.rs                  # Canonical path builders
+    └── aad.rs                    # AAD builders for Sealed Blob v1
+
 paykit-mobile/
-├── src/lib.rs                    # FFI exports
+├── src/lib.rs                    # FFI exports + execute_with_fallbacks
 ├── src/interactive_ffi.rs        # Noise protocol FFI
 ├── src/executor_ffi.rs           # Payment executor FFI
 ├── swift/                        # iOS storage adapters
 └── kotlin/                       # Android storage adapters
+
+paykit-subscriptions/
+└── src/discovery.rs              # Updated for sender-storage model + encryption
+
+docs/
+├── INTEROP_TEST_VECTORS.md       # Cross-platform scope hash test cases
+└── opus-paykit-diff.md           # PDF spec vs implementation analysis
 ```
 
 **bitkit-ios files created:**
 ```
 Bitkit/PaykitIntegration/
-├── FFI/paykit_mobile.swift       # Generated bindings
-├── Services/PaykitManager.swift
-├── Services/DirectoryService.swift
-├── Services/NoisePaymentService.swift
+├── FFI/paykit_mobile.swift         # Generated bindings
+├── Protocol/
+│   └── PaykitV0Protocol.swift      # Canonical path/AAD builders (matches Rust)
+├── Services/
+│   ├── PaykitManager.swift
+│   ├── DirectoryService.swift      # Updated for sender-storage model
+│   ├── PaykitPaymentService.swift  # Updated with fallback loop
+│   ├── PaykitPollingService.swift  # Updated for contact polling
+│   └── NoisePaymentService.swift
 ├── Storage/PaykitKeychainStorage.swift
-└── Views/*.swift                 # UI components
+└── Views/*.swift                   # UI components
 ```
 
 **bitkit-android files created:**
 ```
 app/src/main/java/
-├── uniffi/paykit_mobile/         # Generated bindings
+├── uniffi/paykit_mobile/           # Generated bindings
 └── to/bitkit/paykit/
-    ├── services/PaykitManager.kt
-    ├── services/DirectoryService.kt
+    ├── protocol/
+    │   └── PaykitV0Protocol.kt     # Canonical path/AAD builders (matches Rust)
+    ├── services/
+    │   ├── PaykitManager.kt
+    │   ├── DirectoryService.kt     # Updated for sender-storage model
+    │   └── PaykitPaymentService.kt # Updated with fallback loop
+    ├── workers/
+    │   └── PaykitPollingWorker.kt  # Updated for contact polling
     ├── storage/PaykitSecureStorage.kt
-    └── ui/screens/*.kt           # UI components
+    └── ui/screens/*.kt             # UI components
+
+app/src/test/java/
+└── to/bitkit/paykit/protocol/
+    └── PaykitV0ProtocolTest.kt     # Cross-platform test vectors
 ```
 
 ### B. Dependency Versions

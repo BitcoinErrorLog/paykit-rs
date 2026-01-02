@@ -1216,6 +1216,8 @@ internal open class UniffiVTableCallbackInterfaceReceiptGeneratorCallback(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -1364,6 +1366,8 @@ fun uniffi_paykit_mobile_checksum_method_paykitclient_days_remaining_in_period(
 fun uniffi_paykit_mobile_checksum_method_paykitclient_discover_noise_endpoint(
 ): Short
 fun uniffi_paykit_mobile_checksum_method_paykitclient_execute_payment(
+): Short
+fun uniffi_paykit_mobile_checksum_method_paykitclient_execute_with_fallbacks(
 ): Short
 fun uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr(
 ): Short
@@ -1730,6 +1734,8 @@ fun uniffi_paykit_mobile_fn_method_paykitclient_days_remaining_in_period(`ptr`: 
 fun uniffi_paykit_mobile_fn_method_paykitclient_discover_noise_endpoint(`ptr`: Pointer,`transport`: Pointer,`recipientPubkey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_paykit_mobile_fn_method_paykitclient_execute_payment(`ptr`: Pointer,`methodId`: RustBuffer.ByValue,`endpoint`: RustBuffer.ByValue,`amountSats`: Long,`metadataJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_paykit_mobile_fn_method_paykitclient_execute_with_fallbacks(`ptr`: Pointer,`candidates`: RustBuffer.ByValue,`amountSats`: Long,`metadataJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_paykit_mobile_fn_method_paykitclient_extract_key_from_qr(`ptr`: Pointer,`scannedData`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2296,6 +2302,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_execute_payment() != 54016.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_execute_with_fallbacks() != 32260.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_paykitclient_extract_key_from_qr() != 58479.toShort()) {
@@ -4891,6 +4900,41 @@ public interface PaykitClientInterface {
     fun `executePayment`(`methodId`: kotlin.String, `endpoint`: kotlin.String, `amountSats`: kotlin.ULong, `metadataJson`: kotlin.String?): PaymentExecutionResult
     
     /**
+     * Execute a payment with automatic fallback to alternative methods.
+     *
+     * This method implements the PDF-mandated fallback behavior:
+     * - Attempts the primary method first
+     * - On retryable failure, tries each fallback in order
+     * - Stops on success or non-retryable failure (to avoid double-spend)
+     *
+     * # Arguments
+     *
+     * * `candidates` - Ordered list of payment methods to try (primary first, then fallbacks)
+     * * `amount_sats` - Amount to send in satoshis
+     * * `metadata_json` - Optional metadata as JSON
+     *
+     * # Returns
+     *
+     * `FallbackExecutionResult` containing the outcome and all attempts made.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let candidates = vec![
+     * PaymentCandidate { method_id: "lightning".into(), endpoint: "lnbc1000n1...".into() },
+     * PaymentCandidate { method_id: "onchain".into(), endpoint: "bc1q...".into() },
+     * ];
+     * let result = client.execute_with_fallbacks(candidates, 1000, None)?;
+     * if result.success {
+     * println!("Paid via {}", result.successful_execution.unwrap().method_id);
+     * } else {
+     * println!("All methods failed: {}", result.summary);
+     * }
+     * ```
+     */
+    fun `executeWithFallbacks`(`candidates`: List<PaymentCandidate>, `amountSats`: kotlin.ULong, `metadataJson`: kotlin.String?): FallbackExecutionResult
+    
+    /**
      * Extract public key from scanned QR code.
      */
     fun `extractKeyFromQr`(`scannedData`: kotlin.String): kotlin.String?
@@ -5563,6 +5607,52 @@ open class PaykitClient: Disposable, AutoCloseable, PaykitClientInterface
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_execute_payment(
         it, FfiConverterString.lower(`methodId`),FfiConverterString.lower(`endpoint`),FfiConverterULong.lower(`amountSats`),FfiConverterOptionalString.lower(`metadataJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Execute a payment with automatic fallback to alternative methods.
+     *
+     * This method implements the PDF-mandated fallback behavior:
+     * - Attempts the primary method first
+     * - On retryable failure, tries each fallback in order
+     * - Stops on success or non-retryable failure (to avoid double-spend)
+     *
+     * # Arguments
+     *
+     * * `candidates` - Ordered list of payment methods to try (primary first, then fallbacks)
+     * * `amount_sats` - Amount to send in satoshis
+     * * `metadata_json` - Optional metadata as JSON
+     *
+     * # Returns
+     *
+     * `FallbackExecutionResult` containing the outcome and all attempts made.
+     *
+     * # Example
+     *
+     * ```ignore
+     * let candidates = vec![
+     * PaymentCandidate { method_id: "lightning".into(), endpoint: "lnbc1000n1...".into() },
+     * PaymentCandidate { method_id: "onchain".into(), endpoint: "bc1q...".into() },
+     * ];
+     * let result = client.execute_with_fallbacks(candidates, 1000, None)?;
+     * if result.success {
+     * println!("Paid via {}", result.successful_execution.unwrap().method_id);
+     * } else {
+     * println!("All methods failed: {}", result.summary);
+     * }
+     * ```
+     */
+    @Throws(PaykitMobileException::class)override fun `executeWithFallbacks`(`candidates`: List<PaymentCandidate>, `amountSats`: kotlin.ULong, `metadataJson`: kotlin.String?): FallbackExecutionResult {
+            return FfiConverterTypeFallbackExecutionResult.lift(
+    callWithPointer {
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_method_paykitclient_execute_with_fallbacks(
+        it, FfiConverterSequenceTypePaymentCandidate.lower(`candidates`),FfiConverterULong.lower(`amountSats`),FfiConverterOptionalString.lower(`metadataJson`),_status)
 }
     }
     )
@@ -9192,6 +9282,64 @@ public object FfiConverterTypeErrorMessage: FfiConverterRustBuffer<ErrorMessage>
 
 
 /**
+ * Result of executing payment with fallbacks.
+ *
+ * Contains the successful result if any method worked,
+ * or a complete list of all attempts if all failed.
+ */
+data class FallbackExecutionResult (
+    /**
+     * Whether any payment method succeeded.
+     */
+    var `success`: kotlin.Boolean, 
+    /**
+     * The successful execution result, if any.
+     */
+    var `successfulExecution`: PaymentExecutionResult?, 
+    /**
+     * All attempts made, in order.
+     */
+    var `attempts`: List<PaymentAttempt>, 
+    /**
+     * Summary message describing the outcome.
+     */
+    var `summary`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFallbackExecutionResult: FfiConverterRustBuffer<FallbackExecutionResult> {
+    override fun read(buf: ByteBuffer): FallbackExecutionResult {
+        return FallbackExecutionResult(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypePaymentExecutionResult.read(buf),
+            FfiConverterSequenceTypePaymentAttempt.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FallbackExecutionResult) = (
+            FfiConverterBoolean.allocationSize(value.`success`) +
+            FfiConverterOptionalTypePaymentExecutionResult.allocationSize(value.`successfulExecution`) +
+            FfiConverterSequenceTypePaymentAttempt.allocationSize(value.`attempts`) +
+            FfiConverterString.allocationSize(value.`summary`)
+    )
+
+    override fun write(value: FallbackExecutionResult, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`success`, buf)
+            FfiConverterOptionalTypePaymentExecutionResult.write(value.`successfulExecution`, buf)
+            FfiConverterSequenceTypePaymentAttempt.write(value.`attempts`, buf)
+            FfiConverterString.write(value.`summary`, buf)
+    }
+}
+
+
+
+/**
  * Health check result.
  */
 data class HealthCheckResult (
@@ -9747,6 +9895,110 @@ public object FfiConverterTypeNoiseSessionInfo: FfiConverterRustBuffer<NoiseSess
             FfiConverterBoolean.write(value.`isIncoming`, buf)
             FfiConverterULong.write(value.`messagesSent`, buf)
             FfiConverterULong.write(value.`messagesReceived`, buf)
+    }
+}
+
+
+
+/**
+ * Record of a single attempt within a fallback execution.
+ */
+data class PaymentAttempt (
+    /**
+     * Payment method attempted.
+     */
+    var `methodId`: kotlin.String, 
+    /**
+     * Endpoint attempted.
+     */
+    var `endpoint`: kotlin.String, 
+    /**
+     * Whether this attempt succeeded.
+     */
+    var `success`: kotlin.Boolean, 
+    /**
+     * Error message if failed.
+     */
+    var `error`: kotlin.String?, 
+    /**
+     * Whether this failure is retryable (e.g., network timeout).
+     * Non-retryable failures (e.g., invoice already paid) stop the loop.
+     */
+    var `retryable`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePaymentAttempt: FfiConverterRustBuffer<PaymentAttempt> {
+    override fun read(buf: ByteBuffer): PaymentAttempt {
+        return PaymentAttempt(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PaymentAttempt) = (
+            FfiConverterString.allocationSize(value.`methodId`) +
+            FfiConverterString.allocationSize(value.`endpoint`) +
+            FfiConverterBoolean.allocationSize(value.`success`) +
+            FfiConverterOptionalString.allocationSize(value.`error`) +
+            FfiConverterBoolean.allocationSize(value.`retryable`)
+    )
+
+    override fun write(value: PaymentAttempt, buf: ByteBuffer) {
+            FfiConverterString.write(value.`methodId`, buf)
+            FfiConverterString.write(value.`endpoint`, buf)
+            FfiConverterBoolean.write(value.`success`, buf)
+            FfiConverterOptionalString.write(value.`error`, buf)
+            FfiConverterBoolean.write(value.`retryable`, buf)
+    }
+}
+
+
+
+/**
+ * A payment method candidate for fallback execution.
+ */
+data class PaymentCandidate (
+    /**
+     * Payment method identifier.
+     */
+    var `methodId`: kotlin.String, 
+    /**
+     * Payment endpoint (address, invoice, etc.).
+     */
+    var `endpoint`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePaymentCandidate: FfiConverterRustBuffer<PaymentCandidate> {
+    override fun read(buf: ByteBuffer): PaymentCandidate {
+        return PaymentCandidate(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PaymentCandidate) = (
+            FfiConverterString.allocationSize(value.`methodId`) +
+            FfiConverterString.allocationSize(value.`endpoint`)
+    )
+
+    override fun write(value: PaymentCandidate, buf: ByteBuffer) {
+            FfiConverterString.write(value.`methodId`, buf)
+            FfiConverterString.write(value.`endpoint`, buf)
     }
 }
 
@@ -13331,6 +13583,38 @@ public object FfiConverterOptionalTypeNoiseEndpointInfo: FfiConverterRustBuffer<
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypePaymentExecutionResult: FfiConverterRustBuffer<PaymentExecutionResult?> {
+    override fun read(buf: ByteBuffer): PaymentExecutionResult? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypePaymentExecutionResult.read(buf)
+    }
+
+    override fun allocationSize(value: PaymentExecutionResult?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypePaymentExecutionResult.allocationSize(value)
+        }
+    }
+
+    override fun write(value: PaymentExecutionResult?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypePaymentExecutionResult.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypePaymentStatusInfo: FfiConverterRustBuffer<PaymentStatusInfo?> {
     override fun read(buf: ByteBuffer): PaymentStatusInfo? {
         if (buf.get().toInt() == 0) {
@@ -13597,6 +13881,62 @@ public object FfiConverterSequenceTypeHealthCheckResult: FfiConverterRustBuffer<
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeHealthCheckResult.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePaymentAttempt: FfiConverterRustBuffer<List<PaymentAttempt>> {
+    override fun read(buf: ByteBuffer): List<PaymentAttempt> {
+        val len = buf.getInt()
+        return List<PaymentAttempt>(len) {
+            FfiConverterTypePaymentAttempt.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PaymentAttempt>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePaymentAttempt.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PaymentAttempt>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePaymentAttempt.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePaymentCandidate: FfiConverterRustBuffer<List<PaymentCandidate>> {
+    override fun read(buf: ByteBuffer): List<PaymentCandidate> {
+        val len = buf.getInt()
+        return List<PaymentCandidate>(len) {
+            FfiConverterTypePaymentCandidate.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PaymentCandidate>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePaymentCandidate.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PaymentCandidate>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePaymentCandidate.write(it, buf)
         }
     }
 }

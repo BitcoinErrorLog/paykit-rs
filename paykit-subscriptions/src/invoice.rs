@@ -95,12 +95,16 @@ impl TaxInfo {
         let tax_amount = subtotal.percentage(rate);
         Self::new(description, rate, tax_amount)
     }
-    
+
     /// Create new tax info from an f64 rate (convenience method).
     /// Note: Uses f64 for rate, which may introduce minor precision loss.
     /// For exact precision, use `new` with a Decimal rate.
     pub fn new_f64(description: impl Into<String>, rate: f64, amount: Amount) -> Self {
-        Self::new(description, Decimal::from_f64_retain(rate).unwrap_or(Decimal::ZERO), amount)
+        Self::new(
+            description,
+            Decimal::from_f64_retain(rate).unwrap_or(Decimal::ZERO),
+            amount,
+        )
     }
 
     /// Calculate tax from a subtotal using an f64 rate (convenience method).

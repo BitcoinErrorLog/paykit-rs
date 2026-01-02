@@ -21,27 +21,33 @@ pub async fn run(storage_dir: &Path, verbose: bool) -> Result<()> {
     // Setup Checklist Section
     ui::separator();
     ui::info("Setup Checklist:");
-    
+
     // Check identity
     ui::success("  ✅ Identity created");
-    
+
     // Check wallet configuration
     let wallet_config = super::wallet::WalletConfig::load(storage_dir)?;
-    let has_lightning = wallet_config.as_ref().map(|c| c.has_lightning()).unwrap_or(false);
-    let has_onchain = wallet_config.as_ref().map(|c| c.has_onchain()).unwrap_or(false);
-    
+    let has_lightning = wallet_config
+        .as_ref()
+        .map(|c| c.has_lightning())
+        .unwrap_or(false);
+    let has_onchain = wallet_config
+        .as_ref()
+        .map(|c| c.has_onchain())
+        .unwrap_or(false);
+
     if has_lightning {
         ui::success("  ✅ Lightning wallet configured");
     } else {
         ui::warning("  ⬜ Lightning wallet (run: paykit-demo wallet configure-lnd ...)");
     }
-    
+
     if has_onchain {
         ui::success("  ✅ On-chain wallet configured");
     } else {
         ui::warning("  ⬜ On-chain wallet (run: paykit-demo wallet configure-esplora ...)");
     }
-    
+
     // Check contacts
     let storage = DemoStorage::new(storage_dir.join("data"));
     let contacts = storage.list_contacts().unwrap_or_default();
@@ -50,7 +56,7 @@ pub async fn run(storage_dir: &Path, verbose: bool) -> Result<()> {
     } else {
         ui::warning("  ⬜ Add contacts (run: paykit-demo contacts add ...)");
     }
-    
+
     // Check if methods are published
     // For demo, we just check if wallet is configured as a proxy
     if has_lightning || has_onchain {
@@ -58,16 +64,19 @@ pub async fn run(storage_dir: &Path, verbose: bool) -> Result<()> {
     } else {
         ui::warning("  ⬜ Configure wallet before publishing");
     }
-    
+
     // Calculate completion percentage
     let total_steps = 4;
     let completed_steps = 1 // identity
         + (if has_lightning { 1 } else { 0 })
         + (if has_onchain { 1 } else { 0 })
         + (if !contacts.is_empty() { 1 } else { 0 });
-    
+
     let completion = (completed_steps * 100) / total_steps;
-    ui::info(&format!("\n  Setup Progress: {}% ({}/{})", completion, completed_steps, total_steps));
+    ui::info(&format!(
+        "\n  Setup Progress: {}% ({}/{})",
+        completion, completed_steps, total_steps
+    ));
 
     ui::separator();
 

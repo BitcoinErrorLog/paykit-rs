@@ -22,9 +22,9 @@ use super::traits::{
 };
 
 #[cfg(target_arch = "wasm32")]
-use std::collections::HashMap;
-#[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
+use std::collections::HashMap;
 
 /// Web Crypto-backed secure key storage.
 ///
@@ -86,19 +86,18 @@ impl SecureKeyStorage for WebCryptoStorage {
     ) -> impl std::future::Future<Output = SecureStorageResult<()>> {
         async move {
             let mut keys = self.keys.borrow_mut();
-            
+
             if keys.contains_key(key_id) && !options.overwrite {
                 return Err(SecureStorageError::already_exists(key_id));
             }
-            
+
             keys.insert(key_id.to_string(), key_data.to_vec());
-            
+
             // Store metadata
             let mut metadata = self.metadata.borrow_mut();
-            let meta = KeyMetadata::new(key_id, key_data.len())
-                .with_auth(options.require_auth);
+            let meta = KeyMetadata::new(key_id, key_data.len()).with_auth(options.require_auth);
             metadata.insert(key_id.to_string(), meta);
-            
+
             Ok(())
         }
     }
@@ -118,10 +117,10 @@ impl SecureKeyStorage for WebCryptoStorage {
             let mut keys = self.keys.borrow_mut();
             keys.remove(key_id)
                 .ok_or_else(|| SecureStorageError::not_found(key_id))?;
-            
+
             let mut metadata = self.metadata.borrow_mut();
             metadata.remove(key_id);
-            
+
             Ok(())
         }
     }
@@ -154,10 +153,10 @@ impl SecureKeyStorage for WebCryptoStorage {
         async move {
             let mut keys = self.keys.borrow_mut();
             keys.clear();
-            
+
             let mut metadata = self.metadata.borrow_mut();
             metadata.clear();
-            
+
             Ok(())
         }
     }

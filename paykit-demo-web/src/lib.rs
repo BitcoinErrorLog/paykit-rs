@@ -12,9 +12,9 @@ mod directory;
 mod identity;
 mod payment;
 mod payment_methods;
+mod private_endpoints;
 mod storage;
 mod storage_migration;
-mod private_endpoints;
 mod subscriptions;
 mod types;
 mod utils;
@@ -27,6 +27,7 @@ pub use directory::*;
 pub use identity::{Identity, WasmKeyProvider};
 pub use payment::*;
 pub use payment_methods::*;
+pub use private_endpoints::WasmPrivateEndpointStorage;
 pub use storage::*;
 pub use storage_migration::*;
 pub use subscriptions::*;
@@ -34,7 +35,6 @@ pub use types::*;
 pub use utils::{is_valid_public_key, parse_uri, to_paykit_uri, to_pubky_uri, ParsedUri};
 pub use wasm_transport::WasmUnauthenticatedTransport;
 pub use websocket_transport::*;
-pub use private_endpoints::WasmPrivateEndpointStorage;
 
 /// Initialize the WASM module
 ///

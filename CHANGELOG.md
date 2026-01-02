@@ -4,6 +4,64 @@ All notable changes to the Paykit project are documented in this file.
 
 ## [Unreleased]
 
+### Security: Encrypted Public Storage (January 2026)
+
+Critical security fix for plaintext secrets stored in publicly accessible `/pub/` paths on Pubky homeservers.
+
+#### Breaking Changes
+- `publish_payment_request` now requires `recipient_noise_pk` parameter for encryption
+- `discover_request` and `discover_requests` now require `my_noise_sk` parameter for decryption
+
+#### New Features
+- **Paykit Sealed Blob v1**: Encrypted envelope format for all secret-bearing data on public paths
+  - X25519 ECDH key agreement
+  - HKDF-SHA256 key derivation
+  - ChaCha20-Poly1305 authenticated encryption
+  - Versioned format
+- **Encrypted Payment Requests**: Payment requests encrypted to recipient's Noise endpoint pubkey
+- **Encrypted Subscription Storage**: All subscription data (proposals, agreements, cancellations)
+  encrypted to recipient's Noise public key
+  - `store_subscription_proposal` encrypts to subscriber
+  - `store_signed_subscription` encrypts separately to both parties
+  - `store_subscription_cancellation` encrypts to both parties
+- **Subscription Discovery with Decryption**: New discovery functions
+  - `discover_subscription_proposals`
+  - `discover_subscription_agreements`
+  - `discover_subscription_cancellations`
+
+#### Prerequisite
+Recipients must have a Noise endpoint published at `/pub/paykit.app/v0/noise` before receiving encrypted requests or subscriptions. Both Bitkit iOS and Android publish this via `DirectoryService.publishNoiseEndpoint()`.
+
+#### Documentation
+- `docs/SEALED_BLOB_V1_SPEC.md`: Complete specification for encrypted envelope format
+- `docs/SECURITY_ARCHITECTURE.md`: Updated threat model and mitigation documentation
+  - Cross-device relay security audit (conclusion: already secure)
+  - Push relay security audit (conclusion: secure, tokens never public)
+  - All subscription storage encryption complete
+
+#### Tests
+- `tests/subscription_encryption.rs`: Encryption roundtrip tests for subscriptions
+  - Proposal encryption/decryption
+  - Signed subscription encryption/decryption
+  - Cancellation encryption/decryption
+  - Wrong key/AAD rejection
+  - Legacy plaintext detection
+
+#### Removed (SECURITY)
+- `publish_payment_request_plaintext()` - **REMOVED** - Use `publish_payment_request` with encryption
+- `store_subscription_proposal_plaintext()` - **REMOVED** - Use `SubscriptionManager` encrypted methods
+- `store_signed_subscription_plaintext()` - **REMOVED** - Use `SubscriptionManager` encrypted methods
+- Plaintext parsing fallbacks in all discovery functions - **REMOVED**
+
+All plaintext storage and discovery paths have been removed. Only encrypted Sealed Blob v1 format is accepted.
+
+#### SubscriptionManager Changes
+- Added `with_noise_keypair()` builder for encryption support
+- Added `noise_sk()` accessor for Noise secret key
+- Added Noise public key discovery with caching (`discover_noise_pk`)
+
+---
+
 ### Bitkit Executor FFI Integration
 
 Added comprehensive support for integrating external wallet implementations (like Bitkit iOS/Android) through UniFFI callback interfaces.

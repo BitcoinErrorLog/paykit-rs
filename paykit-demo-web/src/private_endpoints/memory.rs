@@ -65,5 +65,3 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
         self.inner.count().await
     }
 }
-
-

@@ -66,7 +66,7 @@ pub async fn fetch(
 
     // Query profile.json from the directory
     let profile_path = "/pub/pubky.app/profile.json";
-    
+
     match client.get_raw(&public_key, profile_path).await {
         Ok(Some(data)) => {
             if let Some(s) = spinner {
@@ -225,8 +225,7 @@ pub async fn import(
     let profile = match client.get_raw(&source_pubkey, profile_path).await {
         Ok(Some(data)) => {
             spinner.finish_and_clear();
-            serde_json::from_str::<Profile>(&data)
-                .context("Failed to parse source profile")?
+            serde_json::from_str::<Profile>(&data).context("Failed to parse source profile")?
         }
         Ok(None) => {
             spinner.finish_and_clear();
@@ -291,21 +290,24 @@ fn display_profile(profile: &Profile, pubkey: &str) {
     } else {
         ui::key_value("Name", "(not set)");
     }
-    
-    ui::key_value("Pubkey", &format!("{}...{}", &pubkey[..8], &pubkey[pubkey.len()-8..]));
-    
+
+    ui::key_value(
+        "Pubkey",
+        &format!("{}...{}", &pubkey[..8], &pubkey[pubkey.len() - 8..]),
+    );
+
     if let Some(ref bio) = profile.bio {
         ui::key_value("Bio", bio);
     }
-    
+
     if let Some(ref image) = profile.image {
         ui::key_value("Image", image);
     }
-    
+
     if let Some(ref status) = profile.status {
         ui::key_value("Status", status);
     }
-    
+
     if !profile.links.is_empty() {
         ui::info("Links:");
         for link in &profile.links {
@@ -320,4 +322,3 @@ fn parse_pubky_uri(uri: &str) -> Result<pubky::PublicKey> {
     let key_str = key_str.split('/').next().unwrap_or(key_str);
     key_str.parse().context("Invalid Pubky URI format")
 }
-

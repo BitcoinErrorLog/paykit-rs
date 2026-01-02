@@ -80,7 +80,14 @@ pub async fn run(
     tracing::debug!("Parsing recipient: {}", recipient);
     let public_key = parse_pubky_uri(recipient)?;
 
-    ui::key_value("Recipient", &format!("{}...{}", &recipient[..12.min(recipient.len())], &recipient[recipient.len().saturating_sub(8)..]));
+    ui::key_value(
+        "Recipient",
+        &format!(
+            "{}...{}",
+            &recipient[..12.min(recipient.len())],
+            &recipient[recipient.len().saturating_sub(8)..]
+        ),
+    );
     if let Some(amt) = amount {
         ui::key_value("Amount", &format!("{} sats", amt));
     }
@@ -121,15 +128,13 @@ pub async fn run(
     spinner.finish_and_clear();
 
     // Filter healthy methods
-    let healthy_methods: Vec<&ScoredMethod> = scored_methods
-        .iter()
-        .filter(|m| m.is_healthy)
-        .collect();
+    let healthy_methods: Vec<&ScoredMethod> =
+        scored_methods.iter().filter(|m| m.is_healthy).collect();
 
     if healthy_methods.is_empty() {
         ui::warning("No healthy payment methods available");
         ui::info("All discovered methods failed health checks");
-        
+
         if verbose {
             ui::separator();
             ui::info("Unhealthy methods:");
@@ -158,7 +163,7 @@ pub async fn run(
             "{}{}: {} (score: {:.2})",
             rank, method.method_id, method.endpoint, score
         ));
-        
+
         if verbose {
             ui::info(&format!(
                 "     cost: {:.2}, speed: {:.2}, privacy: {:.2}",
@@ -170,12 +175,15 @@ pub async fn run(
     // Recommend best method
     if let Some(best) = sorted.first() {
         ui::separator();
-        ui::success(&format!("Recommended: {} via {}", best.method_id, best.endpoint));
+        ui::success(&format!(
+            "Recommended: {} via {}",
+            best.method_id, best.endpoint
+        ));
 
         if execute {
             ui::separator();
             ui::info("Executing payment...");
-            
+
             // In a real implementation, this would call the pay command
             // For now, show what would happen
             if let Some(amt) = amount {
@@ -259,4 +267,3 @@ fn parse_pubky_uri(uri: &str) -> Result<pubky::PublicKey> {
     let key_str = key_str.split('/').next().unwrap_or(key_str);
     key_str.parse().context("Invalid Pubky URI format")
 }
-

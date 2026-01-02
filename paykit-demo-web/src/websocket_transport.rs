@@ -379,7 +379,7 @@ impl WasmPaymentClient {
         // The methods object is a JavaScript object with method_id -> endpoint mappings
         let noise_endpoint = {
             use js_sys::{Object, Reflect};
-            
+
             // Try to convert to a JavaScript object
             let obj = if methods_js.is_object() {
                 Object::from(methods_js)

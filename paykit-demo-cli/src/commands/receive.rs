@@ -37,7 +37,11 @@ impl ReceiptGenerator for DemoReceiptGenerator {
 /// Simple storage adapter for the demo
 struct DemoStorageAdapter {
     storage: DemoStorage,
-    endpoint_manager: Option<paykit_lib::private_endpoints::PrivateEndpointManager<paykit_lib::private_endpoints::FileStore>>,
+    endpoint_manager: Option<
+        paykit_lib::private_endpoints::PrivateEndpointManager<
+            paykit_lib::private_endpoints::FileStore,
+        >,
+    >,
 }
 
 #[async_trait::async_trait]
@@ -109,8 +113,11 @@ impl PaykitStorage for DemoStorageAdapter {
         method: &paykit_lib::MethodId,
     ) -> paykit_interactive::Result<Option<String>> {
         if let Some(ref manager) = self.endpoint_manager {
-            if let Some(endpoint_data) = manager.get_endpoint(peer, method).await
-                .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))? {
+            if let Some(endpoint_data) = manager
+                .get_endpoint(peer, method)
+                .await
+                .map_err(|e| paykit_interactive::InteractiveError::Transport(e.to_string()))?
+            {
                 return Ok(Some(endpoint_data.0));
             }
         }
@@ -170,18 +177,18 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
     // Setup storage and manager
     let demo_storage = DemoStorage::new(storage_dir.join("data"));
     demo_storage.init()?;
-    
+
     // Setup private endpoint storage with encryption
     let endpoint_manager = {
-        use paykit_lib::private_endpoints::{FileStore, PrivateEndpointManager, encryption};
-        
+        use paykit_lib::private_endpoints::{encryption, FileStore, PrivateEndpointManager};
+
         let endpoints_dir = storage_dir.join("private_endpoints");
         let key_path = storage_dir.join(".endpoint_key");
-        
+
         // Try to load existing key, or generate new one
         let key = if key_path.exists() {
-            let key_bytes = std::fs::read(&key_path)
-                .context("Failed to read endpoint encryption key")?;
+            let key_bytes =
+                std::fs::read(&key_path).context("Failed to read endpoint encryption key")?;
             if key_bytes.len() != 32 {
                 anyhow::bail!("Invalid key length");
             }
@@ -198,17 +205,16 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
-                    .ok();
+                std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600)).ok();
             }
             key_array
         };
-        
+
         let store = FileStore::new_encrypted(&endpoints_dir, key)
             .context("Failed to create encrypted endpoint store")?;
         Some(PrivateEndpointManager::new(store))
     };
-    
+
     let storage_adapter = Arc::new(Box::new(DemoStorageAdapter {
         storage: demo_storage,
         endpoint_manager,

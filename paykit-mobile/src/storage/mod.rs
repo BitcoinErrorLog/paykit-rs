@@ -539,9 +539,7 @@ pub enum StorageCacheError {
 
 impl From<StorageError> for StorageCacheError {
     fn from(e: StorageError) -> Self {
-        Self::Storage {
-            msg: e.to_string(),
-        }
+        Self::Storage { msg: e.to_string() }
     }
 }
 

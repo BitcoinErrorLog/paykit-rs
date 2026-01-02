@@ -203,9 +203,19 @@ mod tests {
         // Clean up expired nonces
         store.cleanup_expired(now).unwrap();
 
-        assert_eq!(store.count().unwrap(), 1, "Should have 1 nonce after cleanup");
-        assert!(store.has_nonce(&recent_nonce).unwrap(), "Recent nonce should remain");
-        assert!(!store.has_nonce(&old_nonce).unwrap(), "Old nonce should be removed");
+        assert_eq!(
+            store.count().unwrap(),
+            1,
+            "Should have 1 nonce after cleanup"
+        );
+        assert!(
+            store.has_nonce(&recent_nonce).unwrap(),
+            "Recent nonce should remain"
+        );
+        assert!(
+            !store.has_nonce(&old_nonce).unwrap(),
+            "Old nonce should be removed"
+        );
     }
 
     #[test]
@@ -228,11 +238,17 @@ mod tests {
         let nonce = [42u8; 32];
         let expires_at = Utc::now().timestamp() + 3600;
 
-        assert!(!store.has_nonce(&nonce).unwrap(), "Should not have nonce initially");
+        assert!(
+            !store.has_nonce(&nonce).unwrap(),
+            "Should not have nonce initially"
+        );
 
         store.check_and_mark(&nonce, expires_at).unwrap();
 
-        assert!(store.has_nonce(&nonce).unwrap(), "Should have nonce after marking");
+        assert!(
+            store.has_nonce(&nonce).unwrap(),
+            "Should have nonce after marking"
+        );
     }
 
     #[test]

@@ -35,7 +35,8 @@ impl WasmPrivateEndpointStorage {
     pub fn set_password(&self, _password: Vec<u8>) {}
 
     async fn init_db(&self) -> Result<IdbDatabase, StorageError> {
-        let window: Window = web_sys::window().ok_or_else(|| StorageError::Other("No window".to_string()))?;
+        let window: Window =
+            web_sys::window().ok_or_else(|| StorageError::Other("No window".to_string()))?;
 
         let idb_factory: IdbFactory = window
             .indexed_db()
@@ -82,8 +83,8 @@ impl WasmPrivateEndpointStorage {
     }
 
     async fn encrypt_endpoint(&self, endpoint: &PrivateEndpoint) -> Result<Vec<u8>, StorageError> {
-        let json =
-            serde_json::to_string(endpoint).map_err(|e| StorageError::Serialization(e.to_string()))?;
+        let json = serde_json::to_string(endpoint)
+            .map_err(|e| StorageError::Serialization(e.to_string()))?;
         Ok(json.as_bytes().to_vec())
     }
 
@@ -122,9 +123,8 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             created_at: endpoint.created_at,
         };
 
-        let value = serde_wasm_bindgen::to_value(&stored).map_err(|e| {
-            StorageError::Serialization(format!("Serialization failed: {}", e))
-        })?;
+        let value = serde_wasm_bindgen::to_value(&stored)
+            .map_err(|e| StorageError::Serialization(format!("Serialization failed: {}", e)))?;
 
         store
             .put_with_key(&value, &JsValue::from_str(&key))
@@ -163,9 +163,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             .map_err(|e| StorageError::Other(format!("Failed to get endpoint: {:?}", e)))?;
 
         let js_value: JsValue = request.into();
-        let promise_obj: js_sys::Promise = js_value.dyn_into().map_err(|_| {
-            StorageError::Other("Failed to convert request to Promise".to_string())
-        })?;
+        let promise_obj: js_sys::Promise = js_value
+            .dyn_into()
+            .map_err(|_| StorageError::Other("Failed to convert request to Promise".to_string()))?;
         let promise: JsFuture = JsFuture::from(promise_obj);
         let result = promise
             .await
@@ -197,9 +197,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             .map_err(|e| StorageError::Other(format!("Failed to get all: {:?}", e)))?;
 
         let js_value: JsValue = request.into();
-        let promise_obj: js_sys::Promise = js_value.dyn_into().map_err(|_| {
-            StorageError::Other("Failed to convert request to Promise".to_string())
-        })?;
+        let promise_obj: js_sys::Promise = js_value
+            .dyn_into()
+            .map_err(|_| StorageError::Other("Failed to convert request to Promise".to_string()))?;
         let promise: JsFuture = JsFuture::from(promise_obj);
         let result = promise
             .await
@@ -239,9 +239,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             .map_err(|e| StorageError::Other(format!("Failed to get all: {:?}", e)))?;
 
         let js_value: JsValue = request.into();
-        let promise_obj: js_sys::Promise = js_value.dyn_into().map_err(|_| {
-            StorageError::Other("Failed to convert request to Promise".to_string())
-        })?;
+        let promise_obj: js_sys::Promise = js_value
+            .dyn_into()
+            .map_err(|_| StorageError::Other("Failed to convert request to Promise".to_string()))?;
         let promise: JsFuture = JsFuture::from(promise_obj);
         let result = promise
             .await
@@ -314,9 +314,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             .map_err(|e| StorageError::Other(format!("Failed to get all: {:?}", e)))?;
 
         let js_value: JsValue = request.into();
-        let promise_obj: js_sys::Promise = js_value.dyn_into().map_err(|_| {
-            StorageError::Other("Failed to convert request to Promise".to_string())
-        })?;
+        let promise_obj: js_sys::Promise = js_value
+            .dyn_into()
+            .map_err(|_| StorageError::Other("Failed to convert request to Promise".to_string()))?;
         let promise: JsFuture = JsFuture::from(promise_obj);
         let result = promise
             .await
@@ -341,7 +341,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             let db = self.init_db().await?;
             let transaction = db
                 .transaction_with_str_and_mode(&self.store_name, IdbTransactionMode::Readwrite)
-                .map_err(|e| StorageError::Other(format!("Failed to create transaction: {:?}", e)))?;
+                .map_err(|e| {
+                    StorageError::Other(format!("Failed to create transaction: {:?}", e))
+                })?;
             let store = transaction
                 .object_store(&self.store_name)
                 .map_err(|e| StorageError::Other(format!("Failed to get object store: {:?}", e)))?;
@@ -380,9 +382,9 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
             .map_err(|e| StorageError::Other(format!("Failed to count: {:?}", e)))?;
 
         let js_value: JsValue = request.into();
-        let promise_obj: js_sys::Promise = js_value.dyn_into().map_err(|_| {
-            StorageError::Other("Failed to convert request to Promise".to_string())
-        })?;
+        let promise_obj: js_sys::Promise = js_value
+            .dyn_into()
+            .map_err(|_| StorageError::Other("Failed to convert request to Promise".to_string()))?;
         let promise: JsFuture = JsFuture::from(promise_obj);
         let result = promise
             .await
@@ -396,5 +398,3 @@ impl PrivateEndpointStore for WasmPrivateEndpointStorage {
         Ok(count)
     }
 }
-
-

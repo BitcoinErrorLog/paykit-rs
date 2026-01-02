@@ -97,9 +97,39 @@ pub fn derive_device_key(
 | Key Type | Lifetime | Storage | Rotation |
 |----------|----------|---------|----------|
 | Ed25519 | Permanent | Ring only | Never |
+| Noise Seed | Permanent per device | Bitkit secure storage | On device reset |
 | X25519 Epoch 0 | 30-90 days | Bitkit cache | To Epoch 1 |
-| X25519 Epoch 1 | 30-90 days | Bitkit cache | Request new epochs |
+| X25519 Epoch 1 | 30-90 days | Bitkit cache | To Epoch 2 (local derivation) |
 | Session Secret | Until revoked | Bitkit secure storage | On 401/403 |
+| Ephemeral Handoff Key | Minutes | Bitkit temp storage | Zeroized after handoff |
+
+### Noise Seed for Local Epoch Derivation
+
+**Problem**: Bitkit needs to derive future Noise epochs without repeatedly calling Ring.
+
+**Solution**: Ring derives a per-device `noise_seed` and includes it in the encrypted handoff payload.
+
+```
+noise_seed = HKDF-SHA256(
+    salt = "paykit-noise-seed-v1",
+    ikm = Ed25519_secret,
+    info = device_id,
+    len = 32
+)
+```
+
+**Properties**:
+- **Domain-separated**: Cannot be used for signing or any non-Noise purpose
+- **Device-specific**: Different `device_id` = different `noise_seed`
+- **One-way**: Cannot reverse to get Ed25519 secret
+
+**Epoch Derivation** (local, no Ring needed):
+
+```
+epoch_key = derive_epoch_keypair(noise_seed, epoch_number)
+```
+
+This uses the existing `pubky-noise` KDF with `noise_seed` as input instead of Ed25519 secret.
 
 ---
 
@@ -151,17 +181,20 @@ Sessions can be revoked by:
 
 ### Threat Model
 
-**Attack Scenario**: URL logging/leaks expose session secrets
+**Attack Scenario**: URL logging/leaks expose session secrets, OR public homeserver storage exposes secrets
 
 **Example Attack Vectors**:
 - Web server access logs
 - Browser history
 - Deep link analytics
 - URL sharing/forwarding
+- **Public `/pub/` storage on Pubky homeserver** (anyone can read)
 
-### Mitigation: Encrypted Handoff
+### Mitigation: Encrypted Handoff with Sealed Blob
 
-**Old (Insecure)**:
+All secret-bearing data stored on `/pub/` paths **must** be encrypted using the **Paykit Sealed Blob v1** format. See [SEALED_BLOB_V1_SPEC.md](./SEALED_BLOB_V1_SPEC.md) for full specification.
+
+**Old (Insecure v1)**:
 ```
 bitkit://paykit-setup?
   session_secret=abc123...&
@@ -169,21 +202,53 @@ bitkit://paykit-setup?
 ```
 ☠️ **Secrets exposed in URL!**
 
-**New (Secure)**:
+**Old (Insecure v2 - plaintext on homeserver)**:
+```
+PUT /pub/paykit.app/v0/handoff/abc123
+{
+  "session_secret": "...",
+  "noise_keypairs": [{"secret_key": "..."}]
+}
+```
+☠️ **Secrets readable by anyone who knows the path!**
+
+**New (Secure v3 - encrypted sealed blob)**:
 ```
 bitkit://paykit-setup?
   mode=secure_handoff&
   pubky=8um71us...&
   request_id=f3a7b2c...
 ```
-✅ **Only request ID in URL - secrets on homeserver**
+✅ **Only request ID in URL**
+
+```
+PUT /pub/paykit.app/v0/handoff/abc123
+{
+  "v": 1,
+  "epk": "<base64url>",
+  "nonce": "<base64url>",
+  "ct": "<encrypted session + noise keys + noise_seed>"
+}
+```
+✅ **Secrets encrypted to Bitkit's ephemeral X25519 public key**
+
+### Ephemeral Key Exchange
+
+1. **Bitkit generates ephemeral X25519 keypair** before calling Ring
+2. **Bitkit includes `ephemeralPk`** in Ring request URL
+3. **Ring encrypts handoff payload** to Bitkit's ephemeral public key
+4. **Ring stores only encrypted envelope** on homeserver
+5. **Bitkit fetches and decrypts** using ephemeral secret key
+6. **Bitkit zeroizes ephemeral secret** after successful decryption
 
 ### Security Properties
 
 1. **Unguessable Path**: 256-bit random `request_id` = 2^256 possible paths
-2. **Time-Limited**: 5-minute TTL in `expires_at` field
+2. **Time-Limited**: 5-minute TTL in `expires_at` field (inside encrypted payload)
 3. **Single-Use**: Deleted immediately after successful fetch
 4. **Access Control**: Requires knowing exact `request_id` (no directory listing)
+5. **Encrypted at Rest**: Even if path is discovered, ciphertext is useless without Bitkit's ephemeral secret key
+6. **AAD Binding**: Ciphertext is bound to storage path; cannot be relocated
 
 ### Attack Analysis
 
@@ -201,6 +266,112 @@ bitkit://paykit-setup?
 - Deleted after fetch prevents reuse
 - `created_at` and `expires_at` prevent time-manipulation
 - `request_id` is unique per request
+
+**Public Storage Attack** (NEW):
+- Even if attacker discovers `request_id`, they only get encrypted ciphertext
+- Decryption requires Bitkit's ephemeral secret key (never transmitted)
+- AAD binding prevents attacker from copying blob to different path
+
+---
+
+## Encrypted Payment Requests & Proposals
+
+### Threat Model
+
+**Attack Scenario**: Payment requests and subscription proposals stored in plaintext on public `/pub/` paths expose:
+- Payment amounts and currencies
+- Sender/recipient relationships
+- Payment method details (invoices, addresses)
+
+### Mitigation: Sealed Blob Encryption
+
+All payment requests and subscription data are encrypted using the **Paykit Sealed Blob v1** format before storage.
+
+**Implementation Status**: ✅ Complete
+- Payment requests: Encrypted to recipient's Noise endpoint public key
+- Subscription proposals: Encrypted to subscriber's Noise endpoint public key
+- Subscription agreements: Encrypted separately to both parties
+- Subscription cancellations: Encrypted separately to both parties
+
+**Storage Paths** (encrypted blobs):
+- Payment requests: `/pub/paykit.app/v0/requests/{scope}/{requestId}` (scope = sha256(normalized_pubkey))
+- Subscription proposals: `/pub/paykit.app/v0/subscriptions/proposals/{scope}/{proposalId}`
+- Subscription agreements: `/pub/paykit.app/v0/subscriptions/agreements/{party}/{subscriptionId}`
+- Subscription cancellations: `/pub/paykit.app/v0/subscriptions/cancellations/{party}/{subscriptionId}`
+- Secure handoff: `/pub/paykit.app/v0/handoff/{requestId}`
+
+**Prerequisite**: Recipients must have a Noise endpoint published at `/pub/paykit.app/v0/noise`.
+Apps publish this via `DirectoryService.publishNoiseEndpoint()` (iOS/Android).
+
+### Canonical AAD Formats (Paykit v0 Protocol)
+
+All AAD strings follow the format: `paykit:v0:{purpose}:{...context...}:{id}`
+
+| Object Type | AAD Format | Example |
+|-------------|------------|---------|
+| Payment Request | `paykit:v0:request:{path}:{requestId}` | `paykit:v0:request:/pub/paykit.app/v0/requests/{scope}/abc:abc` |
+| Subscription Proposal | `paykit:v0:subscription_proposal:{path}:{proposalId}` | `paykit:v0:subscription_proposal:/pub/.../prop1:prop1` |
+| Subscription Agreement | `paykit:v0:subscription_agreement:{path}:{subscriptionId}` | `paykit:v0:subscription_agreement:/pub/.../sub1:sub1` |
+| Subscription Cancellation | `paykit:v0:subscription_cancellation:{path}:{subscriptionId}` | `paykit:v0:subscription_cancellation:/pub/.../sub1:sub1` |
+| Secure Handoff | `paykit:v0:handoff:{ownerPubkey}:{path}:{requestId}` | `paykit:v0:handoff:8um71u...:/pub/.../req1:req1` |
+| Cross-device Relay Session | `paykit:v0:relay:session:{requestId}` | `paykit:v0:relay:session:abc123` |
+
+### Recipient Scope Hash
+
+Payment requests and subscription proposals use a scope-based directory structure:
+- `scope = sha256(normalized_pubkey).hex()`
+- Normalized pubkey: lowercase, z32 alphabet, 52 chars, no `pk:` prefix
+
+This provides:
+- **Privacy**: Pubkey not exposed in path
+- **Determinism**: Same pubkey always maps to same scope
+- **Collision resistance**: SHA-256 provides sufficient entropy
+
+### Encryption Flow (Sender)
+
+1. Discover recipient's Noise endpoint public key from `/pub/paykit.app/v0/noise`
+2. Compute recipient scope: `sha256(normalize(recipient_pubkey)).hex()`
+3. Construct canonical AAD from purpose, path, and ID
+4. Encrypt request JSON using `pubky_noise::sealed_blob::sealed_blob_encrypt()`
+5. Store encrypted envelope at scope-based path
+
+### Decryption Flow (Recipient)
+
+1. Fetch envelope from storage path
+2. Decrypt using locally-cached Noise secret key
+3. Reconstruct canonical AAD from purpose, path, and ID
+4. Parse decrypted JSON
+
+### Implementation Status (January 2026)
+
+All storage and discovery functions are complete:
+
+| Component | Status |
+|-----------|--------|
+| `publish_payment_request` | ✅ Encrypted |
+| `discover_request` | ✅ Decrypts |
+| `store_subscription_proposal` | ✅ Encrypted |
+| `store_signed_subscription` | ✅ Encrypted |
+| `store_subscription_cancellation` | ✅ Encrypted |
+| `discover_subscription_proposals` | ✅ Decrypts |
+| `discover_subscription_agreements` | ✅ Decrypts |
+| `discover_subscription_cancellations` | ✅ Decrypts |
+
+### App Integration
+
+Both Bitkit iOS and Android correctly implement Noise endpoint publishing:
+
+**Android** (`DirectoryService.kt`):
+```kotlin
+suspend fun publishNoiseEndpoint(host: String, port: Int, noisePubkey: String, metadata: String? = null)
+```
+
+**iOS** (`DirectoryService.swift`):
+```swift
+func publishNoiseEndpoint(host: String, port: UInt16, noisePubkey: String, metadata: String?) async throws
+```
+
+Error handling for missing endpoints is implemented via `NoisePaymentError.EndpointNotFound` (Android) and `NoisePaymentError.endpointNotFound` (iOS).
 
 ---
 
@@ -274,6 +445,110 @@ POST:/wake:1703245689:a3f7b2c1d4e5f6...
 - User identities beyond pubkeys
 
 **Future Privacy Enhancement**: Anonymous wake via onion routing
+
+### Audit Conclusion (January 2026)
+
+**Status**: ✅ **SECURE** - Push tokens are NOT stored in public `/pub/` paths.
+
+**Implementation Status**:
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `PushRelayService` (iOS) | ✅ Implemented | Server-side token storage, Ed25519 auth |
+| `PushRelayService` (Android) | ✅ Implemented | Server-side token storage, Ed25519 auth |
+| `PushNotificationService.discoverPushEndpoint` | ⚠️ Deprecated | Returns null, points to PushRelayService |
+| `PushNotificationService.publishOurPushEndpoint` | ⚠️ Deprecated | No-op, points to PushRelayService |
+| Public `/pub/paykit.app/v0/push` storage | ❌ Never implemented | Only referenced in threat model docs |
+
+**Verified**:
+- No code publishes push tokens to public homeserver paths
+- `PushRelayService` is the sole mechanism for push token registration
+- Legacy methods in `PushNotificationService` are deprecated stubs
+- Documentation correctly describes relay as the secure alternative
+
+---
+
+## Cross-Device Relay Authentication (pubkyauth)
+
+### Overview
+
+The cross-device relay flow (`pubkyauth://` scheme) enables authentication from one device (e.g., desktop browser) using another device (e.g., mobile phone with Ring). This is documented in [`pubky-core/docs/AUTH.md`](https://github.com/pubky/pubky-core/blob/main/docs/AUTH.md).
+
+### Flow Summary
+
+```
+┌──────────────┐   (1) QR   ┌─────────────┐   (4) encrypted   ┌───────────┐
+│  3rd Party   │───────────>│   Ring      │─────────────────>│   HTTP    │
+│     App      │<───────────│ (Scanner)   │                   │   Relay   │
+└──────────────┘   (6) sig  └─────────────┘                   └───────────┘
+       │                                                            │
+       │ (2) subscribe                                              │
+       │<───────────────────────────────────────────────────────────│
+       │                          (5) forward                       │
+       │<───────────────────────────────────────────────────────────│
+```
+
+1. **3rd Party App** generates `client_secret` (32 bytes), subscribes to relay at `channel_id = hash(client_secret)`
+2. App displays QR code: `pubkyauth:///?relay=...&caps=...&secret=<base64url(client_secret)>`
+3. Ring scans QR, shows consent form, user approves
+4. Ring signs `AuthToken`, encrypts with `client_secret`, sends to `relay + channel_id`
+5. Relay forwards encrypted token to app
+6. App decrypts, extracts `pubky`, presents `AuthToken` to homeserver for session
+
+### Security Properties
+
+| Property | Status | Notes |
+|----------|--------|-------|
+| **Token Confidentiality** | ✅ Strong | Encrypted with `client_secret` before relay transmission |
+| **Ephemeral Transport** | ✅ Strong | Relay only forwards once; no persistent storage |
+| **Short-Lived Token** | ✅ Strong | 45-second validity window prevents replay |
+| **Mutual Knowledge** | ✅ Strong | Only QR scanner and displayer know `client_secret` |
+
+### Threat Model Comparison
+
+| Attack Vector | Homeserver Storage | Cross-Device Relay |
+|---------------|--------------------|--------------------|
+| Public path enumeration | ❌ Vulnerable (fixed) | N/A (no public storage) |
+| Persistent data exposure | ❌ Vulnerable (fixed) | ✅ Ephemeral only |
+| Man-in-the-middle relay | N/A | ✅ Encrypted with client_secret |
+| QR code interception | N/A | ⚠️ Requires physical proximity |
+| Replay attack | N/A | ✅ 45-second TTL + unique ID |
+
+### Security Analysis
+
+**Why Cross-Device Relay is NOT Vulnerable to the Homeserver Plaintext Issue**:
+
+1. **Ephemeral vs Persistent**: Relay data exists only during transmission; homeserver data was stored indefinitely at guessable paths
+2. **Encrypted by Default**: AuthToken is always encrypted with `client_secret` before relay; homeserver used plaintext (now fixed)
+3. **Shared Secret via QR**: The `client_secret` is exchanged via physical QR scan, requiring attacker presence
+4. **No Predictable Paths**: Relay uses `hash(client_secret)` as channel ID; homeserver paths were predictable
+
+**Remaining Attack Surface**:
+
+| Attack | Likelihood | Impact | Mitigation |
+|--------|------------|--------|------------|
+| QR photo/screenshot | Low | High | User vigilance; short-lived QR codes |
+| Shoulder surfing | Low | High | Physical security awareness |
+| Malicious relay operator | Medium | Low | Token encrypted; relay only sees ciphertext |
+| Client_secret brute force | Very Low | High | 256-bit secret; computationally infeasible |
+
+### Recommendations
+
+1. **No Changes Required**: The cross-device relay flow already provides strong security properties
+2. **Future Enhancement**: Consider time-limited QR codes (regenerate every 30 seconds)
+3. **User Education**: Advise users to scan QR codes in private settings
+4. **Relay Trust**: Document which relays are trusted; consider self-hosted relay option
+
+### Integration with Paykit
+
+The cross-device relay flow is **separate** from the Paykit secure handoff:
+
+- **Cross-Device Relay**: Used for browser/desktop authentication via mobile Ring
+- **Paykit Secure Handoff**: Used for direct mobile-to-mobile Bitkit↔Ring communication
+
+Both flows now use encryption:
+- Cross-device relay: `client_secret` encryption (always did)
+- Paykit handoff: Ephemeral X25519 encryption (newly added)
 
 ---
 
@@ -531,7 +806,17 @@ class SecureSecret(private var data: ByteArray) {
 **Mitigation**: Secure handoff protocol - only `request_id` in URL
 
 **Residual Risk**: `request_id` still logged  
-**Acceptable**: Request ID alone is useless without homeserver access + 5-minute window
+**Acceptable**: Request ID alone reveals only encrypted ciphertext; decryption requires Bitkit's ephemeral secret key
+
+### Scenario 1b: Public Homeserver Storage
+
+**Attack**: Attacker reads `/pub/` paths on homeserver (publicly accessible)
+
+**Old Risk**: Handoff payloads, payment requests, and subscription proposals contained plaintext secrets  
+**Mitigation**: All secret-bearing data encrypted using Paykit Sealed Blob v1
+
+**Residual Risk**: Metadata exposure (path structure reveals sender/recipient pubkeys)  
+**Acceptable**: Pubkeys are already public; no secret data exposed
 
 ### Scenario 2: Push Token DoS
 

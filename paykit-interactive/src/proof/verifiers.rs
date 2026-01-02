@@ -1,9 +1,9 @@
 //! Real proof verifiers that query blockchain/LN nodes
 
 use crate::proof::{PaymentProof, ProofType, ProofVerifier, VerificationResult};
-use paykit_lib::MethodId;
 #[cfg(feature = "http-executor")]
 use paykit_lib::executors::{EsploraConfig, EsploraExecutor};
+use paykit_lib::MethodId;
 
 /// Real Bitcoin transaction proof verifier using Esplora API.
 ///
@@ -238,7 +238,7 @@ impl ProofVerifier for RealLightningProofVerifier {
 
                 if !payment_hash.chars().all(|c| c.is_ascii_hexdigit()) {
                     return VerificationResult::invalid(vec![
-                        "Invalid payment_hash: not hexadecimal".to_string()
+                        "Invalid payment_hash: not hexadecimal".to_string(),
                     ]);
                 }
 
@@ -273,7 +273,7 @@ impl ProofVerifier for RealLightningProofVerifier {
                 // Verify hash matches
                 if computed_hash.as_slice() != payment_hash_bytes.as_slice() {
                     return VerificationResult::invalid(vec![
-                        "Preimage hash mismatch: SHA256(preimage) != payment_hash".to_string()
+                        "Preimage hash mismatch: SHA256(preimage) != payment_hash".to_string(),
                     ]);
                 }
 
@@ -293,4 +293,3 @@ impl ProofVerifier for RealLightningProofVerifier {
         }
     }
 }
-

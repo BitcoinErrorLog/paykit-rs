@@ -61,10 +61,7 @@ impl PaymentMethodRegistry {
     /// If a plugin with the same method ID already exists, it will be replaced.
     pub fn register(&self, plugin: Box<dyn PaymentMethodPlugin>) {
         let method_id = plugin.method_id().0.clone();
-        let mut plugins = self
-            .plugins
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut plugins = self.plugins.write().unwrap_or_else(|e| e.into_inner());
         plugins.insert(method_id, Arc::from(plugin));
     }
 
@@ -72,19 +69,13 @@ impl PaymentMethodRegistry {
     ///
     /// Returns the removed plugin if it existed.
     pub fn unregister(&self, method_id: &MethodId) -> Option<Arc<dyn PaymentMethodPlugin>> {
-        let mut plugins = self
-            .plugins
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut plugins = self.plugins.write().unwrap_or_else(|e| e.into_inner());
         plugins.remove(&method_id.0)
     }
 
     /// Gets a payment method plugin by its ID.
     pub fn get(&self, method_id: &MethodId) -> Option<Arc<dyn PaymentMethodPlugin>> {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         plugins.get(&method_id.0).cloned()
     }
 
@@ -97,19 +88,13 @@ impl PaymentMethodRegistry {
 
     /// Returns all registered method IDs.
     pub fn list_methods(&self) -> Vec<MethodId> {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         plugins.keys().map(|k| MethodId(k.clone())).collect()
     }
 
     /// Returns the number of registered plugins.
     pub fn len(&self) -> usize {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         plugins.len()
     }
 
@@ -120,10 +105,7 @@ impl PaymentMethodRegistry {
 
     /// Checks if a method is registered.
     pub fn has_method(&self, method_id: &MethodId) -> bool {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         plugins.contains_key(&method_id.0)
     }
 
@@ -134,10 +116,7 @@ impl PaymentMethodRegistry {
         &self,
         method_ids: &[MethodId],
     ) -> Vec<(MethodId, Arc<dyn PaymentMethodPlugin>)> {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         method_ids
             .iter()
             .filter_map(|id| plugins.get(&id.0).map(|p| (id.clone(), p.clone())))
@@ -149,10 +128,7 @@ impl PaymentMethodRegistry {
     where
         F: Fn(&dyn PaymentMethodPlugin) -> bool,
     {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         plugins
             .values()
             .filter(|p| predicate(p.as_ref()))
@@ -169,10 +145,7 @@ impl Default for PaymentMethodRegistry {
 
 impl Clone for PaymentMethodRegistry {
     fn clone(&self) -> Self {
-        let plugins = self
-            .plugins
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
         Self {
             plugins: RwLock::new(plugins.clone()),
         }

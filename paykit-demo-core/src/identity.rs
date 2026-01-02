@@ -136,7 +136,8 @@ impl Identity {
 
         let salt = hex::decode(&backup.salt_hex).context("Invalid salt")?;
         let nonce_bytes = hex::decode(&backup.nonce_hex).context("Invalid nonce")?;
-        let encrypted = hex::decode(&backup.encrypted_data_hex).context("Invalid encrypted data")?;
+        let encrypted =
+            hex::decode(&backup.encrypted_data_hex).context("Invalid encrypted data")?;
 
         // Derive encryption key from password
         let mut encryption_key = [0u8; 32];
@@ -203,7 +204,11 @@ impl Identity {
     }
 
     /// Derive X25519 key for Noise protocol from Ed25519 keypair
-    pub fn derive_x25519_key(&self, device_id: &[u8], epoch: u32) -> Result<[u8; 32], pubky_noise::NoiseError> {
+    pub fn derive_x25519_key(
+        &self,
+        device_id: &[u8],
+        epoch: u32,
+    ) -> Result<[u8; 32], pubky_noise::NoiseError> {
         let seed = self.keypair.secret_key();
         pubky_noise::kdf::derive_x25519_for_device_epoch(&seed, device_id, epoch)
     }
@@ -349,83 +354,93 @@ impl SecureIdentityManager {
     pub fn new(storage_dir: impl AsRef<Path>) -> Self {
         let storage = paykit_lib::secure_storage::DesktopKeyStorage::new("paykit-demo");
         let metadata_path = storage_dir.as_ref().join("identities_metadata.json");
-        
-        Self { storage, metadata_path }
+
+        Self {
+            storage,
+            metadata_path,
+        }
     }
-    
+
     /// Save an identity to secure storage
     pub async fn save(&self, identity: &Identity, name: &str) -> Result<()> {
         // Store secret key in OS keychain
         let secret_key_hex = hex::encode(identity.keypair.secret_key());
-        self.storage.store(
-            &format!("identity.{}.secret", name),
-            secret_key_hex.as_bytes(),
-            StoreOptions::default()
-        ).await
-        .map_err(|e| anyhow::anyhow!("Failed to store secret key: {}", e))?;
-        
+        self.storage
+            .store(
+                &format!("identity.{}.secret", name),
+                secret_key_hex.as_bytes(),
+                StoreOptions::default(),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to store secret key: {}", e))?;
+
         // Update metadata file
         self.update_metadata(name, identity).await?;
-        
+
         Ok(())
     }
-    
+
     /// Load an identity from secure storage
     pub async fn load(&self, name: &str) -> Result<Identity> {
         // Load secret key from OS keychain
-        let secret_bytes = self.storage.retrieve(&format!("identity.{}.secret", name))
+        let secret_bytes = self
+            .storage
+            .retrieve(&format!("identity.{}.secret", name))
             .await
             .map_err(|e| anyhow::anyhow!("Failed to retrieve secret key: {}", e))?
             .ok_or_else(|| anyhow::anyhow!("Identity '{}' not found", name))?;
-        
+
         let secret_key_hex = String::from_utf8(secret_bytes)?;
         let secret_bytes = hex::decode(&secret_key_hex)?;
-        
+
         if secret_bytes.len() != 32 {
             anyhow::bail!("Invalid secret key length");
         }
-        
+
         let mut secret_key = [0u8; 32];
         secret_key.copy_from_slice(&secret_bytes);
-        
+
         let keypair = Keypair::from_secret_key(&secret_key);
-        
+
         // Load metadata for nickname
         let metadata = self.load_metadata()?;
-        let identity_info = metadata.identities.iter()
+        let identity_info = metadata
+            .identities
+            .iter()
             .find(|i| i.name == name)
             .ok_or_else(|| anyhow::anyhow!("Identity metadata not found"))?;
-        
+
         let mut identity = Identity::from_keypair(keypair);
         identity.nickname = identity_info.nickname.clone();
-        
+
         Ok(identity)
     }
-    
+
     /// List all identities
     pub fn list(&self) -> Result<Vec<String>> {
         let metadata = self.load_metadata()?;
         Ok(metadata.identities.iter().map(|i| i.name.clone()).collect())
     }
-    
+
     /// Delete an identity
     pub async fn delete(&self, name: &str) -> Result<()> {
         // Delete from keychain
-        self.storage.delete(&format!("identity.{}.secret", name))
+        self.storage
+            .delete(&format!("identity.{}.secret", name))
             .await
             .map_err(|e| anyhow::anyhow!("Failed to delete from keychain: {}", e))?;
-        
+
         // Remove from metadata
         let mut metadata = self.load_metadata()?;
         metadata.identities.retain(|i| i.name != name);
         self.save_metadata(&metadata)?;
-        
+
         Ok(())
     }
-    
+
     async fn update_metadata(&self, name: &str, identity: &Identity) -> Result<()> {
         let mut metadata = self.load_metadata().unwrap_or_default();
-        
+
         let identity_info = IdentityMetadata {
             name: name.to_string(),
             public_key_hex: hex::encode(identity.public_key().as_bytes()),
@@ -435,31 +450,33 @@ impl SecureIdentityManager {
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_secs() as i64,
         };
-        
+
         // Update or insert
         if let Some(existing) = metadata.identities.iter_mut().find(|i| i.name == name) {
             *existing = identity_info;
         } else {
             metadata.identities.push(identity_info);
         }
-        
+
         self.save_metadata(&metadata)
     }
-    
+
     fn load_metadata(&self) -> Result<IdentitiesMetadata> {
         if !self.metadata_path.exists() {
-            return Ok(IdentitiesMetadata { identities: Vec::new() });
+            return Ok(IdentitiesMetadata {
+                identities: Vec::new(),
+            });
         }
-        
+
         let json = std::fs::read_to_string(&self.metadata_path)?;
         Ok(serde_json::from_str(&json)?)
     }
-    
+
     fn save_metadata(&self, metadata: &IdentitiesMetadata) -> Result<()> {
         if let Some(parent) = self.metadata_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         let json = serde_json::to_string_pretty(metadata)?;
         std::fs::write(&self.metadata_path, json)?;
         Ok(())

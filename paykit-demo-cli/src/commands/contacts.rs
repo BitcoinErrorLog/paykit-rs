@@ -52,11 +52,12 @@ pub async fn list(storage_dir: &Path, search_query: Option<&str>, _verbose: bool
         let query_lower = query.to_lowercase();
         contacts.retain(|contact| {
             contact.name.to_lowercase().contains(&query_lower)
-                || contact.public_key.to_string().to_lowercase().contains(&query_lower)
                 || contact
-                    .pubky_uri()
+                    .public_key
+                    .to_string()
                     .to_lowercase()
                     .contains(&query_lower)
+                || contact.pubky_uri().to_lowercase().contains(&query_lower)
                 || contact
                     .notes
                     .as_ref()

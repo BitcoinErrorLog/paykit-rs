@@ -58,7 +58,8 @@ pub async fn load_current_identity(
         let secure_manager = paykit_demo_core::SecureIdentityManager::new(storage_dir);
         secure_manager.load(&name).await
     } else {
-        let identity_manager = paykit_demo_core::IdentityManager::new(storage_dir.join("identities"));
+        let identity_manager =
+            paykit_demo_core::IdentityManager::new(storage_dir.join("identities"));
         identity_manager.load(&name)
     }
 }

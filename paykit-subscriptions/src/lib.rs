@@ -62,6 +62,14 @@ pub use proration::{ProratedAmount, ProrationCalculator, ProrationDetails, Round
 pub use signing::{sign_subscription_ed25519, verify_signature_ed25519, Signature};
 pub use subscription::{PaymentFrequency, SignedSubscription, Subscription, SubscriptionTerms};
 
+// Re-export subscription discovery functions
+pub use discovery::{
+    discover_subscription_agreement, discover_subscription_agreements,
+    discover_subscription_cancellations, discover_subscription_proposal,
+    discover_subscription_proposals, PAYKIT_AGREEMENTS_PATH, PAYKIT_CANCELLATIONS_PATH,
+    PAYKIT_PROPOSALS_PATH,
+};
+
 // Monitor only available on native platforms
 #[cfg(not(target_arch = "wasm32"))]
 pub use monitor::SubscriptionMonitor;

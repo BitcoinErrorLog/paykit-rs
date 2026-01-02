@@ -4,7 +4,9 @@
 //! exchanged with peers during Noise protocol handshakes.
 
 use anyhow::{Context, Result};
-use paykit_lib::private_endpoints::{encryption, FileStore, PrivateEndpointManager, PrivateEndpointStore};
+use paykit_lib::private_endpoints::{
+    encryption, FileStore, PrivateEndpointManager, PrivateEndpointStore,
+};
 use paykit_lib::{MethodId, PublicKey};
 use std::path::Path;
 use std::str::FromStr;
@@ -27,7 +29,10 @@ pub async fn list(storage_dir: &Path, verbose: bool) -> Result<()> {
         return Ok(());
     }
 
-    ui::success(&format!("Found {} peer(s) with private endpoints", peers.len()));
+    ui::success(&format!(
+        "Found {} peer(s) with private endpoints",
+        peers.len()
+    ));
     ui::separator();
 
     for peer in peers {
@@ -73,7 +78,7 @@ pub async fn list(storage_dir: &Path, verbose: bool) -> Result<()> {
 
     // Show summary
     let total_count = store.count().await.unwrap_or(0);
-    
+
     // Count expired endpoints by iterating through all peers
     let mut expired_count = 0;
     let peers_for_count = store.list_peers().await.unwrap_or_default();
@@ -233,10 +238,7 @@ pub async fn remove_peer(storage_dir: &Path, peer: &str, verbose: bool) -> Resul
         .await
         .context("Failed to remove endpoints")?;
 
-    ui::success(&format!(
-        "Removed {} endpoint(s) for peer",
-        endpoints.len()
-    ));
+    ui::success(&format!("Removed {} endpoint(s) for peer", endpoints.len()));
 
     Ok(())
 }
@@ -285,7 +287,7 @@ pub async fn stats(storage_dir: &Path, _verbose: bool) -> Result<()> {
     let total = store.count().await.unwrap_or(0);
     let peers_list = store.list_peers().await.unwrap_or_default();
     let peers = peers_list.len();
-    
+
     // Count expired endpoints
     let mut expired = 0;
     for peer in &peers_list {
@@ -323,9 +325,7 @@ pub async fn stats(storage_dir: &Path, _verbose: bool) -> Result<()> {
 }
 
 /// Load the private endpoint manager
-fn load_endpoint_manager(
-    storage_dir: &Path,
-) -> Result<PrivateEndpointManager<FileStore>> {
+fn load_endpoint_manager(storage_dir: &Path) -> Result<PrivateEndpointManager<FileStore>> {
     let endpoints_dir = storage_dir.join("private_endpoints");
     let key_path = storage_dir.join(".endpoint_key");
 
@@ -356,4 +356,3 @@ fn load_endpoint_manager(
         FileStore::new_encrypted(&endpoints_dir, key).context("Failed to create endpoint store")?;
     Ok(PrivateEndpointManager::new(store))
 }
-

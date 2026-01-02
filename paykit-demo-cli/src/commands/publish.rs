@@ -57,18 +57,18 @@ pub async fn run(
     // Validate payment methods before publishing
     ui::separator();
     ui::info("Validating payment methods...");
-    
+
     let registry = default_registry();
     let mut all_valid = true;
-    
+
     for method in &methods {
         let method_id = MethodId::new(&method.method_id);
-        
+
         if let Some(plugin) = registry.get(&method_id) {
             let endpoint_data = EndpointData::new(&method.endpoint);
-            
+
             let result = plugin.validate_endpoint(&endpoint_data);
-            
+
             if result.valid {
                 ui::success(&format!("  {} - valid", method.method_id));
                 if !result.warnings.is_empty() {
@@ -84,17 +84,20 @@ pub async fn run(
                 }
             }
         } else {
-            ui::warning(&format!("  {} - no validator available (will publish anyway)", method.method_id));
+            ui::warning(&format!(
+                "  {} - no validator available (will publish anyway)",
+                method.method_id
+            ));
         }
     }
-    
+
     if !all_valid {
         ui::separator();
         ui::error("Some payment methods failed validation");
         ui::info("Fix the errors above before publishing");
         return Ok(());
     }
-    
+
     ui::separator();
 
     // Create directory client

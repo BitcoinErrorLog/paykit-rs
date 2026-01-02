@@ -111,7 +111,8 @@ impl PaykitInteractiveManager {
             }
             PaykitNoiseMessage::OfferPrivateEndpoints { methods } => {
                 // Save all offered endpoints
-                let method_ids: Vec<MethodId> = methods.iter().map(|o| o.method_id.clone()).collect();
+                let method_ids: Vec<MethodId> =
+                    methods.iter().map(|o| o.method_id.clone()).collect();
                 for offer in &methods {
                     self.storage
                         .save_private_endpoint(peer, &offer.method_id, &offer.endpoint)

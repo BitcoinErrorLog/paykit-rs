@@ -227,13 +227,13 @@ impl WasmPaymentMethodConfig {
         // Convert to JS object
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"valid".into(), &result.valid.into())?;
-        
+
         let errors = js_sys::Array::new();
         for error in &result.errors {
             errors.push(&error.into());
         }
         js_sys::Reflect::set(&obj, &"errors".into(), &errors)?;
-        
+
         let warnings = js_sys::Array::new();
         for warning in &result.warnings {
             warnings.push(&warning.into());

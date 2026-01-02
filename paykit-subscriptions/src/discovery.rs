@@ -664,6 +664,7 @@ fn try_decrypt_subscription_proposal(
 /// Decrypt an encrypted signed subscription agreement.
 ///
 /// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// AAD format: `paykit:v0:subscription_agreement:{path}:{subscription_id}` (matches manager.rs storage)
 fn try_decrypt_signed_subscription(
     content: &str,
     path: &str,
@@ -678,7 +679,8 @@ fn try_decrypt_signed_subscription(
         return None;
     }
 
-    let aad = format!("agreement:{}:{}", subscription_id, path);
+    // AAD format matches store_signed_subscription in manager.rs
+    let aad = format!("paykit:v0:subscription_agreement:{}:{}", path, subscription_id);
     match sealed_blob_decrypt(my_noise_sk, content, &aad) {
         Ok(plaintext) => serde_json::from_slice(&plaintext).ok(),
         Err(e) => {
@@ -691,6 +693,7 @@ fn try_decrypt_signed_subscription(
 /// Decrypt an encrypted cancellation.
 ///
 /// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// AAD format: `paykit:v0:subscription_cancellation:{path}:{subscription_id}` (matches manager.rs storage)
 fn try_decrypt_cancellation(
     content: &str,
     path: &str,
@@ -705,7 +708,8 @@ fn try_decrypt_cancellation(
         return None;
     }
 
-    let aad = format!("cancellation:{}:{}", subscription_id, path);
+    // AAD format matches store_subscription_cancellation in manager.rs
+    let aad = format!("paykit:v0:subscription_cancellation:{}:{}", path, subscription_id);
     match sealed_blob_decrypt(my_noise_sk, content, &aad) {
         Ok(plaintext) => serde_json::from_slice(&plaintext).ok(),
         Err(e) => {

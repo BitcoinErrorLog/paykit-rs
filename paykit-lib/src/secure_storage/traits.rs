@@ -297,10 +297,7 @@ pub trait SecureKeyStorage {
     ) -> impl Future<Output = SecureStorageResult<()>>;
 
     /// Retrieve a key by its identifier.
-    fn retrieve(
-        &self,
-        key_id: &str,
-    ) -> impl Future<Output = SecureStorageResult<Option<Vec<u8>>>>;
+    fn retrieve(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<Option<Vec<u8>>>>;
 
     /// Delete a key by its identifier.
     fn delete(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<()>>;
@@ -393,7 +390,10 @@ pub trait SecureKeyStorageExt: SecureKeyStorage {
     }
 
     /// Retrieve a key, returning error if not found.
-    fn retrieve_required(&self, key_id: &str) -> impl Future<Output = SecureStorageResult<Vec<u8>>> {
+    fn retrieve_required(
+        &self,
+        key_id: &str,
+    ) -> impl Future<Output = SecureStorageResult<Vec<u8>>> {
         async move {
             self.retrieve(key_id)
                 .await?

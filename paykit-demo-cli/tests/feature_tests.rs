@@ -38,7 +38,8 @@ mod endpoints_tests {
         assert!(
             combined.contains("no") || combined.contains("empty") || success,
             "endpoints list should handle empty state: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -56,7 +57,8 @@ mod endpoints_tests {
         assert!(
             combined.contains("total") || combined.contains("statistic") || success,
             "endpoints stats should display statistics: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -72,9 +74,13 @@ mod endpoints_tests {
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
-            combined.contains("no") || combined.contains("removed") || combined.contains("expired") || success,
+            combined.contains("no")
+                || combined.contains("removed")
+                || combined.contains("expired")
+                || success,
             "endpoints cleanup should handle empty state: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -97,7 +103,8 @@ mod rotation_tests {
         assert!(
             combined.contains("policy") || combined.contains("rotation") || success,
             "rotation status should display policy info: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -115,7 +122,8 @@ mod rotation_tests {
         assert!(
             combined.contains("updated") || combined.contains("success") || success,
             "rotation default should update policy: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -127,13 +135,15 @@ mod rotation_tests {
         run_cli(&temp_dir, &["setup", "--name", "test"]);
 
         // Set per-method policy
-        let (stdout, stderr, success) = run_cli(&temp_dir, &["rotation", "policy", "lightning", "after:5"]);
+        let (stdout, stderr, success) =
+            run_cli(&temp_dir, &["rotation", "policy", "lightning", "after:5"]);
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
             combined.contains("updated") || combined.contains("success") || success,
             "rotation policy should update method policy: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -145,13 +155,15 @@ mod rotation_tests {
         run_cli(&temp_dir, &["setup", "--name", "test"]);
 
         // Enable auto-rotation
-        let (stdout, stderr, success) = run_cli(&temp_dir, &["rotation", "auto-rotate", "--enable"]);
+        let (stdout, stderr, success) =
+            run_cli(&temp_dir, &["rotation", "auto-rotate", "--enable"]);
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
             combined.contains("enabled") || combined.contains("success") || success,
             "rotation auto-rotate should enable: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
 
         // Disable auto-rotation (without --enable flag means disabled)
@@ -161,7 +173,8 @@ mod rotation_tests {
         assert!(
             combined2.contains("disabled") || combined2.contains("success") || success2,
             "rotation auto-rotate should disable: stdout={}, stderr={}",
-            stdout2, stderr2
+            stdout2,
+            stderr2
         );
     }
 
@@ -179,7 +192,8 @@ mod rotation_tests {
         assert!(
             combined.contains("history") || combined.contains("no") || success,
             "rotation history should display: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -197,7 +211,8 @@ mod rotation_tests {
         assert!(
             combined.contains("cleared") || combined.contains("no") || success,
             "rotation clear-history should work: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -220,9 +235,12 @@ mod backup_tests {
 
         // Should either prompt for password, show backup, or give instructions
         assert!(
-            combined.contains("password") || combined.contains("backup") || combined.contains("export"),
+            combined.contains("password")
+                || combined.contains("backup")
+                || combined.contains("export"),
             "backup should handle export: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -235,14 +253,22 @@ mod backup_tests {
         run_cli(&temp_dir, &["setup", "--name", "test"]);
 
         // Try to export with output flag
-        let (stdout, stderr, _success) = run_cli(&temp_dir, &["backup", "--output", backup_path.to_str().unwrap()]);
+        let (stdout, stderr, _success) = run_cli(
+            &temp_dir,
+            &["backup", "--output", backup_path.to_str().unwrap()],
+        );
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         // Should either create file or prompt for password
         assert!(
-            combined.contains("password") || combined.contains("backup") || combined.contains("export") || combined.contains("created") || combined.contains("saved"),
+            combined.contains("password")
+                || combined.contains("backup")
+                || combined.contains("export")
+                || combined.contains("created")
+                || combined.contains("saved"),
             "backup should handle file export: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -262,13 +288,15 @@ mod contacts_search_tests {
         run_cli(&temp_dir, &["contacts", "add", "alice", "pubky://abc123"]);
 
         // Search for the contact
-        let (stdout, stderr, success) = run_cli(&temp_dir, &["contacts", "list", "--search", "alice"]);
+        let (stdout, stderr, success) =
+            run_cli(&temp_dir, &["contacts", "list", "--search", "alice"]);
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
             combined.contains("alice") || success,
             "contacts list --search should find contacts: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 
@@ -283,13 +311,15 @@ mod contacts_search_tests {
         run_cli(&temp_dir, &["contacts", "add", "alice", "pubky://abc123"]);
 
         // Search for non-existent contact
-        let (stdout, stderr, success) = run_cli(&temp_dir, &["contacts", "list", "--search", "bob"]);
+        let (stdout, stderr, success) =
+            run_cli(&temp_dir, &["contacts", "list", "--search", "bob"]);
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
             !combined.contains("alice") || combined.contains("no") || success,
             "contacts list --search should not find non-matching contacts: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -310,9 +340,13 @@ mod dashboard_tests {
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
-            combined.contains("dashboard") || combined.contains("summary") || combined.contains("contact") || success,
+            combined.contains("dashboard")
+                || combined.contains("summary")
+                || combined.contains("contact")
+                || success,
             "dashboard should display: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -333,9 +367,13 @@ mod receipts_tests {
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
-            combined.contains("no") || combined.contains("receipt") || combined.contains("empty") || success,
+            combined.contains("no")
+                || combined.contains("receipt")
+                || combined.contains("empty")
+                || success,
             "receipts should handle empty state: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
@@ -356,10 +394,13 @@ mod wallet_tests {
         let combined = format!("{}{}", stdout, stderr).to_lowercase();
 
         assert!(
-            combined.contains("wallet") || combined.contains("not") || combined.contains("configured") || success,
+            combined.contains("wallet")
+                || combined.contains("not")
+                || combined.contains("configured")
+                || success,
             "wallet status should display: stdout={}, stderr={}",
-            stdout, stderr
+            stdout,
+            stderr
         );
     }
 }
-

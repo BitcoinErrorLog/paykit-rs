@@ -170,7 +170,7 @@ enum Commands {
         #[arg(short, long)]
         id: Option<String>,
     },
-    
+
     /// Verify payment proof for a receipt
     VerifyProof {
         /// Receipt ID to verify
@@ -905,7 +905,7 @@ async fn main() -> Result<()> {
                 commands::receipts::run(&storage_dir, cli.verbose).await?;
             }
         }
-        
+
         Commands::VerifyProof { receipt_id } => {
             commands::receipts::verify_proof(&storage_dir, &receipt_id, cli.verbose).await?;
         }

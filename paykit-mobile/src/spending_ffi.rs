@@ -134,7 +134,7 @@ impl SpendingManagerFFI {
     #[uniffi::constructor]
     pub fn new(storage_path: String) -> Result<Arc<Self>> {
         let path = PathBuf::from(&storage_path);
-        
+
         // Ensure the peer_limits directory exists
         let limits_path = path.join("peer_limits");
         std::fs::create_dir_all(&limits_path).map_err(|e| PaykitMobileError::Internal {
@@ -182,11 +182,8 @@ impl SpendingManagerFFI {
 
         // Save to file
         let path = self.peer_limit_path(&peer_pubkey);
-        let json = serde_json::to_string_pretty(&limit).map_err(|e| {
-            PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            }
-        })?;
+        let json = serde_json::to_string_pretty(&limit)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
         std::fs::write(&path, json).map_err(|e| PaykitMobileError::Internal {
             msg: format!("Failed to save spending limit: {}", e),
         })?;
@@ -208,7 +205,7 @@ impl SpendingManagerFFI {
         peer_pubkey: String,
     ) -> Result<Option<PeerSpendingLimitFFI>> {
         let path = self.peer_limit_path(&peer_pubkey);
-        
+
         if !path.exists() {
             return Ok(None);
         }
@@ -217,10 +214,8 @@ impl SpendingManagerFFI {
             msg: format!("Failed to read spending limit: {}", e),
         })?;
 
-        let limit: PeerSpendingLimit =
-            serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            })?;
+        let limit: PeerSpendingLimit = serde_json::from_str(&json)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
         Ok(Some(PeerSpendingLimitFFI::from(&limit)))
     }
@@ -232,7 +227,7 @@ impl SpendingManagerFFI {
     /// * `peer_pubkey` - Peer's public key (z-base32 encoded)
     pub fn remove_peer_spending_limit(&self, peer_pubkey: String) -> Result<()> {
         let path = self.peer_limit_path(&peer_pubkey);
-        
+
         if path.exists() {
             std::fs::remove_file(&path).map_err(|e| PaykitMobileError::Internal {
                 msg: format!("Failed to remove spending limit: {}", e),
@@ -272,10 +267,8 @@ impl SpendingManagerFFI {
             msg: format!("Failed to read spending limit: {}", e),
         })?;
 
-        let mut limit: PeerSpendingLimit =
-            serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            })?;
+        let mut limit: PeerSpendingLimit = serde_json::from_str(&json)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
         // Check if reset needed
         if limit.should_reset() {
@@ -343,13 +336,18 @@ impl SpendingManagerFFI {
             })?;
 
         // Acquire exclusive lock (blocks until available)
-        file.lock_exclusive().map_err(|e| PaykitMobileError::Internal {
-            msg: format!("Failed to acquire lock: {}", e),
-        })?;
+        file.lock_exclusive()
+            .map_err(|e| PaykitMobileError::Internal {
+                msg: format!("Failed to acquire lock: {}", e),
+            })?;
 
         // Load current limit
         let result = (|| -> Result<SpendingReservationFFI> {
-            if !path.exists() || std::fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(true) {
+            if !path.exists()
+                || std::fs::metadata(&path)
+                    .map(|m| m.len() == 0)
+                    .unwrap_or(true)
+            {
                 return Err(PaykitMobileError::NotFound {
                     msg: format!("No spending limit set for peer: {}", peer_pubkey),
                 });
@@ -359,10 +357,8 @@ impl SpendingManagerFFI {
                 msg: format!("Failed to read spending limit: {}", e),
             })?;
 
-            let mut limit: PeerSpendingLimit =
-                serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                    msg: e.to_string(),
-                })?;
+            let mut limit: PeerSpendingLimit = serde_json::from_str(&json)
+                .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
             // Check if reset needed
             if limit.should_reset() {
@@ -390,11 +386,8 @@ impl SpendingManagerFFI {
                 })?;
 
             // Save updated limit
-            let json = serde_json::to_string_pretty(&limit).map_err(|e| {
-                PaykitMobileError::Serialization {
-                    msg: e.to_string(),
-                }
-            })?;
+            let json = serde_json::to_string_pretty(&limit)
+                .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
             std::fs::write(&path, json).map_err(|e| PaykitMobileError::Internal {
                 msg: format!("Failed to save spending limit: {}", e),
             })?;
@@ -407,11 +400,12 @@ impl SpendingManagerFFI {
             let reservation_id = format!("rsv_{}_{:08x}", now, rand::random::<u32>());
 
             // Store reservation in memory for tracking
-            let mut reservations = self.reservations.write().map_err(|_| {
-                PaykitMobileError::Internal {
-                    msg: "Failed to acquire reservations lock".to_string(),
-                }
-            })?;
+            let mut reservations =
+                self.reservations
+                    .write()
+                    .map_err(|_| PaykitMobileError::Internal {
+                        msg: "Failed to acquire reservations lock".to_string(),
+                    })?;
             reservations.insert(
                 reservation_id.clone(),
                 ReservationData {
@@ -444,11 +438,12 @@ impl SpendingManagerFFI {
     ///
     /// * `reservation_id` - The reservation ID from `try_reserve_spending()`
     pub fn commit_spending(&self, reservation_id: String) -> Result<()> {
-        let mut reservations = self.reservations.write().map_err(|_| {
-            PaykitMobileError::Internal {
-                msg: "Failed to acquire reservations lock".to_string(),
-            }
-        })?;
+        let mut reservations =
+            self.reservations
+                .write()
+                .map_err(|_| PaykitMobileError::Internal {
+                    msg: "Failed to acquire reservations lock".to_string(),
+                })?;
 
         // Remove the reservation from tracking
         // The spending was already applied when we reserved it
@@ -472,11 +467,12 @@ impl SpendingManagerFFI {
 
         // Get the reservation data
         let reservation_data = {
-            let mut reservations = self.reservations.write().map_err(|_| {
-                PaykitMobileError::Internal {
-                    msg: "Failed to acquire reservations lock".to_string(),
-                }
-            })?;
+            let mut reservations =
+                self.reservations
+                    .write()
+                    .map_err(|_| PaykitMobileError::Internal {
+                        msg: "Failed to acquire reservations lock".to_string(),
+                    })?;
 
             match reservations.remove(&reservation_id) {
                 Some(data) => data,
@@ -504,19 +500,18 @@ impl SpendingManagerFFI {
             })?;
 
         // Acquire exclusive lock
-        file.lock_exclusive().map_err(|e| PaykitMobileError::Internal {
-            msg: format!("Failed to acquire lock: {}", e),
-        })?;
+        file.lock_exclusive()
+            .map_err(|e| PaykitMobileError::Internal {
+                msg: format!("Failed to acquire lock: {}", e),
+            })?;
 
         let result = (|| -> Result<()> {
             let json = std::fs::read_to_string(&path).map_err(|e| PaykitMobileError::Internal {
                 msg: format!("Failed to read spending limit: {}", e),
             })?;
 
-            let mut limit: PeerSpendingLimit =
-                serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                    msg: e.to_string(),
-                })?;
+            let mut limit: PeerSpendingLimit = serde_json::from_str(&json)
+                .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
             // Rollback the reserved amount
             let rollback_amount = Amount::from_sats(reservation_data.amount_sats);
@@ -526,11 +521,8 @@ impl SpendingManagerFFI {
                 .unwrap_or(Amount::from_sats(0)); // Defensive: don't go negative
 
             // Save updated limit
-            let json = serde_json::to_string_pretty(&limit).map_err(|e| {
-                PaykitMobileError::Serialization {
-                    msg: e.to_string(),
-                }
-            })?;
+            let json = serde_json::to_string_pretty(&limit)
+                .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
             std::fs::write(&path, json).map_err(|e| PaykitMobileError::Internal {
                 msg: format!("Failed to save spending limit: {}", e),
             })?;
@@ -573,10 +565,8 @@ impl SpendingManagerFFI {
                 msg: format!("Failed to read spending limit: {}", e),
             })?;
 
-            let limit: PeerSpendingLimit =
-                serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                    msg: e.to_string(),
-                })?;
+            let limit: PeerSpendingLimit = serde_json::from_str(&json)
+                .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
             result.push(PeerSpendingLimitFFI::from(&limit));
         }
@@ -630,7 +620,7 @@ pub fn create_spending_manager(storage_path: String) -> Result<Arc<SpendingManag
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn create_test_dir() -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("paykit_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -642,7 +632,7 @@ mod tests {
         let manager = SpendingManagerFFI::new(temp_dir.to_string_lossy().to_string()).unwrap();
         (temp_dir, manager)
     }
-    
+
     fn generate_test_pubkey() -> String {
         // Generate a valid pkarr keypair and return the z-base32 encoded public key
         let keypair = pkarr::Keypair::random();
@@ -665,9 +655,7 @@ mod tests {
         assert_eq!(limit.period, "monthly");
 
         // Get limit
-        let loaded = manager
-            .get_peer_spending_limit(peer)
-            .unwrap();
+        let loaded = manager.get_peer_spending_limit(peer).unwrap();
 
         assert!(loaded.is_some());
         let loaded = loaded.unwrap();
@@ -691,9 +679,7 @@ mod tests {
         assert_eq!(result.remaining_sats, 10000);
 
         // Check amount exceeding limit
-        let result = manager
-            .would_exceed_spending_limit(peer, 15000)
-            .unwrap();
+        let result = manager.would_exceed_spending_limit(peer, 15000).unwrap();
         assert!(result.would_exceed);
     }
 
@@ -707,9 +693,7 @@ mod tests {
             .unwrap();
 
         // Reserve spending
-        let reservation = manager
-            .try_reserve_spending(peer.clone(), 3000)
-            .unwrap();
+        let reservation = manager.try_reserve_spending(peer.clone(), 3000).unwrap();
 
         assert_eq!(reservation.amount_sats, 3000);
         assert_eq!(manager.active_reservations_count(), 1);
@@ -727,10 +711,7 @@ mod tests {
         assert_eq!(manager.active_reservations_count(), 0);
 
         // Limit should still be reduced
-        let limit = manager
-            .get_peer_spending_limit(peer)
-            .unwrap()
-            .unwrap();
+        let limit = manager.get_peer_spending_limit(peer).unwrap().unwrap();
         assert_eq!(limit.current_spent_sats, 3000);
     }
 
@@ -744,9 +725,7 @@ mod tests {
             .unwrap();
 
         // Reserve spending
-        let reservation = manager
-            .try_reserve_spending(peer.clone(), 3000)
-            .unwrap();
+        let reservation = manager.try_reserve_spending(peer.clone(), 3000).unwrap();
 
         // Rollback the reservation
         manager
@@ -755,10 +734,7 @@ mod tests {
         assert_eq!(manager.active_reservations_count(), 0);
 
         // Limit should be restored
-        let limit = manager
-            .get_peer_spending_limit(peer)
-            .unwrap()
-            .unwrap();
+        let limit = manager.get_peer_spending_limit(peer).unwrap().unwrap();
         assert_eq!(limit.current_spent_sats, 0);
         assert_eq!(limit.remaining_sats, 10000);
     }
@@ -810,13 +786,9 @@ mod tests {
             .set_peer_spending_limit(peer.clone(), 10000, "daily".to_string())
             .unwrap();
 
-        manager
-            .remove_peer_spending_limit(peer.clone())
-            .unwrap();
+        manager.remove_peer_spending_limit(peer.clone()).unwrap();
 
-        let limit = manager
-            .get_peer_spending_limit(peer)
-            .unwrap();
+        let limit = manager.get_peer_spending_limit(peer).unwrap();
         assert!(limit.is_none());
     }
 
@@ -829,9 +801,7 @@ mod tests {
             .set_peer_spending_limit(peer.clone(), 10000, "daily".to_string())
             .unwrap();
 
-        let reservation = manager
-            .try_reserve_spending(peer, 3000)
-            .unwrap();
+        let reservation = manager.try_reserve_spending(peer, 3000).unwrap();
 
         // Commit multiple times should be fine
         manager
@@ -849,9 +819,7 @@ mod tests {
             .set_peer_spending_limit(peer.clone(), 10000, "daily".to_string())
             .unwrap();
 
-        let reservation = manager
-            .try_reserve_spending(peer.clone(), 3000)
-            .unwrap();
+        let reservation = manager.try_reserve_spending(peer.clone(), 3000).unwrap();
 
         // Rollback multiple times should be fine
         manager
@@ -862,11 +830,7 @@ mod tests {
             .unwrap();
 
         // Limit should only be restored once
-        let limit = manager
-            .get_peer_spending_limit(peer)
-            .unwrap()
-            .unwrap();
+        let limit = manager.get_peer_spending_limit(peer).unwrap().unwrap();
         assert_eq!(limit.current_spent_sats, 0);
     }
 }
-

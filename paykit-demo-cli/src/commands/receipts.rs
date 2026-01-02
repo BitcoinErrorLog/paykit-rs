@@ -3,10 +3,10 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use paykit_demo_core::DemoStorage;
-use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
 #[cfg(feature = "http-executor")]
 use paykit_interactive::proof::verifiers::RealBitcoinProofVerifier;
 use paykit_interactive::proof::verifiers::RealLightningProofVerifier;
+use paykit_interactive::proof::{PaymentProof, ProofType, ProofVerifier};
 #[cfg(feature = "http-executor")]
 use paykit_lib::executors::EsploraConfig;
 use std::path::Path;
@@ -51,8 +51,16 @@ pub async fn run(storage_dir: &Path, verbose: bool) -> Result<()> {
             } else {
                 "⚠".yellow()
             };
-            println!("  Proof: {} {}", status_icon, if receipt.proof_verified { "Verified" } else { "Unverified" });
-            
+            println!(
+                "  Proof: {} {}",
+                status_icon,
+                if receipt.proof_verified {
+                    "Verified"
+                } else {
+                    "Unverified"
+                }
+            );
+
             if verbose {
                 println!("  Proof details:");
                 ui::json(proof);
@@ -94,7 +102,7 @@ pub async fn show(storage_dir: &Path, receipt_id: &str, verbose: bool) -> Result
 
     ui::key_value("ID", &receipt.id);
     ui::key_value("Method", &receipt.method);
-    
+
     if let Some(amount) = &receipt.amount {
         if let Some(currency) = &receipt.currency {
             ui::key_value("Amount", &format!("{} {}", amount, currency));
@@ -118,14 +126,22 @@ pub async fn show(storage_dir: &Path, receipt_id: &str, verbose: bool) -> Result
     if let Some(proof_json) = &receipt.proof {
         println!("{}", "Proof:".bold());
         ui::json(proof_json);
-        
+
         let status_icon = if receipt.proof_verified {
             "✓".green()
         } else {
             "⚠".yellow()
         };
-        println!("Status: {} {}", status_icon, if receipt.proof_verified { "Verified" } else { "Unverified" });
-        
+        println!(
+            "Status: {} {}",
+            status_icon,
+            if receipt.proof_verified {
+                "Verified"
+            } else {
+                "Unverified"
+            }
+        );
+
         if let Some(verified_at) = receipt.proof_verified_at {
             ui::key_value(
                 "Verified at",
@@ -156,12 +172,14 @@ pub async fn verify_proof(storage_dir: &Path, receipt_id: &str, verbose: bool) -
         .context("Failed to load receipt")?
         .ok_or_else(|| anyhow::anyhow!("Receipt not found: {}", receipt_id))?;
 
-    let proof_json = receipt.proof.as_ref()
+    let proof_json = receipt
+        .proof
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Receipt has no proof to verify"))?;
 
     // Parse proof from JSON
-    let proof: PaymentProof = serde_json::from_value(proof_json.clone())
-        .context("Failed to parse proof JSON")?;
+    let proof: PaymentProof =
+        serde_json::from_value(proof_json.clone()).context("Failed to parse proof JSON")?;
 
     ui::info("Verifying proof...");
     let spinner = ui::spinner("Verifying");
@@ -182,8 +200,8 @@ pub async fn verify_proof(storage_dir: &Path, receipt_id: &str, verbose: bool) -
                     EsploraConfig::blockstream_mainnet()
                 };
 
-                let verifier = RealBitcoinProofVerifier::with_config(esplora_config)
-                    .with_min_confirmations(1);
+                let verifier =
+                    RealBitcoinProofVerifier::with_config(esplora_config).with_min_confirmations(1);
                 verifier.verify(&proof).await
             }
             #[cfg(not(feature = "http-executor"))]
@@ -207,12 +225,12 @@ pub async fn verify_proof(storage_dir: &Path, receipt_id: &str, verbose: bool) -
 
     if verification_result.valid {
         ui::success("Proof verification succeeded!");
-        
+
         // Update receipt
         receipt.proof_verified = true;
         receipt.proof_verified_at = Some(chrono::Utc::now().timestamp());
         storage.save_receipt(receipt)?;
-        
+
         if let Some(details) = verification_result.details {
             if verbose {
                 println!("\nVerification details:");

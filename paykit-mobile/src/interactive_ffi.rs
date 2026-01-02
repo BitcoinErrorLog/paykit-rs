@@ -136,9 +136,8 @@ impl PaykitMessageBuilder {
                 "endpoint": endpoint
             }
         });
-        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&msg)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Create a receipt request message.
@@ -172,9 +171,8 @@ impl PaykitMessageBuilder {
             }
         });
 
-        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&msg)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Create a receipt confirmation message.
@@ -208,9 +206,8 @@ impl PaykitMessageBuilder {
             }
         });
 
-        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&msg)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Create an acknowledgment message.
@@ -223,9 +220,8 @@ impl PaykitMessageBuilder {
             "type": "Ack",
             "payload": null
         });
-        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&msg)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Create an error message.
@@ -246,9 +242,8 @@ impl PaykitMessageBuilder {
                 "message": message
             }
         });
-        serde_json::to_string(&msg).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&msg)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Parse a received message.
@@ -560,17 +555,14 @@ impl ReceiptStore {
             })
         }).collect();
 
-        serde_json::to_string(&list).map_err(|e| PaykitMobileError::Serialization {
-            msg: e.to_string(),
-        })
+        serde_json::to_string(&list)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })
     }
 
     /// Import receipts from JSON.
     pub fn import_receipts_json(&self, json: String) -> Result<u32> {
-        let list: Vec<serde_json::Value> =
-            serde_json::from_str(&json).map_err(|e| PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            })?;
+        let list: Vec<serde_json::Value> = serde_json::from_str(&json)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
         let mut receipts = self
             .receipts

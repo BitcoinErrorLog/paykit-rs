@@ -170,9 +170,10 @@ pub async fn run(
             if let Ok(content) = std::fs::read_to_string(&subscriptions_path) {
                 if let Ok(subs) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
                     for sub in subs {
-                        if let (Some(id), Some(created_at)) =
-                            (sub.get("id").and_then(|v| v.as_str()), sub.get("created_at"))
-                        {
+                        if let (Some(id), Some(created_at)) = (
+                            sub.get("id").and_then(|v| v.as_str()),
+                            sub.get("created_at"),
+                        ) {
                             let timestamp = created_at.as_i64().unwrap_or(0);
                             let peer = sub
                                 .get("peer")
@@ -183,7 +184,10 @@ pub async fn run(
                                 id: id.to_string(),
                                 activity_type: ActivityType::Subscription,
                                 timestamp,
-                                amount: sub.get("amount").and_then(|v| v.as_str()).map(String::from),
+                                amount: sub
+                                    .get("amount")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
                                 currency: sub
                                     .get("currency")
                                     .and_then(|v| v.as_str())
@@ -220,7 +224,10 @@ pub async fn run(
                                 id: id.to_string(),
                                 activity_type: ActivityType::Request,
                                 timestamp: ts,
-                                amount: req.get("amount").and_then(|v| v.as_str()).map(String::from),
+                                amount: req
+                                    .get("amount")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
                                 currency: req
                                     .get("currency")
                                     .and_then(|v| v.as_str())
@@ -252,16 +259,20 @@ pub async fn run(
             if let Ok(content) = std::fs::read_to_string(&autopay_path) {
                 if let Ok(events) = serde_json::from_str::<Vec<serde_json::Value>>(&content) {
                     for event in events {
-                        if let (Some(id), Some(timestamp)) =
-                            (event.get("id").and_then(|v| v.as_str()), event.get("timestamp"))
-                        {
+                        if let (Some(id), Some(timestamp)) = (
+                            event.get("id").and_then(|v| v.as_str()),
+                            event.get("timestamp"),
+                        ) {
                             let ts = timestamp.as_i64().unwrap_or(0);
 
                             activities.push(ActivityItem {
                                 id: id.to_string(),
                                 activity_type: ActivityType::AutoPay,
                                 timestamp: ts,
-                                amount: event.get("amount").and_then(|v| v.as_str()).map(String::from),
+                                amount: event
+                                    .get("amount")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
                                 currency: event
                                     .get("currency")
                                     .and_then(|v| v.as_str())
@@ -412,4 +423,3 @@ fn format_status(status: &str) -> String {
         _ => status.to_string(),
     }
 }
-

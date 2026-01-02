@@ -41,7 +41,7 @@ pub async fn run(storage_dir: &Path, _verbose: bool) -> Result<()> {
             let identity_manager = IdentityManager::new(&identities_dir);
             identity_manager.load(&name)
         };
-        
+
         match load_result {
             Ok(identity) => {
                 let marker = if current.as_ref() == Some(&name) {

@@ -156,7 +156,9 @@ impl StorageMigration {
                     },
                 )
                 .await
-                .map_err(|e| utils::js_error(&format!("Failed to mark migration complete: {:?}", e)))?;
+                .map_err(|e| {
+                    utils::js_error(&format!("Failed to mark migration complete: {:?}", e))
+                })?;
         }
 
         self.status = MigrationStatus::Completed;
@@ -176,4 +178,3 @@ impl StorageMigration {
         .to_string()
     }
 }
-

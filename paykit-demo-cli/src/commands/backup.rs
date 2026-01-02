@@ -15,8 +15,8 @@ pub async fn export(storage_dir: &Path, output: Option<&str>, verbose: bool) -> 
     ui::info(&format!("Identity: {}", identity.pubky_uri()));
 
     // Get password from user
-    let password = rpassword::prompt_password("Enter backup password: ")
-        .context("Failed to read password")?;
+    let password =
+        rpassword::prompt_password("Enter backup password: ").context("Failed to read password")?;
 
     if password.is_empty() {
         anyhow::bail!("Password cannot be empty");
@@ -51,7 +51,10 @@ pub async fn export(storage_dir: &Path, output: Option<&str>, verbose: bool) -> 
         .with_context(|| format!("Failed to write backup to {:?}", output_path))?;
 
     ui::success(&format!("Backup saved to: {}", output_path.display()));
-    ui::info(&format!("Public key (for verification): {}", backup.public_key_z32));
+    ui::info(&format!(
+        "Public key (for verification): {}",
+        backup.public_key_z32
+    ));
     ui::separator();
     ui::warning("IMPORTANT: Store this backup securely and remember your password!");
     ui::warning("Without the password, the backup cannot be restored.");
@@ -81,8 +84,8 @@ pub async fn import(
     }
 
     // Get password
-    let password = rpassword::prompt_password("Enter backup password: ")
-        .context("Failed to read password")?;
+    let password =
+        rpassword::prompt_password("Enter backup password: ").context("Failed to read password")?;
 
     // Decrypt and import
     let spinner = ui::spinner("Decrypting backup...");
@@ -124,8 +127,10 @@ pub async fn import(
     let current_path = storage_dir.join("current_identity");
     std::fs::write(&current_path, &identity_name)?;
 
-    ui::success(&format!("Identity '{}' restored and set as current", identity_name));
+    ui::success(&format!(
+        "Identity '{}' restored and set as current",
+        identity_name
+    ));
 
     Ok(())
 }
-

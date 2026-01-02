@@ -127,11 +127,8 @@ async fn test_server_accepts_connection() {
 
     let client_seed = test_seed("client_accept");
     let client_ring = Arc::new(TestRing::new(client_seed));
-    let client = NoiseClient::<TestRing, ()>::new_direct(
-        "client_kid",
-        b"client_device",
-        client_ring,
-    );
+    let client =
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
 
     let server_pk = server_pubkey(&server_ring, b"server_device");
 
@@ -147,7 +144,9 @@ async fn test_server_accepts_connection() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Client connects
-    let stream = TcpStream::connect(server_addr).await.expect("Connect failed");
+    let stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Connect failed");
     let _channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
         .await
         .expect("Channel connect failed");
@@ -185,11 +184,8 @@ async fn test_server_processes_payment_request() {
 
     let client_seed = test_seed("client_process");
     let client_ring = Arc::new(TestRing::new(client_seed));
-    let client = NoiseClient::<TestRing, ()>::new_direct(
-        "client_kid",
-        b"client_device",
-        client_ring,
-    );
+    let client =
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
 
     let server_pk = server_pubkey(&server_ring, b"server_device");
     let payer_pk = test_pubkey("payer");
@@ -197,15 +193,19 @@ async fn test_server_processes_payment_request() {
 
     // Setup server manager
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage,
+        payee_generator,
+    ));
 
     // Spawn server handling payment request
     let server_handle = {
         let payee_manager = payee_manager.clone();
         let payer_pk = payer_pk.clone();
         let payee_pk = payee_pk.clone();
-        
+
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.expect("Accept failed");
             let (mut channel, _identity) = PubkyNoiseChannel::accept(&server, stream)
@@ -233,12 +233,20 @@ async fn test_server_processes_payment_request() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Client sends payment request
-    let stream = TcpStream::connect(server_addr).await.expect("Connect failed");
+    let stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Connect failed");
     let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
         .await
         .expect("Channel connect failed");
 
-    let receipt = create_test_receipt("server_process_001", &payer_pk, &payee_pk, "lightning", "1000");
+    let receipt = create_test_receipt(
+        "server_process_001",
+        &payer_pk,
+        &payee_pk,
+        "lightning",
+        "1000",
+    );
     channel
         .send(PaykitNoiseMessage::RequestReceipt {
             provisional_receipt: receipt,
@@ -293,8 +301,12 @@ async fn test_server_multiple_concurrent_connections() {
 
     // Setup server manager
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage,
+        payee_generator,
+    ));
 
     // Spawn server accepting multiple connections
     let server_handle = {
@@ -302,7 +314,7 @@ async fn test_server_multiple_concurrent_connections() {
         let payee_manager = payee_manager.clone();
         let payer_pk = payer_pk.clone();
         let payee_pk = payee_pk.clone();
-        
+
         tokio::spawn(async move {
             let mut handles = vec![];
             for i in 0..3 {
@@ -311,7 +323,7 @@ async fn test_server_multiple_concurrent_connections() {
                 let payee_manager = payee_manager.clone();
                 let payer_pk = payer_pk.clone();
                 let payee_pk = payee_pk.clone();
-                
+
                 let handle = tokio::spawn(async move {
                     let (mut channel, _identity) = PubkyNoiseChannel::accept(&server, stream)
                         .await
@@ -330,7 +342,7 @@ async fn test_server_multiple_concurrent_connections() {
                 });
                 handles.push(handle);
             }
-            
+
             for handle in handles {
                 handle.await.expect("Connection handler panic");
             }
@@ -346,7 +358,7 @@ async fn test_server_multiple_concurrent_connections() {
         let server_pk = server_pk;
         let payer_pk = payer_pk.clone();
         let payee_pk = payee_pk.clone();
-        
+
         let handle = tokio::spawn(async move {
             let client_seed = test_seed(&format!("client_multi_{}", i));
             let client_ring = Arc::new(TestRing::new(client_seed));
@@ -356,7 +368,9 @@ async fn test_server_multiple_concurrent_connections() {
                 client_ring,
             );
 
-            let stream = TcpStream::connect(server_addr).await.expect("Connect failed");
+            let stream = TcpStream::connect(server_addr)
+                .await
+                .expect("Connect failed");
             let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
                 .await
                 .expect("Channel connect failed");
@@ -426,11 +440,8 @@ async fn test_server_handles_errors() {
 
     let client_seed = test_seed("client_error");
     let client_ring = Arc::new(TestRing::new(client_seed));
-    let client = NoiseClient::<TestRing, ()>::new_direct(
-        "client_kid",
-        b"client_device",
-        client_ring,
-    );
+    let client =
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
 
     let server_pk = server_pubkey(&server_ring, b"server_device");
     let payer_pk = test_pubkey("payer");
@@ -439,15 +450,19 @@ async fn test_server_handles_errors() {
 
     // Setup server manager
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage,
+        payee_generator,
+    ));
 
     // Spawn server
     let server_handle = {
         let payee_manager = payee_manager.clone();
         let payer_pk = payer_pk.clone();
         let correct_payee_pk = correct_payee_pk.clone();
-        
+
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.expect("Accept failed");
             let (mut channel, _identity) = PubkyNoiseChannel::accept(&server, stream)
@@ -472,7 +487,9 @@ async fn test_server_handles_errors() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Client sends request with wrong payee
-    let stream = TcpStream::connect(server_addr).await.expect("Connect failed");
+    let stream = TcpStream::connect(server_addr)
+        .await
+        .expect("Connect failed");
     let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
         .await
         .expect("Channel connect failed");
@@ -508,4 +525,3 @@ async fn test_server_handles_errors() {
 
     println!("   ✅ Test 4 PASSED: Server handles errors correctly\n");
 }
-

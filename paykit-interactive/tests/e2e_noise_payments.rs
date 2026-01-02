@@ -155,7 +155,11 @@ impl TestContext {
     }
 
     fn create_client(&self) -> NoiseClient<TestRing, ()> {
-        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", self.client_ring.clone())
+        NoiseClient::<TestRing, ()>::new_direct(
+            "client_kid",
+            b"client_device",
+            self.client_ring.clone(),
+        )
     }
 }
 
@@ -172,8 +176,12 @@ async fn test_e2e_basic_payment_flow() {
 
     // Setup payee manager
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage.clone(), payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage.clone(),
+        payee_generator,
+    ));
 
     let payer_pk = ctx.payer_pk.clone();
     let payee_pk = ctx.payee_pk.clone();
@@ -183,7 +191,7 @@ async fn test_e2e_basic_payment_flow() {
         let payee_manager = payee_manager.clone();
         let payer_pk = payer_pk.clone();
         let payee_pk = payee_pk.clone();
-        
+
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.expect("Accept failed");
             let (mut channel, _identity) = PubkyNoiseChannel::accept(&server, stream)
@@ -200,7 +208,7 @@ async fn test_e2e_basic_payment_flow() {
             if let Some(resp) = response {
                 channel.send(resp).await.expect("Send failed");
             }
-            
+
             println!("   ✓ Server: Received request and sent confirmation");
         })
     };
@@ -209,13 +217,16 @@ async fn test_e2e_basic_payment_flow() {
 
     // Client connects and sends payment
     let client = ctx.create_client();
-    let stream = TcpStream::connect(ctx.server_addr).await.expect("Connect failed");
+    let stream = TcpStream::connect(ctx.server_addr)
+        .await
+        .expect("Connect failed");
     let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
         .await
         .expect("Channel connect failed");
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
     let payer_manager = PaykitInteractiveManager::new(payer_storage.clone(), payer_generator);
 
     let receipt = create_test_receipt("e2e_basic_001", &payer_pk, &payee_pk, "lightning", "1000");
@@ -252,8 +263,12 @@ async fn test_e2e_payment_different_methods() {
         let (ctx, listener, server) = TestContext::new(&format!("method_{}", method)).await;
 
         let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-        let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-        let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+        let payee_generator =
+            Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+        let payee_manager = Arc::new(PaykitInteractiveManager::new(
+            payee_storage,
+            payee_generator,
+        ));
 
         let payer_pk = ctx.payer_pk.clone();
         let payee_pk = ctx.payee_pk.clone();
@@ -267,7 +282,11 @@ async fn test_e2e_payment_different_methods() {
                 let (stream, _) = listener.accept().await.unwrap();
                 let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
                 let msg = channel.recv().await.unwrap();
-                if let Some(resp) = payee_manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+                if let Some(resp) = payee_manager
+                    .handle_message(msg, &payer_pk, &payee_pk)
+                    .await
+                    .unwrap()
+                {
                     channel.send(resp).await.unwrap();
                 }
             })
@@ -277,10 +296,13 @@ async fn test_e2e_payment_different_methods() {
 
         let client = ctx.create_client();
         let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-        let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+        let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+            .await
+            .unwrap();
 
         let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-        let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+        let payer_generator =
+            Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
         let payer_manager = PaykitInteractiveManager::new(payer_storage, payer_generator);
 
         let receipt = create_test_receipt(
@@ -290,12 +312,18 @@ async fn test_e2e_payment_different_methods() {
             method,
             "5000",
         );
-        let final_receipt = payer_manager.initiate_payment(&mut channel, receipt).await.unwrap();
+        let final_receipt = payer_manager
+            .initiate_payment(&mut channel, receipt)
+            .await
+            .unwrap();
 
         assert_eq!(final_receipt.method_id.0, method);
         println!("   ✓ {} payment successful", method);
 
-        timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+        timeout(Duration::from_secs(5), server_handle)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     println!("   ✅ Test 2 PASSED: All payment methods work\n");
@@ -313,8 +341,12 @@ async fn test_e2e_multiple_sequential_payments() {
     let (ctx, listener, server) = TestContext::new("sequential").await;
 
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage.clone(), payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage.clone(),
+        payee_generator,
+    ));
 
     let payer_pk = ctx.payer_pk.clone();
     let payee_pk = ctx.payee_pk.clone();
@@ -332,8 +364,15 @@ async fn test_e2e_multiple_sequential_payments() {
 
             for i in 0..payment_count {
                 let msg = channel.recv().await.expect(&format!("Recv {} failed", i));
-                if let Some(resp) = payee_manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
-                    channel.send(resp).await.expect(&format!("Send {} failed", i));
+                if let Some(resp) = payee_manager
+                    .handle_message(msg, &payer_pk, &payee_pk)
+                    .await
+                    .unwrap()
+                {
+                    channel
+                        .send(resp)
+                        .await
+                        .expect(&format!("Send {} failed", i));
                 }
             }
             println!("   ✓ Server: Handled {} sequential payments", payment_count);
@@ -344,10 +383,13 @@ async fn test_e2e_multiple_sequential_payments() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
     let payer_manager = PaykitInteractiveManager::new(payer_storage.clone(), payer_generator);
 
     for i in 0..payment_count {
@@ -358,18 +400,27 @@ async fn test_e2e_multiple_sequential_payments() {
             "lightning",
             &format!("{}", (i + 1) * 1000),
         );
-        let final_receipt = payer_manager.initiate_payment(&mut channel, receipt).await.unwrap();
+        let final_receipt = payer_manager
+            .initiate_payment(&mut channel, receipt)
+            .await
+            .unwrap();
         assert!(final_receipt.metadata.get("invoice").is_some());
     }
 
-    println!("   ✓ Client: Completed {} payments over same channel", payment_count);
+    println!(
+        "   ✓ Client: Completed {} payments over same channel",
+        payment_count
+    );
 
     // Verify receipts stored
     let stored = payer_storage.list_receipts().await.unwrap();
     assert_eq!(stored.len(), payment_count);
     println!("   ✓ {} receipts stored", stored.len());
 
-    timeout(Duration::from_secs(10), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(10), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 3 PASSED: Sequential payments work\n");
 }
@@ -412,17 +463,24 @@ async fn test_e2e_concurrent_clients() {
                 let payee_pk = payee_pk.clone();
 
                 let handle = tokio::spawn(async move {
-                    let (mut channel, identity) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
-                    
+                    let (mut channel, identity) =
+                        PubkyNoiseChannel::accept(&server, stream).await.unwrap();
+
                     // Create payer key from identity
                     let payer_pk = test_pubkey("dynamic_payer");
 
                     let storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-                    let generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+                    let generator = Arc::new(
+                        Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>
+                    );
                     let manager = PaykitInteractiveManager::new(storage, generator);
 
                     let msg = channel.recv().await.unwrap();
-                    if let Some(resp) = manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+                    if let Some(resp) = manager
+                        .handle_message(msg, &payer_pk, &payee_pk)
+                        .await
+                        .unwrap()
+                    {
                         channel.send(resp).await.unwrap();
                     }
                 });
@@ -455,10 +513,13 @@ async fn test_e2e_concurrent_clients() {
 
         let handle = tokio::spawn(async move {
             let stream = TcpStream::connect(server_addr).await.unwrap();
-            let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk).await.unwrap();
+            let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
+                .await
+                .unwrap();
 
             let storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-            let generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+            let generator =
+                Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
             let manager = PaykitInteractiveManager::new(storage, generator);
 
             let receipt = create_test_receipt(
@@ -478,11 +539,17 @@ async fn test_e2e_concurrent_clients() {
 
     // Wait for all clients
     for handle in client_handles {
-        let client_id = timeout(Duration::from_secs(10), handle).await.unwrap().unwrap();
+        let client_id = timeout(Duration::from_secs(10), handle)
+            .await
+            .unwrap()
+            .unwrap();
         println!("   ✓ Client {}: Payment completed", client_id);
     }
 
-    timeout(Duration::from_secs(10), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(10), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 4 PASSED: Concurrent clients handled\n");
 }
@@ -499,8 +566,12 @@ async fn test_e2e_large_amount_payment() {
     let (ctx, listener, server) = TestContext::new("large_amount").await;
 
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage,
+        payee_generator,
+    ));
 
     let payer_pk = ctx.payer_pk.clone();
     let payee_pk = ctx.payee_pk.clone();
@@ -514,7 +585,11 @@ async fn test_e2e_large_amount_payment() {
             let (stream, _) = listener.accept().await.unwrap();
             let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
             let msg = channel.recv().await.unwrap();
-            if let Some(resp) = payee_manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+            if let Some(resp) = payee_manager
+                .handle_message(msg, &payer_pk, &payee_pk)
+                .await
+                .unwrap()
+            {
                 channel.send(resp).await.unwrap();
             }
         })
@@ -524,10 +599,13 @@ async fn test_e2e_large_amount_payment() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
     let payer_manager = PaykitInteractiveManager::new(payer_storage, payer_generator);
 
     // 1 BTC in sats
@@ -539,12 +617,21 @@ async fn test_e2e_large_amount_payment() {
         "onchain",
         large_amount,
     );
-    let final_receipt = payer_manager.initiate_payment(&mut channel, receipt).await.unwrap();
+    let final_receipt = payer_manager
+        .initiate_payment(&mut channel, receipt)
+        .await
+        .unwrap();
 
     assert_eq!(final_receipt.amount, Some(large_amount.to_string()));
-    println!("   ✓ Large amount ({} sats = 1 BTC) payment successful", large_amount);
+    println!(
+        "   ✓ Large amount ({} sats = 1 BTC) payment successful",
+        large_amount
+    );
 
-    timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 5 PASSED: Large amount handled\n");
 }
@@ -561,8 +648,12 @@ async fn test_e2e_payment_with_metadata() {
     let (ctx, listener, server) = TestContext::new("metadata").await;
 
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage, payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage,
+        payee_generator,
+    ));
 
     let payer_pk = ctx.payer_pk.clone();
     let payee_pk = ctx.payee_pk.clone();
@@ -576,7 +667,11 @@ async fn test_e2e_payment_with_metadata() {
             let (stream, _) = listener.accept().await.unwrap();
             let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
             let msg = channel.recv().await.unwrap();
-            if let Some(resp) = payee_manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+            if let Some(resp) = payee_manager
+                .handle_message(msg, &payer_pk, &payee_pk)
+                .await
+                .unwrap()
+            {
                 channel.send(resp).await.unwrap();
             }
         })
@@ -586,10 +681,13 @@ async fn test_e2e_payment_with_metadata() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
     let payer_manager = PaykitInteractiveManager::new(payer_storage, payer_generator);
 
     // Create receipt with rich metadata
@@ -612,14 +710,20 @@ async fn test_e2e_payment_with_metadata() {
         }),
     );
 
-    let final_receipt = payer_manager.initiate_payment(&mut channel, receipt).await.unwrap();
+    let final_receipt = payer_manager
+        .initiate_payment(&mut channel, receipt)
+        .await
+        .unwrap();
 
     // Verify metadata preserved
     assert!(final_receipt.metadata.get("order_id").is_some());
     assert!(final_receipt.metadata.get("items").is_some());
     println!("   ✓ Rich metadata preserved in receipt");
 
-    timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 6 PASSED: Metadata handling works\n");
 }
@@ -664,15 +768,23 @@ async fn test_e2e_private_endpoint_offer() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     // Receive private endpoint
     let msg = channel.recv().await.unwrap();
     match msg {
-        PaykitNoiseMessage::OfferPrivateEndpoint { method_id, endpoint } => {
+        PaykitNoiseMessage::OfferPrivateEndpoint {
+            method_id,
+            endpoint,
+        } => {
             assert_eq!(method_id.0, "lightning");
             assert!(endpoint.contains("lnbc"));
-            println!("   ✓ Client: Received private endpoint: {}...", &endpoint[..30]);
+            println!(
+                "   ✓ Client: Received private endpoint: {}...",
+                &endpoint[..30]
+            );
         }
         _ => panic!("Expected OfferPrivateEndpoint"),
     }
@@ -680,7 +792,10 @@ async fn test_e2e_private_endpoint_offer() {
     // Send ack
     channel.send(PaykitNoiseMessage::Ack).await.unwrap();
 
-    timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 7 PASSED: Private endpoint exchange works\n");
 }
@@ -721,11 +836,16 @@ async fn test_e2e_reconnection() {
                 let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
 
                 let storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-                let generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+                let generator =
+                    Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
                 let manager = PaykitInteractiveManager::new(storage, generator);
 
                 let msg = channel.recv().await.unwrap();
-                if let Some(resp) = manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+                if let Some(resp) = manager
+                    .handle_message(msg, &payer_pk, &payee_pk)
+                    .await
+                    .unwrap()
+                {
                     channel.send(resp).await.unwrap();
                 }
                 println!("   ✓ Server: Handled connection {}", conn_num);
@@ -738,16 +858,27 @@ async fn test_e2e_reconnection() {
 
     // First connection
     {
-        let client = NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring.clone());
+        let client = NoiseClient::<TestRing, ()>::new_direct(
+            "client_kid",
+            b"client_device",
+            client_ring.clone(),
+        );
         let stream = TcpStream::connect(server_addr).await.unwrap();
-        let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk).await.unwrap();
+        let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
+            .await
+            .unwrap();
 
         let storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-        let generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+        let generator =
+            Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
         let manager = PaykitInteractiveManager::new(storage, generator);
 
-        let receipt = create_test_receipt("e2e_reconn_001", &payer_pk, &payee_pk, "lightning", "1000");
-        manager.initiate_payment(&mut channel, receipt).await.unwrap();
+        let receipt =
+            create_test_receipt("e2e_reconn_001", &payer_pk, &payee_pk, "lightning", "1000");
+        manager
+            .initiate_payment(&mut channel, receipt)
+            .await
+            .unwrap();
         println!("   ✓ Client: First payment completed");
     }
     // Connection dropped here
@@ -756,20 +887,31 @@ async fn test_e2e_reconnection() {
 
     // Second connection (reconnect)
     {
-        let client = NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
+        let client =
+            NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
         let stream = TcpStream::connect(server_addr).await.unwrap();
-        let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk).await.unwrap();
+        let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
+            .await
+            .unwrap();
 
         let storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-        let generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+        let generator =
+            Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
         let manager = PaykitInteractiveManager::new(storage, generator);
 
-        let receipt = create_test_receipt("e2e_reconn_002", &payer_pk, &payee_pk, "lightning", "2000");
-        manager.initiate_payment(&mut channel, receipt).await.unwrap();
+        let receipt =
+            create_test_receipt("e2e_reconn_002", &payer_pk, &payee_pk, "lightning", "2000");
+        manager
+            .initiate_payment(&mut channel, receipt)
+            .await
+            .unwrap();
         println!("   ✓ Client: Second payment (after reconnect) completed");
     }
 
-    timeout(Duration::from_secs(10), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(10), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 8 PASSED: Reconnection works\n");
 }
@@ -791,10 +933,13 @@ async fn test_e2e_bidirectional_messages() {
         let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
 
         // Server sends offer first
-        channel.send(PaykitNoiseMessage::OfferPrivateEndpoint {
-            method_id: MethodId("lightning".to_string()),
-            endpoint: "lnbc_server_offer".to_string(),
-        }).await.unwrap();
+        channel
+            .send(PaykitNoiseMessage::OfferPrivateEndpoint {
+                method_id: MethodId("lightning".to_string()),
+                endpoint: "lnbc_server_offer".to_string(),
+            })
+            .await
+            .unwrap();
         println!("   ✓ Server: Sent offer");
 
         // Server receives ack
@@ -805,8 +950,13 @@ async fn test_e2e_bidirectional_messages() {
         // Server receives request from client
         let msg = channel.recv().await.unwrap();
         match msg {
-            PaykitNoiseMessage::RequestReceipt { provisional_receipt } => {
-                println!("   ✓ Server: Received request for {}", provisional_receipt.receipt_id);
+            PaykitNoiseMessage::RequestReceipt {
+                provisional_receipt,
+            } => {
+                println!(
+                    "   ✓ Server: Received request for {}",
+                    provisional_receipt.receipt_id
+                );
             }
             _ => panic!("Expected RequestReceipt"),
         }
@@ -820,13 +970,21 @@ async fn test_e2e_bidirectional_messages() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     // Client receives offer
     let msg = channel.recv().await.unwrap();
     match msg {
-        PaykitNoiseMessage::OfferPrivateEndpoint { method_id, endpoint } => {
-            println!("   ✓ Client: Received offer for {}: {}", method_id.0, endpoint);
+        PaykitNoiseMessage::OfferPrivateEndpoint {
+            method_id,
+            endpoint,
+        } => {
+            println!(
+                "   ✓ Client: Received offer for {}: {}",
+                method_id.0, endpoint
+            );
         }
         _ => panic!("Expected offer"),
     }
@@ -835,10 +993,19 @@ async fn test_e2e_bidirectional_messages() {
     channel.send(PaykitNoiseMessage::Ack).await.unwrap();
 
     // Client sends request
-    let receipt = create_test_receipt("e2e_bidir_001", &ctx.payer_pk, &ctx.payee_pk, "lightning", "500");
-    channel.send(PaykitNoiseMessage::RequestReceipt {
-        provisional_receipt: receipt,
-    }).await.unwrap();
+    let receipt = create_test_receipt(
+        "e2e_bidir_001",
+        &ctx.payer_pk,
+        &ctx.payee_pk,
+        "lightning",
+        "500",
+    );
+    channel
+        .send(PaykitNoiseMessage::RequestReceipt {
+            provisional_receipt: receipt,
+        })
+        .await
+        .unwrap();
     println!("   ✓ Client: Sent request");
 
     // Client receives final ack
@@ -846,7 +1013,10 @@ async fn test_e2e_bidirectional_messages() {
     assert!(matches!(msg, PaykitNoiseMessage::Ack));
     println!("   ✓ Client: Received final ack");
 
-    timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     println!("   ✅ Test 9 PASSED: Bidirectional communication works\n");
 }
@@ -863,8 +1033,12 @@ async fn test_e2e_receipt_storage() {
     let (ctx, listener, server) = TestContext::new("storage").await;
 
     let payee_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payee_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
-    let payee_manager = Arc::new(PaykitInteractiveManager::new(payee_storage.clone(), payee_generator));
+    let payee_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payee_manager = Arc::new(PaykitInteractiveManager::new(
+        payee_storage.clone(),
+        payee_generator,
+    ));
 
     let payer_pk = ctx.payer_pk.clone();
     let payee_pk = ctx.payee_pk.clone();
@@ -878,7 +1052,11 @@ async fn test_e2e_receipt_storage() {
             let (stream, _) = listener.accept().await.unwrap();
             let (mut channel, _) = PubkyNoiseChannel::accept(&server, stream).await.unwrap();
             let msg = channel.recv().await.unwrap();
-            if let Some(resp) = payee_manager.handle_message(msg, &payer_pk, &payee_pk).await.unwrap() {
+            if let Some(resp) = payee_manager
+                .handle_message(msg, &payer_pk, &payee_pk)
+                .await
+                .unwrap()
+            {
                 channel.send(resp).await.unwrap();
             }
         })
@@ -888,17 +1066,26 @@ async fn test_e2e_receipt_storage() {
 
     let client = ctx.create_client();
     let stream = TcpStream::connect(ctx.server_addr).await.unwrap();
-    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk).await.unwrap();
+    let mut channel = PubkyNoiseChannel::connect(&client, stream, &ctx.server_pk)
+        .await
+        .unwrap();
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
-    let payer_generator = Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
+    let payer_generator =
+        Arc::new(Box::new(MockReceiptGenerator::new()) as Box<dyn ReceiptGenerator>);
     let payer_manager = PaykitInteractiveManager::new(payer_storage.clone(), payer_generator);
 
     let receipt_id = "e2e_storage_001";
     let receipt = create_test_receipt(receipt_id, &payer_pk, &payee_pk, "lightning", "3000");
-    let _final = payer_manager.initiate_payment(&mut channel, receipt).await.unwrap();
+    let _final = payer_manager
+        .initiate_payment(&mut channel, receipt)
+        .await
+        .unwrap();
 
-    timeout(Duration::from_secs(5), server_handle).await.unwrap().unwrap();
+    timeout(Duration::from_secs(5), server_handle)
+        .await
+        .unwrap()
+        .unwrap();
 
     // Verify payer storage
     let payer_receipts = payer_storage.list_receipts().await.unwrap();
@@ -950,4 +1137,3 @@ async fn test_e2e_summary() {
     println!("╚═══════════════════════════════════════════════════════════════╝");
     println!("");
 }
-

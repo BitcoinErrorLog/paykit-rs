@@ -180,17 +180,17 @@ impl DirectoryClient {
                 if response.status().as_u16() == 404 {
                     return Ok(None);
                 }
-                
+
                 // Get bytes from response
                 let bytes = response
                     .bytes()
                     .await
                     .context("Failed to read response bytes")?;
-                
+
                 if bytes.is_empty() {
                     return Ok(None);
                 }
-                
+
                 let content =
                     String::from_utf8(bytes.to_vec()).context("Response is not valid UTF-8")?;
                 Ok(Some(content))

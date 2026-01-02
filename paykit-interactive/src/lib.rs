@@ -77,19 +77,13 @@ pub enum PaykitNoiseMessage {
     },
     /// Offer multiple private endpoints for different payment methods.
     /// Used during handshake negotiation to share available private endpoints.
-    OfferPrivateEndpoints {
-        methods: Vec<PrivateEndpointOffer>,
-    },
+    OfferPrivateEndpoints { methods: Vec<PrivateEndpointOffer> },
     /// Accept specific private endpoints from an offer.
     /// Used during handshake to indicate which endpoints are accepted.
-    AcceptPrivateEndpoints {
-        method_ids: Vec<MethodId>,
-    },
+    AcceptPrivateEndpoints { method_ids: Vec<MethodId> },
     /// Decline private endpoint offer with a reason.
     /// Used during handshake to reject endpoint offers.
-    DeclinePrivateEndpoints {
-        reason: String,
-    },
+    DeclinePrivateEndpoints { reason: String },
     /// Payer requests a receipt for a payment they intend to make or have made.
     RequestReceipt { provisional_receipt: PaykitReceipt },
     /// Payee confirms the receipt, potentially adding more metadata/signatures.

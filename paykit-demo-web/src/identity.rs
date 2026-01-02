@@ -239,7 +239,9 @@ impl Identity {
         // Verify public key matches
         let derived_public_key = keypair.public_key().to_z32();
         if derived_public_key != backup.public_key_z32 {
-            return Err(utils::js_error("Public key mismatch - backup may be corrupted"));
+            return Err(utils::js_error(
+                "Public key mismatch - backup may be corrupted",
+            ));
         }
 
         Ok(Identity {

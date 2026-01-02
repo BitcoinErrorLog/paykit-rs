@@ -153,8 +153,7 @@ pub async fn rotate(storage_dir: &Path, method: &str, verbose: bool) -> Result<(
 
     // Create rotation manager
     let registry = paykit_lib::prelude::default_registry();
-    let rotation_manager =
-        paykit_lib::rotation::EndpointRotationManager::new(config, registry);
+    let rotation_manager = paykit_lib::rotation::EndpointRotationManager::new(config, registry);
 
     // Trigger rotation
     match rotation_manager.rotate(&method_id).await {
@@ -189,7 +188,9 @@ pub async fn history(storage_dir: &Path, method: Option<String>, verbose: bool) 
 
     if state.is_none() {
         ui::info("No rotation history recorded yet.");
-        ui::info("Rotations are recorded automatically after payments when auto-rotate is enabled.");
+        ui::info(
+            "Rotations are recorded automatically after payments when auto-rotate is enabled.",
+        );
         return Ok(());
     }
 
@@ -370,16 +371,12 @@ fn parse_policy(policy_str: &str) -> Result<RotationPolicy> {
     }
 
     if let Some(count_str) = policy_lower.strip_prefix("after:") {
-        let count: u32 = count_str
-            .parse()
-            .context("Invalid use count in policy")?;
+        let count: u32 = count_str.parse().context("Invalid use count in policy")?;
         return Ok(RotationPolicy::after_uses(count));
     }
 
     if let Some(interval_str) = policy_lower.strip_prefix("periodic:") {
-        let seconds: u64 = interval_str
-            .parse()
-            .context("Invalid interval in policy")?;
+        let seconds: u64 = interval_str.parse().context("Invalid interval in policy")?;
         return Ok(RotationPolicy::RotatePeriodic {
             interval_secs: seconds,
         });
@@ -402,4 +399,3 @@ fn format_policy(policy: &RotationPolicy) -> String {
         RotationPolicy::Manual => "Manual rotation only".to_string(),
     }
 }
-

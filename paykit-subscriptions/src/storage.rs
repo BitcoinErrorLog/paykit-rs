@@ -273,7 +273,10 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         let json = serde_json::to_string_pretty(sub)?;
         std::fs::write(path, json)?;
 
-        let mut signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
+        let mut signed_subs = self
+            .signed_subscriptions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         signed_subs.insert(sub.subscription.subscription_id.clone(), sub.clone());
 
         Ok(())
@@ -294,7 +297,10 @@ impl SubscriptionStorage for FileSubscriptionStorage {
         &self,
         peer: &PublicKey,
     ) -> Result<Vec<SignedSubscription>> {
-        let signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
+        let signed_subs = self
+            .signed_subscriptions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let result: Vec<SignedSubscription> = signed_subs
             .values()
             .filter(|s| &s.subscription.subscriber == peer || &s.subscription.provider == peer)
@@ -304,7 +310,10 @@ impl SubscriptionStorage for FileSubscriptionStorage {
     }
 
     async fn list_active_subscriptions(&self) -> Result<Vec<SignedSubscription>> {
-        let signed_subs = self.signed_subscriptions.lock().unwrap_or_else(|e| e.into_inner());
+        let signed_subs = self
+            .signed_subscriptions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let now = chrono::Utc::now().timestamp();
 
         let result: Vec<SignedSubscription> = signed_subs

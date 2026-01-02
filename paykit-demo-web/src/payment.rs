@@ -15,7 +15,7 @@ use wasm_bindgen::prelude::*;
 /// Payment proof types for WASM (mirrors paykit_interactive::proof)
 pub mod proof {
     use super::*;
-    
+
     /// Type of payment proof
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(tag = "type", rename_all = "snake_case")]
@@ -26,17 +26,14 @@ pub mod proof {
             payment_hash: String,
         },
         /// Bitcoin on-chain proof with transaction ID
-        BitcoinTxid {
-            txid: String,
-            vout: Option<u32>,
-        },
+        BitcoinTxid { txid: String, vout: Option<u32> },
         /// Custom proof type
         Custom {
             proof_type: String,
             data: serde_json::Value,
         },
     }
-    
+
     /// Payment proof
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct PaymentProof {
@@ -48,7 +45,7 @@ pub mod proof {
         /// Optional metadata
         pub metadata: Option<serde_json::Value>,
     }
-    
+
     /// Result of proof verification
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct VerificationResult {
@@ -59,7 +56,7 @@ pub mod proof {
         /// Additional verification details
         pub details: Option<serde_json::Value>,
     }
-    
+
     impl VerificationResult {
         /// Create a valid result
         pub fn valid() -> Self {
@@ -69,7 +66,7 @@ pub mod proof {
                 details: None,
             }
         }
-        
+
         /// Create an invalid result with errors
         pub fn invalid(errors: Vec<String>) -> Self {
             Self {
@@ -385,72 +382,78 @@ impl WasmReceiptStorage {
     /// ```
     pub async fn verify_proof(&self, receipt_id: &str) -> Result<JsValue, JsValue> {
         use crate::payment::proof::{PaymentProof, ProofType, VerificationResult};
-        
+
         // Get receipt
-        let receipt_json = self.get_receipt(receipt_id).await?
+        let receipt_json = self
+            .get_receipt(receipt_id)
+            .await?
             .ok_or_else(|| utils::js_error(&format!("Receipt not found: {}", receipt_id)))?;
-        
+
         let receipt: PaykitReceipt = serde_json::from_str(&receipt_json)
             .map_err(|e| utils::js_error(&format!("Failed to parse receipt: {}", e)))?;
-        
-        let proof_json = receipt.proof
+
+        let proof_json = receipt
+            .proof
             .as_ref()
             .ok_or_else(|| utils::js_error("Receipt has no proof"))?;
-        
+
         // Parse proof
         let proof: PaymentProof = serde_json::from_value(proof_json.clone())
             .map_err(|e| utils::js_error(&format!("Failed to parse proof: {}", e)))?;
-        
+
         // Verify based on proof type
         // For WASM, we can only do basic Lightning verification (SHA256 check)
         // Bitcoin verification requires server-side Esplora API
         let verification_result = match proof.proof_type {
-            ProofType::LightningPreimage { preimage, payment_hash } => {
+            ProofType::LightningPreimage {
+                preimage,
+                payment_hash,
+            } => {
                 // Basic cryptographic verification: SHA256(preimage) == payment_hash
                 use sha2::{Digest, Sha256};
-                
+
                 let preimage_bytes = hex::decode(preimage)
                     .map_err(|e| utils::js_error(&format!("Invalid preimage hex: {}", e)))?;
                 let hash_bytes = hex::decode(payment_hash)
                     .map_err(|e| utils::js_error(&format!("Invalid payment_hash hex: {}", e)))?;
-                
+
                 let mut hasher = Sha256::new();
                 hasher.update(&preimage_bytes);
                 let computed = hasher.finalize();
-                
+
                 if computed.as_slice() == hash_bytes.as_slice() {
                     VerificationResult::valid()
                 } else {
-                    VerificationResult::invalid(vec![
-                        "Preimage hash mismatch".to_string()
-                    ])
+                    VerificationResult::invalid(vec!["Preimage hash mismatch".to_string()])
                 }
             }
             ProofType::BitcoinTxid { .. } => {
                 // Bitcoin verification requires Esplora API - not available in WASM
-                return Err(utils::js_error("Bitcoin proof verification requires server-side Esplora API"));
+                return Err(utils::js_error(
+                    "Bitcoin proof verification requires server-side Esplora API",
+                ));
             }
             ProofType::Custom { .. } => {
                 return Err(utils::js_error("Custom proof verification not implemented"));
             }
         };
-        
+
         // Build result object
         let result = js_sys::Object::new();
         let _ = js_sys::Reflect::set(&result, &"valid".into(), &verification_result.valid.into());
-        
+
         let errors_array = js_sys::Array::new();
         for error in &verification_result.errors {
             errors_array.push(&JsValue::from_str(error));
         }
         let _ = js_sys::Reflect::set(&result, &"errors".into(), &errors_array.into());
-        
+
         if let Some(details) = verification_result.details {
             let details_js = serde_wasm_bindgen::to_value(&details)
                 .map_err(|e| utils::js_error(&format!("Failed to serialize details: {}", e)))?;
             let _ = js_sys::Reflect::set(&result, &"details".into(), &details_js);
         }
-        
+
         // Update receipt if verification succeeded
         if verification_result.valid {
             let mut updated_receipt = receipt;
@@ -459,7 +462,7 @@ impl WasmReceiptStorage {
                 .map_err(|e| utils::js_error(&format!("Failed to serialize receipt: {}", e)))?;
             self.save_receipt(receipt_id, &updated_json).await?;
         }
-        
+
         Ok(result.into())
     }
 

@@ -77,7 +77,9 @@ pub async fn run(storage_dir: &Path, name: Option<String>, verbose: bool) -> Res
     } else {
         ui::info(&format!(
             "Identity saved to: {:?}",
-            storage_dir.join("identities").join(format!("{}.json", name))
+            storage_dir
+                .join("identities")
+                .join(format!("{}.json", name))
         ));
         ui::warning("Using plaintext storage. Run 'paykit-demo migrate' to use secure storage.");
     }

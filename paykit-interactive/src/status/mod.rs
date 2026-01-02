@@ -162,10 +162,7 @@ impl PaymentStatusTracker {
 
     /// Register a callback for status changes.
     pub fn on_status_change(&self, callback: StatusCallback) {
-        let mut callbacks = self
-            .callbacks
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut callbacks = self.callbacks.write().unwrap_or_else(|e| e.into_inner());
         callbacks.push(callback);
     }
 
@@ -174,10 +171,7 @@ impl PaymentStatusTracker {
         let status = PaymentStatusInfo::pending(&receipt.receipt_id, receipt.method_id.clone());
 
         {
-            let mut statuses = self
-                .statuses
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut statuses = self.statuses.write().unwrap_or_else(|e| e.into_inner());
             statuses.insert(receipt.receipt_id.clone(), status.clone());
         }
 
@@ -186,19 +180,13 @@ impl PaymentStatusTracker {
 
     /// Get status for a receipt.
     pub fn get(&self, receipt_id: &str) -> Option<PaymentStatusInfo> {
-        let statuses = self
-            .statuses
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let statuses = self.statuses.read().unwrap_or_else(|e| e.into_inner());
         statuses.get(receipt_id).cloned()
     }
 
     /// Update status for a receipt.
     pub fn update(&self, receipt_id: &str, new_status: PaymentStatus) -> Option<PaymentStatusInfo> {
-        let mut statuses = self
-            .statuses
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut statuses = self.statuses.write().unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update(new_status);
@@ -218,10 +206,7 @@ impl PaymentStatusTracker {
         confirmations: u64,
         required: u64,
     ) -> Option<PaymentStatusInfo> {
-        let mut statuses = self
-            .statuses
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut statuses = self.statuses.write().unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.update_confirmations(confirmations, required);
@@ -240,10 +225,7 @@ impl PaymentStatusTracker {
         receipt_id: &str,
         error: impl Into<String>,
     ) -> Option<PaymentStatusInfo> {
-        let mut statuses = self
-            .statuses
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut statuses = self.statuses.write().unwrap_or_else(|e| e.into_inner());
 
         if let Some(status) = statuses.get_mut(receipt_id) {
             status.mark_failed(error);
@@ -258,10 +240,7 @@ impl PaymentStatusTracker {
 
     /// Get all pending/in-progress payments.
     pub fn get_in_progress(&self) -> Vec<PaymentStatusInfo> {
-        let statuses = self
-            .statuses
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let statuses = self.statuses.read().unwrap_or_else(|e| e.into_inner());
         statuses
             .values()
             .filter(|s| s.status.is_in_progress())
@@ -271,10 +250,7 @@ impl PaymentStatusTracker {
 
     /// Get all payments by status.
     pub fn get_by_status(&self, status: PaymentStatus) -> Vec<PaymentStatusInfo> {
-        let statuses = self
-            .statuses
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let statuses = self.statuses.read().unwrap_or_else(|e| e.into_inner());
         statuses
             .values()
             .filter(|s| s.status == status)
@@ -284,10 +260,7 @@ impl PaymentStatusTracker {
 
     /// Remove completed/terminal statuses older than the given timestamp.
     pub fn cleanup_old(&self, before_timestamp: i64) -> usize {
-        let mut statuses = self
-            .statuses
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut statuses = self.statuses.write().unwrap_or_else(|e| e.into_inner());
         let count = statuses.len();
         statuses.retain(|_, status| {
             !status.status.is_terminal() || status.updated_at >= before_timestamp
@@ -296,10 +269,7 @@ impl PaymentStatusTracker {
     }
 
     fn notify(&self, status: &PaymentStatusInfo) {
-        let callbacks = self
-            .callbacks
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let callbacks = self.callbacks.read().unwrap_or_else(|e| e.into_inner());
         for callback in callbacks.iter() {
             callback(status);
         }

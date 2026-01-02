@@ -228,19 +228,13 @@ impl HealthMonitor {
 
     /// Get cached status for a method.
     pub fn get_status(&self, method_id: &MethodId) -> Option<HealthStatus> {
-        let cache = self
-            .cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&method_id.0).map(|r| r.status)
     }
 
     /// Get cached result for a method.
     pub fn get_result(&self, method_id: &MethodId) -> Option<HealthCheckResult> {
-        let cache = self
-            .cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         cache.get(&method_id.0).cloned()
     }
 
@@ -264,10 +258,7 @@ impl HealthMonitor {
 
         // Update cache
         {
-            let mut cache = self
-                .cache
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut cache = self.cache.write().unwrap_or_else(|e| e.into_inner());
             cache.insert(method_id.0.clone(), result.clone());
         }
 
@@ -283,10 +274,7 @@ impl HealthMonitor {
 
             // Update cache
             {
-                let mut cache = self
-                    .cache
-                    .write()
-                    .unwrap_or_else(|e| e.into_inner());
+                let mut cache = self.cache.write().unwrap_or_else(|e| e.into_inner());
                 cache.insert(result.method_id.0.clone(), result.clone());
             }
 
@@ -298,10 +286,7 @@ impl HealthMonitor {
 
     /// Get all healthy methods.
     pub fn get_healthy_methods(&self) -> Vec<MethodId> {
-        let cache = self
-            .cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         cache
             .iter()
             .filter(|(_, r)| r.status.is_healthy())
@@ -311,10 +296,7 @@ impl HealthMonitor {
 
     /// Get all usable methods.
     pub fn get_usable_methods(&self) -> Vec<MethodId> {
-        let cache = self
-            .cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         cache
             .iter()
             .filter(|(_, r)| r.status.is_usable())
@@ -324,10 +306,7 @@ impl HealthMonitor {
 
     /// Check if cache is stale for a method.
     pub fn is_stale(&self, method_id: &MethodId) -> bool {
-        let cache = self
-            .cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         if let Some(result) = cache.get(&method_id.0) {
             let now = current_timestamp();
             (now - result.checked_at) > self.cache_ttl_secs

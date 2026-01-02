@@ -1,9 +1,9 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.3  
-> **Last Updated**: December 31, 2025  
-> **Status**: Production Ready - Verification Complete
+> **Version**: 1.5  
+> **Last Updated**: January 2, 2026  
+> **Status**: Production Ready - E2E Verified
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
 
@@ -11,18 +11,25 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - Core architecture and features implemented
 - Security hardening applied (Phases 1-4)
 - Documentation accurate to current code state
-- Code-level verification complete (December 31, 2025)
+- Android E2E testing verified (January 1, 2026)
+- Fixed homeserver cookie format, URL patterns, and `pubky-host` header requirements
 
-**Production Readiness Verification (December 31, 2025)**:
+**Production Readiness Verification (January 2, 2026)**:
 - [x] No GlobalScope usage in Android (uses dedicated CoroutineScope with SupervisorJob)
 - [x] ProGuard/R8 rules added for JNA, UniFFI, and Noise classes
 - [x] Background tasks registered (SessionRefreshWorker, PaykitPollingWorker)
-- [x] Secure handoff implemented (Android) with payload deletion after fetch
+- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android)
 - [x] Key rotation (epoch 0 to 1) implemented with NoiseKeyCache persistence
-- [x] Cross-device QR authentication with 5-minute timeout
+- [x] Cross-device QR with ephemeral X25519 key + encrypted relay response
+- [x] Plaintext cross-device callbacks DISABLED for security
 - [x] Session persistence to Keychain/EncryptedSharedPreferences
 - [x] No secrets logged (verified via grep)
 - [x] No hardcoded secrets (verified via grep)
+- [x] Homeserver cookie format verified: `{pubkey}={secret}` (not `session={secret}`)
+- [x] Homeserver `pubky-host` header required for central homeserver
+- [x] PubkyAppFollow `created_at` timestamp requirement documented
+- [x] Android E2E tests verified with Maestro (session, profile, follows)
+- [x] PaykitV0Protocol: canonical path builders and AAD formats
 
 ---
 
@@ -54,6 +61,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - 📘 [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md) - Detailed implementation summary
 - 🔒 [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) - Security model and threat analysis
 - 🔔 [PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md) - Push relay service specification
+- 🔐 [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) - Encrypted handoff protocol (Sealed Blob v1)
 
 ---
 
@@ -95,15 +103,18 @@ Paykit is a decentralized payment protocol built on Pubky that enables:
 ### Pre-Production Verification Checklist
 
 Before deploying to production, verify end-to-end:
-- [x] Secure handoff flow works (Android - no secrets in URLs; iOS uses legacy mode)
+- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android)
+- [x] Cross-device relay: ephemeral X25519 + encrypted response (plaintext REJECTED)
 - [ ] iOS push relay Ed25519 signing completes successfully (requires runtime test)
 - [x] Android push relay Ed25519 signing implemented via PubkyRingBridge.requestSignature()
 - [x] Key rotation from epoch 0 to epoch 1 - code verified, runtime test recommended
 - [x] Cache miss recovery auto-requests from Ring (implemented in requestNoiseKeypair)
-- [x] Cross-device authentication via QR works (5-min timeout, relay polling)
+- [x] Cross-device authentication via QR works (5-min timeout, ephemeral key encryption)
 - [x] All deep link callbacks handled correctly (verified in handleCallback)
+- [x] Plaintext session callbacks DISABLED - returns error
 - [x] Session persistence survives app restart (Keychain/EncryptedSharedPrefs)
 - [x] Type-safe HomeserverURL prevents pubkey/URL confusion
+- [x] PaykitV0Protocol provides canonical AAD builders for Sealed Blob v1
 
 ### Review Lens (for architecture + assumptions)
 
@@ -122,22 +133,27 @@ This section is meant to help the Bitkit dev team review the project at a high l
 | Decision | What we did | Tradeoff / what to challenge |
 |---|---|---|
 | Ring-only identity | Ed25519 master secret never leaves Ring; Bitkit consumes sessions + derived X25519 keys | Requires Ring installation (or cross-device flow) for initial provisioning and for signing requests |
-| Secure handoff | Ring writes handoff JSON at an unguessable homeserver path; Bitkit fetches via `request_id` | Payload is **not encrypted at rest**; security relies on unguessability + TTL + TLS + deletion after fetch |
+| Secure handoff v2 | Ring encrypts handoff payload with Sealed Blob v1 (ephemeral X25519); Bitkit decrypts | Ephemeral keypair generated per-handoff; Ring must support `ephemeralPk` parameter |
+| Cross-device relay | Relay responses encrypted with ephemeral X25519; plaintext REJECTED | Older Ring versions incompatible; requires coordinated update |
 | Push relay vs public directory tokens | Push tokens are registered to a relay; wake requests require Ed25519 signatures | Adds backend dependency; requires careful lifecycle wiring for token rotation + session replacement |
 | Type-safe identifiers | Introduced `HomeserverURL`, `HomeserverPubkey`, `OwnerPubkey`, `SessionSecret` | Requires discipline to avoid reintroducing raw strings at boundaries |
 | Key rotation model | Epoch-based X25519 keypairs (epoch 0 + epoch 1) cached locally; rotation is manual-triggered | No automatic cadence; requires product decision on rotation triggers and migration path |
+| PaykitV0Protocol | Canonical path builders and AAD formats in single source of truth | Must match paykit-lib Rust implementation exactly |
 
 #### Invariants (things the system assumes are true)
 
 - **No secrets in callback URLs** for paykit setup (secure handoff only)
-- **Sessions authenticate via cookie**: `Cookie: session=<sessionSecret>` on authenticated homeserver requests
+- **Handoff payloads encrypted at rest** using Sealed Blob v1 (ephemeral X25519 + ChaCha20-Poly1305)
+- **Plaintext handoff/relay payloads REJECTED** by Bitkit for security
+- **Sessions authenticate via cookie**: `Cookie: {ownerPubkey}={sessionSecret}` on authenticated homeserver requests (the session secret may be prefixed with `{pubkey}:`, in which case only the portion after the colon is used)
 - **Ring is the only signer**: Ed25519 signatures used for push relay auth are produced by Ring
 - **Handoff lifecycle**: short TTL + Bitkit deletes after fetch (defense-in-depth)
+- **AAD binding**: All encrypted payloads use AAD to prevent replay/relocation attacks
 
 #### Review prompts (what to scrutinize)
 
 - **Security**:
-  - Are we comfortable with “public read + unguessable path” for handoff payloads, or do we require at-rest encryption / authenticated read?
+  - ✅ RESOLVED: Handoff payloads are now encrypted at rest using Sealed Blob v1
   - Are callback schemes and deep link handlers hardened against spoofing and confused-deputy issues?
   - Are we leaking any secrets via logs, analytics, crash reports, or OS-level deep link telemetry?
 - **Reliability**:
@@ -538,7 +554,7 @@ The real pattern is:
    - `AuthenticatedTransportFfi.fromCallback(callback: adapter, ownerPubkey: <pubkey>)`
 3. Pass these transports into Paykit directory operations.
 
-In Bitkit iOS, the session secret is transported as a cookie header: `Cookie: session=<sessionSecret>`.
+In Bitkit, the session is attached as a cookie header: `Cookie: {ownerPubkey}={sessionSecret}`. If the session secret from Ring is in the format `{pubkey}:{actualSecret}`, extract only the portion after the colon. All authenticated requests to the central homeserver (`https://homeserver.pubky.app`) must also include the `pubky-host: {ownerPubkey}` header.
 
 ### Step 4: Register Deep Links
 
@@ -920,27 +936,33 @@ pub fn derive_device_key(
 
 ### 7.2 Paykit Connect Action (Ring-side implementation)
 
-When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...`, Ring processes it via:
+When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...&ephemeralPk=...`, Ring processes it via:
 
 **File:** `pubky-ring/src/utils/actions/paykitConnectAction.ts`
 
-**Note**: The header comment in `paykitConnectAction.ts` is stale. The current implementation **always** uses secure handoff, and the handoff payload is **not encrypted at rest** (security relies on the unguessable path + TTL + TLS + deletion after fetch).
+**SECURITY (v2)**: Handoff payloads are encrypted using Sealed Blob v1 before storage. Bitkit generates an ephemeral X25519 keypair and includes the public key in the request. Ring encrypts to this key. Bitkit decrypts using the ephemeral secret key. Plaintext payloads are REJECTED by Bitkit.
 
 ```typescript
-// Current implementation uses SECURE HANDOFF (no secrets in URL)
+// Current implementation uses ENCRYPTED SECURE HANDOFF (Sealed Blob v1)
 export const handlePaykitConnectAction = async (
     data: PaykitConnectActionData,
     context: ActionContext
 ): Promise<Result<string>> => {
     const { pubky, dispatch } = context;
-    const { deviceId, callback, includeEpoch1 = true } = data.params;
+    const { deviceId, callback, ephemeralPk, includeEpoch1 = true } = data.params;
+
+    // SECURITY: ephemeralPk is REQUIRED for secure handoff
+    if (!ephemeralPk) {
+        throw new Error('ephemeralPk required for secure handoff');
+    }
 
     // Step 1: Sign in to homeserver (gets session)
     const signInResult = await signInToHomeserver({ pubky, dispatch });
     const sessionInfo = signInResult.value;
 
-    // Step 2: Get Ed25519 secret key from secure storage
+    // Step 2: Get Ed25519 secret key and derive noise seed
     const { secretKey: ed25519SecretKey } = await getPubkySecretKey(pubky);
+    const noiseSeed = await deriveNoiseSeed(ed25519SecretKey, deviceId);
 
     // Step 3: Derive X25519 keypairs via native module
     const keypair0 = await deriveX25519Keypair(ed25519SecretKey, deviceId, 0);
@@ -948,10 +970,8 @@ export const handlePaykitConnectAction = async (
         ? await deriveX25519Keypair(ed25519SecretKey, deviceId, 1) 
         : null;
 
-    // Step 4: Store payload on homeserver at unguessable path
+    // Step 4: Build payload
     const requestId = generateRequestId(); // 256-bit random
-    const handoffPath = `pubky://${pubky}/pub/paykit.app/v0/handoff/${requestId}`;
-    
     const payload = {
         version: 1,
         pubky: sessionInfo.pubky,
@@ -962,13 +982,21 @@ export const handlePaykitConnectAction = async (
             { epoch: 0, public_key: keypair0.publicKey, secret_key: keypair0.secretKey },
             keypair1 && { epoch: 1, public_key: keypair1.publicKey, secret_key: keypair1.secretKey },
         ].filter(Boolean),
+        noise_seed: noiseSeed,
         created_at: Date.now(),
         expires_at: Date.now() + 5 * 60 * 1000, // 5 minutes
     };
-    
-    await put(handoffPath, payload, ed25519SecretKey);
 
-    // Step 5: Return to Bitkit with ONLY request_id (no secrets!)
+    // Step 5: Encrypt payload using Sealed Blob v1
+    const storagePath = `/pub/paykit.app/v0/handoff/${requestId}`;
+    const aad = `paykit:v0:handoff:${pubky}:${storagePath}:${requestId}`;
+    const envelope = await sealedBlobEncrypt(ephemeralPk, JSON.stringify(payload), aad, 'handoff');
+
+    // Step 6: Store encrypted envelope on homeserver
+    const handoffPath = `pubky://${pubky}${storagePath}`;
+    await put(handoffPath, envelope, ed25519SecretKey);
+
+    // Step 7: Return to Bitkit with ONLY request_id (no secrets!)
     const callbackUrl = buildCallbackUrl(callback, {
         mode: 'secure_handoff',
         pubky: sessionInfo.pubky,
@@ -979,16 +1007,25 @@ export const handlePaykitConnectAction = async (
 };
 ```
 
-**Callback URL Format (Secure Handoff)**:
+**Callback URL Format (Secure Handoff v2)**:
 ```
 bitkit://paykit-setup?mode=secure_handoff&pubky=<z32_pubkey>&request_id=<256bit_hex>
 ```
 
+**AAD Format (Paykit v0 Protocol)**:
+```
+paykit:v0:handoff:{pubky}:{storagePath}:{requestId}
+```
+
 **Bitkit then**:
-1. Fetches payload from `pubky://<pubky>/pub/paykit.app/v0/handoff/<request_id>`
-2. Parses session and noise keypairs from JSON
-3. Deletes the handoff file immediately (iOS + Android) to minimize exposure window
-4. Caches session and keypairs locally
+1. Fetches encrypted envelope from `pubky://<pubky>/pub/paykit.app/v0/handoff/<request_id>`
+2. Verifies it's a Sealed Blob (rejects plaintext for security)
+3. Decrypts using ephemeral secret key with AAD validation
+4. Parses session, noise keypairs, and noise_seed from decrypted JSON
+5. Deletes the handoff file immediately
+6. Caches session and keypairs locally
+
+**See**: [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) for complete protocol specification.
 
 ### 7.3 Bitkit-side Session and Key Handling
 
@@ -1072,6 +1109,36 @@ SessionRefreshWorker.schedule(context)
 // Calls pubkySDKService.refreshExpiringSessions()
 ```
 
+**PaykitV0Protocol - Canonical Protocol Helpers:**
+
+Bitkit Android provides `PaykitV0Protocol` object for canonical path building and AAD generation:
+- Android: `bitkit-android/app/src/main/java/to/bitkit/paykit/protocol/PaykitV0Protocol.kt`
+
+```kotlin
+// PaykitV0Protocol.kt - Key methods
+object PaykitV0Protocol {
+    const val PAYKIT_V0_PREFIX = "/pub/paykit.app/v0"
+    const val AAD_PREFIX = "paykit:v0"
+
+    // Path builders
+    fun paymentRequestPath(recipientPubkeyZ32: String, requestId: String): String
+    fun subscriptionProposalPath(subscriberPubkeyZ32: String, proposalId: String): String
+    fun secureHandoffPath(requestId: String): String
+    fun noiseEndpointPath(): String
+
+    // AAD builders for Sealed Blob v1 encryption
+    fun paymentRequestAad(recipientPubkeyZ32: String, requestId: String): String
+    fun subscriptionProposalAad(subscriberPubkeyZ32: String, proposalId: String): String
+    fun secureHandoffAad(ownerPubkeyZ32: String, requestId: String): String
+    fun relaySessionAad(requestId: String): String
+
+    // Scope derivation (for per-recipient directories)
+    fun recipientScope(pubkeyZ32: String): String  // SHA-256 hash of normalized pubkey
+}
+```
+
+All AAD strings follow the format: `paykit:v0:{purpose}:{path}:{id}`
+
 **Session expiration handling (Android PubkySDKService):**
 
 ```kotlin
@@ -1131,16 +1198,25 @@ Why this matters:
 
 #### Cross-device flow (Ring installed on a different device)
 
-Bitkit generates a web URL for QR / link:
-- `https://pubky.app/auth?request_id=<uuid>&callback_scheme=bitkit&app_name=Bitkit&relay_url=<relay-url>`
+**SECURITY (v2)**: Cross-device relay responses are encrypted using Sealed Blob v1. Bitkit generates an ephemeral X25519 keypair and includes the public key in the QR URL. Ring encrypts the session payload to this key. **Plaintext relay responses are REJECTED for security.**
 
-Ring completes auth and posts the session to the relay; Bitkit polls the relay for up to 5 minutes:
+Bitkit generates a web URL for QR / link:
+- `https://pubky.app/auth?request_id=<uuid>&callback_scheme=bitkit&app_name=Bitkit&relay_url=<relay-url>&ephemeralPk=<hex>`
+
+Ring completes auth and posts the **encrypted** session to the relay; Bitkit polls the relay for up to 5 minutes:
 - iOS: `PubkyRingBridge.pollForCrossDeviceSession(requestId:timeout:)`
 - Android: `PubkyRingBridge.pollForCrossDeviceSession(requestId, timeoutMs)`
+
+**AAD Format (Paykit v0 Protocol)**:
+```
+paykit:v0:relay:session:{requestId}
+```
 
 Relay default:
 - iOS default: `https://relay.pubky.app/sessions` (override with `PUBKY_RELAY_URL`)
 - Android default: `https://relay.pubky.app/sessions` (override with `-DPUBKY_RELAY_URL=<relay-url>`)
+
+**See**: [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) for complete protocol specification.
 
 ### Cross-App Communication (Android)
 
@@ -1195,8 +1271,10 @@ class PubkyRingBridge @Inject constructor(
 | Action | Deep Link | Callback |
 |--------|-----------|----------|
 | Sign message | `pubkyring://sign-message?message={msg}&callback={url}` | `bitkit://signature-result?signature={hex}&pubkey={z32}` |
-| Paykit setup | `pubkyring://paykit-connect?deviceId={id}&callback={url}` | `bitkit://paykit-setup?mode=secure_handoff&pubky={z32}&request_id={hex}` |
-| Get session | `pubkyring://session?callback={url}` | `bitkit://paykit-session?pubky={z32}&session_secret={secret}` |
+| Paykit setup (v2) | `pubkyring://paykit-connect?deviceId={id}&callback={url}&ephemeralPk={hex}` | `bitkit://paykit-setup?mode=secure_handoff&pubky={z32}&request_id={hex}` |
+| Get session (DEPRECATED) | `pubkyring://session?callback={url}` | `bitkit://paykit-session?pubky={z32}&session_secret={secret}` ❌ DISABLED |
+
+**SECURITY**: The `ephemeralPk` parameter is REQUIRED for secure handoff. Payloads are encrypted using Sealed Blob v1 to this key. Legacy session callbacks with plaintext secrets are REJECTED.
 
 ### Session material in Bitkit (what Bitkit actually persists)
 
@@ -1205,7 +1283,8 @@ Bitkit does not use a JSON bearer token model here. The reference implementation
 - `session.sessionSecret`: opaque session secret string (used as cookie value)
 
 The storage adapters attach the session to authenticated requests via:
-- `Cookie: session=<sessionSecret>`
+- `Cookie: {ownerPubkey}={sessionSecret}` (if session secret contains `:`, use only the portion after)
+- `pubky-host: {ownerPubkey}` header (required for central homeserver)
 
 Reference:
 - iOS: `PubkyAuthenticatedStorageAdapter` in `bitkit-ios/Bitkit/PaykitIntegration/Services/PubkyStorageAdapter.swift`
@@ -1709,15 +1788,64 @@ Production blueprint requirements:
 - Treat timeouts as first-class failures (surface actionable error to user).
 - Prefer structured concurrency over global blocking primitives where possible.
 
-#### ⚠️ Homeserver base URL naming confusion
+#### ⚠️ Homeserver URL format and `pubky-host` header
 
-In Bitkit, configuration strings are sometimes labeled “homeserver pubkey”, but the HTTP storage adapters build URLs by concatenating:
-- `"$homeserverBaseURL/pubky$ownerPubkey$path"` (unauthenticated reads)
-- `"$homeserverBaseURL$path"` (authenticated writes)
+When using the central homeserver (`https://homeserver.pubky.app`), the correct URL and header format is:
+
+**URL format:**
+- `"$homeserverURL$path"` for both reads and writes (NO pubkey in the URL path)
+
+**Required header:**
+- `pubky-host: {ownerPubkey}` - identifies which user's storage to access
+
+**Cookie format (authenticated requests):**
+- `Cookie: {ownerPubkey}={sessionSecret}`
+
+**Example:**
+```
+PUT https://homeserver.pubky.app/pub/pubky.app/follows/abc123...
+Cookie: tjtigrhbiinfwwh8nwwgbq4b17t71uqesshsd7zp37zt3huwmwyo=TVQB9B07VD...
+pubky-host: tjtigrhbiinfwwh8nwwgbq4b17t71uqesshsd7zp37zt3huwmwyo
+Content-Type: application/json
+```
+
+**Common errors:**
+- HTTP 400 "Failed to extract key for rate limiting" - missing `pubky-host` header
+- HTTP 403 Forbidden - pubkey included in URL path instead of header
 
 Production blueprint requirements:
-- If using the HTTP adapters, ensure `homeserverBaseURL` is a real URL (e.g., `https://homeserver.pubky.app`).
-- If relying on `pubky://` URIs + DHT/Pkarr resolution, leave `homeserverBaseURL` unset and use `pubky://<pubkey><path>` reads (see `DirectoryService.fetchPaymentRequest` on iOS/Android).
+- Always include `pubky-host` header when using `https://homeserver.pubky.app`
+- Do NOT put the pubkey in the URL path (e.g., `/pubky{pubkey}/path` is WRONG)
+- If relying on `pubky://` URIs + DHT/Pkarr resolution, use `pubky://<pubkey><path>` reads (see `DirectoryService.fetchPaymentRequest` on iOS/Android)
+
+#### ⚠️ PubkyAppFollow requires `created_at` timestamp
+
+**Problem:** Adding a follow with an empty JSON object `{}` fails with HTTP 400.
+
+**Symptom:**
+```
+HTTP 400: Invalid follow format
+```
+
+**Solution:** Per `pubky-app-specs`, `PubkyAppFollow` requires a `created_at` field with Unix timestamp in **microseconds**:
+
+```json
+{"created_at": 1735689600000000}
+```
+
+**Code example (Kotlin):**
+```kotlin
+val createdAt = System.currentTimeMillis() * 1000 // Convert millis to micros
+val followJson = """{"created_at":$createdAt}"""
+adapter.put("/pub/pubky.app/follows/$targetPubkey", followJson)
+```
+
+**Code example (Swift):**
+```swift
+let createdAt = Int64(Date().timeIntervalSince1970 * 1_000_000)
+let followJson = #"{"created_at":\#(createdAt)}"#
+try await adapter.put(path: "/pub/pubky.app/follows/\(targetPubkey)", content: followJson)
+```
 
 #### ⚠️ Android GlobalScope usage in PubkyRingBridge
 
@@ -1799,11 +1927,12 @@ DirectoryService.shared.initialize(client: paykitClient)
 DirectoryService.shared.configureWithPubkySession(session)
 
 // Internally, DirectoryService wires:
-// - UnauthenticatedTransportFfi.fromCallback(callback: PubkyUnauthenticatedStorageAdapter(homeserverBaseURL: <homeserver-pubkey-or-url>))
-// - AuthenticatedTransportFfi.fromCallback(callback: PubkyAuthenticatedStorageAdapter(sessionId: session.sessionSecret, homeserverBaseURL: <homeserver-pubkey-or-url>), ownerPubkey: session.pubkey)
+// - UnauthenticatedTransportFfi.fromCallback(callback: PubkyUnauthenticatedStorageAdapter(homeserverURL: <homeserver-url>))
+// - AuthenticatedTransportFfi.fromCallback(callback: PubkyAuthenticatedStorageAdapter(sessionSecret: session.sessionSecret, ownerPubkey: session.pubkey, homeserverURL: <homeserver-url>), ownerPubkey: session.pubkey)
 
-// 2) The authenticated adapter attaches the session via cookie:
-// Cookie: session=<session.sessionSecret>
+// 2) The authenticated adapter attaches the session via:
+// Cookie: {session.pubkey}={actualSecret}  (extract actualSecret from sessionSecret if it contains ':')
+// Header: pubky-host: {session.pubkey}  (required for central homeserver)
 ```
 
 ### Background polling (Bitkit production blueprint)
@@ -1916,6 +2045,38 @@ cd paykit-rs
 # Run E2E tests
 cargo test --features e2e-tests
 ```
+
+### 11.6 Maestro Cross-App E2E Testing (Android)
+
+For testing Ring-to-Bitkit integration flows on Android, Maestro provides reliable cross-app UI automation:
+
+**Setup:**
+```bash
+# Install Maestro CLI
+curl -Ls "https://get.maestro.mobile.dev" | bash
+
+# Push test identity files to emulator
+adb push test-identity.pkarr /sdcard/Download/
+```
+
+**Reference implementation:** `bitkit-android/e2e/flows/`
+
+**Key test flows:**
+- `01-import-identity.yaml` - Import `.pkarr` identity into Ring
+- `02-session-acquisition.yaml` - Test session handoff from Ring to Bitkit
+- `03-profile-operations.yaml` - Test profile read/write to homeserver
+- `test_add_follow.yaml` - Test adding follows via UI
+
+**Running tests:**
+```bash
+cd bitkit-android
+maestro test e2e/flows/02-session-acquisition.yaml
+```
+
+**Benefits:**
+- Tests real cross-app deep link flows
+- Validates end-to-end homeserver authentication
+- Catches integration issues that unit tests miss
 
 ---
 
@@ -2255,32 +2416,39 @@ The following architectural improvements were implemented to enhance security, r
 
 **Implementation Details**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#phase-1-ring-only-identity-model)
 
-### 17.2 Secure Handoff Protocol (Phase 2)
+### 17.2 Secure Handoff Protocol v2 (Phase 2 - Updated)
 
-**Problem**: Session secrets passed in callback URLs are vulnerable to logging/leaks.
+**Problem**: Session secrets passed in callback URLs are vulnerable to logging/leaks. Plaintext storage on homeserver is readable by anyone who discovers the path.
 
-**Solution**: Store handoff payload on homeserver at unguessable path, return only `request_id` in URL.
+**Solution (v2)**: Encrypt handoff payload using Sealed Blob v1 before storage. Bitkit generates ephemeral X25519 keypair, Ring encrypts to it, Bitkit decrypts.
 
 **Benefits**:
 - No secrets in URLs (immune to logging attacks)
+- **Secrets encrypted at rest** (Sealed Blob v1 with AEAD)
 - 256-bit random path (unguessable, 2^256 combinations)
 - 5-minute TTL (time-limited exposure)
 - Immediate deletion after fetch (defense in depth)
+- **Forward secrecy**: ephemeral X25519 keys per handoff
 
-**Protocol**:
-1. Ring stores handoff payload as JSON at `/pub/paykit.app/v0/handoff/{request_id}`
-2. Ring returns: `bitkit://paykit-setup?mode=secure_handoff&pubky=...&request_id=...`
-3. Bitkit fetches payload from homeserver using `request_id`
-4. Bitkit deletes payload immediately after fetch (iOS + Android)
+**Protocol (v2)**:
+1. Bitkit generates ephemeral X25519 keypair, includes public key in request
+2. Ring encrypts payload using `sealedBlobEncrypt(ephemeralPk, payload, aad, "handoff")`
+3. Ring stores encrypted envelope at `/pub/paykit.app/v0/handoff/{request_id}`
+4. Ring returns: `bitkit://paykit-setup?mode=secure_handoff&pubky=...&request_id=...`
+5. Bitkit fetches encrypted envelope from homeserver
+6. Bitkit verifies it's a Sealed Blob (REJECTS plaintext)
+7. Bitkit decrypts with ephemeral secret key + AAD validation
+8. Bitkit deletes payload immediately after fetch
 
-**Security Properties** (Note: payload is NOT encrypted at rest):
-- **Path unguessability**: 256-bit random request_id makes brute-force infeasible
+**Security Properties**:
+- **Encrypted at rest**: Sealed Blob v1 (X25519 + ChaCha20-Poly1305)
+- **Path unguessability**: 256-bit random request_id
+- **AAD binding**: `paykit:v0:handoff:{pubky}:{path}:{requestId}` prevents replay
 - **Time-limited**: 5-minute `expires_at` timestamp in payload
-- **Transport encryption**: TLS protects data in transit
-- **Immediate cleanup**: Bitkit deletes after fetch; homeserver should honor TTL
-- **Access control**: Authenticated write, public read (security via obscurity of path)
+- **Forward secrecy**: ephemeral X25519 keypair per handoff
+- **Plaintext rejected**: Bitkit's `isSealedBlob()` check rejects unencrypted payloads
 
-**Protocol Flow Diagram**: See [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md#protocol-flow)
+**Protocol Specification**: See [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md)
 
 ### 17.3 Private Push Relay (Phase 3)
 

@@ -70,13 +70,6 @@ This directory contains additional documentation for the Paykit project.
 - **[paykit-demo-cli/TESTING.md](../paykit-demo-cli/TESTING.md)** - Testing guide
 - **[paykit-demo-cli/TROUBLESHOOTING.md](../paykit-demo-cli/TROUBLESHOOTING.md)** - Troubleshooting guide
 
-## Archive
-
-Historical development artifacts are preserved in:
-- **[archive/planning-documents/](./archive/planning-documents/)** - Feature parity plans, roadmaps, and integration readiness reviews
-- **[archive/phase-summaries/](./archive/phase-summaries/)** - Phase completion summaries (Phase 1, 2, 3+4)
-- **[archive/status-reports/](./archive/status-reports/)** - Build status and E2E test results
-
 ## Contributing Documentation
 
 When adding new documentation:

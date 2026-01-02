@@ -58,7 +58,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Use uniffi_bindgen's library_mode API for 0.29.x
-    use uniffi_bindgen::bindings::{KotlinBindingGenerator, PythonBindingGenerator, SwiftBindingGenerator};
+    use uniffi_bindgen::bindings::{
+        KotlinBindingGenerator, PythonBindingGenerator, SwiftBindingGenerator,
+    };
     use uniffi_bindgen::library_mode::generate_bindings;
 
     println!("Calling uniffi_bindgen::library_mode::generate_bindings...");

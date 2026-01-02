@@ -117,6 +117,50 @@ paykit:v0:subscription_proposal:{path}:{proposal_id}
 paykit:v0:handoff:{owner_pubkey_z32}:{path}:{request_id}
 ```
 
+Example:
+```
+paykit:v0:handoff:8um71us3fyw6h8wbcxb5ar3rwusy1a6u49956ikzojg3gcwd1dty:/pub/paykit.app/v0/handoff/f3a7b2c1d4e5f6a7:f3a7b2c1d4e5f6a7
+```
+
+---
+
+## AAD Test Vectors
+
+These test vectors verify that AAD construction matches across implementations.
+
+### Test Case 1: Payment Request AAD
+
+**Inputs:**
+- `recipient_pubkey_z32`: `ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u`
+- `request_id`: `req-12345`
+
+**Expected AAD:**
+```
+paykit:v0:request:/pub/paykit.app/v0/requests/55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80/req-12345:req-12345
+```
+
+### Test Case 2: Subscription Proposal AAD
+
+**Inputs:**
+- `subscriber_pubkey_z32`: `8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo`
+- `proposal_id`: `prop-67890`
+
+**Expected AAD:**
+```
+paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12/prop-67890:prop-67890
+```
+
+### Test Case 3: Secure Handoff AAD
+
+**Inputs:**
+- `owner_pubkey_z32`: `ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u`
+- `request_id`: `handoff-abc123`
+
+**Expected AAD:**
+```
+paykit:v0:handoff:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u:/pub/paykit.app/v0/handoff/handoff-abc123:handoff-abc123
+```
+
 ---
 
 ## Validation Rules

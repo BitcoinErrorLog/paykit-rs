@@ -41,6 +41,7 @@ pub mod health;
 pub mod methods;
 pub mod prelude;
 pub mod private_endpoints;
+pub mod protocol;
 pub mod rotation;
 pub mod routing;
 pub mod secure_storage;

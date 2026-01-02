@@ -5,8 +5,11 @@ use crate::{
     Subscription, SubscriptionStorage,
 };
 use paykit_interactive::{PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage};
+use paykit_lib::protocol::{subscription_proposal_aad, subscription_proposal_path};
 use paykit_lib::PublicKey;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Messages for subscription protocol
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -27,6 +30,10 @@ pub struct SubscriptionManager {
     interactive: Arc<PaykitInteractiveManager>,
     pubky_session: Option<pubky::PubkySession>,
     nonce_store: Arc<NonceStore>,
+    /// Our Noise secret key for encryption/decryption
+    my_noise_sk: Option<[u8; 32]>,
+    /// Cache of peer Noise public keys (pubkey -> noise_pk)
+    noise_pk_cache: Arc<RwLock<HashMap<String, [u8; 32]>>>,
 }
 
 impl SubscriptionManager {
@@ -39,12 +46,25 @@ impl SubscriptionManager {
             interactive,
             pubky_session: None,
             nonce_store: Arc::new(NonceStore::new()),
+            my_noise_sk: None,
+            noise_pk_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     pub fn with_pubky_session(mut self, session: pubky::PubkySession) -> Self {
         self.pubky_session = Some(session);
         self
+    }
+
+    /// Configure the manager with a Noise secret key for encryption/decryption
+    pub fn with_noise_keypair(mut self, noise_sk: [u8; 32]) -> Self {
+        self.my_noise_sk = Some(noise_sk);
+        self
+    }
+
+    /// Get the Noise secret key if configured
+    pub fn noise_sk(&self) -> Option<&[u8; 32]> {
+        self.my_noise_sk.as_ref()
     }
 
     /// Validate payment request
@@ -443,77 +463,253 @@ impl SubscriptionManager {
     // Private helper methods for Pubky storage
     // ============================================================
 
+    /// Discover the Noise public key for a peer from their `/pub/paykit.app/v0/noise` endpoint.
+    ///
+    /// Uses caching to avoid repeated network requests.
+    async fn discover_noise_pk(&self, pubkey: &PublicKey) -> Result<[u8; 32]> {
+        let pubkey_str = pubkey.to_string();
+
+        // Check cache first
+        {
+            let cache = self.noise_pk_cache.read().await;
+            if let Some(pk) = cache.get(&pubkey_str) {
+                return Ok(*pk);
+            }
+        }
+
+        // Create public storage reader for fetching peer's noise endpoint
+        let public_storage = pubky::PublicStorage::new()
+            .map_err(|e| anyhow::anyhow!("Failed to create public storage: {}", e))?;
+
+        let path = format!("pubky://{}/pub/paykit.app/v0/noise", pubkey_str);
+        let response = public_storage
+            .get(&path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch noise endpoint: {}", e))?;
+
+        let content = response
+            .bytes()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read noise endpoint response: {}", e))?;
+
+        if content.is_empty() {
+            anyhow::bail!("No noise endpoint found for {}", pubkey_str);
+        }
+
+        // Parse the noise endpoint JSON to extract public key
+        let endpoint: serde_json::Value = serde_json::from_slice(&content)
+            .map_err(|e| anyhow::anyhow!("Invalid noise endpoint JSON: {}", e))?;
+
+        let pk_hex = endpoint
+            .get("public_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing public_key in noise endpoint"))?;
+
+        let pk_bytes = hex::decode(pk_hex)
+            .map_err(|e| anyhow::anyhow!("Invalid noise public key hex: {}", e))?;
+
+        if pk_bytes.len() != 32 {
+            anyhow::bail!(
+                "Invalid noise public key length: expected 32, got {}",
+                pk_bytes.len()
+            );
+        }
+
+        let mut pk_arr = [0u8; 32];
+        pk_arr.copy_from_slice(&pk_bytes);
+
+        // Cache the result
+        {
+            let mut cache = self.noise_pk_cache.write().await;
+            cache.insert(pubkey_str, pk_arr);
+        }
+
+        Ok(pk_arr)
+    }
+
+    /// Store a subscription proposal encrypted to the subscriber.
+    ///
+    /// The proposal is encrypted using Paykit Sealed Blob v1 so only the
+    /// intended subscriber can decrypt and read it.
+    ///
+    /// # Path Format (v0)
+    ///
+    /// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
+    /// where `subscriber_scope = hex(sha256(normalized_subscriber_pubkey_z32))`.
     async fn store_subscription_proposal(
         &self,
         session: &pubky::PubkySession,
         subscription: &Subscription,
     ) -> Result<()> {
-        let path = format!(
-            "/pub/paykit.app/subscriptions/proposals/{:?}/{}",
-            subscription.provider, subscription.subscription_id
-        );
-        let data = serde_json::to_vec(&subscription)?;
+        // Build canonical path using subscriber scope
+        let subscriber_pubkey_z32 = subscription.subscriber.to_string();
+        let path =
+            subscription_proposal_path(&subscriber_pubkey_z32, &subscription.subscription_id)
+                .map_err(|e| anyhow::anyhow!("Invalid subscriber pubkey: {}", e))?;
+
+        // Discover subscriber's Noise public key for encryption
+        let subscriber_noise_pk = self.discover_noise_pk(&subscription.subscriber).await?;
+
+        // Serialize and encrypt
+        let plaintext = serde_json::to_vec(&subscription)?;
+
+        // Build canonical AAD
+        let aad = subscription_proposal_aad(&subscriber_pubkey_z32, &subscription.subscription_id)
+            .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
+
+        let envelope = pubky_noise::sealed_blob::sealed_blob_encrypt(
+            &subscriber_noise_pk,
+            &plaintext,
+            &aad,
+            Some("subscription_proposal"),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt subscription proposal: {}", e))?;
+
+        // Store encrypted envelope on provider storage
         session
             .storage()
-            .put(path, data)
+            .put(path, envelope.as_bytes().to_vec())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to store proposal: {}", e))?;
+
         Ok(())
     }
 
+    /// Store a signed subscription encrypted for both parties.
+    ///
+    /// Each party gets their own encrypted copy that only they can decrypt.
+    ///
+    /// Note: Agreements use a simpler path format as they're stored on both
+    /// parties' own storage (no scope-based discovery needed).
     async fn store_signed_subscription(
         &self,
         session: &pubky::PubkySession,
         signed: &SignedSubscription,
     ) -> Result<()> {
-        // Store for both parties
+        let plaintext = serde_json::to_vec(&signed)?;
+
+        // Store for subscriber (encrypted to subscriber's Noise PK)
         let path_subscriber = format!(
-            "/pub/paykit.app/subscriptions/agreements/{:?}/{}",
+            "/pub/paykit.app/v0/subscriptions/agreements/{}/{}",
             signed.subscription.subscriber, signed.subscription.subscription_id
         );
-        let path_provider = format!(
-            "/pub/paykit.app/subscriptions/agreements/{:?}/{}",
-            signed.subscription.provider, signed.subscription.subscription_id
+        let subscriber_noise_pk = self
+            .discover_noise_pk(&signed.subscription.subscriber)
+            .await?;
+        let aad_subscriber = format!(
+            "paykit:v0:subscription_agreement:{}:{}",
+            path_subscriber, signed.subscription.subscription_id
         );
-
-        let data = serde_json::to_vec(&signed)?;
+        let envelope_subscriber = pubky_noise::sealed_blob::sealed_blob_encrypt(
+            &subscriber_noise_pk,
+            &plaintext,
+            &aad_subscriber,
+            Some("subscription_agreement"),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt subscription for subscriber: {}", e))?;
 
         session
             .storage()
-            .put(path_subscriber.clone(), data.clone())
+            .put(path_subscriber, envelope_subscriber.as_bytes().to_vec())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to store subscription for subscriber: {}", e))?;
 
+        // Store for provider (encrypted to provider's Noise PK)
+        let path_provider = format!(
+            "/pub/paykit.app/v0/subscriptions/agreements/{}/{}",
+            signed.subscription.provider, signed.subscription.subscription_id
+        );
+        let provider_noise_pk = self
+            .discover_noise_pk(&signed.subscription.provider)
+            .await?;
+        let aad_provider = format!(
+            "paykit:v0:subscription_agreement:{}:{}",
+            path_provider, signed.subscription.subscription_id
+        );
+        let envelope_provider = pubky_noise::sealed_blob::sealed_blob_encrypt(
+            &provider_noise_pk,
+            &plaintext,
+            &aad_provider,
+            Some("subscription_agreement"),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt subscription for provider: {}", e))?;
+
         session
             .storage()
-            .put(path_provider, data)
+            .put(path_provider, envelope_provider.as_bytes().to_vec())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to store subscription for provider: {}", e))?;
 
         Ok(())
     }
 
+    /// Store a subscription cancellation encrypted for both parties.
+    ///
+    /// Each party gets their own encrypted copy that only they can decrypt.
     async fn store_subscription_cancellation(
         &self,
         session: &pubky::PubkySession,
         subscription: &SignedSubscription,
         reason: Option<String>,
     ) -> Result<()> {
-        let path = format!(
-            "/pub/paykit.app/subscriptions/cancellations/{}",
-            subscription.subscription.subscription_id
-        );
-        let data = serde_json::to_vec(&serde_json::json!({
+        let cancellation = serde_json::json!({
             "subscription_id": subscription.subscription.subscription_id,
             "reason": reason,
             "cancelled_at": chrono::Utc::now().timestamp(),
-        }))?;
+        });
+        let plaintext = serde_json::to_vec(&cancellation)?;
+
+        // Store for subscriber (encrypted to subscriber's Noise PK)
+        let path_subscriber = format!(
+            "/pub/paykit.app/v0/subscriptions/cancellations/{}/{}",
+            subscription.subscription.subscriber, subscription.subscription.subscription_id
+        );
+        let subscriber_noise_pk = self
+            .discover_noise_pk(&subscription.subscription.subscriber)
+            .await?;
+        let aad_subscriber = format!(
+            "paykit:v0:subscription_cancellation:{}:{}",
+            path_subscriber, subscription.subscription.subscription_id
+        );
+        let envelope_subscriber = pubky_noise::sealed_blob::sealed_blob_encrypt(
+            &subscriber_noise_pk,
+            &plaintext,
+            &aad_subscriber,
+            Some("subscription_cancellation"),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt cancellation for subscriber: {}", e))?;
 
         session
             .storage()
-            .put(path, data)
+            .put(path_subscriber, envelope_subscriber.as_bytes().to_vec())
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to store cancellation: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to store cancellation for subscriber: {}", e))?;
+
+        // Store for provider (encrypted to provider's Noise PK)
+        let path_provider = format!(
+            "/pub/paykit.app/v0/subscriptions/cancellations/{}/{}",
+            subscription.subscription.provider, subscription.subscription.subscription_id
+        );
+        let provider_noise_pk = self
+            .discover_noise_pk(&subscription.subscription.provider)
+            .await?;
+        let aad_provider = format!(
+            "paykit:v0:subscription_cancellation:{}:{}",
+            path_provider, subscription.subscription.subscription_id
+        );
+        let envelope_provider = pubky_noise::sealed_blob::sealed_blob_encrypt(
+            &provider_noise_pk,
+            &plaintext,
+            &aad_provider,
+            Some("subscription_cancellation"),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to encrypt cancellation for provider: {}", e))?;
+
+        session
+            .storage()
+            .put(path_provider, envelope_provider.as_bytes().to_vec())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to store cancellation for provider: {}", e))?;
 
         Ok(())
     }

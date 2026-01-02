@@ -15,7 +15,7 @@ This guide provides step-by-step instructions for integrating Paykit into iOS an
 ### Required Tools
 
 - **Rust**: 1.70+ with cargo
-- **UniFFI**: 0.25+ (`cargo install uniffi-bindgen-cli@0.25`)
+- **UniFFI**: 0.29.4 (`cargo install uniffi-bindgen-cli@0.29.4`)
 - **iOS**: Xcode 14+, Swift 5.5+
 - **Android**: Android Studio, Kotlin 1.8+, NDK
 
@@ -471,7 +471,7 @@ keyManager.switchIdentity("work")
 ### General Issues
 
 **Problem**: Bindings generation fails
-- **Solution**: Ensure UniFFI CLI is installed: `cargo install uniffi-bindgen-cli@0.25`
+- **Solution**: Ensure UniFFI CLI is installed: `cargo install uniffi-bindgen-cli@0.29.4`
 
 **Problem**: Runtime errors
 - **Solution**: Check that all required dependencies are linked and native libraries are accessible

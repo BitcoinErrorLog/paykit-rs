@@ -1,10 +1,14 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.7  
+> **Version**: 1.8  
 > **Last Updated**: January 2, 2026  
 > **Status**: Production Ready - E2E Verified
-
+>
+> **v1.8 Changes**: Dependency version corrections: UniFFI 0.25→0.29.4, LDK Node 0.3.0→0.7.0-rc.1.
+> Fixed NoiseKeyCache path references (Storage/→Services/). This is the canonical version;
+> bitkit-android and pubky-ring copies should sync from paykit-rs.
+>
 > **v1.7 Changes**: Namespace separation clarification (profiles in `/pub/pubky.app/`, paykit 
 > features in `/pub/paykit.app/v0/`), homeserver URL tracking in sessions, pubky-noise API 
 > documentation for `x25519GenerateKeypair` and `sealedBlobDecrypt`, x86_64 simulator support
@@ -125,7 +129,7 @@ Paykit is a decentralized payment protocol built on Pubky that enables:
 ### Pre-Production Verification Checklist
 
 Before deploying to production, verify end-to-end:
-- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android)
+- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android + iOS)
 - [x] Cross-device relay: ephemeral X25519 + encrypted response (plaintext REJECTED)
 - [ ] iOS push relay Ed25519 signing completes successfully (requires runtime test)
 - [x] Android push relay Ed25519 signing implemented via PubkyRingBridge.requestSignature()
@@ -305,7 +309,7 @@ sequenceDiagram
 | Tool | Required Version | Purpose |
 |------|------------------|---------|
 | Rust | 1.70+ (via Rustup, NOT Homebrew) | Build paykit-rs |
-| UniFFI | 0.25+ | Generate FFI bindings |
+| UniFFI | 0.29.4 | Generate FFI bindings (must match paykit-mobile Cargo.toml) |
 | Xcode | 14+ | iOS build |
 | Swift | 5.5+ | iOS bindings |
 | Android Studio | Latest | Android build |
@@ -375,7 +379,7 @@ ls -la target/release/libpaykit_mobile.*
 
 ```bash
 # Install uniffi-bindgen if not installed (must match the UniFFI version in paykit-mobile)
-cargo install uniffi-bindgen-cli@0.25
+cargo install uniffi-bindgen-cli@0.29.4
 
 # Generate bindings using the repo script (preferred)
 cd paykit-mobile
@@ -1152,8 +1156,8 @@ public func publicGet(uri: String) async throws -> Data {
 **NoiseKeyCache - Persistent noise key storage:**
 
 Bitkit caches noise keys to avoid repeated Ring requests:
-- iOS: `PaykitIntegration/Storage/NoiseKeyCache.swift`
-- Android: `paykit/storage/NoiseKeyCache.kt`
+- iOS: `PaykitIntegration/Services/NoiseKeyCache.swift`
+- Android: `paykit/services/NoiseKeyCache.kt`
 
 ```swift
 // iOS NoiseKeyCache
@@ -1908,7 +1912,7 @@ uniffi checksum mismatch
 
 **Solution:** Always regenerate bindings after updating UniFFI:
 ```bash
-cargo install uniffi-bindgen-cli@0.25  # Match Cargo.toml version
+cargo install uniffi-bindgen-cli@0.29.4  # Match Cargo.toml version
 ./paykit-mobile/generate-bindings.sh
 ```
 
@@ -2904,11 +2908,11 @@ app/src/test/java/
 | Dependency | Version | Notes |
 |------------|---------|-------|
 | Rust | 1.75+ | Via Rustup |
-| UniFFI | 0.25.3 | Must match across all crates |
+| UniFFI | 0.29.4 | Must match across all crates |
 | Pubky SDK | 0.6.0-rc.6 | API breaking changes pending |
 | pubky-noise | 1.0.0+ | `deriveDeviceKey` throws in 1.1+ |
 | pubky-core | 0.6.0-rc.6 | Used via BitkitCore for homeserver ops |
-| LDK Node | 0.3.0 | Lightning payments |
+| LDK Node | 0.7.0-rc.1 | Lightning payments |
 
 ### C. Glossary
 

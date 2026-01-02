@@ -138,9 +138,7 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
             paykit_lib::PaykitError::SessionExpired => Self::SessionError {
                 msg: "Session expired".to_string(),
             },
-            paykit_lib::PaykitError::InvalidCredentials(msg) => {
-                Self::AuthenticationError { msg }
-            }
+            paykit_lib::PaykitError::InvalidCredentials(msg) => Self::AuthenticationError { msg },
             paykit_lib::PaykitError::NotFound {
                 resource_type,
                 identifier,
@@ -368,6 +366,47 @@ pub struct PaymentProofResult {
     pub proof_type: String,
     /// Proof data as JSON.
     pub proof_data_json: String,
+}
+
+/// A payment method candidate for fallback execution.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PaymentCandidate {
+    /// Payment method identifier.
+    pub method_id: String,
+    /// Payment endpoint (address, invoice, etc.).
+    pub endpoint: String,
+}
+
+/// Record of a single attempt within a fallback execution.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct PaymentAttempt {
+    /// Payment method attempted.
+    pub method_id: String,
+    /// Endpoint attempted.
+    pub endpoint: String,
+    /// Whether this attempt succeeded.
+    pub success: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+    /// Whether this failure is retryable (e.g., network timeout).
+    /// Non-retryable failures (e.g., invoice already paid) stop the loop.
+    pub retryable: bool,
+}
+
+/// Result of executing payment with fallbacks.
+///
+/// Contains the successful result if any method worked,
+/// or a complete list of all attempts if all failed.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FallbackExecutionResult {
+    /// Whether any payment method succeeded.
+    pub success: bool,
+    /// The successful execution result, if any.
+    pub successful_execution: Option<PaymentExecutionResult>,
+    /// All attempts made, in order.
+    pub attempts: Vec<PaymentAttempt>,
+    /// Summary message describing the outcome.
+    pub summary: String,
 }
 
 // ============================================================================
@@ -614,9 +653,8 @@ impl PaykitClient {
         bitcoin_network: executor_ffi::BitcoinNetworkFFI,
         lightning_network: executor_ffi::LightningNetworkFFI,
     ) -> Result<Arc<Self>> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|e| PaykitMobileError::Internal {
-            msg: e.to_string(),
-        })?;
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| PaykitMobileError::Internal { msg: e.to_string() })?;
 
         Ok(Arc::new(Self {
             registry: Arc::new(RwLock::new(paykit_lib::methods::default_registry())),
@@ -654,14 +692,14 @@ impl PaykitClient {
         let method = paykit_lib::MethodId(method_id);
         let data = paykit_lib::EndpointData(endpoint);
 
-        let plugin = self
-            .registry
-            .read()
-            .unwrap()
-            .get(&method)
-            .ok_or(PaykitMobileError::NotFound {
-                msg: format!("Method not found: {}", method.0),
-            })?;
+        let plugin =
+            self.registry
+                .read()
+                .unwrap()
+                .get(&method)
+                .ok_or(PaykitMobileError::NotFound {
+                    msg: format!("Method not found: {}", method.0),
+                })?;
 
         let result = plugin.validate_endpoint(&data);
         Ok(result.valid)
@@ -713,12 +751,15 @@ impl PaykitClient {
             })
             .unwrap_or_default();
 
-        let selector = PaymentMethodSelector::new(self.registry.read().unwrap_or_else(|e| e.into_inner()).clone());
-        let result = selector.select(&supported, &amount, &prefs).map_err(|e| {
-            PaykitMobileError::Validation {
-                msg: e.to_string(),
-            }
-        })?;
+        let selector = PaymentMethodSelector::new(
+            self.registry
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        );
+        let result = selector
+            .select(&supported, &amount, &prefs)
+            .map_err(|e| PaykitMobileError::Validation { msg: e.to_string() })?;
 
         Ok(SelectionResult {
             primary_method: result.primary.0,
@@ -861,7 +902,10 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.write().unwrap_or_else(|e| e.into_inner()).register(Box::new(plugin));
+        self.registry
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .register(Box::new(plugin));
 
         Ok(())
     }
@@ -905,7 +949,10 @@ impl PaykitClient {
         );
 
         // Register the plugin (replaces the default one)
-        self.registry.write().unwrap_or_else(|e| e.into_inner()).register(Box::new(plugin));
+        self.registry
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .register(Box::new(plugin));
 
         Ok(())
     }
@@ -1013,6 +1060,159 @@ impl PaykitClient {
         })
     }
 
+    /// Execute a payment with automatic fallback to alternative methods.
+    ///
+    /// This method implements the PDF-mandated fallback behavior:
+    /// - Attempts the primary method first
+    /// - On retryable failure, tries each fallback in order
+    /// - Stops on success or non-retryable failure (to avoid double-spend)
+    ///
+    /// # Arguments
+    ///
+    /// * `candidates` - Ordered list of payment methods to try (primary first, then fallbacks)
+    /// * `amount_sats` - Amount to send in satoshis
+    /// * `metadata_json` - Optional metadata as JSON
+    ///
+    /// # Returns
+    ///
+    /// `FallbackExecutionResult` containing the outcome and all attempts made.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let candidates = vec![
+    ///     PaymentCandidate { method_id: "lightning".into(), endpoint: "lnbc1000n1...".into() },
+    ///     PaymentCandidate { method_id: "onchain".into(), endpoint: "bc1q...".into() },
+    /// ];
+    /// let result = client.execute_with_fallbacks(candidates, 1000, None)?;
+    /// if result.success {
+    ///     println!("Paid via {}", result.successful_execution.unwrap().method_id);
+    /// } else {
+    ///     println!("All methods failed: {}", result.summary);
+    /// }
+    /// ```
+    pub fn execute_with_fallbacks(
+        &self,
+        candidates: Vec<PaymentCandidate>,
+        amount_sats: u64,
+        metadata_json: Option<String>,
+    ) -> Result<FallbackExecutionResult> {
+        if candidates.is_empty() {
+            return Ok(FallbackExecutionResult {
+                success: false,
+                successful_execution: None,
+                attempts: vec![],
+                summary: "No payment candidates provided".to_string(),
+            });
+        }
+
+        let mut attempts: Vec<PaymentAttempt> = Vec::new();
+
+        for candidate in &candidates {
+            // Check if executor is registered
+            let plugin_exists = self
+                .registry
+                .read()
+                .unwrap()
+                .get(&paykit_lib::MethodId(candidate.method_id.clone()))
+                .is_some();
+
+            if !plugin_exists {
+                attempts.push(PaymentAttempt {
+                    method_id: candidate.method_id.clone(),
+                    endpoint: candidate.endpoint.clone(),
+                    success: false,
+                    error: Some(format!("Executor not registered for method: {}", candidate.method_id)),
+                    retryable: true, // Missing executor is retryable (try next)
+                });
+                continue;
+            }
+
+            // Attempt payment
+            match self.execute_payment(
+                candidate.method_id.clone(),
+                candidate.endpoint.clone(),
+                amount_sats,
+                metadata_json.clone(),
+            ) {
+                Ok(result) if result.success => {
+                    attempts.push(PaymentAttempt {
+                        method_id: candidate.method_id.clone(),
+                        endpoint: candidate.endpoint.clone(),
+                        success: true,
+                        error: None,
+                        retryable: false,
+                    });
+                    return Ok(FallbackExecutionResult {
+                        success: true,
+                        successful_execution: Some(result),
+                        attempts,
+                        summary: format!("Payment succeeded via {}", candidate.method_id),
+                    });
+                }
+                Ok(result) => {
+                    // Execution returned but failed - check if retryable
+                    let (retryable, error_msg) = classify_error(&result.error);
+                    attempts.push(PaymentAttempt {
+                        method_id: candidate.method_id.clone(),
+                        endpoint: candidate.endpoint.clone(),
+                        success: false,
+                        error: Some(error_msg.clone()),
+                        retryable,
+                    });
+
+                    if !retryable {
+                        // Non-retryable error - stop to avoid double-spend
+                        return Ok(FallbackExecutionResult {
+                            success: false,
+                            successful_execution: None,
+                            attempts,
+                            summary: format!(
+                                "Stopped after non-retryable error on {}: {}",
+                                candidate.method_id, error_msg
+                            ),
+                        });
+                    }
+                }
+                Err(e) => {
+                    let (retryable, error_msg) = classify_mobile_error(&e);
+                    attempts.push(PaymentAttempt {
+                        method_id: candidate.method_id.clone(),
+                        endpoint: candidate.endpoint.clone(),
+                        success: false,
+                        error: Some(error_msg.clone()),
+                        retryable,
+                    });
+
+                    if !retryable {
+                        return Ok(FallbackExecutionResult {
+                            success: false,
+                            successful_execution: None,
+                            attempts,
+                            summary: format!(
+                                "Stopped after non-retryable error on {}: {}",
+                                candidate.method_id, error_msg
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+
+        // All candidates exhausted
+        let methods_tried: Vec<String> = attempts.iter().map(|a| a.method_id.clone()).collect();
+        Ok(FallbackExecutionResult {
+            success: false,
+            successful_execution: None,
+            attempts,
+            summary: format!(
+                "All {} payment methods failed: {}",
+                methods_tried.len(),
+                methods_tried.join(", ")
+            ),
+        })
+    }
+
     /// Generate a payment proof from an execution result.
     ///
     /// After a successful payment, call this to generate cryptographic proof
@@ -1042,9 +1242,7 @@ impl PaykitClient {
 
         // Parse execution data
         let execution_data: serde_json::Value = serde_json::from_str(&execution_data_json)
-            .map_err(|e| PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            })?;
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
 
         // Extract amount - try amount_sats first, then convert from amount_msat
         let amount_sats = execution_data
@@ -1181,9 +1379,7 @@ impl PaykitClient {
                 change_date,
                 "SAT",
             )
-            .map_err(|e| PaykitMobileError::Validation {
-                msg: e.to_string(),
-            })?;
+            .map_err(|e| PaykitMobileError::Validation { msg: e.to_string() })?;
 
         Ok(ProrationResult {
             credit_sats: result.credit.as_sats(),
@@ -1321,11 +1517,8 @@ impl PaykitClient {
     /// Parse receipt metadata as JSON.
     pub fn parse_receipt_metadata(&self, metadata_json: String) -> Result<String> {
         // Validate JSON
-        serde_json::from_str::<serde_json::Value>(&metadata_json).map_err(|e| {
-            PaykitMobileError::Serialization {
-                msg: e.to_string(),
-            }
-        })?;
+        serde_json::from_str::<serde_json::Value>(&metadata_json)
+            .map_err(|e| PaykitMobileError::Serialization { msg: e.to_string() })?;
         Ok(metadata_json)
     }
 
@@ -1682,6 +1875,84 @@ fn rand_suffix() -> String {
         .unwrap_or_default()
         .subsec_nanos();
     format!("{:08x}", nanos)
+}
+
+/// Classify an error from `PaymentExecutionResult.error` to determine if retryable.
+///
+/// Returns (retryable, error_message).
+///
+/// Non-retryable errors (stop fallback loop to avoid double-spend):
+/// - "already paid" / "duplicate payment"
+/// - "insufficient balance" (unlikely to improve with different method)
+/// - "invoice expired" (specific to this invoice)
+/// - "payment hash already exists"
+///
+/// Retryable errors (try next fallback):
+/// - Network/connection errors
+/// - Timeout errors
+/// - "no route" (Lightning-specific, on-chain might work)
+/// - Unknown errors (assume transient)
+fn classify_error(error: &Option<String>) -> (bool, String) {
+    let msg = match error {
+        Some(e) => e.to_lowercase(),
+        None => return (true, "Unknown error".to_string()),
+    };
+
+    // Non-retryable patterns (could cause double-spend or are permanent)
+    let non_retryable_patterns = [
+        "already paid",
+        "duplicate payment",
+        "duplicate invoice",
+        "insufficient balance",
+        "insufficient funds",
+        "invoice expired",
+        "payment hash already exists",
+        "invoice already paid",
+        "amount too low",
+        "amount below minimum",
+        "permanently failed",
+    ];
+
+    for pattern in non_retryable_patterns {
+        if msg.contains(pattern) {
+            return (false, error.clone().unwrap_or_default());
+        }
+    }
+
+    // Retryable (transient or method-specific)
+    (true, error.clone().unwrap_or_default())
+}
+
+/// Classify a `PaykitMobileError` to determine if retryable.
+fn classify_mobile_error(error: &PaykitMobileError) -> (bool, String) {
+    let msg = error.to_string();
+
+    match error {
+        // Network issues are retryable
+        PaykitMobileError::Transport { .. } => (true, msg),
+        PaykitMobileError::NetworkTimeout { .. } => (true, msg),
+        PaykitMobileError::ConnectionError { .. } => (true, msg),
+
+        // Session issues might be retryable with refresh
+        PaykitMobileError::SessionError { .. } => (true, msg),
+
+        // Not found (missing executor) is retryable (try next method)
+        PaykitMobileError::NotFound { .. } => (true, msg),
+
+        // Validation errors are usually permanent
+        PaykitMobileError::Validation { .. } => (false, msg),
+
+        // Auth errors are usually permanent for this method
+        PaykitMobileError::AuthenticationError { .. } => (false, msg),
+        PaykitMobileError::PermissionDenied { .. } => (false, msg),
+
+        // Rate limits - retryable but might hit same limit
+        PaykitMobileError::RateLimitError { .. } => (true, msg),
+
+        // Internal/serialization - assume retryable
+        PaykitMobileError::Serialization { .. } => (true, msg),
+        PaykitMobileError::Internal { .. } => (true, msg),
+    }
 }
 
 #[cfg(test)]
@@ -2411,6 +2682,123 @@ mod tests {
             }
             _ => panic!("Expected NotFound error"),
         }
+    }
+
+    #[test]
+    fn test_execute_with_fallbacks_success_on_primary() {
+        struct MockLightningExecutor;
+
+        impl executor_ffi::LightningExecutorFFI for MockLightningExecutor {
+            fn pay_invoice(
+                &self,
+                _invoice: String,
+                _amount_msat: Option<u64>,
+                _max_fee_msat: Option<u64>,
+            ) -> Result<executor_ffi::LightningPaymentResultFFI> {
+                Ok(executor_ffi::LightningPaymentResultFFI::success(
+                    "preimage_abc123".to_string(),
+                    "hash_def456".to_string(),
+                    1000000,
+                    100,
+                ))
+            }
+
+            fn decode_invoice(&self, _invoice: String) -> Result<executor_ffi::DecodedInvoiceFFI> {
+                Ok(executor_ffi::DecodedInvoiceFFI {
+                    payment_hash: "hash_def456".to_string(),
+                    amount_msat: Some(1000000),
+                    description: Some("Test payment".to_string()),
+                    description_hash: None,
+                    payee: "test_payee".to_string(),
+                    expiry: 3600,
+                    timestamp: 1700000000,
+                    expired: false,
+                })
+            }
+
+            fn estimate_fee(&self, _invoice: String) -> Result<u64> {
+                Ok(100)
+            }
+
+            fn get_payment(
+                &self,
+                _payment_hash: String,
+            ) -> Result<Option<executor_ffi::LightningPaymentResultFFI>> {
+                Ok(None)
+            }
+
+            fn verify_preimage(&self, _preimage: String, _payment_hash: String) -> bool {
+                true
+            }
+        }
+
+        let client = PaykitClient::new_with_network(
+            executor_ffi::BitcoinNetworkFFI::Testnet,
+            executor_ffi::LightningNetworkFFI::Testnet,
+        )
+        .unwrap();
+
+        client
+            .register_lightning_executor(Box::new(MockLightningExecutor))
+            .unwrap();
+
+        let candidates = vec![
+            PaymentCandidate {
+                method_id: "lightning".to_string(),
+                endpoint: format!("lntb1000n1p{}", "0".repeat(200)),
+            },
+            PaymentCandidate {
+                method_id: "onchain".to_string(),
+                endpoint: "bc1qtest".to_string(),
+            },
+        ];
+
+        let result = client
+            .execute_with_fallbacks(candidates, 1000, None)
+            .unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.attempts.len(), 1);
+        assert_eq!(result.attempts[0].method_id, "lightning");
+        assert!(result.successful_execution.is_some());
+        assert_eq!(result.successful_execution.unwrap().method_id, "lightning");
+    }
+
+    #[test]
+    fn test_execute_with_fallbacks_tries_fallback() {
+        // No executors registered - first method will fail, then second will also fail
+        let client = PaykitClient::new().unwrap();
+
+        let candidates = vec![
+            PaymentCandidate {
+                method_id: "lightning".to_string(),
+                endpoint: "lnbc1000n1ptest".to_string(),
+            },
+            PaymentCandidate {
+                method_id: "onchain".to_string(),
+                endpoint: "bc1qtest".to_string(),
+            },
+        ];
+
+        let result = client
+            .execute_with_fallbacks(candidates, 1000, None)
+            .unwrap();
+
+        // Both should fail (no executors)
+        assert!(!result.success);
+        assert_eq!(result.attempts.len(), 2);
+        assert!(result.attempts[0].error.is_some());
+        assert!(result.attempts[1].error.is_some());
+    }
+
+    #[test]
+    fn test_execute_with_fallbacks_empty_candidates() {
+        let client = PaykitClient::new().unwrap();
+        let result = client.execute_with_fallbacks(vec![], 1000, None).unwrap();
+
+        assert!(!result.success);
+        assert!(result.attempts.is_empty());
+        assert!(result.summary.contains("No payment candidates"));
     }
 
     #[test]

@@ -1,9 +1,36 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 1.8  
-> **Last Updated**: January 2, 2026  
+> **Version**: 2.2  
+> **Last Updated**: January 3, 2026  
 > **Status**: Production Ready - E2E Verified
+>
+> **v2.2 Changes**: Added `ed25519Sign` and `ed25519Verify` to pubky-noise FFI (iOS + Android).
+> Updated native module bridges (PubkyNoiseModule.swift, PubkyNoiseModule.kt) with signing methods.
+> Fixed `signMessageAction` to return signature instead of pubkey. Added comprehensive unit tests
+> (11 tests) for signMessageAction. Added test for PaymentAssertionBuilder::check() method.
+> Verified pubky-core WASM bindings compile correctly for wasm32 target.
+> Removed legacy Ring actions (`session`, `derive-keypair`) and deprecated plaintext
+> subscriptions notification APIs from paykit-subscriptions.
+>
+> **v2.1 Changes**: Fixed Noise endpoint schema mismatch. Ring now publishes with `pubkey` field
+> (matching PaykitMobile FFI) instead of `public_key`. Added metadata serialization as JSON string.
+> Implemented `signMessageAction` in Ring using `ed25519Sign` from PubkyNoiseModule. Bitkit now
+> updates Noise endpoint host/port when starting Noise server. `SecureHandoffHandler` verification
+> now uses `DirectoryService.discoverNoiseEndpoint()` to validate schema compatibility.
+> `paykit-subscriptions` accepts both `pubkey` and `public_key` for backwards compatibility.
+> Deleted duplicate master guides from bitkit-android and pubky-ring (paykit-rs is canonical).
+>
+> **v2.0 Changes**: Fixed profile/Noise endpoint publishing blocker. Ring now publishes Noise endpoint
+> during Paykit Connect using SDK keypair auth (not HTTP session). Added homeserver auth documentation
+> explaining SDK keypair vs HTTP session authentication. Added Noise endpoint verification in Bitkit's
+> SecureHandoffHandler. Fixed TypeScript errors in pubky-ring (MnemonicForm refs, RootNavigator types,
+> dead DeepLinkData code). Updated storage diagnostic logging in PubkyStorageAdapter.
+>
+> **v1.9 Changes**: Security hardening: Ring's `deriveNoiseSeed` now uses HKDF via native module
+> (replaced placeholder XOR-based derivation). Ring's `generateRequestId` now throws if
+> `crypto.getRandomValues` unavailable (no insecure Math.random fallback). Deprecated plaintext
+> `store_notification` in Rust. Added subscription agreement/cancellation/relay AAD formats to docs.
 >
 > **v1.8 Changes**: Dependency version corrections: UniFFI 0.25→0.29.4, LDK Node 0.3.0→0.7.0-rc.1.
 > Fixed NoiseKeyCache path references (Storage/→Services/). This is the canonical version;
@@ -1007,6 +1034,27 @@ func completeConnection(...)
 /// Encrypt/decrypt with established session
 @objc(encrypt:plaintext:resolver:rejecter:)
 @objc(decrypt:ciphertext:resolver:rejecter:)
+
+/// Sign a message with Ed25519 secret key
+@objc(ed25519Sign:messageHex:resolver:rejecter:)
+func ed25519Sign(
+    _ ed25519SecretHex: String, // 32-byte Ed25519 secret key (64 hex chars)
+    messageHex: String,         // Message to sign (hex-encoded)
+    resolve: RCTPromiseResolveBlock,
+    reject: RCTPromiseRejectBlock
+)
+// Returns: 64-byte signature (128 hex chars)
+
+/// Verify an Ed25519 signature
+@objc(ed25519Verify:messageHex:signatureHex:resolver:rejecter:)
+func ed25519Verify(
+    _ ed25519PublicHex: String, // 32-byte Ed25519 public key (64 hex chars)
+    messageHex: String,         // Original message (hex-encoded)
+    signatureHex: String,       // 64-byte signature (128 hex chars)
+    resolve: RCTPromiseResolveBlock,
+    reject: RCTPromiseRejectBlock
+)
+// Returns: boolean (true if valid)
 ```
 
 **How `deriveDeviceKey` works (from pubky-noise):**
@@ -1234,7 +1282,10 @@ Normalization:
 |-------------|------------|
 | Payment Request | `paykit:v0:request:{path}:{request_id}` |
 | Subscription Proposal | `paykit:v0:subscription_proposal:{path}:{proposal_id}` |
+| Subscription Agreement | `paykit:v0:subscription_agreement:{path}:{subscription_id}` |
+| Subscription Cancellation | `paykit:v0:subscription_cancellation:{path}:{subscription_id}` |
 | Secure Handoff | `paykit:v0:handoff:{owner_pubkey}:{path}:{request_id}` |
+| Cross-device Relay Session | `paykit:v0:relay:session:{request_id}` |
 
 **Cross-Platform Test Vectors:**
 See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for pubkey→scope hash test cases that all implementations must pass.
@@ -1385,6 +1436,17 @@ class PubkyRingBridge @Inject constructor(
 | Sign message | `pubkyring://sign-message?message={msg}&callback={url}` | `bitkit://signature-result?signature={hex}&pubkey={z32}` |
 | Paykit setup (v2) | `pubkyring://paykit-connect?deviceId={id}&callback={url}&ephemeralPk={hex}` | `bitkit://paykit-setup?mode=secure_handoff&pubky={z32}&request_id={hex}` |
 | Get session (DEPRECATED) | `pubkyring://session?callback={url}` | `bitkit://paykit-session?pubky={z32}&session_secret={secret}` ❌ DISABLED |
+
+**Sign Message Implementation (v2.1)**:
+Ring's `signMessageAction.ts` uses the `ed25519Sign` function from `PubkyNoiseModule`:
+```typescript
+// Ring: signMessageAction.ts
+const secretKeyResult = await getPubkySecretKey(pubky);
+const ed25519SecretHex = secretKeyResult.value.secretKey;
+const messageHex = stringToHex(message);
+const signatureHex = await ed25519Sign(ed25519SecretHex, messageHex);
+// Returns via callback: bitkit://signature-result?signature={hex}&pubkey={z32}
+```
 
 **SECURITY**: The `ephemeralPk` parameter is REQUIRED for secure handoff. Payloads are encrypted using Sealed Blob v1 to this key. Legacy session callbacks with plaintext secrets are REJECTED.
 
@@ -2073,10 +2135,100 @@ let followJson = #"{"created_at":\#(createdAt)}"#
 try await adapter.put(path: "/pub/pubky.app/follows/\(targetPubkey)", content: followJson)
 ```
 
-#### ⚠️ Android GlobalScope usage in PubkyRingBridge
+#### ⚠️ Pubky Homeserver Authentication: SDK Keypair vs HTTP Session
 
-`PubkyRingBridge.kt` persists sessions using `GlobalScope.launch(Dispatchers.IO)` which is not production-safe. Blueprint requirement:
-- Replace `GlobalScope` persistence with an injected `CoroutineScope` tied to app lifecycle or a repository/service scope.
+**Problem:** There are two authentication methods for writing to the Pubky homeserver, and they are NOT interchangeable:
+
+1. **SDK Keypair Authentication (Ring uses this):**
+   - Uses `put(path, data, ed25519SecretKey)` from `@synonymdev/react-native-pubky`
+   - Signs requests with the user's Ed25519 secret key
+   - Works reliably because the SDK handles all auth headers/cookies internally
+   - Ring MUST use this method since it owns the secret key
+
+2. **HTTP Session Authentication (Bitkit tries to use this):**
+   - Uses HTTP PUT with `Cookie: {pubkey}={sessionSecret}` header
+   - Session cookies are short-lived and may expire
+   - Requires correct `pubky-host` header for central homeserver
+   - Can fail with "Error: null" if session is invalid or expired
+
+**Symptom:** Bitkit's profile/Noise endpoint publishing fails with "Error: null" while Ring can publish successfully.
+
+**Root Cause:** Bitkit receives a session cookie from Ring during secure handoff, but:
+- Session cookies may expire before Bitkit uses them
+- HTTP session auth has additional requirements (correct headers, cookie format)
+- Bitkit doesn't have the Ed25519 secret key to sign requests directly
+
+**Solution (Implemented):** Ring now publishes critical data (like Noise endpoint) during the Paykit Connect handoff, using SDK keypair auth. Bitkit verifies the data exists but doesn't need to publish it.
+
+**Noise Endpoint Schema (v2.1):**
+
+The Noise endpoint must match the `NoiseEndpointData` schema expected by PaykitMobile FFI:
+
+```json
+{
+  "host": "pending",      // String: Host address (or "pending" if not yet running)
+  "port": 0,              // Number: Port number (or 0 if not yet running)
+  "pubkey": "abc123...",  // String: X25519 public key (64-char hex)
+  "metadata": "{\"provisioned_by\":\"ring-handoff\",\"device_id\":\"...\",\"created_at\":...}"  // Optional String: JSON-serialized metadata
+}
+```
+
+**CRITICAL**: The field name MUST be `pubkey` (not `public_key`) and `metadata` MUST be a JSON string (not an object) to match PaykitMobile FFI deserialization.
+
+**Implementation:**
+```typescript
+// Ring: paykitConnectAction.ts
+// During Paykit Connect, Ring publishes the Noise endpoint using SDK put()
+const noiseEndpointPath = `pubky://${publicKeyZ32}/pub/paykit.app/v0/noise`;
+const noiseEndpoint = {
+  host: 'pending',
+  port: 0,
+  pubkey: noisePublicKeyHex,  // MUST be 'pubkey' not 'public_key'
+  metadata: JSON.stringify({  // MUST be serialized string
+    provisioned_by: 'ring-handoff',
+    device_id: deviceId,
+    created_at: now,
+  }),
+};
+const putResult = await put(noiseEndpointPath, noiseEndpoint, ed25519SecretKey);
+```
+
+```kotlin
+// Bitkit: SecureHandoffHandler.kt
+// After handoff, Bitkit verifies the Noise endpoint via DirectoryService (validates schema)
+suspend fun verifyNoiseEndpointPublished(pubkey: String): Boolean {
+    val endpoint = directoryService.discoverNoiseEndpoint(pubkey)
+    if (endpoint != null) {
+        Logger.info("Verified Noise endpoint: host=${endpoint.host}, port=${endpoint.port}")
+        return true
+    }
+    return false
+}
+```
+
+**Bitkit Server Mode:**
+When Bitkit starts a Noise server (e.g., for push-wake payments), it updates the endpoint with real host/port:
+
+```kotlin
+// NoisePaymentService.kt - startBackgroundServer()
+suspend fun startBackgroundServer(port: Int, externalHost: String?, onRequest: ...) {
+    // ... start server ...
+    // Update Noise endpoint with actual host/port
+    directoryService.publishNoiseEndpoint(
+        host = externalHost ?: getLocalIpAddress() ?: "localhost",
+        port = port,
+        noisePubkey = keypair.publicKeyHex,
+        metadata = null,
+    )
+}
+```
+
+**Production Blueprint:**
+- Ring MUST publish all identity-related data (profile, Noise endpoint) during Paykit Connect
+- Bitkit SHOULD NOT attempt to publish identity data - it doesn't have the secret key
+- Bitkit CAN read/verify data published by Ring
+- Bitkit CAN publish to its own storage (like payment requests to sender's storage) using session auth
+- Session auth is appropriate for non-critical, retryable operations
 
 ### 9.3 Platform-Specific Issues
 
@@ -2728,7 +2880,6 @@ The following architectural improvements were implemented to enhance security, r
   - a valid push token (APNs on iOS, FCM on Android), and
   - an active Pubky identity/session (from Ring setup).
 - Re-register when the push token rotates or the Pubky session is replaced.
-- Do not use the deprecated directory-based push publishing/discovery methods in production.
 
 **Ed25519 Signing Flow**:
 ```swift

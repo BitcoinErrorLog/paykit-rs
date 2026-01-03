@@ -22,7 +22,7 @@
 //! to discover pending requests. Recipients cannot delete requests from sender
 //! storage (deduplication is local-only).
 
-use crate::{PaymentRequest, RequestNotification};
+use crate::PaymentRequest;
 use paykit_lib::protocol::{
     payment_request_aad, payment_request_path, payment_requests_dir, subscription_proposal_aad,
     subscription_proposal_path, subscription_proposals_dir,
@@ -34,15 +34,6 @@ use serde::{Deserialize, Serialize};
 /// Path prefix for payment requests in Pubky storage (v0).
 /// Use `payment_request_path()` or `payment_requests_dir()` for canonical paths.
 pub const PAYKIT_REQUESTS_PATH: &str = "/pub/paykit.app/v0/requests/";
-
-/// Path prefix for incoming request notifications (DEPRECATED).
-/// Notifications require writing to recipient storage, which is not allowed
-/// in the sender-storage model. Use polling discovery instead.
-#[deprecated(
-    since = "0.3.0",
-    note = "Notifications require writing to recipient storage. Use polling discovery instead."
-)]
-pub const PAYKIT_NOTIFICATIONS_PATH: &str = "/pub/paykit.app/v0/notifications/requests/";
 
 /// A discoverable payment request stored in Pubky.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,54 +114,6 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
         .put(&path, &envelope)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to publish request: {}", e))?;
-
-    Ok(())
-}
-
-/// Publish a notification for a payment request to the recipient.
-///
-/// # DEPRECATED
-///
-/// This function is deprecated because it requires writing to the recipient's
-/// storage, which is not allowed in the sender-storage model. The Paykit v0
-/// protocol uses polling-based discovery instead:
-///
-/// 1. Sender publishes encrypted request to their own storage at
-///    `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
-/// 2. Recipient polls known contacts and lists `.../{my_scope}/` to discover requests
-///
-/// This function will fail in most configurations because the sender does not
-/// have write access to the recipient's homeserver.
-#[deprecated(
-    since = "0.3.0",
-    note = "Notifications require writing to recipient storage. Use polling discovery instead."
-)]
-pub async fn publish_request_notification<T: AuthenticatedTransport>(
-    transport: &T,
-    recipient: &PublicKey,
-    request: &PaymentRequest,
-) -> crate::Result<()> {
-    let notification = RequestNotification {
-        request_id: request.request_id.clone(),
-        from: request.from.clone(),
-        amount: request.amount,
-        currency: request.currency.clone(),
-        created_at: request.created_at,
-    };
-
-    let json = serde_json::to_string(&notification)?;
-
-    // DEPRECATED: This requires write access to recipient's storage,
-    // which is not allowed in the sender-storage model.
-    #[allow(deprecated)]
-    let path = format!(
-        "pubky://{}{}{}",
-        recipient, PAYKIT_NOTIFICATIONS_PATH, request.request_id
-    );
-    transport
-        .put(&path, &json)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to publish notification: {}", e))?;
 
     Ok(())
 }
@@ -770,6 +713,8 @@ mod tests {
     #[test]
     fn test_path_constants() {
         assert!(PAYKIT_REQUESTS_PATH.starts_with("/pub/paykit.app/"));
-        assert!(PAYKIT_NOTIFICATIONS_PATH.starts_with("/pub/paykit.app/"));
+        assert!(PAYKIT_PROPOSALS_PATH.starts_with("/pub/paykit.app/"));
+        assert!(PAYKIT_AGREEMENTS_PATH.starts_with("/pub/paykit.app/"));
+        assert!(PAYKIT_CANCELLATIONS_PATH.starts_with("/pub/paykit.app/"));
     }
 }

@@ -456,14 +456,10 @@ POST:/wake:1703245689:a3f7b2c1d4e5f6...
 |-----------|--------|-------|
 | `PushRelayService` (iOS) | ✅ Implemented | Server-side token storage, Ed25519 auth |
 | `PushRelayService` (Android) | ✅ Implemented | Server-side token storage, Ed25519 auth |
-| `PushNotificationService.discoverPushEndpoint` | ⚠️ Deprecated | Returns null, points to PushRelayService |
-| `PushNotificationService.publishOurPushEndpoint` | ⚠️ Deprecated | No-op, points to PushRelayService |
-| Public `/pub/paykit.app/v0/push` storage | ❌ Never implemented | Only referenced in threat model docs |
 
 **Verified**:
 - No code publishes push tokens to public homeserver paths
 - `PushRelayService` is the sole mechanism for push token registration
-- Legacy methods in `PushNotificationService` are deprecated stubs
 - Documentation correctly describes relay as the secure alternative
 
 ---
@@ -880,7 +876,7 @@ class SecureSecret(private var data: ByteArray) {
 - [ ] No Ed25519 secrets in Bitkit codebase (grep for "secret.*key", "derive.*ed25519")
 - [ ] All Ring requests use deep links (no local key operations)
 - [ ] Session secrets not logged (check Logger calls)
-- [ ] Push tokens not published publicly (deprecated methods removed)
+- [x] Push tokens not published publicly (public directory methods removed)
 - [ ] TLS certificate validation enabled
 - [ ] Input validation on all deep link parameters
 

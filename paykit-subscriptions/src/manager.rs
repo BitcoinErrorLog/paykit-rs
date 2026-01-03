@@ -1,4 +1,3 @@
-use crate::request::RequestNotification;
 use crate::{
     signing::{self, Signature},
     NonceStore, PaymentRequest, PaymentRequestResponse, RequestStatus, Result, SignedSubscription,
@@ -100,106 +99,14 @@ impl SubscriptionManager {
             .send(PaykitNoiseMessage::Ack) // Placeholder - would extend enum
             .await?;
 
-        // Also store notification in Pubky for async discovery
-        if let Some(session) = &self.pubky_session {
-            self.store_notification(session, &request).await?;
-        }
+        // DEPRECATED: Plaintext notification storage has been removed for security.
+        // Use `publish_payment_request` from discovery.rs for encrypted async storage.
+        // The Noise channel above handles real-time delivery.
 
         Ok(())
     }
 
-    /// Store payment request notification in Pubky storage
-    async fn store_notification(
-        &self,
-        session: &pubky::PubkySession,
-        request: &PaymentRequest,
-    ) -> Result<()> {
-        let path = format!(
-            "/pub/paykit.app/subscriptions/requests/{:?}/{}",
-            request.to, request.request_id
-        );
-
-        let notification = RequestNotification {
-            request_id: request.request_id.clone(),
-            from: request.from.clone(),
-            amount: request.amount,
-            currency: request.currency.clone(),
-            created_at: request.created_at,
-        };
-
-        let data = serde_json::to_vec(&notification)?;
-        session
-            .storage()
-            .put(path, data)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to store notification: {}", e))?;
-
-        Ok(())
-    }
-
-    /// Poll for new payment requests from Pubky storage
-    pub async fn poll_requests(&self, peer: &PublicKey) -> Result<Vec<PaymentRequest>> {
-        use paykit_lib::{PubkyUnauthenticatedTransport, UnauthenticatedTransportRead};
-
-        // If no Pubky session available, return empty (can't poll)
-        if self.pubky_session.is_none() {
-            return Ok(Vec::new());
-        }
-
-        // Create unauthenticated transport for reading peer's storage
-        let public_storage = pubky::PublicStorage::new()
-            .map_err(|e| anyhow::anyhow!("Failed to create public storage: {}", e))?;
-        let unauth_transport = PubkyUnauthenticatedTransport::new(public_storage);
-
-        // List directory entries for this peer's payment requests
-        let path = format!("/pub/paykit.app/subscriptions/requests/{:?}", peer);
-        let entries = unauth_transport
-            .list_directory(peer, &path)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to list directory: {}", e))?;
-
-        let mut requests = Vec::new();
-
-        // Fetch each notification and convert to PaymentRequest
-        for entry in entries {
-            let notification_path = format!("{}/{}", path, entry);
-            if let Some(notification_json) = unauth_transport.get(peer, &notification_path).await? {
-                match serde_json::from_str::<RequestNotification>(&notification_json) {
-                    Ok(notification) => {
-                        // Check if we've already seen this request
-                        if self
-                            .storage
-                            .get_request(&notification.request_id)
-                            .await?
-                            .is_none()
-                        {
-                            // Convert notification to PaymentRequest
-                            let request = PaymentRequest::new(
-                                notification.from,
-                                peer.clone(),
-                                notification.amount,
-                                notification.currency,
-                                paykit_lib::MethodId("lightning".to_string()), // Default, should be in notification
-                            );
-                            // Override request_id and created_at from notification
-                            let request = PaymentRequest {
-                                request_id: notification.request_id,
-                                created_at: notification.created_at,
-                                ..request
-                            };
-                            requests.push(request);
-                        }
-                    }
-                    Err(e) => {
-                        // Log but continue processing other entries
-                        eprintln!("Failed to parse notification {}: {}", entry, e);
-                    }
-                }
-            }
-        }
-
-        Ok(requests)
-    }
+    // Deprecated plaintext notification and polling methods removed for pre-production hardening.
 
     /// Handle incoming payment request
     pub async fn handle_request(
@@ -500,10 +407,12 @@ impl SubscriptionManager {
         let endpoint: serde_json::Value = serde_json::from_slice(&content)
             .map_err(|e| anyhow::anyhow!("Invalid noise endpoint JSON: {}", e))?;
 
+        // Accept both "pubkey" (PaykitMobile FFI schema) and "public_key" (legacy)
         let pk_hex = endpoint
-            .get("public_key")
+            .get("pubkey")
+            .or_else(|| endpoint.get("public_key"))
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing public_key in noise endpoint"))?;
+            .ok_or_else(|| anyhow::anyhow!("Missing pubkey in noise endpoint"))?;
 
         let pk_bytes = hex::decode(pk_hex)
             .map_err(|e| anyhow::anyhow!("Invalid noise public key hex: {}", e))?;

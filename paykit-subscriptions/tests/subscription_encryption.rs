@@ -82,12 +82,16 @@ fn test_subscription_encrypt_decrypt_roundtrip() {
     // Serialize subscription
     let plaintext = serde_json::to_vec(&subscription).unwrap();
 
-    // Encrypt
+    // Use canonical /v0/ path format
     let path = format!(
-        "/pub/paykit.app/subscriptions/proposals/{}/{}",
-        subscription.provider, subscription.subscription_id
+        "/pub/paykit.app/v0/subscriptions/proposals/{}/{}",
+        subscription.subscriber, subscription.subscription_id
     );
-    let aad = format!("proposal:{}:{}", subscription.subscription_id, path);
+    // Use canonical AAD format: paykit:v0:subscription_proposal:{path}:{id}
+    let aad = format!(
+        "paykit:v0:subscription_proposal:{}:{}",
+        path, subscription.subscription_id
+    );
 
     let envelope = encrypt_blob(
         &recipient_pk,
@@ -122,12 +126,16 @@ fn test_signed_subscription_encrypt_decrypt_roundtrip() {
     // Serialize
     let plaintext = serde_json::to_vec(&signed).unwrap();
 
-    // Encrypt
+    // Use canonical /v0/ path format
     let path = format!(
-        "/pub/paykit.app/subscriptions/agreements/{}/{}",
+        "/pub/paykit.app/v0/subscriptions/agreements/{}/{}",
         signed.subscription.subscriber, signed.subscription.subscription_id
     );
-    let aad = format!("agreement:{}:{}", signed.subscription.subscription_id, path);
+    // Use canonical AAD format: paykit:v0:subscription_agreement:{path}:{id}
+    let aad = format!(
+        "paykit:v0:subscription_agreement:{}:{}",
+        path, signed.subscription.subscription_id
+    );
 
     let envelope = encrypt_blob(
         &recipient_pk,
@@ -164,14 +172,15 @@ fn test_cancellation_encrypt_decrypt_roundtrip() {
     });
     let plaintext = serde_json::to_vec(&cancellation).unwrap();
 
-    // Encrypt
+    // Use canonical /v0/ path format
     let path = format!(
-        "/pub/paykit.app/subscriptions/cancellations/{}/{}",
+        "/pub/paykit.app/v0/subscriptions/cancellations/{}/{}",
         signed.subscription.subscriber, signed.subscription.subscription_id
     );
+    // Use canonical AAD format: paykit:v0:subscription_cancellation:{path}:{id}
     let aad = format!(
-        "cancellation:{}:{}",
-        signed.subscription.subscription_id, path
+        "paykit:v0:subscription_cancellation:{}:{}",
+        path, signed.subscription.subscription_id
     );
 
     let envelope = encrypt_blob(
@@ -208,11 +217,16 @@ fn test_wrong_key_fails_decryption() {
 
     // Serialize and encrypt
     let plaintext = serde_json::to_vec(&subscription).unwrap();
+    // Use canonical /v0/ path format
     let path = format!(
-        "/pub/paykit.app/subscriptions/proposals/{}/{}",
-        subscription.provider, subscription.subscription_id
+        "/pub/paykit.app/v0/subscriptions/proposals/{}/{}",
+        subscription.subscriber, subscription.subscription_id
     );
-    let aad = format!("proposal:{}:{}", subscription.subscription_id, path);
+    // Use canonical AAD format: paykit:v0:subscription_proposal:{path}:{id}
+    let aad = format!(
+        "paykit:v0:subscription_proposal:{}:{}",
+        path, subscription.subscription_id
+    );
 
     let envelope = encrypt_blob(
         &recipient_pk,
@@ -234,7 +248,8 @@ fn test_wrong_aad_fails_decryption() {
 
     // Serialize and encrypt
     let plaintext = serde_json::to_vec(&subscription).unwrap();
-    let aad = "proposal:correct-id:/correct/path";
+    // Use canonical AAD format
+    let aad = "paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/scope/correct-id:correct-id";
 
     let envelope = encrypt_blob(
         &recipient_pk,
@@ -245,7 +260,7 @@ fn test_wrong_aad_fails_decryption() {
     .expect("Encryption should succeed");
 
     // Try to decrypt with wrong AAD
-    let wrong_aad = "proposal:wrong-id:/wrong/path";
+    let wrong_aad = "paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/scope/wrong-id:wrong-id";
     let result = decrypt_blob(&recipient_sk, &envelope, wrong_aad);
     assert!(result.is_err(), "Decryption with wrong AAD should fail");
 }

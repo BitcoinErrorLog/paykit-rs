@@ -185,6 +185,7 @@ impl<'a> PaymentAssertionBuilder<'a> {
     }
 
     /// Check if all assertions pass without panicking.
+    #[allow(dead_code)] // Public test utility API
     pub fn check(self) -> bool {
         self.checks.iter().all(|(_, passed)| *passed)
     }
@@ -262,5 +263,33 @@ mod tests {
                 status: LightningPaymentStatus::Failed,
             }
         ));
+    }
+
+    #[test]
+    fn test_payment_assertion_builder_check() {
+        let result = LightningPaymentResult {
+            preimage: "abc123".to_string(),
+            payment_hash: "hash456".to_string(),
+            amount_msat: 1000,
+            fee_msat: 10,
+            hops: 2,
+            status: LightningPaymentStatus::Succeeded,
+        };
+
+        // Test check() with all passing assertions
+        let all_pass = PaymentAssertionBuilder::new(&result)
+            .has_preimage()
+            .succeeded()
+            .fee_within(100)
+            .check();
+        assert!(all_pass, "check() should return true when all assertions pass");
+
+        // Test check() with a failing assertion
+        let has_failure = PaymentAssertionBuilder::new(&result)
+            .has_preimage()
+            .succeeded()
+            .fee_within(5) // This will fail since fee is 10
+            .check();
+        assert!(!has_failure, "check() should return false when any assertion fails");
     }
 }

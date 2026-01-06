@@ -264,7 +264,7 @@ mod tests {
         let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
         let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
 
-        let manager = Arc::new(SubscriptionManager::new(storage, interactive));
+        let manager = Arc::new(SubscriptionManager::new_for_testing(storage, interactive));
         let monitor = SubscriptionMonitor::with_default_interval(manager);
 
         assert_eq!(monitor.check_interval, Duration::from_secs(3600));
@@ -281,7 +281,10 @@ mod tests {
         let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
         let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
 
-        let manager = Arc::new(SubscriptionManager::new(storage.clone(), interactive));
+        let manager = Arc::new(SubscriptionManager::new_for_testing(
+            storage.clone(),
+            interactive,
+        ));
         let monitor = SubscriptionMonitor::with_default_interval(manager);
 
         // Create subscription for today's day of month

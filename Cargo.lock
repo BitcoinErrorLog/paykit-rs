@@ -3442,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "paykit-interactive"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -3461,7 +3461,7 @@ dependencies = [
 
 [[package]]
 name = "paykit-lib"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -3504,7 +3504,7 @@ dependencies = [
 
 [[package]]
 name = "paykit-mobile"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "paykit-subscriptions"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4137,7 +4137,7 @@ dependencies = [
 
 [[package]]
 name = "pubky-noise"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "base64",
  "blake2",

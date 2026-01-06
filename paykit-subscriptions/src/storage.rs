@@ -35,6 +35,138 @@ impl ReservationToken {
     }
 }
 
+/// RAII guard for spending reservations that auto-rolls-back on drop.
+///
+/// # Security
+///
+/// This guard ensures that if a payment operation panics or returns early
+/// without explicitly committing, the reserved spending is automatically
+/// rolled back. This prevents spending limit leaks due to:
+/// - Panics during payment execution
+/// - Early returns due to errors
+/// - Dropped futures
+///
+/// # Platform Support
+///
+/// This type is only available on native platforms (not wasm32) because
+/// it requires access to the tokio runtime for async rollback in Drop.
+/// WASM applications should use explicit commit/rollback calls instead.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let guard = SpendingGuard::new(storage, token);
+///
+/// // Payment operation that might panic or fail
+/// match execute_payment().await {
+///     Ok(_) => guard.commit().await?,
+///     Err(_) => { /* guard auto-rolls-back on drop */ }
+/// }
+/// ```
+#[cfg(not(target_arch = "wasm32"))]
+pub struct SpendingGuard {
+    storage: Arc<Box<dyn SubscriptionStorage>>,
+    token: Option<ReservationToken>,
+    committed: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl SpendingGuard {
+    /// Create a new spending guard.
+    ///
+    /// The guard takes ownership of the reservation token and will
+    /// automatically rollback if dropped without calling `commit()`.
+    pub fn new(storage: Arc<Box<dyn SubscriptionStorage>>, token: ReservationToken) -> Self {
+        Self {
+            storage,
+            token: Some(token),
+            committed: false,
+        }
+    }
+
+    /// Commit the spending reservation.
+    ///
+    /// After calling this, the guard will not rollback on drop.
+    /// Returns the original token for logging/tracking purposes.
+    pub async fn commit(mut self) -> Result<ReservationToken> {
+        let token = self
+            .token
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("SpendingGuard already committed"))?;
+        self.storage.commit_spending(token.clone()).await?;
+        self.committed = true;
+        Ok(token)
+    }
+
+    /// Manually rollback the spending reservation.
+    ///
+    /// This is called automatically on drop, but can be called explicitly
+    /// for clarity or to handle errors.
+    pub async fn rollback(mut self) -> Result<()> {
+        if let Some(token) = self.token.take() {
+            self.storage.rollback_spending(token).await?;
+        }
+        self.committed = true; // Prevent double-rollback
+        Ok(())
+    }
+
+    /// Check if this guard has been committed or rolled back.
+    pub fn is_finalized(&self) -> bool {
+        self.committed || self.token.is_none()
+    }
+
+    /// Get a reference to the reservation token (if not yet consumed).
+    pub fn token(&self) -> Option<&ReservationToken> {
+        self.token.as_ref()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for SpendingGuard {
+    fn drop(&mut self) {
+        if !self.committed {
+            if let Some(token) = self.token.take() {
+                // We need to rollback, but we can't use async in Drop.
+                // Use tokio::task::block_in_place if we're in a tokio runtime,
+                // otherwise spawn a blocking task.
+                let storage = self.storage.clone();
+
+                // Try to detect if we're in a tokio runtime
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    // We're in a tokio runtime - spawn a blocking rollback
+                    handle.spawn(async move {
+                        if let Err(e) = storage.rollback_spending(token).await {
+                            // Log the error - we can't return it from Drop
+                            eprintln!(
+                                "WARNING: SpendingGuard rollback failed on drop: {}. \
+                                 Spending limit may be incorrectly reserved.",
+                                e
+                            );
+                        }
+                    });
+                } else {
+                    // Not in a tokio runtime - create a blocking runtime
+                    // This is a fallback for edge cases (tests, etc.)
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new();
+                        if let Ok(rt) = rt {
+                            rt.block_on(async {
+                                if let Err(e) = storage.rollback_spending(token).await {
+                                    eprintln!(
+                                        "WARNING: SpendingGuard rollback failed: {}. \
+                                         Spending limit may be incorrectly reserved.",
+                                        e
+                                    );
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        }
+    }
+}
+
 /// Filter for listing payment requests
 #[derive(Debug, Clone, Default)]
 pub struct RequestFilter {
@@ -590,5 +722,145 @@ mod tests {
 
         let requests = storage.list_requests(filter).await.unwrap();
         assert_eq!(requests.len(), 1);
+    }
+
+    // ======================================================================
+    // SpendingGuard tests (native only)
+    // ======================================================================
+
+    #[cfg(not(target_arch = "wasm32"))]
+    mod spending_guard_tests {
+        use super::*;
+        use std::panic::{self, AssertUnwindSafe};
+
+        #[tokio::test]
+        async fn test_spending_guard_commit() {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let storage: Arc<Box<dyn SubscriptionStorage>> = Arc::new(Box::new(
+                FileSubscriptionStorage::new(temp_dir.path().to_path_buf()).unwrap(),
+            ));
+
+            let peer = test_pubkey();
+            let limit =
+                PeerSpendingLimit::new(peer.clone(), Amount::from_sats(10000), "daily".to_string());
+            storage.save_peer_limit(&limit).await.unwrap();
+
+            // Reserve spending
+            let token = storage
+                .try_reserve_spending(&peer, &Amount::from_sats(1000))
+                .await
+                .unwrap();
+
+            // Create guard and commit
+            let guard = SpendingGuard::new(storage.clone(), token);
+            let committed_token = guard.commit().await.unwrap();
+
+            // Verify the commitment happened
+            assert_eq!(committed_token.amount.as_sats(), 1000);
+
+            // Check that spending was recorded
+            let updated_limit = storage.get_peer_limit(&peer).await.unwrap().unwrap();
+            assert_eq!(updated_limit.current_spent.as_sats(), 1000);
+        }
+
+        #[tokio::test]
+        async fn test_spending_guard_explicit_rollback() {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let storage: Arc<Box<dyn SubscriptionStorage>> = Arc::new(Box::new(
+                FileSubscriptionStorage::new(temp_dir.path().to_path_buf()).unwrap(),
+            ));
+
+            let peer = test_pubkey();
+            let limit =
+                PeerSpendingLimit::new(peer.clone(), Amount::from_sats(10000), "daily".to_string());
+            storage.save_peer_limit(&limit).await.unwrap();
+
+            // Reserve spending
+            let token = storage
+                .try_reserve_spending(&peer, &Amount::from_sats(1000))
+                .await
+                .unwrap();
+
+            // Create guard and explicitly rollback
+            let guard = SpendingGuard::new(storage.clone(), token);
+            guard.rollback().await.unwrap();
+
+            // Check that spending was rolled back (no spending recorded)
+            let updated_limit = storage.get_peer_limit(&peer).await.unwrap().unwrap();
+            assert_eq!(updated_limit.current_spent.as_sats(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_spending_guard_auto_rollback_on_drop() {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let storage: Arc<Box<dyn SubscriptionStorage>> = Arc::new(Box::new(
+                FileSubscriptionStorage::new(temp_dir.path().to_path_buf()).unwrap(),
+            ));
+
+            let peer = test_pubkey();
+            let limit =
+                PeerSpendingLimit::new(peer.clone(), Amount::from_sats(10000), "daily".to_string());
+            storage.save_peer_limit(&limit).await.unwrap();
+
+            // Reserve spending
+            let token = storage
+                .try_reserve_spending(&peer, &Amount::from_sats(1000))
+                .await
+                .unwrap();
+
+            // Create guard and drop without committing
+            {
+                let _guard = SpendingGuard::new(storage.clone(), token);
+                // Guard dropped here without commit
+            }
+
+            // Give the async rollback a moment to complete
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+            // Check that spending was rolled back
+            let updated_limit = storage.get_peer_limit(&peer).await.unwrap().unwrap();
+            assert_eq!(updated_limit.current_spent.as_sats(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_spending_guard_rollback_on_panic() {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let storage: Arc<Box<dyn SubscriptionStorage>> = Arc::new(Box::new(
+                FileSubscriptionStorage::new(temp_dir.path().to_path_buf()).unwrap(),
+            ));
+
+            let peer = test_pubkey();
+            let limit =
+                PeerSpendingLimit::new(peer.clone(), Amount::from_sats(10000), "daily".to_string());
+            storage.save_peer_limit(&limit).await.unwrap();
+
+            // Reserve spending
+            let token = storage
+                .try_reserve_spending(&peer, &Amount::from_sats(1000))
+                .await
+                .unwrap();
+
+            // Simulate a panic while guard is held
+            let storage_clone = storage.clone();
+            let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                let _guard = SpendingGuard::new(storage_clone, token);
+                // Panic! The guard should still rollback
+                panic!("Simulated payment failure");
+            }));
+
+            // The panic should have been caught
+            assert!(result.is_err());
+
+            // Give the async rollback a moment to complete
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+            // Check that spending was rolled back despite the panic
+            let updated_limit = storage.get_peer_limit(&peer).await.unwrap().unwrap();
+            assert_eq!(
+                updated_limit.current_spent.as_sats(),
+                0,
+                "Spending should be rolled back after panic"
+            );
+        }
     }
 }

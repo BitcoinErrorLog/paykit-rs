@@ -51,6 +51,7 @@
 use crate::{PaykitError, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Result of a Bitcoin on-chain transaction.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -543,19 +544,14 @@ fn hex_decode(hex: &str) -> std::result::Result<Vec<u8>, &'static str> {
         .collect()
 }
 
-/// Simple SHA256 implementation for preimage verification.
-/// In production, use a proper crypto library.
+/// SHA256 hash for preimage verification.
+///
+/// # Security
+///
+/// This function is used for cryptographic verification of Lightning payment proofs.
+/// It uses the sha2 crate which provides a secure, constant-time implementation.
 fn sha256(data: &[u8]) -> Vec<u8> {
-    // This is a placeholder. In a real implementation, use:
-    // use sha2::{Sha256, Digest};
-    // Sha256::digest(data).to_vec()
-
-    // For now, return a mock hash based on data
-    let mut hash = [0u8; 32];
-    for (i, byte) in data.iter().enumerate() {
-        hash[i % 32] ^= byte;
-    }
-    hash.to_vec()
+    Sha256::digest(data).to_vec()
 }
 
 #[cfg(test)]
@@ -633,5 +629,55 @@ mod tests {
 
         assert_eq!(result.status, LightningPaymentStatus::Succeeded);
         assert_eq!(result.amount_msat, 1000);
+    }
+
+    #[test]
+    fn test_verify_preimage_valid() {
+        let executor = MockLightningExecutor::new();
+
+        // Known test vector: SHA256 of 32 zero bytes
+        let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
+        // SHA256(0x00 * 32) = 66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925
+        let hash = "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925";
+
+        assert!(
+            executor.verify_preimage(preimage, hash),
+            "Should verify valid preimage"
+        );
+    }
+
+    #[test]
+    fn test_verify_preimage_invalid() {
+        let executor = MockLightningExecutor::new();
+
+        // Wrong hash for the preimage
+        let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
+        let wrong_hash = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        assert!(
+            !executor.verify_preimage(preimage, wrong_hash),
+            "Should reject invalid preimage"
+        );
+    }
+
+    #[test]
+    fn test_verify_preimage_invalid_hex() {
+        let executor = MockLightningExecutor::new();
+
+        // Invalid hex characters
+        assert!(!executor.verify_preimage("not_valid_hex", "also_not_valid"));
+        assert!(!executor.verify_preimage("abc", "def")); // Odd length
+    }
+
+    #[test]
+    fn test_sha256_implementation() {
+        // Test that our sha256 function produces correct output
+        let data = b"test";
+        let hash = sha256(data);
+
+        // SHA256("test") = 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+        let expected =
+            hex_decode("9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08").unwrap();
+        assert_eq!(hash, expected);
     }
 }

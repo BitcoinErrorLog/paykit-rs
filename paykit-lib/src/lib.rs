@@ -360,11 +360,9 @@ pub async fn publish_supported_snapshot<S>(
 where
     S: AuthenticatedTransport,
 {
-    let json = serde_json::to_string(entries).map_err(|e| {
-        PaykitError::InvalidData {
-            field: "entries".into(),
-            reason: format!("failed to serialize snapshot: {}", e),
-        }
+    let json = serde_json::to_string(entries).map_err(|e| PaykitError::InvalidData {
+        field: "entries".into(),
+        reason: format!("failed to serialize snapshot: {}", e),
     })?;
     client
         .put(SUPPORTED_SNAPSHOT_PATH, &json)

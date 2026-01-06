@@ -906,7 +906,94 @@ class SecureSecret(private var data: ByteArray) {
 
 ---
 
+## Security Hardening (v2.0.0)
+
+The v2.0.0 release addressed several security and correctness issues identified during production audit.
+
+### Fixed Issues
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| TLS certificate bypass in LND executor | Critical | Proper certificate validation via `add_root_certificate()` |
+| Unbounded message sizes in Noise transport | High | `MAX_MESSAGE_SIZE` (1MB) and `MAX_HANDSHAKE_SIZE` (64KB) limits |
+| Placeholder SHA256 in preimage verification | High | Real SHA256 via sha2 crate |
+| In-memory only nonce tracking | Medium | `NonceStorage` trait with persistent implementations |
+| Spending reservation panic leaks | Medium | `SpendingGuard` RAII type for automatic rollback |
+
+### TLS Certificate Validation
+
+**Before (Vulnerable)**:
+```rust
+// DANGEROUS: Bypassed ALL certificate validation
+.danger_accept_invalid_certs(config.tls_cert_pem.is_some())
+```
+
+**After (Secure)**:
+```rust
+// Proper: Adds provided cert as trusted root
+if let Some(cert_pem) = &config.tls_cert_pem {
+    let cert = Certificate::from_pem(cert_pem.as_bytes())?;
+    builder = builder.add_root_certificate(cert);
+}
+```
+
+### Message Size Limits
+
+The `paykit-interactive` transport layer now enforces message size limits to prevent DoS via memory exhaustion:
+
+- `DEFAULT_MAX_MESSAGE_SIZE`: 1 MB (configurable)
+- `MAX_HANDSHAKE_SIZE`: 64 KB (fixed)
+
+```rust
+// Size validated BEFORE allocation
+let len = u32::from_be_bytes(len_bytes) as usize;
+if len > self.max_message_size {
+    return Err(InteractiveError::Transport("Message too large".into()));
+}
+```
+
+### Persistent Nonce Storage
+
+The `NonceStorage` trait enables persistent nonce tracking across app restarts:
+
+```rust
+pub trait NonceStorage: Send + Sync {
+    fn check_and_mark(&self, nonce: &[u8; 32], expires_at: i64) -> Result<bool>;
+    fn is_used(&self, nonce: &[u8; 32]) -> Result<bool>;
+    fn cleanup_expired(&self, before: i64) -> Result<()>;
+    fn count(&self) -> Result<usize>;
+}
+```
+
+Implementations:
+- `FileNonceStorage` - File-based for CLI/demo (paykit-rs)
+- `NonceStorage` - SharedPreferences (bitkit-android)
+- `NonceStorage` - UserDefaults (bitkit-ios)
+
+### Spending Guard
+
+The `SpendingGuard` RAII type ensures automatic rollback on panic:
+
+```rust
+let guard = SpendingGuard::new(storage, token);
+
+match execute_payment().await {
+    Ok(_) => guard.commit().await?, // Spending committed
+    Err(_) => {} // guard auto-rolls-back on drop
+}
+```
+
+---
+
 ## Future Security Enhancements
+
+### Short Term (Completed in v2.0.0)
+
+1. ✅ **TLS Certificate Validation**: Fixed bypass in LND executor
+2. ✅ **Message Size Limits**: Added DoS protection to Noise transport
+3. ✅ **Preimage Verification**: Real SHA256 implementation
+4. ✅ **Persistent Nonce Storage**: `NonceStorage` trait and implementations
+5. ✅ **Panic-Safe Spending**: `SpendingGuard` RAII type
 
 ### Short Term (Next Release)
 
@@ -934,13 +1021,13 @@ class SecureSecret(private var data: ByteArray) {
 ## Security Contacts
 
 For security issues, contact:
-- **Paykit**: [security contact TBD]
-- **Pubky**: [security contact TBD]
-- **Bitkit**: [security contact TBD]
+- **Paykit**: security@synonym.to
+- **Pubky**: security@synonym.to
+- **Bitkit**: security@synonym.to
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 22, 2025  
-**Status**: Reference Implementation - Audit Required Before Production
+**Document Version**: 2.0  
+**Last Updated**: January 5, 2026  
+**Status**: Security Hardening - Core Components Complete
 

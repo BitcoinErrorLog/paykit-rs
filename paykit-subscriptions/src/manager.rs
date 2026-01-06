@@ -1,7 +1,9 @@
+#[cfg(test)]
+use crate::NonceStore;
 use crate::{
     signing::{self, Signature},
-    NonceStore, PaymentRequest, PaymentRequestResponse, RequestStatus, Result, SignedSubscription,
-    Subscription, SubscriptionStorage,
+    NonceStorage, PaymentRequest, PaymentRequestResponse, RequestStatus, Result,
+    SignedSubscription, Subscription, SubscriptionStorage,
 };
 use paykit_interactive::{PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage};
 use paykit_lib::protocol::{subscription_proposal_aad, subscription_proposal_path};
@@ -28,7 +30,7 @@ pub struct SubscriptionManager {
     storage: Arc<Box<dyn SubscriptionStorage>>,
     interactive: Arc<PaykitInteractiveManager>,
     pubky_session: Option<pubky::PubkySession>,
-    nonce_store: Arc<NonceStore>,
+    nonce_storage: Arc<dyn NonceStorage>,
     /// Our Noise secret key for encryption/decryption
     my_noise_sk: Option<[u8; 32]>,
     /// Cache of peer Noise public keys (pubkey -> noise_pk)
@@ -36,18 +38,46 @@ pub struct SubscriptionManager {
 }
 
 impl SubscriptionManager {
+    /// Create a new subscription manager.
+    ///
+    /// # Arguments
+    ///
+    /// * `storage` - Storage backend for subscriptions and spending limits
+    /// * `interactive` - Interactive payment manager
+    /// * `nonce_storage` - Persistent nonce storage for replay attack prevention
+    ///
+    /// # Security
+    ///
+    /// The `nonce_storage` MUST be persistent across app restarts to prevent replay attacks.
+    /// Use [`NonceStore`] only for testing; production apps should use [`FileNonceStorage`]
+    /// or a platform-specific implementation (SharedPreferences, UserDefaults, etc.).
     pub fn new(
         storage: Arc<Box<dyn SubscriptionStorage>>,
         interactive: Arc<PaykitInteractiveManager>,
+        nonce_storage: Arc<dyn NonceStorage>,
     ) -> Self {
         Self {
             storage,
             interactive,
             pubky_session: None,
-            nonce_store: Arc::new(NonceStore::new()),
+            nonce_storage,
             my_noise_sk: None,
             noise_pk_cache: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Create a new subscription manager with in-memory nonce storage (for testing only).
+    ///
+    /// # Security Warning
+    ///
+    /// This uses in-memory nonce storage that resets on restart, making the app
+    /// vulnerable to replay attacks. Only use for testing.
+    #[cfg(test)]
+    pub fn new_for_testing(
+        storage: Arc<Box<dyn SubscriptionStorage>>,
+        interactive: Arc<PaykitInteractiveManager>,
+    ) -> Self {
+        Self::new(storage, interactive, Arc::new(NonceStore::new()))
     }
 
     pub fn with_pubky_session(mut self, session: pubky::PubkySession) -> Self {
@@ -185,7 +215,7 @@ impl SubscriptionManager {
 
         // Record nonce
         if !self
-            .nonce_store
+            .nonce_storage
             .as_ref()
             .check_and_mark(&nonce, signature.expires_at)?
         {
@@ -232,7 +262,7 @@ impl SubscriptionManager {
             return Err(anyhow::anyhow!("Invalid proposer signature"));
         }
         if !self
-            .nonce_store
+            .nonce_storage
             .as_ref()
             .check_and_mark(&proposer_signature.nonce, proposer_signature.expires_at)?
         {
@@ -250,7 +280,7 @@ impl SubscriptionManager {
             3600 * 24 * 7, // 7 days
         )?;
         if !self
-            .nonce_store
+            .nonce_storage
             .as_ref()
             .check_and_mark(&nonce, acceptor_signature.expires_at)?
         {
@@ -301,7 +331,7 @@ impl SubscriptionManager {
         }
 
         // Check and record nonces
-        if !self.nonce_store.as_ref().check_and_mark(
+        if !self.nonce_storage.as_ref().check_and_mark(
             &signed.subscriber_signature.nonce,
             signed.subscriber_signature.expires_at,
         )? {
@@ -309,7 +339,7 @@ impl SubscriptionManager {
                 "Subscriber nonce already used (replay attack)"
             ));
         }
-        if !self.nonce_store.as_ref().check_and_mark(
+        if !self.nonce_storage.as_ref().check_and_mark(
             &signed.provider_signature.nonce,
             signed.provider_signature.expires_at,
         )? {
@@ -748,24 +778,34 @@ impl SubscriptionManager {
         Ok(true)
     }
 
-    /// Execute auto-payment
     /// Execute auto-payment with atomic spending limit enforcement
     ///
     /// # Security
     ///
-    /// Uses atomic check-and-reserve operations to prevent TOCTOU race conditions.
-    /// If payment fails, the reservation is rolled back automatically.
+    /// Uses [`SpendingGuard`] for panic-safe spending limit enforcement.
+    /// The guard automatically rolls back the reservation if:
+    /// - The payment fails and we return early
+    /// - A panic occurs during payment execution
+    /// - The future is dropped
+    ///
+    /// This prevents TOCTOU race conditions and spending limit leaks.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn execute_autopay<C: PaykitNoiseChannel>(
         &self,
         channel: &mut C,
         request: PaymentRequest,
         local_pk: &PublicKey,
     ) -> Result<paykit_interactive::PaykitReceipt> {
-        // Phase 4: Atomic check-and-reserve spending limit
+        use crate::SpendingGuard;
+
+        // Atomic check-and-reserve spending limit
         let reservation = self
             .storage
             .try_reserve_spending(&request.from, &request.amount)
             .await?;
+
+        // Wrap in SpendingGuard for panic-safe rollback
+        let guard = SpendingGuard::new(self.storage.clone(), reservation);
 
         // Create provisional receipt
         let provisional_receipt = paykit_interactive::PaykitReceipt::new(
@@ -788,15 +828,16 @@ impl SubscriptionManager {
         match payment_result {
             Ok(receipt) => {
                 // Payment succeeded - commit the reservation
-                self.storage.commit_spending(reservation).await?;
+                guard.commit().await?;
                 self.storage
                     .update_request_status(&request.request_id, RequestStatus::Fulfilled)
                     .await?;
                 Ok(receipt)
             }
             Err(e) => {
-                // Payment failed - rollback the reservation
-                self.storage.rollback_spending(reservation).await?;
+                // Payment failed - guard auto-rolls-back on drop
+                // We can also explicitly rollback for clarity:
+                let _ = guard.rollback().await;
                 Err(e.into())
             }
         }
@@ -989,7 +1030,7 @@ mod tests {
         let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
 
         let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
-        let manager = SubscriptionManager::new(storage.clone(), interactive);
+        let manager = SubscriptionManager::new_for_testing(storage.clone(), interactive);
 
         let from = test_pubkey();
         let to = test_pubkey();
@@ -1023,7 +1064,7 @@ mod tests {
         let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
 
         let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
-        let manager = SubscriptionManager::new(storage.clone(), interactive);
+        let manager = SubscriptionManager::new_for_testing(storage.clone(), interactive);
 
         let from = test_pubkey();
         let to = test_pubkey();
@@ -1054,7 +1095,7 @@ mod tests {
         let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
 
         let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
-        let manager = SubscriptionManager::new(storage, interactive);
+        let manager = SubscriptionManager::new_for_testing(storage, interactive);
 
         let from = test_pubkey();
         let to = test_pubkey();

@@ -21,6 +21,7 @@ pub mod executor_ffi;
 pub mod interactive_ffi;
 pub mod keys;
 pub mod noise_ffi;
+pub mod nonce_storage_ffi;
 pub mod scanner;
 pub mod spending_ffi;
 pub mod storage;
@@ -60,6 +61,9 @@ pub use executor_ffi::{
 pub use spending_ffi::{
     PeerSpendingLimitFFI, SpendingCheckResultFFI, SpendingManagerFFI, SpendingReservationFFI,
 };
+
+// Re-export nonce storage FFI types for replay attack prevention
+pub use nonce_storage_ffi::{NonceStorageBridge, NonceStorageFFI};
 
 use std::sync::{Arc, RwLock};
 
@@ -1122,7 +1126,10 @@ impl PaykitClient {
                     method_id: candidate.method_id.clone(),
                     endpoint: candidate.endpoint.clone(),
                     success: false,
-                    error: Some(format!("Executor not registered for method: {}", candidate.method_id)),
+                    error: Some(format!(
+                        "Executor not registered for method: {}",
+                        candidate.method_id
+                    )),
                     retryable: true, // Missing executor is retryable (try next)
                 });
                 continue;

@@ -126,6 +126,10 @@ pub mod status;
 pub mod storage;
 pub mod transport;
 
+pub use transport::{
+    PubkyNoiseChannel, DEFAULT_MAX_MESSAGE_SIZE, MAX_HANDSHAKE_SIZE, MAX_MESSAGE_SIZE,
+};
+
 pub use manager::{PaykitInteractiveManager, ReceiptGenerator};
 pub use metadata::{
     MetadataItem, MetadataValidator, OrderMetadata, PaymentMetadata, ShippingMetadata, TaxMetadata,
@@ -152,6 +156,8 @@ pub enum InteractiveError {
     Unimplemented,
     #[error("serialization error: {0}")]
     Serialization(String),
+    #[error("invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 impl From<serde_json::Error> for InteractiveError {

@@ -10,7 +10,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-paykit-lib = "0.1"
+paykit-lib = "2.0"
 ```
 
 ### Basic Usage

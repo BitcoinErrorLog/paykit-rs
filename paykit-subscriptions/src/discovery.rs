@@ -623,7 +623,10 @@ fn try_decrypt_signed_subscription(
     }
 
     // AAD format matches store_signed_subscription in manager.rs
-    let aad = format!("paykit:v0:subscription_agreement:{}:{}", path, subscription_id);
+    let aad = format!(
+        "paykit:v0:subscription_agreement:{}:{}",
+        path, subscription_id
+    );
     match sealed_blob_decrypt(my_noise_sk, content, &aad) {
         Ok(plaintext) => serde_json::from_slice(&plaintext).ok(),
         Err(e) => {
@@ -652,7 +655,10 @@ fn try_decrypt_cancellation(
     }
 
     // AAD format matches store_subscription_cancellation in manager.rs
-    let aad = format!("paykit:v0:subscription_cancellation:{}:{}", path, subscription_id);
+    let aad = format!(
+        "paykit:v0:subscription_cancellation:{}:{}",
+        path, subscription_id
+    );
     match sealed_blob_decrypt(my_noise_sk, content, &aad) {
         Ok(plaintext) => serde_json::from_slice(&plaintext).ok(),
         Err(e) => {

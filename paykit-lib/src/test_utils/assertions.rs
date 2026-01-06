@@ -282,7 +282,10 @@ mod tests {
             .succeeded()
             .fee_within(100)
             .check();
-        assert!(all_pass, "check() should return true when all assertions pass");
+        assert!(
+            all_pass,
+            "check() should return true when all assertions pass"
+        );
 
         // Test check() with a failing assertion
         let has_failure = PaymentAssertionBuilder::new(&result)
@@ -290,6 +293,9 @@ mod tests {
             .succeeded()
             .fee_within(5) // This will fail since fee is 10
             .check();
-        assert!(!has_failure, "check() should return false when any assertion fails");
+        assert!(
+            !has_failure,
+            "check() should return false when any assertion fails"
+        );
     }
 }

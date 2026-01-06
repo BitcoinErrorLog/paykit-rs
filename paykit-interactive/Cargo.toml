@@ -1,6 +1,6 @@
 [package]
 name = "paykit-interactive"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Interactive payment protocols and receipts for Paykit over Pubky Noise"
 

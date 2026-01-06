@@ -41,13 +41,17 @@ pub use amount::Amount;
 pub use invoice::{
     Invoice, InvoiceFormat, InvoiceItem, ShippingAddress, ShippingInfo, ShippingMethod, TaxInfo,
 };
-pub use nonce_store::NonceStore;
+pub use nonce_store::{NonceStorage, NonceStore};
 pub use request::{PaymentRequest, PaymentRequestResponse, RequestNotification, RequestStatus};
 pub use storage::{Direction, RequestFilter, ReservationToken, SubscriptionStorage};
 
-// Platform-specific storage implementations
+// Platform-specific exports (not available on wasm32)
+#[cfg(not(target_arch = "wasm32"))]
+pub use nonce_store::FileNonceStorage;
 #[cfg(not(target_arch = "wasm32"))]
 pub use storage::FileSubscriptionStorage;
+#[cfg(not(target_arch = "wasm32"))]
+pub use storage::SpendingGuard;
 
 // WASM storage implementation (WasmSubscriptionStorage) is future work
 // See FINAL_SWEEP_REPORT.md for details

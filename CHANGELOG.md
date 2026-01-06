@@ -2,6 +2,82 @@
 
 All notable changes to the Paykit project are documented in this file.
 
+## [2.0.0] - 2026-01-05
+
+### Security Hardening Release
+
+Critical security fixes and correctness improvements identified during production audit.
+
+#### BREAKING CHANGES
+
+- **paykit-lib**: `LndExecutor::new()` now validates TLS certificates properly instead of bypassing validation
+- **paykit-interactive**: Messages exceeding `MAX_MESSAGE_SIZE` are now rejected to prevent DoS
+- **paykit-subscriptions**: `NonceStorage` trait replaces internal-only nonce tracking
+
+#### Security Fixes
+
+- **[CRITICAL] TLS Certificate Validation** (`paykit-lib/src/executors/lnd.rs`)
+  - Fixed `danger_accept_invalid_certs(true)` misuse that bypassed TLS validation
+  - TLS certificates are now properly added as trusted roots via `add_root_certificate()`
+  - Falls back to system roots when no certificate provided
+  - Prevents MITM attacks against LND REST API
+
+- **[HIGH] Message Size Limits** (`paykit-interactive/src/transport.rs`)
+  - Added `DEFAULT_MAX_MESSAGE_SIZE` (1 MB) constant
+  - Added `MAX_HANDSHAKE_SIZE` (64 KB) for handshake messages
+  - Size validation before memory allocation prevents DoS via memory exhaustion
+  - Configurable via `with_max_message_size()` builder method
+
+- **[HIGH] Preimage Verification** (`paykit-lib/src/methods/executor.rs`)
+  - `LightningExecutor::verify_preimage()` now uses real SHA256 (sha2 crate)
+  - Replaced placeholder XOR-based mock hash with cryptographic implementation
+  - Added tests with known test vectors
+
+- **[MEDIUM] Persistent Nonce Storage** (`paykit-subscriptions/src/nonce_store.rs`)
+  - New `NonceStorage` trait for persistent nonce storage
+  - `FileNonceStorage` implementation for CLI/demo applications
+  - `NonceStore` in-memory implementation now implements the trait
+  - Nonces persist across restarts to prevent replay attacks
+
+- **[MEDIUM] Panic-Safe Spending Rollback** (`paykit-subscriptions/src/storage.rs`)
+  - New `SpendingGuard` RAII type for automatic rollback on panic
+  - Prevents spending limit leaks from panics or early returns
+  - Auto-rollback on drop if not explicitly committed
+
+#### New Types
+
+- `NonceStorage` - Trait for persistent nonce storage backends
+- `FileNonceStorage` - File-based persistent nonce storage
+- `SpendingGuard` - RAII guard for panic-safe spending reservations (native only)
+- `NonceStorageFFI` - FFI callback interface for mobile nonce storage
+- `NonceStorageBridge` - Bridge from FFI callback to `NonceStorage` trait
+- `DEFAULT_MAX_MESSAGE_SIZE` - Maximum transport message size constant (1 MB)
+- `MAX_MESSAGE_SIZE` - Alias for `DEFAULT_MAX_MESSAGE_SIZE`
+- `MAX_HANDSHAKE_SIZE` - Maximum handshake message size constant (64 KB)
+
+#### Downstream Updates
+
+- **bitkit-android**: Added `NonceStorage` using SharedPreferences
+- **bitkit-ios**: Added `NonceStorage` using UserDefaults
+- **pubky-ring**: Verified no exposure to affected code paths
+
+#### Documentation
+
+- Updated `docs/SECURITY_ARCHITECTURE.md` with threat model updates
+- Created `docs/MIGRATION_V2.md` migration guide
+- Added security comments throughout affected code
+
+#### Version Changes
+
+| Crate | Old | New |
+|-------|-----|-----|
+| paykit-lib | 1.0.0 | 2.0.0 |
+| paykit-interactive | 0.1.0 | 0.2.0 |
+| paykit-subscriptions | 0.2.0 | 0.3.0 |
+| paykit-mobile | 0.1.0 | 0.2.0 |
+
+---
+
 ## [Unreleased]
 
 ### Security: Encrypted Public Storage (January 2026)

@@ -41,6 +41,9 @@ use crate::methods::{
 };
 use crate::{PaykitError, Result};
 
+#[cfg(feature = "http-executor")]
+use reqwest::tls::Certificate;
+
 /// LND REST API executor for Lightning payments.
 ///
 /// This executor connects to an LND node via its REST API to execute
@@ -59,6 +62,57 @@ pub struct LndExecutor {
 }
 
 impl LndExecutor {
+    /// Build HTTP client with proper TLS configuration.
+    ///
+    /// # Security
+    ///
+    /// When a TLS certificate PEM is provided, it is added as a trusted root certificate.
+    /// This allows connecting to LND nodes with self-signed certificates while still
+    /// performing proper certificate validation. The certificate is NOT blindly trusted;
+    /// it must match the server's certificate chain.
+    ///
+    /// When no certificate is provided, the system's root certificates are used.
+    #[cfg(feature = "http-executor")]
+    fn build_http_client(config: &LndConfig) -> Result<reqwest::Client> {
+        let mut builder =
+            reqwest::Client::builder().timeout(Duration::from_secs(config.timeout_secs));
+
+        // If a TLS certificate is provided, add it as a trusted root
+        // This is the SECURE way to handle self-signed certs (vs danger_accept_invalid_certs)
+        if let Some(ref cert_pem) = config.tls_cert_pem {
+            // Validate PEM is not empty
+            let trimmed = cert_pem.trim();
+            if trimmed.is_empty() {
+                return Err(PaykitError::InvalidData {
+                    field: "tls_cert_pem".to_string(),
+                    reason: "TLS certificate PEM cannot be empty".to_string(),
+                });
+            }
+
+            // Validate PEM format
+            if !trimmed.starts_with("-----BEGIN CERTIFICATE-----") {
+                return Err(PaykitError::InvalidData {
+                    field: "tls_cert_pem".to_string(),
+                    reason:
+                        "Invalid TLS certificate PEM: must start with -----BEGIN CERTIFICATE-----"
+                            .to_string(),
+                });
+            }
+
+            let cert = Certificate::from_pem(cert_pem.as_bytes()).map_err(|e| {
+                PaykitError::InvalidData {
+                    field: "tls_cert_pem".to_string(),
+                    reason: format!("Invalid TLS certificate PEM: {}", e),
+                }
+            })?;
+            builder = builder.add_root_certificate(cert);
+        }
+
+        builder
+            .build()
+            .map_err(|e| PaykitError::Internal(format!("Failed to build HTTP client: {}", e)))
+    }
+
     /// Create a new LND executor with the given configuration.
     ///
     /// # Errors
@@ -66,6 +120,7 @@ impl LndExecutor {
     /// Returns an error if:
     /// - The REST URL is empty
     /// - The macaroon is empty
+    /// - The TLS certificate PEM is invalid (if provided)
     /// - (With `http-executor` feature) The HTTP client cannot be built
     pub fn new(config: LndConfig) -> Result<Self> {
         // Validate configuration
@@ -83,11 +138,7 @@ impl LndExecutor {
         }
 
         #[cfg(feature = "http-executor")]
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
-            .danger_accept_invalid_certs(config.tls_cert_pem.is_some()) // Accept self-signed if cert provided
-            .build()
-            .map_err(|e| PaykitError::Internal(format!("Failed to build HTTP client: {}", e)))?;
+        let client = Self::build_http_client(&config)?;
 
         Ok(Self {
             config,
@@ -511,6 +562,79 @@ mod tests {
         assert_eq!(
             executor.url("payreq/lnbc123"),
             "https://localhost:8080/v1/payreq/lnbc123"
+        );
+    }
+
+    #[cfg(feature = "http-executor")]
+    #[test]
+    fn test_lnd_executor_with_valid_tls_cert() {
+        // A real self-signed test certificate (generated via openssl)
+        // This certificate is self-signed for "localhost" and expires far in the future
+        let test_cert_pem = include_str!("../../../tests/fixtures/test_cert.pem");
+
+        let config =
+            LndConfig::new("https://localhost:8080", "macaroon123").with_tls_cert(test_cert_pem);
+
+        // Should succeed with a valid PEM certificate
+        let result = LndExecutor::new(config);
+        assert!(result.is_ok(), "Valid PEM should be accepted: {:?}", result);
+    }
+
+    #[cfg(feature = "http-executor")]
+    #[test]
+    fn test_lnd_executor_with_invalid_tls_cert_pem_fails() {
+        // Various invalid PEM formats should fail with an error
+        let invalid_pems = [
+            "",                                                                // Empty
+            "not a PEM at all",                                                // Plain text
+            "-----BEGIN CERTIFICATE-----\ngarbage\n-----END CERTIFICATE-----", // Garbage base64
+        ];
+
+        for invalid_pem in invalid_pems {
+            let config =
+                LndConfig::new("https://localhost:8080", "macaroon123").with_tls_cert(invalid_pem);
+
+            let result = LndExecutor::new(config);
+            assert!(
+                result.is_err(),
+                "Invalid PEM '{}' should be rejected",
+                &invalid_pem[..invalid_pem.len().min(30)]
+            );
+        }
+    }
+
+    #[cfg(feature = "http-executor")]
+    #[test]
+    fn test_lnd_executor_without_tls_cert_uses_system_roots() {
+        // When no TLS cert is provided, should use system roots successfully
+        let config = LndConfig::new("https://localhost:8080", "macaroon123");
+        let result = LndExecutor::new(config);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "http-executor")]
+    #[test]
+    fn test_no_danger_accept_invalid_certs() {
+        // This test verifies the security fix: we should NOT be using
+        // danger_accept_invalid_certs(true) anymore.
+        //
+        // The old vulnerable code was:
+        //   .danger_accept_invalid_certs(config.tls_cert_pem.is_some())
+        //
+        // The new secure code uses add_root_certificate() instead.
+        //
+        // We can't easily test the actual TLS validation behavior without
+        // a running server, but we verify the code path works correctly
+        // by testing that valid certs are accepted and the executor is built.
+
+        let valid_cert = include_str!("../../../tests/fixtures/test_cert.pem");
+        let config =
+            LndConfig::new("https://localhost:8080", "macaroon123").with_tls_cert(valid_cert);
+
+        let result = LndExecutor::new(config);
+        assert!(
+            result.is_ok(),
+            "TLS cert should be properly added as root certificate"
         );
     }
 }

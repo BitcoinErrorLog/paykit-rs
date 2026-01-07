@@ -1,6 +1,6 @@
 # Pubky Cryptographic Specification
 
-**Version**: 1.0  
+**Version**: 2.0  
 **Date**: January 2026  
 **Status**: Authoritative Reference
 
@@ -330,9 +330,7 @@ Implementations MAY persist:
 
 When both parties are not online simultaneously, messages are stored encrypted on the homeserver. The recipient decrypts without the sender being online.
 
-### 7.2 Sealed Blob v2 Envelope
-
-Extension of Sealed Blob v1 with sender identity:
+### 7.2 Sealed Blob Envelope
 
 ```json
 {
@@ -362,10 +360,7 @@ key = HKDF-SHA256(
 
 ### 7.4 Nonce Generation
 
-For v2 envelopes: 24 bytes random (XChaCha20-Poly1305).
-
-For v1 envelopes (legacy): 12 bytes random (ChaCha20-Poly1305).
-For v2 envelopes (current): 24 bytes random (XChaCha20-Poly1305).
+24 bytes cryptographically random, generated fresh for each envelope. Used with XChaCha20-Poly1305.
 
 ### 7.5 AAD Construction
 
@@ -546,7 +541,7 @@ Async envelopes: provided by sender's ephemeral X25519 key per message.
 
 ### 11.6 Traffic Analysis
 
-Out of scope for v1. Future mitigations:
+Out of scope for initial release. Future mitigations:
 - Padding messages to fixed sizes
 - Randomized polling intervals
 - Decoy traffic
@@ -591,9 +586,7 @@ Test vectors for interoperability testing are defined in `pubky-noise/tests/`.
 | X25519 derivation salt | `"pubky-noise-x25519:v1"` |
 | Local archive salt | `"pubky-ring/local-archive/v1"` |
 | Identity binding prefix | `"pubky-noise-bind:v1"` |
-| Envelope key info (v1) | `"paykit-sealed-blob-v1"` |
-| Envelope key info (v2) | `"pubky-envelope/v2"` |
-| Envelope key info (v2) | `"pubky-envelope/v2"` |
+| Envelope key info | `"pubky-envelope/v2"` |
 | Envelope signature prefix | `"pubky-envelope-sig/v2"` |
 
 ---
@@ -620,7 +613,7 @@ This section documents gaps between the spec and current implementation.
 |---------|--------|----------|
 | X25519 derivation with device_id + epoch | ✅ Implemented | `pubky-noise/src/kdf.rs` |
 | Session ID from handshake hash | ✅ Implemented | `pubky-noise/src/session_id.rs` |
-| Sealed Blob v2 encryption | ✅ Implemented | `pubky-noise/src/sealed_blob.rs` |
+| Sealed Blob encryption | ✅ Implemented | `pubky-noise/src/sealed_blob.rs` |
 | RingKeyProvider trait | ✅ Implemented | `pubky-noise/src/ring.rs` |
 | Identity binding in handshake | ✅ Implemented | `pubky-noise/src/identity_payload.rs` |
 | Secure handoff (Ring → Bitkit) | ✅ Implemented | `pubky-ring/src/utils/actions/paykitConnectAction.ts` |
@@ -632,7 +625,6 @@ This section documents gaps between the spec and current implementation.
 | APP_SEED derivation layer | ❌ Not implemented | Currently uses ed25519 seed directly |
 | Role parameter in X25519 derivation | ❌ Not implemented | Info is `device_id \|\| epoch` only |
 | LOCAL_ARCHIVE_KEY derivation | ❌ Not implemented | Needs new function in kdf.rs |
-| Sealed Blob v1 backward compat | ✅ Implemented | Decryption auto-detects v1/v2 |
 | Epoch fallback decryption | ❌ Not implemented | Single epoch only |
 | Message kind field in envelopes | ❌ Not implemented | Purpose field exists but not typed |
 

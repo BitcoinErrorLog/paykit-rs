@@ -588,6 +588,10 @@ cd paykit-mobile && cargo test --lib
 
 ## Documentation
 
+### Cryptographic Foundation
+
+- **[Pubky Crypto Spec](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md)** — Authoritative reference for key derivation, Sealed Blob envelopes, Noise protocol patterns, and security considerations across the Pubky ecosystem
+
 ### Production Integration Guide
 
 - **[Bitkit + Paykit Integration Master Guide](docs/BITKIT_PAYKIT_INTEGRATION_MASTERGUIDE.md)** - **Complete production integration blueprint for Bitkit iOS, Bitkit Android, and Pubky Ring** (616+ lines covering build instructions, session management, Noise protocol flows, and production checklist)

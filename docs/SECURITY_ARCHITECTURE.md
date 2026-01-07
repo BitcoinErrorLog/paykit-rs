@@ -192,7 +192,7 @@ Sessions can be revoked by:
 
 ### Mitigation: Encrypted Handoff with Sealed Blob
 
-All secret-bearing data stored on `/pub/` paths **must** be encrypted using the **Paykit Sealed Blob v1** format. See [SEALED_BLOB_V1_SPEC.md](./SEALED_BLOB_V1_SPEC.md) for full specification.
+All secret-bearing data stored on `/pub/` paths **must** be encrypted using the **Paykit Sealed Blob** format (v2 current, v1 legacy). See [SEALED_BLOB_SPEC.md](./SEALED_BLOB_SPEC.md) for full specification.
 
 **Old (Insecure v1)**:
 ```
@@ -285,7 +285,7 @@ PUT /pub/paykit.app/v0/handoff/abc123
 
 ### Mitigation: Sealed Blob Encryption
 
-All payment requests and subscription data are encrypted using the **Paykit Sealed Blob v1** format before storage.
+All payment requests and subscription data are encrypted using the **Paykit Sealed Blob** format before storage.
 
 **Implementation Status**: ✅ Complete
 - Payment requests: Encrypted to recipient's Noise endpoint public key
@@ -809,7 +809,7 @@ class SecureSecret(private var data: ByteArray) {
 **Attack**: Attacker reads `/pub/` paths on homeserver (publicly accessible)
 
 **Old Risk**: Handoff payloads, payment requests, and subscription proposals contained plaintext secrets  
-**Mitigation**: All secret-bearing data encrypted using Paykit Sealed Blob v1
+**Mitigation**: All secret-bearing data encrypted using Paykit Sealed Blob
 
 **Residual Risk**: Metadata exposure (path structure reveals sender/recipient pubkeys)  
 **Acceptable**: Pubkeys are already public; no secret data exposed

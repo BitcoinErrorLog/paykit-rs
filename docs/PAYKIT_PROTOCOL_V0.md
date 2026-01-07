@@ -7,7 +7,7 @@
 This document is the canonical specification for Paykit Protocol v0. All implementations (Rust, Kotlin, Swift, TypeScript) **must** conform to this spec.
 
 **Related Documents**:
-- [SEALED_BLOB_V1_SPEC.md](SEALED_BLOB_V1_SPEC.md) - Encryption envelope format
+- [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format (v2 current, v1 legacy)
 - [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) - Cross-platform test vectors
 - [SECURE_HANDOFF.md](SECURE_HANDOFF.md) - Bitkit/Ring key provisioning
 
@@ -42,7 +42,7 @@ Paykit is a decentralized payment coordination protocol built on Pubky. It enabl
 
 1. **Sender-Storage Model**: Senders store data on their own homeserver, not recipients'
 2. **Recipient-Scoped Directories**: Per-recipient hashed directories for privacy and discovery
-3. **Mandatory Encryption**: All payment requests and proposals use Sealed Blob v1
+3. **Mandatory Encryption**: All payment requests and proposals use Sealed Blob
 4. **Decentralized Discovery**: Polling known contacts, not centralized notification
 
 ---
@@ -57,9 +57,9 @@ All Paykit v0 data is stored under `/pub/paykit.app/v0/` on user homeservers.
 |--------------|-------------|------------|
 | `/pub/paykit.app/v0/{method_id}` | Supported payment method (e.g., `lightning`) | None (public) |
 | `/pub/paykit.app/v0/noise` | Noise endpoint info (X25519 public key) | None (public) |
-| `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}` | Payment request (on sender's storage) | Sealed Blob v1 |
-| `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}` | Subscription proposal (on provider's storage) | Sealed Blob v1 |
-| `/pub/paykit.app/v0/handoff/{request_id}` | Secure handoff payload | Sealed Blob v1 |
+| `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}` | Payment request (on sender's storage) | Sealed Blob |
+| `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}` | Subscription proposal (on provider's storage) | Sealed Blob |
+| `/pub/paykit.app/v0/handoff/{request_id}` | Secure handoff payload | Sealed Blob |
 
 ### Example Directory Tree
 
@@ -160,7 +160,7 @@ See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors
 
 ### Mandatory Encryption
 
-All payment requests and subscription proposals **MUST** use Sealed Blob v1 encryption.
+All payment requests and subscription proposals **MUST** use Sealed Blob encryption.
 
 **Plaintext storage is REJECTED** for security reasons.
 
@@ -169,7 +169,7 @@ All payment requests and subscription proposals **MUST** use Sealed Blob v1 encr
 1. **Fetch recipient's Noise endpoint**: `GET /pub/paykit.app/v0/noise`
 2. **Extract recipient's X25519 public key** from the endpoint
 3. **Construct AAD** using the canonical format (see Section 8)
-4. **Encrypt** using Sealed Blob v1
+4. **Encrypt** using Sealed Blob
 5. **Store** encrypted envelope at the appropriate path
 
 ### Decryption Flow
@@ -184,7 +184,7 @@ All payment requests and subscription proposals **MUST** use Sealed Blob v1 encr
 
 During the transition period:
 - Writers: Always encrypt (no plaintext writes)
-- Readers: Accept Sealed Blob v1 only, reject plaintext
+- Readers: Accept Sealed Blob only, reject plaintext
 
 After transition (hard break):
 - Plaintext data is orphaned (not read, not migrated)
@@ -261,7 +261,7 @@ After transition (hard break):
 
 ## 8. AAD Formats
 
-All Sealed Blob v1 encryption uses AAD to bind ciphertext to its context.
+All Sealed Blob encryption uses AAD to bind ciphertext to its context.
 
 ### Format Pattern
 
@@ -356,7 +356,7 @@ For clients that prefer a single JSON array (PDF-style compatibility):
 | `subscription_proposal_path` | Build path for subscription proposal |
 | `payment_request_aad` | Build AAD for payment request encryption |
 | `subscription_proposal_aad` | Build AAD for subscription proposal encryption |
-| `is_sealed_blob` | Check if content is Sealed Blob v1 format |
+| `is_sealed_blob` | Check if content is Sealed Blob format |
 
 ### Security Requirements
 
@@ -381,7 +381,7 @@ This section defines the canonical JSON schemas for encrypted payloads. All impl
 
 ### Payment Request Schema
 
-The plaintext payload (before Sealed Blob v1 encryption):
+The plaintext payload (before Sealed Blob encryption):
 
 ```json
 {
@@ -409,7 +409,7 @@ The plaintext payload (before Sealed Blob v1 encryption):
 
 ### Subscription Proposal Schema
 
-The plaintext payload (before Sealed Blob v1 encryption):
+The plaintext payload (before Sealed Blob encryption):
 
 ```json
 {
@@ -483,7 +483,7 @@ fun verifyProviderBinding(proposal: SubscriptionProposal, polledPubkey: String):
 ### v0.1 (January 2, 2026)
 - Initial specification
 - Sender-storage model with recipient-scoped directories
-- Mandatory Sealed Blob v1 encryption
+- Mandatory Sealed Blob encryption
 - SHA-256 scope hashing
 
 ---

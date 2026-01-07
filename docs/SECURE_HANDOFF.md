@@ -7,7 +7,7 @@
 This document specifies the secure handoff protocol between Pubky Ring and Bitkit for provisioning identity sessions and Noise keypairs.
 
 **Related Documents**:
-- [SEALED_BLOB_V1_SPEC.md](SEALED_BLOB_V1_SPEC.md) - Encryption envelope format
+- [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format (v2 current, v1 legacy)
 - [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) - Cross-device relay protocol
 - [PAYKIT_PROTOCOL_V0.md](PAYKIT_PROTOCOL_V0.md) - Paykit v0 specification
 
@@ -34,7 +34,7 @@ Secure Handoff enables Bitkit to receive:
 - Noise keypairs (for encrypted payment channels)
 - Noise seed (for local key derivation)
 
-All secret material is encrypted using Sealed Blob v1 before storage, ensuring secrets are never exposed in URLs or readable on public storage.
+All secret material is encrypted using Sealed Blob before storage, ensuring secrets are never exposed in URLs or readable on public storage.
 
 ### Actors
 
@@ -51,7 +51,7 @@ All secret material is encrypted using Sealed Blob v1 before storage, ensuring s
 | Goal | How Achieved |
 |------|--------------|
 | No secrets in URLs | Only `request_id` in callback, not session/keys |
-| Encrypted at rest | Sealed Blob v1 encryption on homeserver |
+| Encrypted at rest | Sealed Blob encryption on homeserver |
 | Forward secrecy | Ephemeral X25519 keypair per handoff |
 | Time-limited exposure | 5-minute expiration on handoff payload |
 | Single-use | Bitkit deletes payload after fetch |
@@ -80,7 +80,7 @@ Ring:
 2. Derives Noise keypairs from Ed25519 seed
 3. Constructs handoff payload (JSON)
 4. Generates random 256-bit `request_id`
-5. Encrypts payload using Sealed Blob v1:
+5. Encrypts payload using Sealed Blob:
    - Recipient: Bitkit's `ephemeralPk`
    - AAD: `paykit:v0:handoff:{pubky}:{path}:{request_id}`
 6. Stores encrypted envelope at `/pub/paykit.app/v0/handoff/{request_id}`
@@ -365,7 +365,7 @@ export const handlePaykitConnectAction = async (
     const storagePath = `/pub/paykit.app/v0/handoff/${requestId}`;
     const aad = `paykit:v0:handoff:${pubky}:${storagePath}:${requestId}`;
     
-    // Encrypt using Sealed Blob v1
+    // Encrypt using Sealed Blob
     const envelope = await sealedBlobEncrypt(
         Buffer.from(ephemeralPk, 'hex'),
         JSON.stringify(payload),
@@ -413,7 +413,7 @@ export const handlePaykitConnectAction = async (
 | Threat | Mitigation |
 |--------|------------|
 | URL logging exposing secrets | Secrets never in URLs |
-| Homeserver operator reading secrets | Sealed Blob v1 encryption |
+| Homeserver operator reading secrets | Sealed Blob encryption |
 | Replay attack | Unique `request_id` per handoff |
 | Blob relocation | AAD binding to path and owner |
 | Key compromise | Ephemeral X25519 per handoff |

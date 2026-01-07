@@ -91,7 +91,7 @@ Example with `recipient_scope` = `55340b54f918470e1f025a80bb3347934fad3f57189eef
 
 ## AAD (Additional Authenticated Data) Formats
 
-AAD binds the ciphertext to its storage context. All Sealed Blob v1 encryption must use these exact formats.
+AAD binds the ciphertext to its storage context. All Sealed Blob encryption must use these exact formats.
 
 ### Payment Request
 

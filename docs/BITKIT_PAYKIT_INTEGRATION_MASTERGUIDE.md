@@ -1,9 +1,28 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 2.2  
-> **Last Updated**: January 3, 2026  
+> **Version**: 2.4  
+> **Last Updated**: January 6, 2026  
 > **Status**: Production Ready - E2E Verified
+>
+> **v2.4 Changes**: Added comprehensive Noise key sync troubleshooting section (Section 14) with
+> diagnostic patterns for detecting key mismatches between published endpoints and local keys.
+> Added detailed decryption logging recommendations for debugging payment request failures.
+> Added payment request discovery troubleshooting for "0 requests found" issues.
+> Documented the pattern of checking `discoverNoiseEndpoint(myPubkey)` vs local `noiseKeypair.publicKey`
+> to detect sync issues requiring Ring reconnection. Covered persistence requirements for discovered
+> requests to ensure they appear in UI after background polling.
+>
+> **v2.3 Changes**: Added Profiles and Contacts documentation (Section 8.1.2) covering profile
+> publishing, image upload (pubky-app-specs compliant), contacts synchronized from Pubky follows,
+> and ContactPickerSheet for recipient selection. Fixed subscription proposal cleanup to scope
+> tracked IDs per recipient, preventing cross-recipient false matches when deleting orphaned
+> proposals. Added cleanup orphaned proposals feature to SubscriptionsViewModel (Android + iOS)
+> with `listProposalsOnHomeserver()` and `deleteProposalsBatch()` DirectoryService methods.
+> Added Sent tab for tracking outgoing proposals with cancel capability. Added comprehensive
+> unit tests for SubscriptionProposalStorage, SubscriptionsViewModel cleanup logic, and
+> DirectoryService proposal operations. Updated SUBSCRIPTIONS_LOCAL_TESTING.md runbook with
+> contacts picker, Sent tab, and cleanup orphaned proposals documentation.
 >
 > **v2.2 Changes**: Added `ed25519Sign` and `ed25519Verify` to pubky-noise FFI (iOS + Android).
 > Updated native module bridges (PubkyNoiseModule.swift, PubkyNoiseModule.kt) with signing methods.
@@ -42,7 +61,7 @@
 > for iOS XCFrameworks, updated `PubkyAuthenticatedStorageAdapter` constructor with `ownerPubkey`.
 >
 > **v1.6 Changes**: Added PaykitV0Protocol (Rust/Kotlin/Swift), sender-storage model, 
-> recipient-scoped directories, mandatory Sealed Blob v1 encryption, payment method 
+> recipient-scoped directories, mandatory Sealed Blob encryption, payment method 
 > fallback loop with retryable error classification, cross-platform interop test vectors.
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
@@ -58,7 +77,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] No GlobalScope usage in Android (uses dedicated CoroutineScope with SupervisorJob)
 - [x] ProGuard/R8 rules added for JNA, UniFFI, and Noise classes
 - [x] Background tasks registered (SessionRefreshWorker, PaykitPollingWorker)
-- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android + iOS)
+- [x] Secure handoff v2: encrypted with Sealed Blob (Android + iOS)
 - [x] Key rotation (epoch 0 to 1) implemented with NoiseKeyCache persistence
 - [x] Cross-device QR with ephemeral X25519 key + encrypted relay response
 - [x] Plaintext cross-device callbacks DISABLED for security
@@ -72,7 +91,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] PaykitV0Protocol: canonical path builders and AAD formats (Rust, Kotlin, Swift)
 - [x] Sender-storage model: payment requests stored on sender's homeserver
 - [x] Recipient-scoped directories: `hex(sha256(normalized_pubkey))` for privacy
-- [x] Mandatory Sealed Blob v1 encryption for payment requests and subscription proposals
+- [x] Mandatory Sealed Blob encryption for payment requests and subscription proposals
 - [x] Payment method fallback loop: retryable vs non-retryable error classification
 - [x] Cross-platform test vectors for scope hashing (INTEROP_TEST_VECTORS.md)
 - [x] Namespace separation: profiles in `/pub/pubky.app/`, paykit in `/pub/paykit.app/v0/`
@@ -112,7 +131,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - 📘 [PHASE_1-4_IMPROVEMENTS.md](PHASE_1-4_IMPROVEMENTS.md) - Detailed implementation summary
 - 🔒 [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) - Security model and threat analysis
 - 🔔 [PUSH_RELAY_DESIGN.md](PUSH_RELAY_DESIGN.md) - Push relay service specification
-- 🔐 [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) - Encrypted handoff protocol (Sealed Blob v1)
+- 🔐 [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) - Encrypted handoff protocol (Sealed Blob)
 - 🧪 [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) - Cross-platform test vectors for scope hashing
 - 📋 [opus-paykit-diff.md](opus-paykit-diff.md) - Paykit PDF spec vs implementation analysis
 
@@ -156,7 +175,7 @@ Paykit is a decentralized payment protocol built on Pubky that enables:
 ### Pre-Production Verification Checklist
 
 Before deploying to production, verify end-to-end:
-- [x] Secure handoff v2: encrypted with Sealed Blob v1 (Android + iOS)
+- [x] Secure handoff v2: encrypted with Sealed Blob (Android + iOS)
 - [x] Cross-device relay: ephemeral X25519 + encrypted response (plaintext REJECTED)
 - [ ] iOS push relay Ed25519 signing completes successfully (requires runtime test)
 - [x] Android push relay Ed25519 signing implemented via PubkyRingBridge.requestSignature()
@@ -167,7 +186,7 @@ Before deploying to production, verify end-to-end:
 - [x] Plaintext session callbacks DISABLED - returns error
 - [x] Session persistence survives app restart (Keychain/EncryptedSharedPrefs)
 - [x] Type-safe HomeserverURL prevents pubkey/URL confusion
-- [x] PaykitV0Protocol provides canonical AAD builders for Sealed Blob v1
+- [x] PaykitV0Protocol provides canonical AAD builders for Sealed Blob
 
 ### Review Lens (for architecture + assumptions)
 
@@ -186,7 +205,7 @@ This section is meant to help the Bitkit dev team review the project at a high l
 | Decision | What we did | Tradeoff / what to challenge |
 |---|---|---|
 | Ring-only identity | Ed25519 master secret never leaves Ring; Bitkit consumes sessions + derived X25519 keys | Requires Ring installation (or cross-device flow) for initial provisioning and for signing requests |
-| Secure handoff v2 | Ring encrypts handoff payload with Sealed Blob v1 (ephemeral X25519); Bitkit decrypts | Ephemeral keypair generated per-handoff; Ring must support `ephemeralPk` parameter |
+| Secure handoff v2 | Ring encrypts handoff payload with Sealed Blob (ephemeral X25519); Bitkit decrypts | Ephemeral keypair generated per-handoff; Ring must support `ephemeralPk` parameter |
 | Cross-device relay | Relay responses encrypted with ephemeral X25519; plaintext REJECTED | Older Ring versions incompatible; requires coordinated update |
 | Push relay vs public directory tokens | Push tokens are registered to a relay; wake requests require Ed25519 signatures | Adds backend dependency; requires careful lifecycle wiring for token rotation + session replacement |
 | Type-safe identifiers | Introduced `HomeserverURL`, `HomeserverPubkey`, `OwnerPubkey`, `SessionSecret` | Requires discipline to avoid reintroducing raw strings at boundaries |
@@ -196,7 +215,7 @@ This section is meant to help the Bitkit dev team review the project at a high l
 #### Invariants (things the system assumes are true)
 
 - **No secrets in callback URLs** for paykit setup (secure handoff only)
-- **Handoff payloads encrypted at rest** using Sealed Blob v1 (ephemeral X25519 + ChaCha20-Poly1305)
+- **Handoff payloads encrypted at rest** using Sealed Blob (ephemeral X25519 + ChaCha20-Poly1305)
 - **Plaintext handoff/relay payloads REJECTED** by Bitkit for security
 - **Sessions authenticate via cookie**: `Cookie: {ownerPubkey}={sessionSecret}` on authenticated homeserver requests (the session secret may be prefixed with `{pubkey}:`, in which case only the portion after the colon is used)
 - **Ring is the only signer**: Ed25519 signatures used for push relay auth are produced by Ring
@@ -206,7 +225,7 @@ This section is meant to help the Bitkit dev team review the project at a high l
 #### Review prompts (what to scrutinize)
 
 - **Security**:
-  - ✅ RESOLVED: Handoff payloads are now encrypted at rest using Sealed Blob v1
+  - ✅ RESOLVED: Handoff payloads are now encrypted at rest using Sealed Blob
   - Are callback schemes and deep link handlers hardened against spoofing and confused-deputy issues?
   - Are we leaking any secrets via logs, analytics, crash reports, or OS-level deep link telemetry?
 - **Reliability**:
@@ -1081,10 +1100,10 @@ When Bitkit calls `pubkyring://paykit-connect?deviceId=...&callback=...&ephemera
 
 **File:** `pubky-ring/src/utils/actions/paykitConnectAction.ts`
 
-**SECURITY (v2)**: Handoff payloads are encrypted using Sealed Blob v1 before storage. Bitkit generates an ephemeral X25519 keypair and includes the public key in the request. Ring encrypts to this key. Bitkit decrypts using the ephemeral secret key. Plaintext payloads are REJECTED by Bitkit.
+**SECURITY (v2)**: Handoff payloads are encrypted using Sealed Blob before storage. Bitkit generates an ephemeral X25519 keypair and includes the public key in the request. Ring encrypts to this key. Bitkit decrypts using the ephemeral secret key. Plaintext payloads are REJECTED by Bitkit.
 
 ```typescript
-// Current implementation uses ENCRYPTED SECURE HANDOFF (Sealed Blob v1)
+// Current implementation uses ENCRYPTED SECURE HANDOFF (Sealed Blob)
 export const handlePaykitConnectAction = async (
     data: PaykitConnectActionData,
     context: ActionContext
@@ -1128,7 +1147,7 @@ export const handlePaykitConnectAction = async (
         expires_at: Date.now() + 5 * 60 * 1000, // 5 minutes
     };
 
-    // Step 5: Encrypt payload using Sealed Blob v1
+    // Step 5: Encrypt payload using Sealed Blob
     const storagePath = `/pub/paykit.app/v0/handoff/${requestId}`;
     const aad = `paykit:v0:handoff:${pubky}:${storagePath}:${requestId}`;
     const envelope = await sealedBlobEncrypt(ephemeralPk, JSON.stringify(payload), aad, 'handoff');
@@ -1277,7 +1296,7 @@ Normalization:
 | Noise Endpoint | `/pub/paykit.app/v0/noise` |
 | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
 
-**AAD Formats (for Sealed Blob v1):**
+**AAD Formats (for Sealed Blob):**
 | Object Type | AAD Format |
 |-------------|------------|
 | Payment Request | `paykit:v0:request:{path}:{request_id}` |
@@ -1361,7 +1380,7 @@ Why this matters:
 
 #### Cross-device flow (Ring installed on a different device)
 
-**SECURITY (v2)**: Cross-device relay responses are encrypted using Sealed Blob v1. Bitkit generates an ephemeral X25519 keypair and includes the public key in the QR URL. Ring encrypts the session payload to this key. **Plaintext relay responses are REJECTED for security.**
+**SECURITY (v2)**: Cross-device relay responses are encrypted using Sealed Blob. Bitkit generates an ephemeral X25519 keypair and includes the public key in the QR URL. Ring encrypts the session payload to this key. **Plaintext relay responses are REJECTED for security.**
 
 Bitkit generates a web URL for QR / link:
 - `https://pubky.app/auth?request_id=<uuid>&callback_scheme=bitkit&app_name=Bitkit&relay_url=<relay-url>&ephemeralPk=<hex>`
@@ -1448,7 +1467,7 @@ const signatureHex = await ed25519Sign(ed25519SecretHex, messageHex);
 // Returns via callback: bitkit://signature-result?signature={hex}&pubkey={z32}
 ```
 
-**SECURITY**: The `ephemeralPk` parameter is REQUIRED for secure handoff. Payloads are encrypted using Sealed Blob v1 to this key. Legacy session callbacks with plaintext secrets are REJECTED.
+**SECURITY**: The `ephemeralPk` parameter is REQUIRED for secure handoff. Payloads are encrypted using Sealed Blob to this key. Legacy session callbacks with plaintext secrets are REJECTED.
 
 ### Session material in Bitkit (what Bitkit actually persists)
 
@@ -1574,6 +1593,105 @@ for method in orderedMethods {
 }
 ```
 
+### 8.1.2 Profiles and Contacts
+
+Bitkit integrates with Pubky's identity system for profiles and contacts (follows).
+
+**Profile Publishing:**
+Profiles are stored in the Pubky namespace (`/pub/pubky.app/profile.json`), not the Paykit namespace:
+
+```kotlin
+// Android - DirectoryService.kt
+suspend fun publishProfile(profile: PubkyProfile) {
+    val profileJson = profile.toJson()
+    authenticatedAdapter.put("/pub/pubky.app/profile.json", profileJson)
+}
+
+// Publish with verification (reads back to confirm)
+suspend fun publishProfileWithVerification(profile: PubkyProfile): Boolean {
+    publishProfile(profile)
+    val readBack = pubkySDKService.fetchProfile(ownerPubkey)
+    return readBack?.name == profile.name
+}
+```
+
+**Image Upload for Profile Pictures:**
+Profile images are uploaded to homeserver storage with metadata:
+
+```kotlin
+// Android - ImageUploadService.kt
+suspend fun uploadProfileImage(uri: Uri): String? {
+    val imageData = processImage(uri, MAX_IMAGE_SIZE, JPEG_QUALITY)
+    val fileId = generateCrockfordId()  // 13-char Crockford Base32
+    val blobPath = "/pub/pubky.app/blobs/$fileId"
+    val filePath = "/pub/pubky.app/files/$fileId"
+    
+    // Upload blob
+    directoryService.putBlob(blobPath, imageData)
+    
+    // Create file metadata (per pubky-app-specs)
+    val fileMetadata = PubkyAppFile(
+        name = "profile.jpg",
+        createdAt = System.currentTimeMillis() * 1000,  // microseconds
+        src = blobPath,
+        contentType = "image/jpeg",
+        size = imageData.size
+    )
+    directoryService.put(filePath, fileMetadata.toJson())
+    
+    return filePath
+}
+```
+
+**Contacts from Follows:**
+Contacts are synchronized from Pubky follows (the homeserver is the source of truth):
+
+```kotlin
+// Android - ContactsViewModel.kt
+fun loadContacts() {
+    viewModelScope.launch {
+        // Sync contacts from Pubky follows (source of truth)
+        val follows = directoryService.discoverContactsFromFollows()
+        
+        // Merge with local data (notes, payment history)
+        val contacts = follows.map { discovered ->
+            val existing = contactStorage.getContact(discovered.pubkey)
+            Contact(
+                publicKeyZ32 = discovered.pubkey,
+                name = discovered.name ?: existing?.name ?: "",
+                notes = existing?.notes,
+                paymentCount = existing?.paymentCount ?: 0,
+            )
+        }
+        _contacts.value = contacts
+    }
+}
+```
+
+**DirectoryService Follows APIs:**
+- `fetchFollows()` - Get list of pubkeys user follows
+- `addFollow(pubkey)` - Add a follow (creates entry with `created_at` timestamp)
+- `removeFollow(pubkey)` - Remove a follow
+- `discoverContactsFromFollows()` - Get follows with profile data merged
+
+**Contact Picker:**
+The `ContactPickerSheet` allows selecting recipients for payments/proposals:
+
+```kotlin
+// Android - PaykitSubscriptionsScreen.kt
+ContactPickerSheet(
+    contacts = uiState.contacts,
+    onSelectContact = { contact ->
+        viewModel.showSendProposalForContact(contact)
+    },
+    onDismiss = { viewModel.hideContactPicker() }
+)
+```
+
+**Key implementation files:**
+- Android: `ContactsViewModel.kt`, `ContactStorage.kt`, `ImageUploadService.kt`, `ContactPickerSheet.kt`
+- iOS: `ContactsViewModel.swift`, `ContactStorage.swift`, `PaykitContactsView.swift`
+
 ### 8.2 Payment Requests (Bitkit core flow)
 
 Bitkit’s production-facing “paykit://” experience is **payment requests**, not smart checkout.
@@ -1588,7 +1706,7 @@ Reference implementations:
 Payment requests are stored on the **sender's** homeserver, NOT the recipient's. This:
 - Respects write-only access (sender can write to their own storage)
 - Uses recipient-scoped directories for discovery
-- Requires mandatory Sealed Blob v1 encryption
+- Requires mandatory Sealed Blob encryption
 
 Where it is implemented:
 - **iOS**: `DirectoryService.publishPaymentRequest(_:)` 
@@ -1619,7 +1737,7 @@ Recipients discover pending requests by polling known contacts' storage:
 4. Deduplicate locally (recipient cannot delete from sender's storage)
 
 **Mandatory Encryption:**
-- All payment requests MUST use Sealed Blob v1 encryption
+- All payment requests MUST use Sealed Blob encryption
 - Plaintext requests are REJECTED for security
 - AAD format: `paykit:v0:request:{path}:{request_id}`
 
@@ -1871,13 +1989,47 @@ if (!response.success) {
 }
 ```
 
+**Background Noise Server (push-wake payments):**
+When a push notification indicates an incoming Noise payment, `NoiseServerWorker` handles it:
+
+```kotlin
+// Android - NoiseServerWorker.kt
+// Started via WorkManager when push notification received
+override suspend fun doWork(): Result {
+    val fromPubkey = inputData.getString(KEY_FROM_PUBKEY) ?: return Result.failure()
+    
+    // Start server with timeout
+    withTimeout(SERVER_TIMEOUT_SECONDS.seconds) {
+        noisePaymentService.startBackgroundServer(DEFAULT_PORT, externalHost) { request ->
+            // Store received payment request
+            paymentRequestStorage.savePaymentRequest(paymentRequest)
+            // Show notification
+            pushNotification(title = "Payment Request", body = "From ${request.payerPubkey}")
+        }
+    }
+    return Result.success()
+}
+```
+
+**NoisePaymentViewModel (UI integration):**
+For interactive Noise payment flows in the UI:
+- `NoisePaymentViewModel.sendPayment(request)` - Send payment via Noise channel
+- `NoisePaymentViewModel.authenticateAndPay()` - Biometric auth before payment
+- Exposes `isConnecting`, `isConnected`, `paymentResponse`, `errorMessage` states
+
+**Key implementation files:**
+- `NoisePaymentService.kt` / `.swift` - Core Noise protocol implementation
+- `NoiseServerWorker.kt` - Background push-wake payment handling (Android)
+- `NoisePaymentViewModel.kt` / `.swift` - UI state management for Noise payments
+- `NoiseKeyCache.kt` / `.swift` - Persistent X25519 keypair storage
+
 ### 8.4 Subscriptions
 
 **Sender-Storage Model for Subscription Proposals:**
 Like payment requests, subscription proposals are stored on the **provider's** homeserver:
 - Path: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
 - `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))`
-- Mandatory Sealed Blob v1 encryption
+- Mandatory Sealed Blob encryption
 - Subscribers poll providers' storage to discover proposals
 - Subscribers cannot delete proposals from provider storage (local dedup only)
 
@@ -1904,6 +2056,49 @@ try await paykitClient.enableAutoPay(
 2. For each provider, list `/{provider}/pub/paykit.app/v0/subscriptions/proposals/{my_scope}/`
 3. Decrypt each proposal using subscriber's Noise secret key
 4. Accept/decline locally (cannot delete from provider's storage)
+
+**Sent Proposals Tracking (Provider Side):**
+Providers track sent proposals locally for management:
+- `SubscriptionProposalStorage.saveSentProposal()` - track outgoing proposals
+- `SubscriptionProposalStorage.listSentProposals()` - list all sent proposals
+- `SubscriptionProposalStorage.deleteSentProposal()` - remove local tracking after cancellation
+
+**Cleanup Orphaned Proposals:**
+Proposals may become orphaned on the homeserver (e.g., after app reinstall, session issues):
+
+```kotlin
+// Android - SubscriptionsViewModel.kt
+fun cleanupOrphanedProposals() {
+    viewModelScope.launch {
+        val sentProposals = proposalStorage.listSentProposals(ownerPubkey)
+        
+        // Group tracked IDs by recipient to avoid cross-recipient false matches
+        val trackedIdsByRecipient = sentProposals.groupBy(
+            keySelector = { it.recipientPubkey },
+            valueTransform = { it.id }
+        ).mapValues { it.value.toSet() }
+        
+        var totalDeleted = 0
+        for ((recipientPubkey, trackedIds) in trackedIdsByRecipient) {
+            val homeserverIds = directoryService.listProposalsOnHomeserver(recipientPubkey)
+            val orphanedIds = homeserverIds.filter { it !in trackedIds }
+            if (orphanedIds.isNotEmpty()) {
+                totalDeleted += directoryService.deleteProposalsBatch(orphanedIds, recipientPubkey)
+            }
+        }
+    }
+}
+```
+
+**Key implementation files:**
+- Android: `SubscriptionsViewModel.kt`, `SubscriptionProposalStorage.kt`, `DirectoryService.kt`
+- iOS: `SubscriptionsViewModel.swift`, `SubscriptionStorage.swift`, `DirectoryService.swift`
+
+**DirectoryService cleanup APIs:**
+- `listProposalsOnHomeserver(subscriberPubkey)` - list all proposal IDs for a subscriber
+- `deleteProposalsBatch(proposalIds, subscriberPubkey)` - delete multiple proposals
+
+**CRITICAL**: Tracked IDs must be scoped per-recipient when comparing against homeserver listings. Using a global tracked ID set could cause false matches if the same proposal ID exists for different recipients.
 
 ### 8.5 Spending Limits
 
@@ -2440,6 +2635,19 @@ Before release, manually verify:
 - [ ] Background subscription check runs
 - [ ] App recovers from network failure
 - [ ] Keys persist across app restart
+- [ ] Send subscription proposal (using contacts picker)
+- [ ] Verify proposal appears in Sent tab
+- [ ] Cancel sent proposal
+- [ ] Cleanup orphaned proposals works
+- [ ] Accept/decline incoming proposal
+- [ ] Create/edit profile (name, bio, image)
+- [ ] Profile image upload completes
+- [ ] Add contact via pubkey
+- [ ] Remove contact (unfollow)
+- [ ] Contact picker shows synced contacts
+
+**Subscription Testing Runbook:**
+See `bitkit-android/docs/SUBSCRIPTIONS_LOCAL_TESTING.md` for detailed subscription testing scenarios including contacts picker usage, Sent tab management, and cleanup orphaned proposals.
 
 ### 11.5 E2E Test Scenarios
 
@@ -2643,6 +2851,99 @@ Blueprint requirements:
 - Check rate limiting isn't triggered
 - Ensure both sides support Noise_IK
 
+### Sealed Blob Decryption Errors
+
+**"E006: Decryption failed" or "Failed to decrypt/parse payment request"**
+
+This error indicates the recipient cannot decrypt a payment request or subscription proposal. Common causes:
+
+1. **Noise Key Sync Issue (Most Common)**
+   - The recipient's published Noise endpoint contains a different public key than their local Noise secret key
+   - Senders encrypt to the published key, but the recipient has a different local key for decryption
+   - **Diagnosis**: Compare `myNoisePk` in logs with published endpoint's `serverNoisePubkey`
+   - **Solution**: Reconnect to Pubky Ring to re-sync keys
+
+2. **Key Rotation Mismatch**
+   - Sender encrypted with epoch 1 key, but recipient only has epoch 0 cached
+   - **Diagnosis**: Check epoch values in decryption logs
+   - **Solution**: Request fresh keypairs from Ring including both epochs
+
+3. **AAD Mismatch**
+   - The Additional Authenticated Data used for encryption doesn't match decryption
+   - Usually indicates a path or ID mismatch between sender and recipient
+   - **Diagnosis**: Log and compare AAD strings on both sides
+
+**Implementing Key Sync Diagnostics (Recommended)**
+
+Add this check in `decryptAndParsePaymentRequest()` to detect key sync issues:
+
+```swift
+// iOS - DirectoryService.swift
+if let publishedEndpoint = try? await discoverNoiseEndpoint(for: myPubkey) {
+    if publishedEndpoint.serverNoisePubkey != noiseKeypair.publicKey {
+        Logger.error("KEY MISMATCH: Local key \(noiseKeypair.publicKey.prefix(16))... != published \(publishedEndpoint.serverNoisePubkey.prefix(16))...")
+        Logger.error("Please reconnect to Pubky Ring to fix key sync")
+    }
+}
+```
+
+```kotlin
+// Android - DirectoryService.kt
+val publishedEndpoint = discoverNoiseEndpoint(recipientPubkey)
+if (publishedEndpoint != null && publishedEndpoint.serverNoisePubkey != noiseKeypair.publicKey) {
+    Logger.error("KEY MISMATCH: Local key ${noiseKeypair.publicKey.take(16)}... != published ${publishedEndpoint.serverNoisePubkey.take(16)}...", context = TAG)
+    Logger.error("Please reconnect to Pubky Ring to fix key sync", context = TAG)
+}
+```
+
+**Detailed Decryption Logging (Recommended)**
+
+Add comprehensive logging before decryption attempts:
+
+```swift
+// iOS
+Logger.info("Decrypting request \(requestId):", context: "DirectoryService")
+Logger.info("  - myPubkey: \(myPubkey)", context: "DirectoryService")
+Logger.info("  - myNoisePk (first 16 hex): \(noiseKeypair.publicKey.prefix(32))...", context: "DirectoryService")
+Logger.info("  - epoch: \(noiseKeypair.epoch)", context: "DirectoryService")
+Logger.info("  - AAD: \(aad)", context: "DirectoryService")
+```
+
+```kotlin
+// Android
+Logger.info("Decrypting request $requestId:", context = TAG)
+Logger.info("  - myPubkey: $recipientPubkey", context = TAG)
+Logger.info("  - myNoisePk (first 16 hex): ${noiseKeypair.publicKey.take(32)}...", context = TAG)
+Logger.info("  - epoch: 0", context = TAG)
+Logger.info("  - AAD: $aad", context = TAG)
+```
+
+### Payment Request Discovery Issues
+
+**"0 requests found" but requests were sent**
+
+1. **Discovery Source**: Ensure discovery uses `directoryService.fetchFollows()` (network) NOT `contactStorage.listContacts()` (local)
+2. **Scope Mismatch**: Verify sender computed recipient scope correctly using `PaykitV0Protocol.recipientScope()`
+3. **Encryption Target**: Sender must encrypt to recipient's published Noise public key
+4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
+
+**Requests not persisted to UI after discovery**
+
+Ensure discovered requests are persisted to local storage before processing:
+
+```swift
+// iOS - PaykitPollingService
+let request = BitkitPaymentRequest(...)
+try storage.addRequest(request)
+storage.markRequestAsSeen(id: request.id)
+```
+
+```kotlin
+// Android - PaykitPollingWorker
+paymentRequestStorage.addRequest(paymentRequest)
+seenRequestIds.add(request.requestId)
+```
+
 ---
 
 ## 15. Future Work
@@ -2755,6 +3056,16 @@ This comprehensive checklist covers everything the production team must verify b
 - [ ] Subscriptions create and persist correctly
 - [ ] Auto-pay evaluates rules and executes payments
 - [ ] Spending limits enforce correctly
+- [ ] Subscription proposals sent via contacts picker
+- [ ] Sent proposals tracked in Sent tab
+- [ ] Proposal cancellation works correctly
+- [ ] Cleanup orphaned proposals deletes stale homeserver data
+- [ ] Cache invalidation refreshes proposal data correctly
+- [ ] Profile publishing works (name, bio, image)
+- [ ] Profile image upload works (blob + file metadata)
+- [ ] Contacts sync from Pubky follows
+- [ ] Add/remove follow updates homeserver
+- [ ] Contact picker shows available contacts
 
 ### 16.7 Error Handling
 
@@ -2826,11 +3137,11 @@ The following architectural improvements were implemented to enhance security, r
 
 **Problem**: Session secrets passed in callback URLs are vulnerable to logging/leaks. Plaintext storage on homeserver is readable by anyone who discovers the path.
 
-**Solution (v2)**: Encrypt handoff payload using Sealed Blob v1 before storage. Bitkit generates ephemeral X25519 keypair, Ring encrypts to it, Bitkit decrypts.
+**Solution (v2)**: Encrypt handoff payload using Sealed Blob before storage. Bitkit generates ephemeral X25519 keypair, Ring encrypts to it, Bitkit decrypts.
 
 **Benefits**:
 - No secrets in URLs (immune to logging attacks)
-- **Secrets encrypted at rest** (Sealed Blob v1 with AEAD)
+- **Secrets encrypted at rest** (Sealed Blob with AEAD)
 - 256-bit random path (unguessable, 2^256 combinations)
 - 5-minute TTL (time-limited exposure)
 - Immediate deletion after fetch (defense in depth)
@@ -2847,7 +3158,7 @@ The following architectural improvements were implemented to enhance security, r
 8. Bitkit deletes payload immediately after fetch
 
 **Security Properties**:
-- **Encrypted at rest**: Sealed Blob v1 (X25519 + ChaCha20-Poly1305)
+- **Encrypted at rest**: Sealed Blob (X25519 + ChaCha20-Poly1305)
 - **Path unguessability**: 256-bit random request_id
 - **AAD binding**: `paykit:v0:handoff:{pubky}:{path}:{requestId}` prevents replay
 - **Time-limited**: 5-minute `expires_at` timestamp in payload
@@ -2951,7 +3262,7 @@ paykit-lib/
     ├── mod.rs                    # Protocol constants
     ├── scope.rs                  # Pubkey normalization + SHA-256 scope hashing
     ├── paths.rs                  # Canonical path builders
-    └── aad.rs                    # AAD builders for Sealed Blob v1
+    └── aad.rs                    # AAD builders for Sealed Blob
 
 paykit-mobile/
 ├── src/lib.rs                    # FFI exports + execute_with_fallbacks
@@ -3008,17 +3319,30 @@ Bitkit/
     │   └── PubkyNoise.xcframework  # Rebuilt with x25519GenerateKeypair + sealedBlobDecrypt
     ├── Protocol/
     │   └── PaykitV0Protocol.swift  # Canonical path/AAD builders (matches Rust)
+    ├── ViewModels/
+    │   ├── SubscriptionsViewModel.swift # Subscriptions management + cleanup orphaned proposals
+    │   └── ContactsViewModel.swift  # Contacts from Pubky follows sync
     ├── Services/
     │   ├── PaykitManager.swift
-    │   ├── DirectoryService.swift  # Updated: homeserverURL tracking, adapter init
+    │   ├── DirectoryService.swift  # Updated: follows, profiles, proposals, subscriptions
     │   ├── PubkyStorageAdapter.swift # Updated: ownerPubkey in constructor
     │   ├── PubkyRingBridge.swift   # Updated: homeserverURL in session
     │   ├── SecureHandoffHandler.swift # Updated: uses sealedBlobDecrypt
     │   ├── PaykitPaymentService.swift
     │   ├── PaykitPollingService.swift
+    │   ├── SubscriptionBackgroundService.swift # Background subscription processing
     │   └── NoisePaymentService.swift
-    ├── Storage/PaykitKeychainStorage.swift
-    └── Views/*.swift               # UI components
+    ├── Storage/
+    │   ├── PaykitKeychainStorage.swift
+    │   ├── SubscriptionStorage.swift # Subscription + proposal storage with caching
+    │   └── ContactStorage.swift    # Local contact data persistence
+    ├── Models/
+    │   ├── Subscription.swift      # Subscription data model
+    │   └── Contact.swift           # Contact data model
+    └── Views/
+        ├── PaykitSubscriptionsView.swift # Subscriptions UI with Sent tab
+        ├── PaykitContactsView.swift # Contacts list UI
+        └── ContactDetailView.swift  # Contact detail view
 ```
 
 **bitkit-android files created/modified:**
@@ -3030,28 +3354,53 @@ app/src/main/java/
 └── to/bitkit/paykit/
     ├── protocol/
     │   └── PaykitV0Protocol.kt     # Canonical path/AAD builders (matches Rust)
+    ├── viewmodels/
+    │   ├── SubscriptionsViewModel.kt # Subscriptions + cleanup orphaned proposals (per-recipient scoped)
+    │   ├── ContactsViewModel.kt    # Contacts from Pubky follows sync
+    │   └── NoisePaymentViewModel.kt # Noise payment UI state management
     ├── services/
     │   ├── PaykitManager.kt
-    │   ├── DirectoryService.kt     # Updated: homeserverURL tracking, adapter init
+    │   ├── DirectoryService.kt     # Updated: follows, profiles, proposals, subscriptions
+    │   ├── ImageUploadService.kt   # Profile image upload (pubky-app-specs compliant)
     │   ├── PubkyStorageAdapter.kt  # Updated: ownerPubkey in constructor
     │   ├── PubkyRingBridge.kt      # Updated: x25519GenerateKeypair, homeserverURL
     │   ├── SecureHandoffHandler.kt # Updated: uses sealedBlobDecrypt
     │   └── PaykitPaymentService.kt # Updated with fallback loop
     ├── workers/
-    │   └── PaykitPollingWorker.kt  # Updated for contact polling
+    │   ├── PaykitPollingWorker.kt  # Updated for contact polling
+    │   ├── SubscriptionCheckWorker.kt # Background subscription due processing
+    │   └── NoiseServerWorker.kt    # Background push-wake Noise payment handling
     ├── storage/
-    │   └── PaykitKeychainStorage.kt # Added setStringSync/deleteSync
+    │   ├── PaykitKeychainStorage.kt # Added setStringSync/deleteSync
+    │   ├── SubscriptionStorage.kt   # Subscription persistence
+    │   ├── SubscriptionProposalStorage.kt # Proposal tracking with cache invalidation
+    │   └── ContactStorage.kt       # Local contact data persistence
+    ├── models/
+    │   ├── Subscription.kt         # Subscription data model
+    │   ├── SubscriptionProposal.kt # Proposal data model
+    │   └── Contact.kt              # Contact data model
     ├── types/
     │   └── HomeserverTypes.kt      # Added homeserverURL to PubkySession
-    └── ui/screens/*.kt             # UI components
+    └── ui/paykit/
+        ├── PaykitSubscriptionsScreen.kt # Subscriptions UI with Sent tab
+        ├── SubscriptionDetailScreen.kt  # Subscription detail view
+        ├── PaykitContactsScreen.kt # Contacts list UI
+        ├── ContactDetailScreen.kt  # Contact detail view
+        └── ContactPickerSheet.kt   # Contact selection for payments/proposals
 
 app/src/main/jniLibs/
 ├── arm64-v8a/libpubky_noise.so     # Rebuilt Jan 2026
 └── x86_64/libpubky_noise.so        # Rebuilt Jan 2026
 
-app/src/test/java/
-└── to/bitkit/paykit/protocol/
-    └── PaykitV0ProtocolTest.kt     # Cross-platform test vectors
+app/src/test/java/to/bitkit/paykit/
+├── protocol/
+│   └── PaykitV0ProtocolTest.kt     # Cross-platform test vectors
+├── viewmodels/
+│   └── SubscriptionsViewModelTest.kt # Tests for cleanup orphaned proposals
+├── storage/
+│   └── SubscriptionProposalStorageTest.kt # Tests for invalidateCache, proposal tracking
+└── services/
+    └── DirectoryServiceTest.kt     # Tests for listProposalsOnHomeserver, deleteProposalsBatch
 ```
 
 ### B. Dependency Versions

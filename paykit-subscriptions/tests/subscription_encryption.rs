@@ -1,8 +1,9 @@
 //! Tests for encrypted subscription storage
 //!
 //! These tests verify that subscription proposals, agreements, and cancellations
-//! are properly encrypted using Paykit Sealed Blob v1 and can be decrypted
-//! with the correct Noise secret key.
+//! are properly encrypted using Paykit Sealed Blob v2 (XChaCha20-Poly1305) and can
+//! be decrypted with the correct Noise secret key. Decryption is backward compatible
+//! with Sealed Blob v1.
 
 use paykit_lib::{MethodId, PublicKey};
 use paykit_subscriptions::{
@@ -285,5 +286,60 @@ fn test_legacy_plaintext_detection() {
     assert!(
         check_sealed_blob(&envelope),
         "Encrypted envelope should be detected as sealed blob"
+    );
+}
+
+#[test]
+fn test_v2_envelope_has_correct_version() {
+    let (_, pk) = random_x25519_keypair();
+    let plaintext = b"test data";
+    let aad = "test:aad";
+
+    let envelope_json = encrypt_blob(&pk, plaintext, aad, None).expect("Encryption should succeed");
+
+    // Parse and verify v2
+    let envelope: serde_json::Value = serde_json::from_str(&envelope_json).unwrap();
+    assert_eq!(
+        envelope["v"].as_u64().unwrap(),
+        2,
+        "Sealed Blob should produce v2 envelopes"
+    );
+
+    // v2 uses 24-byte nonce (32 chars in base64url)
+    let nonce = envelope["nonce"].as_str().unwrap();
+    assert!(
+        nonce.len() >= 32,
+        "v2 nonce should be 24 bytes (at least 32 base64url chars)"
+    );
+}
+
+#[test]
+fn test_is_sealed_blob_detects_v1_and_v2() {
+    // v1 envelope
+    assert!(
+        check_sealed_blob(r#"{"v":1,"epk":"abc","nonce":"def","ct":"ghi"}"#),
+        "Should detect v1 sealed blob"
+    );
+
+    // v2 envelope
+    assert!(
+        check_sealed_blob(r#"{"v":2,"epk":"abc","nonce":"defdefdefdefdefdefdefdefdefdef","ct":"ghi"}"#),
+        "Should detect v2 sealed blob"
+    );
+
+    // Missing epk
+    assert!(
+        !check_sealed_blob(r#"{"v":1,"nonce":"def","ct":"ghi"}"#),
+        "Should reject v1 without epk"
+    );
+    assert!(
+        !check_sealed_blob(r#"{"v":2,"nonce":"def","ct":"ghi"}"#),
+        "Should reject v2 without epk"
+    );
+
+    // Unsupported version
+    assert!(
+        !check_sealed_blob(r#"{"v":99,"epk":"abc","nonce":"def","ct":"ghi"}"#),
+        "Should reject unsupported version"
     );
 }

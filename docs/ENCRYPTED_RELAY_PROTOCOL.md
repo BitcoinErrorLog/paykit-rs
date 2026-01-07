@@ -93,17 +93,19 @@ Used when Bitkit wants full Paykit setup (session + noise keys + noise_seed) via
 }
 ```
 
-### Sealed Blob v1 Envelope (stored)
+### Sealed Blob v2 Envelope (stored)
 
 ```json
 {
-  "v": 1,
+  "v": 2,
   "epk": "<base64url sender ephemeral public key>",
-  "nonce": "<base64url 12-byte nonce>",
+  "nonce": "<base64url 24-byte nonce>",
   "ct": "<base64url ciphertext + tag>",
   "purpose": "handoff"
 }
 ```
+
+> **Note**: Decryption also supports legacy v1 envelopes (12-byte nonce, `v: 1`).
 
 ## Deprecated Flows (DISABLED)
 
@@ -137,7 +139,7 @@ PUT /pub/paykit.app/v0/handoff/{requestId}
 
 | Property | Same-Device Handoff | Cross-Device Relay |
 |----------|--------------------|--------------------|
-| Secrets encrypted | ✅ Sealed Blob v1 | ✅ client_secret |
+| Secrets encrypted | ✅ Sealed Blob v2 | ✅ client_secret |
 | No URL secrets | ✅ reference only | ✅ reference only |
 | Forward secrecy | ✅ ephemeral X25519 | ⚠️ per-QR secret |
 | TTL enforcement | ✅ 5 minutes | ✅ 45 seconds |
@@ -145,7 +147,7 @@ PUT /pub/paykit.app/v0/handoff/{requestId}
 
 ## Implementation Checklist
 
-- [x] Ring: Encrypt same-device handoff with Sealed Blob v1
+- [x] Ring: Encrypt same-device handoff with Sealed Blob v2
 - [x] Bitkit: Reject plaintext homeserver handoff payloads
 - [x] Bitkit: Reject plaintext cross-device callback URLs
 - [x] Cross-device relay: Already uses client_secret encryption

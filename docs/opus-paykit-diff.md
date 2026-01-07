@@ -220,7 +220,7 @@ The PDF implies **security by URL obscurity** with optional encryption.
 No "private list by URL" abstraction exists. Privacy is handled via:
 
 1. **Noise Protocol channels** for interactive payments
-2. **Sealed Blob v1 encryption** for stored sensitive data
+2. **Sealed Blob encryption** for stored sensitive data
 3. **Private endpoint manager** for per-peer local storage
 
 ```rust
@@ -255,7 +255,7 @@ pub async fn store_endpoint(
 
 **Update the spec** to describe:
 - Noise endpoint discovery at `/pub/paykit.app/v0/noise`
-- Sealed Blob v1 format for encrypted storage
+- Sealed Blob format for encrypted storage
 - Per-peer private endpoint exchange over encrypted channels
 
 ---
@@ -398,7 +398,7 @@ The PDF's daemon vision is **server-oriented** (always-on, SQLite DB, LND connec
 
 | Implementation | Path Format | Encryption |
 |----------------|-------------|------------|
-| `paykit-subscriptions` | `/pub/paykit.app/v0/requests/{request_id}` | Sealed Blob v1 |
+| `paykit-subscriptions` | `/pub/paykit.app/v0/requests/{request_id}` | Sealed Blob |
 | Bitkit Android | `/pub/paykit.app/v0/requests/{recipient}/{id}` | Plaintext JSON |
 | Bitkit iOS | `/pub/paykit.app/v0/requests/{recipient}/{id}` | Plaintext JSON |
 
@@ -435,7 +435,7 @@ val result = adapter.put(path, requestJson)  // Plaintext!
    - Option B: `/pub/paykit.app/v0/requests/{recipient}/{request_id}` (recipient-inbox model)
 
 2. Decide on **encryption policy**:
-   - Sealed Blob v1 should be **mandatory** for payment requests (they contain sensitive data)
+   - Sealed Blob should be **mandatory** for payment requests (they contain sensitive data)
 
 3. Update all implementations to match.
 

@@ -109,7 +109,7 @@ Critical security fix for plaintext secrets stored in publicly accessible `/pub/
 Recipients must have a Noise endpoint published at `/pub/paykit.app/v0/noise` before receiving encrypted requests or subscriptions. Both Bitkit iOS and Android publish this via `DirectoryService.publishNoiseEndpoint()`.
 
 #### Documentation
-- `docs/SEALED_BLOB_V1_SPEC.md`: Complete specification for encrypted envelope format
+- `docs/SEALED_BLOB_SPEC.md`: Complete specification for encrypted envelope format (v2 current, v1 legacy)
 - `docs/SECURITY_ARCHITECTURE.md`: Updated threat model and mitigation documentation
   - Cross-device relay security audit (conclusion: already secure)
   - Push relay security audit (conclusion: secure, tokens never public)

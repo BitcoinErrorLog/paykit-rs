@@ -1,6 +1,9 @@
-# Paykit Sealed Blob v1 Specification
+# Paykit Sealed Blob Specification (v1 and v2)
 
 This document specifies the encrypted envelope format used for storing secret-bearing data on Pubky homeservers. Since all data under `/pub/` is publicly readable, any sensitive payload must be encrypted before storage.
+
+**Current Version**: v2 (XChaCha20-Poly1305)  
+**Backward Compatible**: Decryption supports both v1 and v2
 
 ## Table of Contents
 
@@ -29,32 +32,59 @@ All blobs use **ephemeral-static ECDH** (sender generates ephemeral keypair, enc
 
 ## Cryptographic Primitives
 
+### Version 2 (Current)
+
 | Primitive | Algorithm | Library |
 |-----------|-----------|---------|
 | Key Agreement | X25519 ECDH | `x25519-dalek` |
 | Key Derivation | HKDF-SHA256 | `hkdf` crate |
-| AEAD | ChaCha20-Poly1305 | `chacha20poly1305` crate |
-| Nonce | 12 bytes random | `rand` crate |
+| AEAD | XChaCha20-Poly1305 | `chacha20poly1305` crate |
+| Nonce | 24 bytes random | `rand` crate |
+
+### Version 1 (Legacy, Decryption Only)
+
+| Primitive | Algorithm |
+|-----------|-----------|
+| AEAD | ChaCha20-Poly1305 |
+| Nonce | 12 bytes random |
 
 ### Key Derivation
 
+**v2**:
 ```
 shared_secret = X25519(sender_ephemeral_sk, recipient_static_pk)
 salt          = sender_ephemeral_pk || recipient_static_pk  (64 bytes)
-info          = b"paykit-sealed-blob-v1"
+info          = b"pubky-envelope/v2"
 key           = HKDF-SHA256(salt, shared_secret, info, 32)
+```
+
+**v1** (legacy):
+```
+info          = b"paykit-sealed-blob-v1"
 ```
 
 ### Nonce Generation
 
-- 12 bytes from cryptographically secure RNG
+- **v2**: 24 bytes from cryptographically secure RNG (XChaCha20 extended nonce)
+- **v1** (legacy): 12 bytes random
 - Never reused for the same key (ephemeral key ensures uniqueness)
 
 ---
 
 ## Envelope Format
 
-The envelope is a JSON object with the following fields:
+### v2 Envelope (Current)
+
+```json
+{
+  "v": 2,
+  "epk": "<base64url-encoded sender ephemeral public key, 32 bytes>",
+  "nonce": "<base64url-encoded nonce, 24 bytes>",
+  "ct": "<base64url-encoded ciphertext + 16-byte Poly1305 tag>"
+}
+```
+
+### v1 Envelope (Legacy)
 
 ```json
 {
@@ -69,9 +99,9 @@ The envelope is a JSON object with the following fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `v` | integer | Yes | Version number. Must be `1` for this spec. |
+| `v` | integer | Yes | Version number. `1` for legacy, `2` for current. |
 | `epk` | string | Yes | Sender's ephemeral X25519 public key, base64url-encoded (no padding). |
-| `nonce` | string | Yes | 12-byte nonce, base64url-encoded (no padding). |
+| `nonce` | string | Yes | Nonce, base64url-encoded (24 bytes for v2, 12 bytes for v1). |
 | `ct` | string | Yes | Ciphertext concatenated with 16-byte Poly1305 authentication tag, base64url-encoded (no padding). |
 
 ### Optional Fields
@@ -139,7 +169,7 @@ On decryption:
 
 ## Operations
 
-### Encrypt (Seal)
+### Encrypt (Seal) — v2
 
 **Inputs**:
 - `recipient_pk`: Recipient's X25519 public key (32 bytes)
@@ -152,16 +182,16 @@ On decryption:
 2. Compute shared_secret = X25519(esk, recipient_pk)
 3. Derive key via HKDF:
    salt = epk || recipient_pk
-   key = HKDF-SHA256(salt, shared_secret, b"paykit-sealed-blob-v1", 32)
-4. Generate random 12-byte nonce
-5. Encrypt: ct = ChaCha20-Poly1305.seal(key, nonce, plaintext, aad)
+   key = HKDF-SHA256(salt, shared_secret, b"pubky-envelope/v2", 32)
+4. Generate random 24-byte nonce
+5. Encrypt: ct = XChaCha20-Poly1305.seal(key, nonce, plaintext, aad)
 6. Zeroize: esk, shared_secret, key
-7. Return Envelope { v: 1, epk, nonce, ct }
+7. Return Envelope { v: 2, epk, nonce, ct }
 ```
 
 **Output**: JSON-encoded envelope
 
-### Decrypt (Open)
+### Decrypt (Open) — v1/v2 Auto-Detect
 
 **Inputs**:
 - `recipient_sk`: Recipient's X25519 secret key (32 bytes)
@@ -171,13 +201,17 @@ On decryption:
 **Algorithm**:
 ```
 1. Parse envelope JSON
-2. Verify v == 1
+2. Read v field
 3. Decode epk, nonce, ct from base64url
 4. Compute shared_secret = X25519(recipient_sk, epk)
-5. Derive key via HKDF:
-   salt = epk || recipient_pk  (where recipient_pk = X25519_public_from_secret(recipient_sk))
-   key = HKDF-SHA256(salt, shared_secret, b"paykit-sealed-blob-v1", 32)
-6. Decrypt: plaintext = ChaCha20-Poly1305.open(key, nonce, ct, aad)
+5. Derive key via HKDF (version-specific info string):
+   salt = epk || recipient_pk
+   if v == 1: key = HKDF-SHA256(salt, shared_secret, b"paykit-sealed-blob-v1", 32)
+   if v == 2: key = HKDF-SHA256(salt, shared_secret, b"pubky-envelope/v2", 32)
+   else: return UNSUPPORTED_VERSION
+6. Decrypt (version-specific AEAD):
+   if v == 1: plaintext = ChaCha20-Poly1305.open(key, nonce, ct, aad)
+   if v == 2: plaintext = XChaCha20-Poly1305.open(key, nonce, ct, aad)
 7. Zeroize: shared_secret, key
 8. Return plaintext
 ```
@@ -192,12 +226,12 @@ On decryption:
 
 | Error | Code | Description |
 |-------|------|-------------|
-| `UNSUPPORTED_VERSION` | E001 | Envelope `v` field is not `1` |
+| `UNSUPPORTED_VERSION` | E001 | Envelope `v` field is not `1` or `2` |
 | `MALFORMED_ENVELOPE` | E002 | JSON parsing failed or required fields missing |
 | `INVALID_BASE64` | E003 | Base64url decoding failed for epk/nonce/ct |
 | `INVALID_KEY_SIZE` | E004 | epk is not 32 bytes after decoding |
-| `INVALID_NONCE_SIZE` | E005 | nonce is not 12 bytes after decoding |
-| `DECRYPTION_FAILED` | E006 | ChaCha20-Poly1305 authentication failed |
+| `INVALID_NONCE_SIZE` | E005 | nonce is not 12 bytes (v1) or 24 bytes (v2) after decoding |
+| `DECRYPTION_FAILED` | E006 | AEAD authentication failed |
 | `PLAINTEXT_TOO_LARGE` | E007 | Plaintext exceeds 64 KiB limit |
 
 ### Error Behavior
@@ -211,23 +245,33 @@ On decryption:
    - These reveal no secret information
 
 3. **Version errors allow graceful upgrade**
-   - If `v > 1`, return `UNSUPPORTED_VERSION` with the version number
+   - If `v` is not `1` or `2`, return `UNSUPPORTED_VERSION` with the version number
    - Allows clients to prompt for app update
 
 ---
 
 ## Versioning
 
-### Current Version: 1
+### Current Version: 2
 
-This specification is version 1. The `v` field in the envelope indicates the version.
+This specification defines version 2 as the current encryption format. Decryption supports both v1 (legacy) and v2.
+
+| Version | Status | AEAD | Nonce | HKDF Info |
+|---------|--------|------|-------|-----------|
+| 2 | Current | XChaCha20-Poly1305 | 24 bytes | `pubky-envelope/v2` |
+| 1 | Legacy (decrypt only) | ChaCha20-Poly1305 | 12 bytes | `paykit-sealed-blob-v1` |
+
+### Version History
+
+- **v2** (January 2026): Upgraded to XChaCha20-Poly1305 with 24-byte nonce for better security margins
+- **v1** (December 2025): Initial version using ChaCha20-Poly1305 with 12-byte nonce
 
 ### Future Versions
 
 When a new version is introduced:
 1. Increment `v` field
 2. Document changes in this spec
-3. Clients should attempt v1 decryption as fallback during migration
+3. Decryption should auto-detect and handle all supported versions
 4. Old clients return `UNSUPPORTED_VERSION` for unknown versions
 
 ### Breaking vs Non-Breaking Changes
@@ -251,7 +295,7 @@ When a new version is introduced:
 
 | Threat | Mitigation |
 |--------|------------|
-| Passive eavesdropper | X25519 ECDH + ChaCha20-Poly1305 encryption |
+| Passive eavesdropper | X25519 ECDH + XChaCha20-Poly1305 encryption (v2) |
 | Active tampering | Poly1305 authentication tag |
 | Blob relocation | AAD binding to path and owner |
 | Key reuse attacks | Ephemeral sender key per blob |
@@ -335,7 +379,7 @@ fun x25519PublicFromSecret(secret: ByteArray): ByteArray
 
 ## Test Vectors
 
-### Vector 1: Basic Encryption
+### Vector 1: v2 Basic Encryption
 
 **Inputs**:
 ```
@@ -344,22 +388,22 @@ recipient_pk (hex): 0x8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa
 plaintext (utf8): "hello world"
 aad: "handoff:testpubkey123:/pub/paykit.app/v0/handoff/abc"
 ephemeral_sk (hex): 0x5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb
-nonce (hex): 0x000000000000000000000001
+nonce (hex): 0x000000000000000000000000000000000000000000000001 (24 bytes)
 ```
 
 **Expected Envelope** (field values, not full JSON due to ephemeral key):
 ```
-v: 1
-epk: base64url of 0xde9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f
-nonce: base64url of 0x000000000000000000000001
+v: 2
+epk: base64url of ephemeral public key
+nonce: base64url of 24-byte nonce
 ct: <authenticated ciphertext>
 ```
 
-Note: Actual test vectors with computed ciphertext will be added during implementation.
+See `pubky-noise/tests/fixtures/test_vectors.json` for cross-language test vectors with frozen ciphertext.
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: January 2, 2026  
-**Status**: Specification - Implementation Required
+**Document Version**: 2.0  
+**Last Updated**: January 7, 2026  
+**Status**: Specification - v2 Implemented
 

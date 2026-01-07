@@ -280,7 +280,7 @@ This is application-specific, not a standalone daemon component.
 
 ### Evidence
 
-- `pubky-ring/src/utils/actions/paykitConnectAction.ts`: requires `ephemeralPk`, encrypts payload with Sealed Blob v1, stores at `/pub/paykit.app/v0/handoff/{request_id}` with AAD `handoff:{pubky}:{storagePath}`.
+- `pubky-ring/src/utils/actions/paykitConnectAction.ts`: requires `ephemeralPk`, encrypts payload with Sealed Blob, stores at `/pub/paykit.app/v0/handoff/{request_id}` with AAD `handoff:{pubky}:{storagePath}`.
 - `bitkit-android/app/src/main/java/to/bitkit/paykit/services/SecureHandoffHandler.kt`: detects sealed blobs and decrypts using `com.pubky.noise.sealedBlobDecrypt(...)` with the same AAD construction.
 - `bitkit-ios/Bitkit/PaykitIntegration/Services/SecureHandoffHandler.swift`: decrypts sealed blobs and persists `noise_seed` for local epoch derivation.
 
@@ -324,7 +324,7 @@ let plaintextData = try sealedBlobDecrypt(
 
 ### Impact vs PDF
 
-PDF’s “private lists optionally encrypted via URL” is effectively replaced by sealed-blob encrypted public storage + unguessable IDs. Bitkit Android and iOS both include Sealed Blob v1 decryption paths, and both still contain legacy plaintext fallback handling.
+PDF’s “private lists optionally encrypted via URL” is effectively replaced by sealed-blob encrypted public storage + unguessable IDs. Bitkit Android and iOS both include Sealed Blob decryption paths, and both still contain legacy plaintext fallback handling.
 
 ## 9) Payment Requests / “send arbitrary data to URL” (PDF) vs current implementation
 
@@ -377,7 +377,7 @@ Bitkit Android/iOS polling lists `/pub/paykit.app/v0/requests/{ownerPubkey}/` in
 
 ### Additional drift: subscriptions proposal paths and encryption
 
-- `paykit-subscriptions/src/manager.rs`: stores subscription proposals encrypted (Sealed Blob v1) under `/pub/paykit.app/subscriptions/proposals/{provider}/{subscription_id}` (note: not under `/v0/`).
+- `paykit-subscriptions/src/manager.rs`: stores subscription proposals encrypted (Sealed Blob) under `/pub/paykit.app/subscriptions/proposals/{provider}/{subscription_id}` (note: not under `/v0/`).
 - Bitkit Android/iOS store and list subscription proposals under `/pub/paykit.app/v0/subscriptions/proposals/{recipientPubkey}/{proposalId}` and parse JSON directly.
 
 ### Impact vs PDF

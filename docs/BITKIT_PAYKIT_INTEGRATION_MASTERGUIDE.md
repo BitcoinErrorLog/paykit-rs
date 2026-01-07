@@ -1,9 +1,19 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 2.4  
-> **Last Updated**: January 6, 2026  
+> **Version**: 2.5  
+> **Last Updated**: January 7, 2026  
 > **Status**: Production Ready - E2E Verified
+>
+> **v2.5 Changes**: Upgraded Sealed Blob from v1 to v2 across all platforms. Key changes:
+> - **XChaCha20-Poly1305** replaces ChaCha20-Poly1305 (24-byte nonces vs 12-byte)
+> - **HKDF info string** updated from `paykit-sealed-blob-v1` to `pubky-envelope/v2`
+> - **Auto-detection**: `sealed_blob_decrypt()` handles both v1 and v2 envelopes automatically
+> - **Version detection**: `is_sealed_blob()` now detects both `"v":1` and `"v":2` envelopes
+> - **New encryption**: `sealed_blob_encrypt()` always produces v2 envelopes
+> - Updated native libs (pubky-noise) for Android (arm64-v8a, armeabi-v7a, x86_64) and iOS (XCFramework)
+> - Updated Kotlin bindings to use package `com.pubky.noise` (NOT `uniffi.pubky_noise`)
+> - Backward compatible: existing v1 envelopes continue to decrypt successfully
 >
 > **v2.4 Changes**: Added comprehensive Noise key sync troubleshooting section (Section 14) with
 > diagnostic patterns for detecting key mismatches between published endpoints and local keys.
@@ -215,7 +225,7 @@ This section is meant to help the Bitkit dev team review the project at a high l
 #### Invariants (things the system assumes are true)
 
 - **No secrets in callback URLs** for paykit setup (secure handoff only)
-- **Handoff payloads encrypted at rest** using Sealed Blob (ephemeral X25519 + ChaCha20-Poly1305)
+- **Handoff payloads encrypted at rest** using Sealed Blob v2 (ephemeral X25519 + XChaCha20-Poly1305)
 - **Plaintext handoff/relay payloads REJECTED** by Bitkit for security
 - **Sessions authenticate via cookie**: `Cookie: {ownerPubkey}={sessionSecret}` on authenticated homeserver requests (the session secret may be prefixed with `{pubkey}:`, in which case only the portion after the colon is used)
 - **Ring is the only signer**: Ed25519 signatures used for push relay auth are produced by Ring
@@ -225,7 +235,7 @@ This section is meant to help the Bitkit dev team review the project at a high l
 #### Review prompts (what to scrutinize)
 
 - **Security**:
-  - ✅ RESOLVED: Handoff payloads are now encrypted at rest using Sealed Blob
+  - ✅ RESOLVED: Handoff payloads are now encrypted at rest using Sealed Blob v2
   - Are callback schemes and deep link handlers hardened against spoofing and confused-deputy issues?
   - Are we leaking any secrets via logs, analytics, crash reports, or OS-level deep link telemetry?
 - **Reliability**:
@@ -610,21 +620,23 @@ pub fn public_key_from_secret(secret: &[u8]) -> [u8; 32];
 pub fn x25519_generate_keypair() -> X25519Keypair;
 // Returns: { secret_key: [u8; 32], public_key: [u8; 32] }
 
-// Sealed Blob encryption/decryption (for encrypted handoff payloads)
+// Sealed Blob v2 encryption/decryption (for encrypted handoff payloads)
+// v2 uses XChaCha20-Poly1305 with 24-byte nonces (v1 used ChaCha20-Poly1305 with 12-byte nonces)
 pub fn sealed_blob_encrypt(
     recipient_pk: &[u8],  // Recipient's X25519 public key
     plaintext: &str,      // JSON payload to encrypt
     aad: &str,            // Additional authenticated data
-    context: &str         // Context string (e.g., "handoff")
-) -> String;  // Returns encrypted envelope JSON
+    purpose: &str         // Purpose hint (e.g., "handoff", "request")
+) -> String;  // Returns v2 encrypted envelope JSON
 
 pub fn sealed_blob_decrypt(
     recipient_sk: &[u8],  // Recipient's X25519 secret key
-    envelope_json: &str,  // Encrypted envelope from sealed_blob_encrypt
+    envelope_json: &str,  // Encrypted envelope (v1 or v2 - auto-detected)
     aad: &str             // Must match the AAD used during encryption
 ) -> Result<Vec<u8>, NoiseError>;  // Returns decrypted plaintext bytes
+// Note: Auto-detects v1 vs v2 based on envelope's "v" field
 
-pub fn is_sealed_blob(json: &str) -> bool;  // Check if JSON is a Sealed Blob envelope
+pub fn is_sealed_blob(json: &str) -> bool;  // Check if JSON is a Sealed Blob envelope (v1 or v2)
 ```
 
 ---
@@ -2863,12 +2875,19 @@ This error indicates the recipient cannot decrypt a payment request or subscript
    - **Diagnosis**: Compare `myNoisePk` in logs with published endpoint's `serverNoisePubkey`
    - **Solution**: Reconnect to Pubky Ring to re-sync keys
 
-2. **Key Rotation Mismatch**
+2. **Version Mismatch (v1 vs v2)**
+   - Sender used Sealed Blob v2 (XChaCha20-Poly1305) but recipient has v1-only decryption
+   - This occurs when apps are not updated simultaneously
+   - **Diagnosis**: Check `"v":1` vs `"v":2` in the envelope JSON
+   - **Solution**: Update both sender and recipient apps to latest pubky-noise libs
+   - **Note**: As of v2.5, `sealed_blob_decrypt()` auto-detects and handles both v1 and v2
+
+3. **Key Rotation Mismatch**
    - Sender encrypted with epoch 1 key, but recipient only has epoch 0 cached
    - **Diagnosis**: Check epoch values in decryption logs
    - **Solution**: Request fresh keypairs from Ring including both epochs
 
-3. **AAD Mismatch**
+4. **AAD Mismatch**
    - The Additional Authenticated Data used for encryption doesn't match decryption
    - Usually indicates a path or ID mismatch between sender and recipient
    - **Diagnosis**: Log and compare AAD strings on both sides
@@ -3158,12 +3177,13 @@ The following architectural improvements were implemented to enhance security, r
 8. Bitkit deletes payload immediately after fetch
 
 **Security Properties**:
-- **Encrypted at rest**: Sealed Blob (X25519 + ChaCha20-Poly1305)
+- **Encrypted at rest**: Sealed Blob v2 (X25519 ECDH + XChaCha20-Poly1305 + HKDF-SHA256)
 - **Path unguessability**: 256-bit random request_id
 - **AAD binding**: `paykit:v0:handoff:{pubky}:{path}:{requestId}` prevents replay
 - **Time-limited**: 5-minute `expires_at` timestamp in payload
 - **Forward secrecy**: ephemeral X25519 keypair per handoff
 - **Plaintext rejected**: Bitkit's `isSealedBlob()` check rejects unencrypted payloads
+- **Backward compatible**: Decryption handles both v1 (ChaCha20-Poly1305) and v2 (XChaCha20-Poly1305)
 
 **Protocol Specification**: See [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md)
 

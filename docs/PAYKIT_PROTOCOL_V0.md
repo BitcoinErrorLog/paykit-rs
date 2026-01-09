@@ -17,7 +17,7 @@ This document is the canonical specification for Paykit Protocol v0. All impleme
 
 1. [Overview](#1-overview)
 2. [Directory Layout](#2-directory-layout)
-3. [Scope Derivation](#3-scope-derivation)
+3. [ContextId Derivation](#3-contextid-derivation)
 4. [Storage Model](#4-storage-model)
 5. [Encryption Requirements](#5-encryption-requirements)
 6. [Discovery Algorithm](#6-discovery-algorithm)
@@ -41,9 +41,10 @@ Paykit is a decentralized payment coordination protocol built on Pubky. It enabl
 ### Design Principles
 
 1. **Sender-Storage Model**: Senders store data on their own homeserver, not recipients'
-2. **Recipient-Scoped Directories**: Per-recipient hashed directories for privacy and discovery
-3. **Mandatory Encryption**: All payment requests and proposals use Sealed Blob
-4. **Decentralized Discovery**: Polling known contacts, not centralized notification
+2. **ContextId-Based Directories**: Symmetric peer-pair hashed directories for privacy and discovery
+3. **Mandatory Encryption**: All payment requests and proposals use Sealed Blob v2 (XChaCha20-Poly1305)
+4. **Owner-Bound AAD**: AAD includes storage owner pubkey to prevent relocation attacks
+5. **Decentralized Discovery**: Polling known contacts, not centralized notification
 
 ---
 
@@ -57,9 +58,10 @@ All Paykit v0 data is stored under `/pub/paykit.app/v0/` on user homeservers.
 |--------------|-------------|------------|
 | `/pub/paykit.app/v0/{method_id}` | Supported payment method (e.g., `lightning`) | None (public) |
 | `/pub/paykit.app/v0/noise` | Noise endpoint info (X25519 public key) | None (public) |
-| `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}` | Payment request (on sender's storage) | Sealed Blob |
-| `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}` | Subscription proposal (on provider's storage) | Sealed Blob |
-| `/pub/paykit.app/v0/handoff/{request_id}` | Secure handoff payload | Sealed Blob |
+| `/pub/paykit.app/v0/requests/{context_id}/{request_id}` | Payment request (on sender's storage) | Sealed Blob v2 |
+| `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}` | Subscription proposal (on provider's storage) | Sealed Blob v2 |
+| `/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}` | Encrypted ACK (on receiver's storage) *(specified, not yet implemented)* | Sealed Blob v2 |
+| `/pub/paykit.app/v0/handoff/{request_id}` | Secure handoff payload | Sealed Blob v2 |
 
 ### Example Directory Tree
 
@@ -69,53 +71,64 @@ All Paykit v0 data is stored under `/pub/paykit.app/v0/` on user homeservers.
 ├── onchain                       # Payment method: Bitcoin onchain
 ├── noise                         # Noise endpoint public key
 ├── requests/
-│   └── 55340b54f9184.../         # Recipient scope (64 hex chars)
-│       ├── req_001               # Encrypted payment request
-│       └── req_002               # Encrypted payment request
+│   └── 55340b54f9184.../         # ContextId (64 hex chars, symmetric)
+│       ├── req_001               # Sealed Blob v2 encrypted request
+│       └── req_002               # Sealed Blob v2 encrypted request
 ├── subscriptions/
 │   └── proposals/
-│       └── 04dc3323da61.../      # Subscriber scope (64 hex chars)
-│           └── prop_001          # Encrypted subscription proposal
+│       └── 04dc3323da61.../      # ContextId (64 hex chars, symmetric)
+│           └── prop_001          # Sealed Blob v2 encrypted proposal
 └── handoff/
-    └── f3a7b2c1d4e5f6...         # Encrypted handoff payload
+    └── f3a7b2c1d4e5f6...         # Sealed Blob v2 encrypted handoff
 ```
 
 ---
 
-## 3. Scope Derivation
+## 3. ContextId Derivation
 
-The `scope` creates per-recipient directories that:
-- Hide the recipient's pubkey from directory listing
-- Enable efficient discovery by the recipient
+ContextId creates per-peer-pair directories that:
+- Bind sender and recipient symmetrically
+- Hide both pubkeys from directory listings
+- Enable efficient discovery by either party
 - Prevent enumeration attacks
 
 ### Algorithm
 
 ```
-scope = hex(sha256(utf8(normalize(pubkey_z32))))
+context_id = hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))
 ```
+
+Where `first_z32` and `second_z32` are normalized pubkeys sorted lexicographically.
+
+**Key property**: ContextId is symmetric: `context_id(A, B) == context_id(B, A)`
 
 ### Normalization
 
 1. Trim whitespace
-2. Strip `pk:` prefix if present
-3. Lowercase
+2. Strip `pubky://` prefix if present
+3. Strip `pk:` prefix if present
+4. Lowercase
+5. Validate length (52 chars) and z-base-32 alphabet
 
 ### Properties
 
 | Property | Value |
 |----------|-------|
-| Input | z-base-32 encoded Ed25519 pubkey (52 chars) |
+| Input | Two z-base-32 encoded Ed25519 pubkeys (52 chars each) |
 | Output | Lowercase hex SHA-256 hash (64 chars) |
-| Deterministic | Yes (same input → same output) |
+| Deterministic | Yes (same inputs → same output) |
+| Symmetric | Yes (`context_id(A,B) == context_id(B,A)`) |
 | Collision-resistant | SHA-256 provides 128-bit security |
 
-### Test Vectors
+### Legacy Scope (Deprecated)
 
-| Input | Output (scope) |
-|-------|----------------|
-| `ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u` | `55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80` |
-| `8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo` | `04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12` |
+The legacy `recipient_scope` function computed a single-party hash:
+```
+recipient_scope = hex(sha256(utf8(normalize(pubkey_z32))))
+```
+
+This is retained for backward compatibility but **should not be used for new code**.
+Use `context_id()` for all new paths.
 
 See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors.
 
@@ -146,12 +159,17 @@ See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors
 
 **Payment Request** (stored on sender's homeserver):
 ```
-/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}
+/pub/paykit.app/v0/requests/{context_id}/{request_id}
 ```
 
 **Subscription Proposal** (stored on provider's homeserver):
 ```
-/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}
+/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}
+```
+
+**Encrypted ACK** (stored on receiver's homeserver) *(specified, not yet implemented)*:
+```
+/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}
 ```
 
 ---
@@ -198,12 +216,13 @@ After transition (hard break):
 1. Get list of known contacts (follows, past senders)
 2. For each contact `C`:
    ```
-   my_scope = recipient_scope(my_pubkey)
-   path = "pubky://{C}/pub/paykit.app/v0/requests/{my_scope}/"
+   ctx_id = context_id(C, my_pubkey)  # symmetric
+   path = "pubky://{C}/pub/paykit.app/v0/requests/{ctx_id}/"
    entries = list_directory(path)
    for entry in entries:
        blob = fetch(path + entry)
        if is_sealed_blob(blob):
+           aad = payment_request_aad(C, C, my_pubkey, entry)  # owner=C
            request = decrypt(blob, my_noise_sk, aad)
            process(request)
    ```
@@ -215,12 +234,13 @@ After transition (hard break):
 1. Get list of known providers (past subscriptions, follows)
 2. For each provider `P`:
    ```
-   my_scope = subscriber_scope(my_pubkey)
-   path = "pubky://{P}/pub/paykit.app/v0/subscriptions/proposals/{my_scope}/"
+   ctx_id = context_id(P, my_pubkey)  # symmetric
+   path = "pubky://{P}/pub/paykit.app/v0/subscriptions/proposals/{ctx_id}/"
    entries = list_directory(path)
    for entry in entries:
        blob = fetch(path + entry)
        if is_sealed_blob(blob):
+           aad = subscription_proposal_aad(P, P, my_pubkey, entry)  # owner=P
            proposal = decrypt(blob, my_noise_sk, aad)
            process(proposal)
    ```
@@ -261,35 +281,43 @@ After transition (hard break):
 
 ## 8. AAD Formats
 
-All Sealed Blob encryption uses AAD to bind ciphertext to its context.
+All Sealed Blob v2 encryption uses AAD to bind ciphertext to its storage context and owner.
 
-### Format Pattern
+### Format Pattern (Owner-Bound)
 
 ```
-paykit:v0:{purpose}:{path}:{id}
+paykit:v0:{purpose}:{owner_z32}:{path}:{id}
 ```
+
+Where `owner_z32` is the normalized z-base-32 pubkey of the storage owner.
 
 ### Specific Formats
 
 | Object Type | AAD Format |
 |-------------|------------|
-| Payment Request | `paykit:v0:request:{full_path}:{request_id}` |
-| Subscription Proposal | `paykit:v0:subscription_proposal:{full_path}:{proposal_id}` |
-| Secure Handoff | `paykit:v0:handoff:{owner_pubkey}:{full_path}:{request_id}` |
+| Payment Request | `paykit:v0:request:{owner_z32}:{path}:{request_id}` |
+| Subscription Proposal | `paykit:v0:subscription_proposal:{owner_z32}:{path}:{proposal_id}` |
+| Encrypted ACK | `paykit:v0:ack_{object_type}:{ack_writer_z32}:{path}:{msg_id}` |
+| Secure Handoff | `paykit:v0:handoff:{owner_z32}:{path}:{request_id}` |
 
 ### Examples
 
-**Payment Request**:
+**Payment Request** (sender is owner):
 ```
-paykit:v0:request:/pub/paykit.app/v0/requests/55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80/req_001:req_001
-```
-
-**Subscription Proposal**:
-```
-paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12/prop_001:prop_001
+paykit:v0:request:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo:/pub/paykit.app/v0/requests/a7b8c9d0.../req_001:req_001
 ```
 
-**Secure Handoff**:
+**Subscription Proposal** (provider is owner):
+```
+paykit:v0:subscription_proposal:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u:/pub/paykit.app/v0/subscriptions/proposals/b3c4d5e6.../prop_001:prop_001
+```
+
+**Encrypted ACK** (receiver is owner):
+```
+paykit:v0:ack_request:tj1igr...abc:/pub/paykit.app/v0/acks/request/a7b8c9d0.../req_001:req_001
+```
+
+**Secure Handoff** (Ring user is owner):
 ```
 paykit:v0:handoff:8um71us3fyw6h8wbcxb5ar3rwusy1a6u49956ikzojg3gcwd1dty:/pub/paykit.app/v0/handoff/f3a7b2c1d4e5f6a7b8c9:f3a7b2c1d4e5f6a7b8c9
 ```
@@ -350,13 +378,18 @@ For clients that prefer a single JSON array (PDF-style compatibility):
 
 | Component | Description |
 |-----------|-------------|
-| `normalize_pubkey_z32` | Normalize pubkey: trim, strip prefix, lowercase |
-| `recipient_scope` | Compute scope hash: SHA-256 of normalized pubkey |
-| `payment_request_path` | Build path for payment request |
-| `subscription_proposal_path` | Build path for subscription proposal |
-| `payment_request_aad` | Build AAD for payment request encryption |
-| `subscription_proposal_aad` | Build AAD for subscription proposal encryption |
-| `is_sealed_blob` | Check if content is Sealed Blob format |
+| `normalize_pubkey_z32` | Normalize pubkey: trim, strip `pubky://` and `pk:` prefixes, lowercase |
+| `context_id` | Compute symmetric ContextId for peer pair |
+| `payment_request_path` | Build path for payment request (uses ContextId) |
+| `subscription_proposal_path` | Build path for subscription proposal (uses ContextId) |
+| `ack_path` | Build path for encrypted ACK (uses ContextId) |
+| `payment_request_aad` | Build owner-bound AAD for payment request |
+| `subscription_proposal_aad` | Build owner-bound AAD for subscription proposal |
+| `ack_aad` | Build AAD for encrypted ACK |
+| `is_sealed_blob` | Check if content is Sealed Blob v1 or v2 format |
+
+**Deprecated** (legacy compatibility only):
+| `recipient_scope` | Legacy single-party scope hash (use `context_id` instead) |
 
 ### Security Requirements
 
@@ -479,6 +512,14 @@ fun verifyProviderBinding(proposal: SubscriptionProposal, polledPubkey: String):
 ---
 
 ## Appendix B: Changelog
+
+### v0.2 (January 8, 2026)
+- Migrated from `recipient_scope`/`subscriber_scope` to symmetric `context_id`
+- Updated AAD format to include owner binding (`paykit:v0:{purpose}:{owner}:{path}:{id}`)
+- Added encrypted ACK path and AAD specs
+- Updated all path templates to use `{context_id}`
+- Clarified Sealed Blob v2 as current, v1 as legacy
+- Added `pubky://` prefix stripping to normalization
 
 ### v0.1 (January 2, 2026)
 - Initial specification

@@ -2,8 +2,18 @@
 //!
 //! These functions produce the exact paths used for storing and retrieving
 //! Paykit objects on Pubky homeservers. All clients must use identical paths.
+//!
+//! ## Storage Layout (Paykit v0)
+//!
+//! | Object Type | Path |
+//! |-------------|------|
+//! | Payment Request | `/pub/paykit.app/v0/requests/{context_id}/{request_id}` |
+//! | Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}` |
+//! | ACK | `/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}` |
+//! | Noise Endpoint | `/pub/paykit.app/v0/noise` |
+//! | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
 
-use super::scope::{recipient_scope, subscriber_scope};
+use super::scope::context_id;
 use crate::Result;
 
 /// Base path prefix for all Paykit v0 data.
@@ -21,15 +31,19 @@ pub const NOISE_ENDPOINT_SUBPATH: &str = "noise";
 /// Path suffix for secure handoff directory.
 pub const HANDOFF_SUBPATH: &str = "handoff";
 
+/// Path suffix for ACKs directory.
+pub const ACKS_SUBPATH: &str = "acks";
+
 /// Build the storage path for a payment request.
 ///
-/// Path format: `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
+/// Path format: `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
 ///
 /// This path is used on the **sender's** storage to store an encrypted
 /// payment request addressed to the recipient.
 ///
 /// # Arguments
 ///
+/// * `sender_pubkey_z32` - The sender's z-base-32 encoded pubkey
 /// * `recipient_pubkey_z32` - The recipient's z-base-32 encoded pubkey
 /// * `request_id` - Unique identifier for this request
 ///
@@ -43,50 +57,60 @@ pub const HANDOFF_SUBPATH: &str = "handoff";
 /// use paykit_lib::protocol::payment_request_path;
 ///
 /// let path = payment_request_path(
+///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
 ///     "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
 ///     "abc123"
 /// ).unwrap();
 /// assert!(path.starts_with("/pub/paykit.app/v0/requests/"));
 /// assert!(path.ends_with("/abc123"));
 /// ```
-pub fn payment_request_path(recipient_pubkey_z32: &str, request_id: &str) -> Result<String> {
-    let scope = recipient_scope(recipient_pubkey_z32)?;
+pub fn payment_request_path(
+    sender_pubkey_z32: &str,
+    recipient_pubkey_z32: &str,
+    request_id: &str,
+) -> Result<String> {
+    let ctx_id = context_id(sender_pubkey_z32, recipient_pubkey_z32)?;
     Ok(format!(
         "{}/{}/{}/{}",
-        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, scope, request_id
+        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, ctx_id, request_id
     ))
 }
 
-/// Build the directory path for listing payment requests for a recipient.
+/// Build the directory path for listing payment requests between two peers.
 ///
-/// Path format: `/pub/paykit.app/v0/requests/{recipient_scope}/`
+/// Path format: `/pub/paykit.app/v0/requests/{context_id}/`
 ///
 /// Used when polling a contact's storage to discover pending requests.
 ///
 /// # Arguments
 ///
+/// * `sender_pubkey_z32` - The sender's z-base-32 encoded pubkey
 /// * `recipient_pubkey_z32` - The recipient's z-base-32 encoded pubkey
 ///
 /// # Returns
 ///
 /// The directory path (with trailing slash for listing).
-pub fn payment_requests_dir(recipient_pubkey_z32: &str) -> Result<String> {
-    let scope = recipient_scope(recipient_pubkey_z32)?;
+pub fn payment_requests_dir(
+    sender_pubkey_z32: &str,
+    recipient_pubkey_z32: &str,
+) -> Result<String> {
+    let ctx_id = context_id(sender_pubkey_z32, recipient_pubkey_z32)?;
     Ok(format!(
         "{}/{}/{}/",
-        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, scope
+        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, ctx_id
     ))
 }
 
 /// Build the storage path for a subscription proposal.
 ///
-/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
+/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
 ///
 /// This path is used on the **provider's** storage to store an encrypted
 /// subscription proposal addressed to the subscriber.
 ///
 /// # Arguments
 ///
+/// * `provider_pubkey_z32` - The provider's z-base-32 encoded pubkey
 /// * `subscriber_pubkey_z32` - The subscriber's z-base-32 encoded pubkey
 /// * `proposal_id` - Unique identifier for this proposal
 ///
@@ -100,6 +124,7 @@ pub fn payment_requests_dir(recipient_pubkey_z32: &str) -> Result<String> {
 /// use paykit_lib::protocol::subscription_proposal_path;
 ///
 /// let path = subscription_proposal_path(
+///     "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
 ///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
 ///     "prop-456"
 /// ).unwrap();
@@ -107,34 +132,39 @@ pub fn payment_requests_dir(recipient_pubkey_z32: &str) -> Result<String> {
 /// assert!(path.ends_with("/prop-456"));
 /// ```
 pub fn subscription_proposal_path(
+    provider_pubkey_z32: &str,
     subscriber_pubkey_z32: &str,
     proposal_id: &str,
 ) -> Result<String> {
-    let scope = subscriber_scope(subscriber_pubkey_z32)?;
+    let ctx_id = context_id(provider_pubkey_z32, subscriber_pubkey_z32)?;
     Ok(format!(
         "{}/{}/{}/{}",
-        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, scope, proposal_id
+        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, ctx_id, proposal_id
     ))
 }
 
-/// Build the directory path for listing subscription proposals for a subscriber.
+/// Build the directory path for listing subscription proposals between two peers.
 ///
-/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/`
+/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/`
 ///
 /// Used when polling a provider's storage to discover pending proposals.
 ///
 /// # Arguments
 ///
+/// * `provider_pubkey_z32` - The provider's z-base-32 encoded pubkey
 /// * `subscriber_pubkey_z32` - The subscriber's z-base-32 encoded pubkey
 ///
 /// # Returns
 ///
 /// The directory path (with trailing slash for listing).
-pub fn subscription_proposals_dir(subscriber_pubkey_z32: &str) -> Result<String> {
-    let scope = subscriber_scope(subscriber_pubkey_z32)?;
+pub fn subscription_proposals_dir(
+    provider_pubkey_z32: &str,
+    subscriber_pubkey_z32: &str,
+) -> Result<String> {
+    let ctx_id = context_id(provider_pubkey_z32, subscriber_pubkey_z32)?;
     Ok(format!(
         "{}/{}/{}/",
-        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, scope
+        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, ctx_id
     ))
 }
 
@@ -165,43 +195,90 @@ pub fn secure_handoff_path(request_id: &str) -> String {
     format!("{}/{}/{}", PAYKIT_V0_PREFIX, HANDOFF_SUBPATH, request_id)
 }
 
+/// Build the storage path for an ACK.
+///
+/// Path format: `/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}`
+///
+/// This path is used on the **receiver's** storage to store an encrypted
+/// ACK for the original sender to poll.
+///
+/// # Arguments
+///
+/// * `object_type` - Type of object being ACKed (e.g., "request", "subscription_proposal")
+/// * `sender_pubkey_z32` - The original sender's z-base-32 encoded pubkey
+/// * `recipient_pubkey_z32` - The recipient's z-base-32 encoded pubkey
+/// * `msg_id` - The original message's identifier
+///
+/// # Returns
+///
+/// The full storage path (without the `pubky://owner` prefix).
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::protocol::ack_path;
+///
+/// let path = ack_path(
+///     "request",
+///     "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+///     "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+///     "req_001"
+/// ).unwrap();
+/// assert!(path.starts_with("/pub/paykit.app/v0/acks/request/"));
+/// assert!(path.ends_with("/req_001"));
+/// ```
+pub fn ack_path(
+    object_type: &str,
+    sender_pubkey_z32: &str,
+    recipient_pubkey_z32: &str,
+    msg_id: &str,
+) -> Result<String> {
+    let ctx_id = context_id(sender_pubkey_z32, recipient_pubkey_z32)?;
+    Ok(format!(
+        "{}/{}/{}/{}/{}",
+        PAYKIT_V0_PREFIX, ACKS_SUBPATH, object_type, ctx_id, msg_id
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const TEST_PUBKEY: &str = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+    const SENDER_PUBKEY: &str = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+    const RECIPIENT_PUBKEY: &str = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
 
     #[test]
     fn payment_request_path_format() {
-        let path = payment_request_path(TEST_PUBKEY, "req-123").unwrap();
+        let path = payment_request_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         assert!(path.starts_with("/pub/paykit.app/v0/requests/"));
         assert!(path.ends_with("/req-123"));
-        // Should contain a 64-char hex scope between requests/ and /req-123
+        // Should contain a 64-char hex context_id between requests/ and /req-123
         let parts: Vec<&str> = path.split('/').collect();
-        assert_eq!(parts.len(), 7); // ["", "pub", "paykit.app", "v0", "requests", scope, "req-123"]
-        assert_eq!(parts[5].len(), 64); // scope is 64 hex chars
+        assert_eq!(parts.len(), 7); // ["", "pub", "paykit.app", "v0", "requests", context_id, "req-123"]
+        assert_eq!(parts[5].len(), 64); // context_id is 64 hex chars
     }
 
     #[test]
     fn payment_requests_dir_format() {
-        let dir = payment_requests_dir(TEST_PUBKEY).unwrap();
+        let dir = payment_requests_dir(SENDER_PUBKEY, RECIPIENT_PUBKEY).unwrap();
         assert!(dir.starts_with("/pub/paykit.app/v0/requests/"));
         assert!(dir.ends_with('/'));
     }
 
     #[test]
     fn subscription_proposal_path_format() {
-        let path = subscription_proposal_path(TEST_PUBKEY, "prop-456").unwrap();
+        let path =
+            subscription_proposal_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "prop-456").unwrap();
         assert!(path.starts_with("/pub/paykit.app/v0/subscriptions/proposals/"));
         assert!(path.ends_with("/prop-456"));
         let parts: Vec<&str> = path.split('/').collect();
-        assert_eq!(parts.len(), 8); // ["", "pub", "paykit.app", "v0", "subscriptions", "proposals", scope, "prop-456"]
-        assert_eq!(parts[6].len(), 64); // scope is 64 hex chars
+        assert_eq!(parts.len(), 8); // ["", "pub", "paykit.app", "v0", "subscriptions", "proposals", context_id, "prop-456"]
+        assert_eq!(parts[6].len(), 64); // context_id is 64 hex chars
     }
 
     #[test]
     fn subscription_proposals_dir_format() {
-        let dir = subscription_proposals_dir(TEST_PUBKEY).unwrap();
+        let dir = subscription_proposals_dir(SENDER_PUBKEY, RECIPIENT_PUBKEY).unwrap();
         assert!(dir.starts_with("/pub/paykit.app/v0/subscriptions/proposals/"));
         assert!(dir.ends_with('/'));
     }
@@ -219,25 +296,35 @@ mod tests {
     }
 
     #[test]
-    fn paths_are_consistent_for_same_pubkey() {
-        let path1 = payment_request_path(TEST_PUBKEY, "req-1").unwrap();
-        let path2 = payment_request_path(TEST_PUBKEY, "req-2").unwrap();
-
-        // Extract scope from both paths
-        let scope1 = path1.split('/').nth(5).unwrap();
-        let scope2 = path2.split('/').nth(5).unwrap();
-        assert_eq!(scope1, scope2);
+    fn ack_path_format() {
+        let path = ack_path("request", SENDER_PUBKEY, RECIPIENT_PUBKEY, "req_001").unwrap();
+        assert!(path.starts_with("/pub/paykit.app/v0/acks/request/"));
+        assert!(path.ends_with("/req_001"));
+        let parts: Vec<&str> = path.split('/').collect();
+        assert_eq!(parts.len(), 8); // ["", "pub", "paykit.app", "v0", "acks", "request", context_id, "req_001"]
+        assert_eq!(parts[6].len(), 64); // context_id is 64 hex chars
     }
 
     #[test]
-    fn paths_differ_for_different_pubkeys() {
-        let pubkey2 = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+    fn context_id_is_symmetric_in_paths() {
+        let path_ab = payment_request_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-1").unwrap();
+        let path_ba = payment_request_path(RECIPIENT_PUBKEY, SENDER_PUBKEY, "req-1").unwrap();
 
-        let path1 = payment_request_path(TEST_PUBKEY, "req-1").unwrap();
-        let path2 = payment_request_path(pubkey2, "req-1").unwrap();
+        // Extract context_id from both paths
+        let ctx_ab = path_ab.split('/').nth(5).unwrap();
+        let ctx_ba = path_ba.split('/').nth(5).unwrap();
+        assert_eq!(ctx_ab, ctx_ba);
+    }
 
-        let scope1 = path1.split('/').nth(5).unwrap();
-        let scope2 = path2.split('/').nth(5).unwrap();
-        assert_ne!(scope1, scope2);
+    #[test]
+    fn paths_differ_for_different_peer_pairs() {
+        let third_pubkey = "o1gg96ewuojmopcjbz8895478wdtxtzzuxnfjjz8o8e77csa1ngo";
+
+        let path1 = payment_request_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-1").unwrap();
+        let path2 = payment_request_path(SENDER_PUBKEY, third_pubkey, "req-1").unwrap();
+
+        let ctx1 = path1.split('/').nth(5).unwrap();
+        let ctx2 = path2.split('/').nth(5).unwrap();
+        assert_ne!(ctx1, ctx2);
     }
 }

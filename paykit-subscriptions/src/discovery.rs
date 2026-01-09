@@ -6,19 +6,19 @@
 //! ## Path Format (v0)
 //!
 //! Requests are stored on the **sender's** homeserver at:
-//! `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
+//! `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
 //!
-//! Where `recipient_scope = hex(sha256(normalized_pubkey_z32))`.
+//! Where `context_id = hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))`.
 //!
 //! ## Security
 //!
-//! Payment requests are encrypted using Paykit Sealed Blob v1 before storage
+//! Payment requests are encrypted using Paykit Sealed Blob v2 before storage
 //! to prevent public exposure of payment details. All requests MUST be encrypted.
 //! Plaintext storage is REJECTED for security reasons.
 //!
 //! ## Discovery
 //!
-//! Recipients poll known contacts and list their `.../{my_scope}/` directory
+//! Recipients poll known contacts and list their `.../{context_id}/` directory
 //! to discover pending requests. Recipients cannot delete requests from sender
 //! storage (deduplication is local-only).
 
@@ -64,19 +64,20 @@ impl PublishedRequest {
 
 /// Publish a payment request to the sender's Pubky storage (encrypted).
 ///
-/// The request is stored at `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
-/// as a Paykit Sealed Blob v1 encrypted to the recipient's Noise endpoint public key.
+/// The request is stored at `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
+/// as a Paykit Sealed Blob v2 encrypted to the recipient's Noise endpoint public key.
 ///
 /// # Path Format
 ///
-/// `recipient_scope = hex(sha256(normalized_recipient_pubkey_z32))`
+/// `context_id = hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))`
 ///
-/// This creates a per-recipient directory on the sender's storage, allowing
-/// recipients to poll known contacts and list `.../{my_scope}/` to discover requests.
+/// This creates a per-peer-pair directory on the sender's storage, allowing
+/// recipients to poll known contacts and list `.../{context_id}/` to discover requests.
 ///
 /// # Arguments
 ///
 /// * `transport` - Authenticated transport for the sender
+/// * `sender_pubkey_z32` - Sender's z-base-32 pubkey (storage owner)
 /// * `request` - The payment request to publish
 /// * `recipient_noise_pk` - Recipient's Noise endpoint X25519 public key (32 bytes)
 ///
@@ -86,26 +87,32 @@ impl PublishedRequest {
 /// use paykit_subscriptions::discovery::publish_payment_request;
 ///
 /// let request = PaymentRequest::new(from, to, amount, currency, method);
-/// publish_payment_request(&transport, &request, &recipient_noise_pk).await?;
+/// publish_payment_request(&transport, &sender_z32, &request, &recipient_noise_pk).await?;
 /// ```
 pub async fn publish_payment_request<T: AuthenticatedTransport>(
     transport: &T,
+    sender_pubkey_z32: &str,
     request: &PaymentRequest,
     recipient_noise_pk: &[u8; 32],
 ) -> crate::Result<()> {
     let published = PublishedRequest::new(request.clone());
     let plaintext = serde_json::to_vec(&published)?;
 
-    // Build canonical path using recipient scope
+    // Build canonical path using context_id
     let recipient_pubkey_z32 = request.to.to_string();
-    let path = payment_request_path(&recipient_pubkey_z32, &request.request_id)
-        .map_err(|e| anyhow::anyhow!("Invalid recipient pubkey: {}", e))?;
+    let path = payment_request_path(sender_pubkey_z32, &recipient_pubkey_z32, &request.request_id)
+        .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
-    // Build canonical AAD
-    let aad = payment_request_aad(&recipient_pubkey_z32, &request.request_id)
-        .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
+    // Build canonical AAD with owner binding
+    let aad = payment_request_aad(
+        sender_pubkey_z32,
+        sender_pubkey_z32,
+        &recipient_pubkey_z32,
+        &request.request_id,
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
 
-    // Encrypt using Sealed Blob v1
+    // Encrypt using Sealed Blob v2
     let envelope = sealed_blob_encrypt(recipient_noise_pk, &plaintext, &aad, Some("request"))
         .map_err(|e| anyhow::anyhow!("Failed to encrypt payment request: {}", e))?;
 
@@ -120,19 +127,20 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
 
 /// Discover payment requests from a sender addressed to me.
 ///
-/// Lists the sender's `.../{my_scope}/` directory and decrypts Sealed Blob v1
+/// Lists the sender's `.../{context_id}/` directory and decrypts Sealed Blob v2
 /// encrypted requests using the recipient's Noise secret key.
 ///
 /// # Path Format
 ///
-/// Requests are stored at: `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
-/// This function lists the `{recipient_scope}` directory on the sender's storage.
+/// Requests are stored at: `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
+/// This function lists the `{context_id}` directory on the sender's storage.
 ///
 /// # Arguments
 ///
 /// * `reader` - Unauthenticated reader for Pubky storage
 /// * `sender` - The sender's public key
-/// * `my_pubkey_z32` - The recipient's own z-base-32 pubkey (to compute scope)
+/// * `sender_pubkey_z32` - The sender's z-base-32 pubkey (to compute context_id)
+/// * `my_pubkey_z32` - The recipient's own z-base-32 pubkey (to compute context_id)
 /// * `my_noise_sk` - Recipient's Noise endpoint X25519 secret key (32 bytes)
 ///
 /// # Returns
@@ -141,15 +149,16 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
 pub async fn discover_requests<R: UnauthenticatedTransportRead>(
     reader: &R,
     sender: &PublicKey,
+    sender_pubkey_z32: &str,
     my_pubkey_z32: &str,
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Vec<PublishedRequest>> {
-    // Compute my scope directory
-    let my_scope_dir = payment_requests_dir(my_pubkey_z32)
+    // Compute context_id directory
+    let ctx_dir = payment_requests_dir(sender_pubkey_z32, my_pubkey_z32)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     let entries = reader
-        .list_directory(sender, &my_scope_dir)
+        .list_directory(sender, &ctx_dir)
         .await
         .unwrap_or_else(|_| vec![]); // Empty if directory doesn't exist
 
@@ -157,14 +166,18 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
 
     for entry in entries {
         // Build full path for this request
-        let path = payment_request_path(my_pubkey_z32, &entry)
+        let path = payment_request_path(sender_pubkey_z32, my_pubkey_z32, &entry)
             .map_err(|e| anyhow::anyhow!("Invalid path: {}", e))?;
 
         if let Ok(Some(content)) = reader.get(sender, &path).await {
             // Decrypt sealed blob only (no plaintext fallback)
-            if let Some(published) =
-                try_decrypt_request(&content, my_pubkey_z32, &entry, my_noise_sk)
-            {
+            if let Some(published) = try_decrypt_request(
+                &content,
+                sender_pubkey_z32,
+                my_pubkey_z32,
+                &entry,
+                my_noise_sk,
+            ) {
                 if published.active {
                     requests.push(published);
                 }
@@ -177,13 +190,14 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
 
 /// Discover a specific payment request by ID.
 ///
-/// Decrypts Sealed Blob v1 encrypted requests using the recipient's Noise secret key.
+/// Decrypts Sealed Blob v2 encrypted requests using the recipient's Noise secret key.
 ///
 /// # Arguments
 ///
 /// * `reader` - Unauthenticated reader for Pubky storage
 /// * `sender` - The sender's public key
-/// * `my_pubkey_z32` - The recipient's own z-base-32 pubkey (to compute scope)
+/// * `sender_pubkey_z32` - The sender's z-base-32 pubkey (to compute context_id)
+/// * `my_pubkey_z32` - The recipient's own z-base-32 pubkey (to compute context_id)
 /// * `request_id` - The request ID
 /// * `my_noise_sk` - Recipient's Noise endpoint X25519 secret key (32 bytes)
 ///
@@ -193,20 +207,25 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
 pub async fn discover_request<R: UnauthenticatedTransportRead>(
     reader: &R,
     sender: &PublicKey,
+    sender_pubkey_z32: &str,
     my_pubkey_z32: &str,
     request_id: &str,
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Option<PublishedRequest>> {
     // Build canonical path
-    let path = payment_request_path(my_pubkey_z32, request_id)
+    let path = payment_request_path(sender_pubkey_z32, my_pubkey_z32, request_id)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     match reader.get(sender, &path).await {
         Ok(Some(content)) => {
-            let published = try_decrypt_request(&content, my_pubkey_z32, request_id, my_noise_sk)
-                .ok_or_else(|| {
-                anyhow::anyhow!("Failed to decrypt request (sealed blob only)")
-            })?;
+            let published = try_decrypt_request(
+                &content,
+                sender_pubkey_z32,
+                my_pubkey_z32,
+                request_id,
+                my_noise_sk,
+            )
+            .ok_or_else(|| anyhow::anyhow!("Failed to decrypt request (sealed blob only)"))?;
             Ok(Some(published))
         }
         Ok(None) => Ok(None),
@@ -216,10 +235,11 @@ pub async fn discover_request<R: UnauthenticatedTransportRead>(
 
 /// Decrypt a sealed blob payment request.
 ///
-/// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 /// Plaintext storage is REJECTED for security reasons.
 fn try_decrypt_request(
     content: &str,
+    sender_pubkey_z32: &str,
     recipient_pubkey_z32: &str,
     request_id: &str,
     my_noise_sk: &[u8; 32],
@@ -233,8 +253,13 @@ fn try_decrypt_request(
         return None;
     }
 
-    // Build canonical AAD (must match encryption)
-    let aad = match payment_request_aad(recipient_pubkey_z32, request_id) {
+    // Build canonical AAD (must match encryption) with owner binding
+    let aad = match payment_request_aad(
+        sender_pubkey_z32,
+        sender_pubkey_z32,
+        recipient_pubkey_z32,
+        request_id,
+    ) {
         Ok(aad) => aad,
         Err(e) => {
             tracing::warn!("Failed to build AAD for request {}: {}", request_id, e);
@@ -259,14 +284,16 @@ fn try_decrypt_request(
 /// # Arguments
 ///
 /// * `transport` - Authenticated transport for the sender
+/// * `sender_pubkey_z32` - The sender's z-base-32 pubkey
 /// * `recipient_pubkey_z32` - The recipient's z-base-32 pubkey
 /// * `request_id` - The request ID to cancel
 pub async fn cancel_payment_request<T: AuthenticatedTransport>(
     transport: &T,
+    sender_pubkey_z32: &str,
     recipient_pubkey_z32: &str,
     request_id: &str,
 ) -> crate::Result<()> {
-    let path = payment_request_path(recipient_pubkey_z32, request_id)
+    let path = payment_request_path(sender_pubkey_z32, recipient_pubkey_z32, request_id)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     // Delete the request from storage
@@ -282,12 +309,12 @@ pub async fn cancel_payment_request<T: AuthenticatedTransport>(
 ///
 /// This struct provides polling-based discovery of payment requests
 /// from known contacts or specific peers. Supports decryption of
-/// Sealed Blob v1 encrypted requests using the provided Noise secret key.
+/// Sealed Blob v2 encrypted requests using the provided Noise secret key.
 ///
 /// # Discovery Model
 ///
 /// The poller iterates over known peers (contacts) and lists each peer's
-/// `.../{my_scope}/` directory to find requests addressed to me.
+/// `.../{context_id}/` directory to find requests addressed to me.
 pub struct RequestDiscoveryPoller<R: UnauthenticatedTransportRead> {
     reader: R,
     known_peers: Vec<PublicKey>,
@@ -349,7 +376,9 @@ impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
         let mut results = Vec::new();
 
         for peer in &self.known_peers {
-            match discover_requests(&self.reader, peer, &self.my_pubkey_z32, &self.noise_sk).await {
+            // Convert peer PublicKey to z32 for context_id computation
+            let peer_z32 = peer.to_string();
+            match discover_requests(&self.reader, peer, &peer_z32, &self.my_pubkey_z32, &self.noise_sk).await {
                 Ok(requests) if !requests.is_empty() => {
                     results.push((peer.clone(), requests));
                 }
@@ -403,45 +432,51 @@ pub const PAYKIT_CANCELLATIONS_PATH: &str = "/pub/paykit.app/v0/subscriptions/ca
 
 /// Discover subscription proposals from a provider addressed to me.
 ///
-/// Lists the provider's `.../{my_scope}/` directory and decrypts Sealed Blob v1
+/// Lists the provider's `.../{context_id}/` directory and decrypts Sealed Blob v2
 /// encrypted proposals using the subscriber's Noise secret key.
 ///
 /// # Path Format
 ///
-/// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
-/// This function lists the `{subscriber_scope}` directory on the provider's storage.
+/// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
+/// This function lists the `{context_id}` directory on the provider's storage.
 ///
 /// # Arguments
 ///
 /// * `reader` - Unauthenticated transport for reading
 /// * `provider` - The provider's public key
-/// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute my scope)
+/// * `provider_pubkey_z32` - The provider's z-base-32 encoded pubkey (to compute context_id)
+/// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute context_id)
 /// * `my_noise_sk` - My Noise secret key for decryption
 pub async fn discover_subscription_proposals<R: UnauthenticatedTransportRead>(
     reader: &R,
     provider: &PublicKey,
+    provider_pubkey_z32: &str,
     my_pubkey_z32: &str,
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Vec<crate::Subscription>> {
-    // Compute my scope directory on provider storage
-    let my_scope_dir = subscription_proposals_dir(my_pubkey_z32)
+    // Compute context_id directory on provider storage
+    let ctx_dir = subscription_proposals_dir(provider_pubkey_z32, my_pubkey_z32)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     let entries: Vec<String> = reader
-        .list_directory(provider, &my_scope_dir)
+        .list_directory(provider, &ctx_dir)
         .await
         .unwrap_or_default();
 
     let mut proposals = Vec::new();
     for entry in entries {
         // Build full path for this proposal
-        let full_path = subscription_proposal_path(my_pubkey_z32, &entry)
+        let full_path = subscription_proposal_path(provider_pubkey_z32, my_pubkey_z32, &entry)
             .map_err(|e| anyhow::anyhow!("Invalid path: {}", e))?;
 
         if let Ok(Some(content)) = reader.get(provider, &full_path).await {
-            if let Some(subscription) =
-                try_decrypt_subscription_proposal(&content, my_pubkey_z32, &entry, my_noise_sk)
-            {
+            if let Some(subscription) = try_decrypt_subscription_proposal(
+                &content,
+                provider_pubkey_z32,
+                my_pubkey_z32,
+                &entry,
+                my_noise_sk,
+            ) {
                 proposals.push(subscription);
             }
         }
@@ -452,30 +487,33 @@ pub async fn discover_subscription_proposals<R: UnauthenticatedTransportRead>(
 
 /// Discover a specific subscription proposal by ID.
 ///
-/// Decrypts Sealed Blob v1 encrypted proposals using the subscriber's Noise secret key.
+/// Decrypts Sealed Blob v2 encrypted proposals using the subscriber's Noise secret key.
 ///
 /// # Arguments
 ///
 /// * `reader` - Unauthenticated transport for reading
 /// * `provider` - The provider's public key
-/// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute my scope)
+/// * `provider_pubkey_z32` - The provider's z-base-32 encoded pubkey (to compute context_id)
+/// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute context_id)
 /// * `proposal_id` - The proposal ID
 /// * `my_noise_sk` - My Noise secret key for decryption
 pub async fn discover_subscription_proposal<R: UnauthenticatedTransportRead>(
     reader: &R,
     provider: &PublicKey,
+    provider_pubkey_z32: &str,
     my_pubkey_z32: &str,
     proposal_id: &str,
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Option<crate::Subscription>> {
-    // Build canonical path
-    let path = subscription_proposal_path(my_pubkey_z32, proposal_id)
+    // Build canonical path using context_id
+    let path = subscription_proposal_path(provider_pubkey_z32, my_pubkey_z32, proposal_id)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     match reader.get(provider, &path).await {
         Ok(Some(content)) => {
             let subscription = try_decrypt_subscription_proposal(
                 &content,
+                provider_pubkey_z32,
                 my_pubkey_z32,
                 proposal_id,
                 my_noise_sk,
@@ -489,7 +527,7 @@ pub async fn discover_subscription_proposal<R: UnauthenticatedTransportRead>(
 
 /// Discover subscription agreements for a party.
 ///
-/// Decrypts Sealed Blob v1 encrypted agreements using the party's Noise secret key.
+/// Decrypts Sealed Blob v2 encrypted agreements using the party's Noise secret key.
 pub async fn discover_subscription_agreements<R: UnauthenticatedTransportRead>(
     reader: &R,
     party: &PublicKey,
@@ -567,9 +605,10 @@ pub async fn discover_subscription_cancellations<R: UnauthenticatedTransportRead
 
 /// Decrypt an encrypted subscription proposal.
 ///
-/// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 fn try_decrypt_subscription_proposal(
     content: &str,
+    provider_pubkey_z32: &str,
     subscriber_pubkey_z32: &str,
     proposal_id: &str,
     my_noise_sk: &[u8; 32],
@@ -582,8 +621,13 @@ fn try_decrypt_subscription_proposal(
         return None;
     }
 
-    // Build canonical AAD
-    let aad = match subscription_proposal_aad(subscriber_pubkey_z32, proposal_id) {
+    // Build canonical AAD with owner binding (owner = provider for proposals)
+    let aad = match subscription_proposal_aad(
+        provider_pubkey_z32, // owner = provider (stores on their homeserver)
+        provider_pubkey_z32,
+        subscriber_pubkey_z32,
+        proposal_id,
+    ) {
         Ok(aad) => aad,
         Err(e) => {
             tracing::warn!("Failed to build AAD for proposal {}: {}", proposal_id, e);
@@ -606,7 +650,7 @@ fn try_decrypt_subscription_proposal(
 
 /// Decrypt an encrypted signed subscription agreement.
 ///
-/// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 /// AAD format: `paykit:v0:subscription_agreement:{path}:{subscription_id}` (matches manager.rs storage)
 fn try_decrypt_signed_subscription(
     content: &str,
@@ -638,7 +682,7 @@ fn try_decrypt_signed_subscription(
 
 /// Decrypt an encrypted cancellation.
 ///
-/// SECURITY: Only encrypted Sealed Blob v1 format is accepted.
+/// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 /// AAD format: `paykit:v0:subscription_cancellation:{path}:{subscription_id}` (matches manager.rs storage)
 fn try_decrypt_cancellation(
     content: &str,

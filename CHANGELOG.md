@@ -2,6 +2,50 @@
 
 All notable changes to the Paykit project are documented in this file.
 
+## [Unreleased] - ContextId & Owner-Bound AAD
+
+### Protocol Migration: ContextId-Based Routing
+
+This release introduces ContextId-based path routing and owner-bound AAD for stronger
+cryptographic binding of encrypted payloads to their storage location.
+
+#### BREAKING CHANGES
+
+- **paykit-lib/protocol/scope.rs**: Deprecated `recipient_scope()` and `subscriber_scope()` 
+  in favor of new `context_id()` function. Legacy functions remain for backward compatibility
+  but are marked deprecated.
+  
+- **paykit-lib/protocol/paths.rs**: All path builders now require sender/provider pubkey:
+  - `payment_request_path(sender_z32, recipient_z32, id)` 
+  - `payment_requests_dir(sender_z32, recipient_z32)`
+  - `subscription_proposal_path(provider_z32, subscriber_z32, id)`
+  - `subscription_proposals_dir(provider_z32, subscriber_z32)`
+
+- **paykit-lib/protocol/aad.rs**: All AAD builders now include owner binding:
+  - `payment_request_aad(owner_z32, sender_z32, recipient_z32, id)`
+  - `subscription_proposal_aad(owner_z32, provider_z32, subscriber_z32, id)`
+  - `secure_handoff_aad(owner_z32, id)`
+
+#### New Features
+
+- **ContextId**: Symmetric, stable peer-pair identifier for routing and correlation.
+  - Formula: `hex(sha256("paykit:v0:context:" || sorted(pk_a, pk_b)))`
+  - Normalizes `pk:` and `pubky://` prefixes before hashing
+  - Used for path routing instead of recipient-only scope
+
+- **ACK Helpers**: New functions for offline acknowledgment protocol:
+  - `ack_path(object_type, sender_z32, recipient_z32, msg_id)` 
+  - `ack_aad(object_type, ack_writer_z32, sender_z32, recipient_z32, msg_id)`
+
+- **Owner-Bound AAD**: AAD format now includes storage owner for relocation resistance:
+  - Format: `paykit:v0:{purpose}:{owner_z32}:{path}:{id}`
+
+#### Migration Notes
+
+- Existing data stored with old paths will need to be migrated or dual-read during transition
+- Apps should update path/AAD builders before next major release
+- `pubky://` prefixes are now stripped from pubkeys during normalization
+
 ## [2.0.0] - 2026-01-05
 
 ### Security Hardening Release
@@ -89,7 +133,9 @@ Critical security fix for plaintext secrets stored in publicly accessible `/pub/
 - `discover_request` and `discover_requests` now require `my_noise_sk` parameter for decryption
 
 #### New Features
-- **Paykit Sealed Blob v1**: Encrypted envelope format for all secret-bearing data on public paths
+- **Paykit Sealed Blob**: Encrypted envelope format for all secret-bearing data on public paths
+  - v2 (current): XChaCha20-Poly1305 with 24-byte nonces
+  - v1 (legacy): ChaCha20-Poly1305 with 12-byte nonces (decryption-only support)
   - X25519 ECDH key agreement
   - HKDF-SHA256 key derivation
   - ChaCha20-Poly1305 authenticated encryption
@@ -129,7 +175,7 @@ Recipients must have a Noise endpoint published at `/pub/paykit.app/v0/noise` be
 - `store_signed_subscription_plaintext()` - **REMOVED** - Use `SubscriptionManager` encrypted methods
 - Plaintext parsing fallbacks in all discovery functions - **REMOVED**
 
-All plaintext storage and discovery paths have been removed. Only encrypted Sealed Blob v1 format is accepted.
+All plaintext storage and discovery paths have been removed. Only encrypted Sealed Blob format is accepted (v2 for new writes, v1/v2 for reads).
 
 #### SubscriptionManager Changes
 - Added `with_noise_keypair()` builder for encryption support

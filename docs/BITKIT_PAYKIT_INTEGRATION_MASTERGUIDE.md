@@ -1303,8 +1303,8 @@ Normalization:
 **Path Formats:**
 | Object Type | Path Format |
 |-------------|-------------|
-| Payment Request | `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}` |
-| Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}` |
+| Payment Request | `/pub/paykit.app/v0/requests/{context_id}/{request_id}` |
+| Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}` |
 | Noise Endpoint | `/pub/paykit.app/v0/noise` |
 | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
 
@@ -1323,13 +1323,13 @@ See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for pubkey→scope hash t
 
 ```kotlin
 // Kotlin example
-val scope = PaykitV0Protocol.recipientScope("ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u")
+val contextId = PaykitV0Protocol.contextId(senderPubkey, recipientPubkey)
 // Result: "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80"
 ```
 
 ```swift
 // Swift example
-let scope = try PaykitV0Protocol.recipientScope("ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u")
+let contextId = try PaykitV0Protocol.contextId(senderPubkey, recipientPubkey)
 // Result: "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80"
 ```
 
@@ -1724,8 +1724,8 @@ Where it is implemented:
 - **iOS**: `DirectoryService.publishPaymentRequest(_:)` 
 - **Android**: `DirectoryService.publishPaymentRequest()`
 
-**Storage path:** `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
-- `recipient_scope` = `hex(sha256(normalized_recipient_pubkey))`
+**Storage path:** `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
+- `context_id` = `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
 - Stored on **sender's** homeserver (not recipient's)
 
 End-to-end steps:
@@ -2039,8 +2039,8 @@ For interactive Noise payment flows in the UI:
 
 **Sender-Storage Model for Subscription Proposals:**
 Like payment requests, subscription proposals are stored on the **provider's** homeserver:
-- Path: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
-- `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))`
+- Path: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
+- `context_id` = `hex(sha256(normalized_subscriber_pubkey))`
 - Mandatory Sealed Blob encryption
 - Subscribers poll providers' storage to discover proposals
 - Subscribers cannot delete proposals from provider storage (local dedup only)
@@ -2942,9 +2942,9 @@ Logger.info("  - AAD: $aad", context = TAG)
 **"0 requests found" but requests were sent**
 
 1. **Discovery Source**: Ensure discovery uses `directoryService.fetchFollows()` (network) NOT `contactStorage.listContacts()` (local)
-2. **Scope Mismatch**: Verify sender computed recipient scope correctly using `PaykitV0Protocol.recipientScope()`
+2. **ContextId Mismatch**: Verify sender and recipient compute the same ContextId using `PaykitV0Protocol.contextId(sender, recipient)`
 3. **Encryption Target**: Sender must encrypt to recipient's published Noise public key
-4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{recipient_scope}/{request_id}`
+4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{context_id}/{request_id}` (ContextId is symmetric, same for both peers)
 
 **Requests not persisted to UI after discovery**
 

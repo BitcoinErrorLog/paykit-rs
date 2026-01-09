@@ -468,23 +468,27 @@ impl SubscriptionManager {
 
     /// Store a subscription proposal encrypted to the subscriber.
     ///
-    /// The proposal is encrypted using Paykit Sealed Blob v1 so only the
+    /// The proposal is encrypted using Paykit Sealed Blob v2 so only the
     /// intended subscriber can decrypt and read it.
     ///
     /// # Path Format (v0)
     ///
-    /// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{subscriber_scope}/{proposal_id}`
-    /// where `subscriber_scope = hex(sha256(normalized_subscriber_pubkey_z32))`.
+    /// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
+    /// where `context_id = hex(sha256("paykit:v0:context:" || sorted(provider_z32, subscriber_z32)))`.
     async fn store_subscription_proposal(
         &self,
         session: &pubky::PubkySession,
         subscription: &Subscription,
     ) -> Result<()> {
-        // Build canonical path using subscriber scope
+        // Build canonical path using context_id
+        let provider_pubkey_z32 = subscription.provider.to_string();
         let subscriber_pubkey_z32 = subscription.subscriber.to_string();
-        let path =
-            subscription_proposal_path(&subscriber_pubkey_z32, &subscription.subscription_id)
-                .map_err(|e| anyhow::anyhow!("Invalid subscriber pubkey: {}", e))?;
+        let path = subscription_proposal_path(
+            &provider_pubkey_z32,
+            &subscriber_pubkey_z32,
+            &subscription.subscription_id,
+        )
+        .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
         // Discover subscriber's Noise public key for encryption
         let subscriber_noise_pk = self.discover_noise_pk(&subscription.subscriber).await?;
@@ -492,9 +496,14 @@ impl SubscriptionManager {
         // Serialize and encrypt
         let plaintext = serde_json::to_vec(&subscription)?;
 
-        // Build canonical AAD
-        let aad = subscription_proposal_aad(&subscriber_pubkey_z32, &subscription.subscription_id)
-            .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
+        // Build canonical AAD with owner binding (owner = provider)
+        let aad = subscription_proposal_aad(
+            &provider_pubkey_z32, // owner = provider (stores on their homeserver)
+            &provider_pubkey_z32,
+            &subscriber_pubkey_z32,
+            &subscription.subscription_id,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
 
         let envelope = pubky_noise::sealed_blob::sealed_blob_encrypt(
             &subscriber_noise_pk,

@@ -1,3 +1,8 @@
+# WARNING: This crate uses Tokio and cannot be used in iOS Notification Extensions.
+# The 24MB memory limit will cause OOM crashes.
+# For extension use, use pure Swift/KMP code only.
+# See: bitkit-ios/docs/plans/ios_background_lightning_plan.md
+
 [package]
 name = "paykit-mobile"
 version = "0.2.0"

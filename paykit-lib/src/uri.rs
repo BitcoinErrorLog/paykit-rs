@@ -40,7 +40,7 @@ use std::str::FromStr;
 pub enum PaykitUri {
     /// A Pubky public key URI.
     ///
-    /// Format: `pubky://<base58-encoded-public-key>`
+    /// Format: `pubky://<z-base-32-encoded-public-key>`
     Pubky {
         /// The public key extracted from the URI.
         public_key: PublicKey,
@@ -91,7 +91,7 @@ impl PaykitUri {
 ///
 /// # Supported Formats
 ///
-/// 1. **Pubky URIs**: `pubky://<base58-public-key>`
+/// 1. **Pubky URIs**: `pubky://<z-base-32-public-key>`
 /// 2. **Lightning Invoices**: `lightning:<bolt11>` or just `lnbc1...`
 /// 3. **Bitcoin Addresses**: `bitcoin:<address>` or just `bc1q...` or `1A1...`
 /// 4. **Payment Requests**: `paykit:request?request_id=<id>&from=<pubky-uri>`
@@ -185,7 +185,7 @@ fn parse_pubky_uri(key_str: &str) -> Result<PaykitUri> {
     }
 
     // Try to parse as PublicKey
-    // PublicKey might be base58 encoded, z-base32, or hex depending on the implementation
+    // PublicKey is z-base-32 encoded (Pubky ecosystem standard)
     #[cfg(feature = "pubky")]
     {
         // Use pubky's PublicKey parsing

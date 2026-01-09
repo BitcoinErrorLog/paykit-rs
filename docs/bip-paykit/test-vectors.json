@@ -1,0 +1,296 @@
+{
+  "_license": "SPDX-License-Identifier: CC0-1.0",
+  "_description": "Test vectors for Paykit BIP implementation verification",
+  "_version": "0.1.0",
+
+  "identity_encoding": {
+    "description": "z-base-32 encoding of Ed25519 public keys",
+    "vectors": [
+      {
+        "description": "All zeros public key (trivially verifiable)",
+        "public_key_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "z_base_32": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "pubky_uri": "pubky://yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "notes": "z-base-32 'y' encodes 0 bits; this vector is trivially verifiable"
+      }
+    ],
+    "notes": [
+      "z-base-32 alphabet: ybndrfg8ejkmcpqxot1uwisza345h769",
+      "32 bytes -> 52 characters (no padding)",
+      "Case-insensitive, normalize to lowercase",
+      "Reference implementation: pubky crate (https://github.com/BitcoinErrorLog/pubky-core)"
+    ]
+  },
+
+  "directory_paths": {
+    "description": "Standard Paykit directory paths",
+    "prefix": "/pub/paykit.app/v0/",
+    "vectors": [
+      {
+        "method_id": "onchain",
+        "full_path": "/pub/paykit.app/v0/onchain"
+      },
+      {
+        "method_id": "lightning",
+        "full_path": "/pub/paykit.app/v0/lightning"
+      }
+    ]
+  },
+
+  "context_id": {
+    "description": "ContextId derivation test vectors",
+    "formula": "hex(sha256('paykit:v0:context:' + first_z32 + ':' + second_z32))",
+    "notes": [
+      "first_z32 and second_z32 are normalized pubkeys sorted lexicographically",
+      "Normalization: strip 'pubky://' and 'pk:' prefixes, lowercase, trim",
+      "Result is symmetric: context_id(A, B) == context_id(B, A)"
+    ],
+    "vectors": [
+      {
+        "description": "Two all-zeros pubkeys (trivial case)",
+        "pubkey_a": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "pubkey_b": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "first_z32": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "second_z32": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "preimage": "paykit:v0:context:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "expected_context_id": "9d88e67d72ad84aff9c61bd356da55c802febcfd2f86c9ca239a1a9d6e8db576",
+        "notes": "SHA256 of the preimage string (verified: echo -n 'paykit:v0:context:...' | shasum -a 256)"
+      },
+      {
+        "description": "Two different pubkeys with prefixes",
+        "pubkey_a": "pubky://ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+        "pubkey_b": "pk:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+        "first_z32": "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+        "second_z32": "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+        "preimage": "paykit:v0:context:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+        "expected_context_id": "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+        "notes": "Sorted lexicographically: '8' < 'y'"
+      }
+    ]
+  },
+
+  "ack_paths": {
+    "description": "ACK path and AAD test vectors",
+    "vectors": [
+      {
+        "description": "ACK for payment request",
+        "object_type": "request",
+        "sender_z32": "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+        "recipient_z32": "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+        "msg_id": "req_001",
+        "context_id": "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+        "expected_path": "/pub/paykit.app/v0/acks/request/762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74/req_001",
+        "expected_aad": "paykit:v0:ack_request:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo:/pub/paykit.app/v0/acks/request/762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74/req_001:req_001",
+        "notes": "Recipient writes ACK to their own storage"
+      },
+      {
+        "description": "ACK for subscription proposal",
+        "object_type": "subscription_proposal",
+        "sender_z32": "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+        "recipient_z32": "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
+        "msg_id": "prop_001",
+        "context_id": "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+        "expected_path": "/pub/paykit.app/v0/acks/subscription_proposal/762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74/prop_001",
+        "expected_aad": "paykit:v0:ack_subscription_proposal:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo:/pub/paykit.app/v0/acks/subscription_proposal/762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74/prop_001:prop_001"
+      }
+    ]
+  },
+
+  "endpoint_data": {
+    "description": "Example endpoint data for each payment method",
+    "vectors": [
+      {
+        "method_id": "onchain",
+        "endpoint_data": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+        "description": "bech32 Bitcoin address"
+      },
+      {
+        "method_id": "onchain",
+        "endpoint_data": "bitcoin:bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq?amount=0.001",
+        "description": "BIP21 URI with amount"
+      },
+      {
+        "method_id": "lightning",
+        "endpoint_data": "lnbc10u1p3pj257pp5yztkwjcz5ftl5laxkav23zmzekaw37zk6kmv80pk4xaev5qhtz7qdpdwd3xger9wd5kwm36yprx7u3qd36kucmgyp282etnv3shjcqzpgxqyz5vqsp5usyc4lk9chsfp53kvcnvq456ganh60d89reykdngsmtj6yw3nhvq9qyyssqjcewm5cjwz4a6rfjx77c490yced6pevvb6qf5dtr7vj4d5p3q7ug0r5pjqxrvs7hwlcsp3g4z8dn8jc2hy5l0nmdhw42rhw3tq0a8gpgpgqqy",
+        "description": "BOLT11 invoice"
+      },
+      {
+        "method_id": "lightning",
+        "endpoint_data": "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf0v9cxj0m385ekvcenxc6r2c35xvukxefcv5mkvv34x5ekzd3ev56nyd3hxqurzepexejxxepnxscrvwfnv9nxzcn9xq6xyefhvgcxxcmyxymnserxfq5fns",
+        "description": "LNURL-pay string (valid under lightning method)"
+      }
+    ]
+  },
+
+  "sealed_blob_v2": {
+    "description": "Sealed Blob v2 encryption test vector with deterministic inputs for roundtrip testing",
+    "vectors": [
+      {
+        "description": "Deterministic v2 inputs for encrypt-then-decrypt roundtrip verification",
+        "inputs": {
+          "recipient_sk_hex": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+          "recipient_pk_hex": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+          "ephemeral_sk_hex": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb",
+          "ephemeral_pk_hex": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+          "nonce_hex": "000000000000000000000000000000000000000000000001",
+          "plaintext": "Hello, Paykit!",
+          "aad": "paykit:v0:request:testowner:/pub/paykit.app/v0/requests/ctx123/req001:req001"
+        },
+        "derived": {
+          "shared_secret_note": "X25519(ephemeral_sk, recipient_pk)",
+          "salt_note": "ephemeral_pk || recipient_pk (64 bytes)",
+          "hkdf_info": "pubky-envelope/v2"
+        },
+        "expected_envelope_fields": {
+          "v": 2,
+          "epk_base64url": "3p7bfXt9wbTTW2HC7OQ1Nz-DQ8hbeGdNrfx-FG-IK08",
+          "nonce_base64url": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB"
+        },
+        "notes": "Use these inputs for roundtrip testing. In production, ephemeral keys and nonces are random, so ciphertext is not deterministic."
+      }
+    ],
+    "notes": [
+      "ephemeral_pk derived from ephemeral_sk via X25519 basepoint multiplication",
+      "Base64url encoding: RFC 4648 §5, no padding",
+      "epk is 32 bytes -> 43 base64url chars",
+      "nonce is 24 bytes -> 32 base64url chars",
+      "HKDF salt = ephemeral_pk || recipient_pk (64 bytes)",
+      "HKDF info = 'pubky-envelope/v2'",
+      "AEAD = XChaCha20-Poly1305",
+      "Ciphertext is not frozen in this vector because production envelopes use random ephemeral keys and nonces"
+    ]
+  },
+
+  "sealed_blob_v1_compat": {
+    "description": "Sealed Blob v1 backward compatibility vectors",
+    "vectors": [
+      {
+        "description": "V1 envelope structure (deterministic inputs, decrypt-only)",
+        "inputs": {
+          "recipient_sk_hex": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+          "recipient_pk_hex": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+          "ephemeral_pk_hex": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+          "nonce_hex": "000000000000000000000001",
+          "plaintext": "test"
+        },
+        "derived": {
+          "hkdf_info": "paykit-sealed-blob-v1"
+        },
+        "expected_envelope_fields": {
+          "v": 1,
+          "epk_base64url": "3p7bfXt9wbTTW2HC7OQ1Nz-DQ8hbeGdNrfx-FG-IK08",
+          "nonce_base64url": "AAAAAAAAAAAAAAAB",
+          "ct_note": "ChaCha20-Poly1305 ciphertext of 'test'; actual value is implementation-specific until frozen"
+        }
+      },
+      {
+        "description": "Frozen v1 envelope from pubky-noise test suite (cross-platform verification)",
+        "frozen_envelope": {
+          "v": 1,
+          "epk": "QrcZC6lKhz5XVTbIiLMORfdFl1KRz0B9D4RgvgE5Vms",
+          "nonce": "AQIDBAUGBwgJCgsM",
+          "ct": "YY0tmQsVUbOOb_4Z8w7wpZFM1lQ3S5qXgxI"
+        },
+        "inputs": {
+          "recipient_sk_hex": "1022334455667788990011121314151617181920212223242526272829ee7f40",
+          "note": "recipient_sk is clamped (sk[0] &= 248, sk[31] &= 127, sk[31] |= 64)",
+          "aad": "test:v1:compat"
+        },
+        "expected_plaintext": "v1 test data",
+        "notes": "This is a frozen envelope from pubky-noise. Decrypt with recipient_sk and aad to verify v1 compatibility."
+      }
+    ],
+    "notes": [
+      "v1 nonce is 12 bytes -> 16 base64url chars",
+      "v1 HKDF info = 'paykit-sealed-blob-v1'",
+      "v1 AEAD = ChaCha20-Poly1305 (not XChaCha)",
+      "Implementations MUST support v1 decryption",
+      "The frozen envelope vector enables cross-platform verification"
+    ]
+  },
+
+  "subscription_signature": {
+    "description": "Subscription signature structure (postcard serialization)",
+    "domain": "PAYKIT_SUBSCRIPTION_V2",
+    "vectors": [
+      {
+        "description": "Subscription signature inputs (expected output deferred until JCS migration)",
+        "subscription": {
+          "subscription_id": "sub_1704067200_abc123",
+          "subscriber": "pubky://yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+          "provider": "pubky://yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+          "terms": {
+            "amount": "1000",
+            "currency": "SAT",
+            "frequency": "monthly:1",
+            "method": "lightning",
+            "description": "Test subscription"
+          },
+          "metadata": {},
+          "created_at": 1704067200,
+          "starts_at": 1704067200,
+          "ends_at": null
+        },
+        "nonce_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "timestamp": 1704067200,
+        "expires_at": 1706745600,
+        "signer_sk_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+        "signer_pk_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+      }
+    ],
+    "notes": [
+      "Current serialization uses postcard (deterministic binary)",
+      "Message = SHA-256(domain || serialized || nonce || timestamp || expires_at)",
+      "Signature = Ed25519.sign(signer_sk, message)",
+      "Expected signature output deferred: postcard format is Rust-specific; migration to RFC 8785 JCS planned for v1.0"
+    ]
+  },
+
+  "receipt_id": {
+    "description": "Receipt ID generation format",
+    "format": "receipt_{timestamp}_{random_suffix}",
+    "vectors": [
+      {
+        "timestamp": 1704067200,
+        "random_suffix": "abc123",
+        "receipt_id": "receipt_1704067200_abc123"
+      }
+    ]
+  },
+
+  "message_framing": {
+    "description": "Length-prefixed message framing for Noise transport",
+    "vectors": [
+      {
+        "description": "Small message",
+        "message_json": "{\"type\":\"Ack\"}",
+        "message_bytes_hex": "7b2274797065223a2241636b227d",
+        "length_prefix_hex": "0000000e",
+        "framed_message_hex": "0000000e7b2274797065223a2241636b227d"
+      }
+    ],
+    "notes": [
+      "Length prefix is 4 bytes, big-endian unsigned integer",
+      "Maximum message size: 1,048,576 bytes (1 MB)",
+      "Maximum handshake message size: 65,536 bytes (64 KB)"
+    ]
+  },
+
+  "noise_handshake": {
+    "description": "Noise protocol handshake patterns supported by Paykit",
+    "patterns": [
+      {
+        "name": "Noise_IK",
+        "suite": "Noise_IK_25519_ChaChaPoly_BLAKE2s",
+        "messages": 2,
+        "use_case": "Initiator knows responder's static public key (REQUIRED)"
+      },
+      {
+        "name": "Noise_XX",
+        "suite": "Noise_XX_25519_ChaChaPoly_BLAKE2s",
+        "messages": 3,
+        "use_case": "First contact / TOFU (RECOMMENDED)"
+      }
+    ]
+  }
+}

@@ -4142,6 +4142,7 @@ version = "1.2.0"
 dependencies = [
  "base64",
  "blake2",
+ "blake3",
  "cfg-if",
  "chacha20poly1305",
  "curve25519-dalek",

@@ -16,6 +16,9 @@ default = []
 tracing = ["paykit-lib/tracing", "dep:tracing"]
 # Enable bindgen CLI tool
 bindgen-cli = ["dep:uniffi_bindgen", "dep:clap", "dep:anyhow", "dep:camino", "dep:toml"]
+# Enable legacy generic signing APIs (DEPRECATED - violates PUBKY_CRYPTO_SPEC v2.5)
+# This feature is OFF by default. Use typed signing APIs instead.
+legacy-signing = []
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]

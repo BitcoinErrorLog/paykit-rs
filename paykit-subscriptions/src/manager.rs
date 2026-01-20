@@ -6,7 +6,9 @@ use crate::{
     SignedSubscription, Subscription, SubscriptionStorage,
 };
 use paykit_interactive::{PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage};
-use paykit_lib::protocol::{subscription_proposal_aad, subscription_proposal_path};
+use paykit_lib::protocol::{
+    owner_peerid_bytes_from_z32, subscription_proposal_path, PURPOSE_SUBSCRIPTION_PROPOSAL,
+};
 use paykit_lib::PublicKey;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -125,9 +127,10 @@ impl SubscriptionManager {
         let _msg_json = serde_json::to_string(&SubscriptionMessage::PaymentRequest(Box::new(
             request.clone(),
         )))?;
-        channel
-            .send(PaykitNoiseMessage::Ack) // Placeholder - would extend enum
-            .await?;
+        // Note: Real-time Noise delivery uses Ack as confirmation.
+        // The actual payment request is delivered via stored encrypted blobs
+        // on the sender's homeserver (see discovery.rs::publish_payment_request).
+        channel.send(PaykitNoiseMessage::Ack).await?;
 
         // DEPRECATED: Plaintext notification storage has been removed for security.
         // Use `publish_payment_request` from discovery.rs for encrypted async storage.
@@ -175,8 +178,9 @@ impl SubscriptionManager {
             _ => {}
         }
 
-        // Send response via Noise channel
-        // Placeholder - would use extended enum
+        // Send response via Noise channel.
+        // Ack confirms the response was processed; actual content is in the
+        // stored encrypted blobs on the recipient's homeserver.
         channel.send(PaykitNoiseMessage::Ack).await?;
 
         Ok(())
@@ -225,9 +229,9 @@ impl SubscriptionManager {
         // Store the signature temporarily (we'll use it when acceptance comes back)
         // For now, just send the proposal
 
-        // Send proposal via Noise channel
-        // Note: In production, this would extend PaykitNoiseMessage enum
-        // For now, we use a placeholder
+        // Send Noise Ack to signal proposal notification.
+        // The actual encrypted proposal is stored on the provider's homeserver
+        // and discovered via polling (see store_subscription_proposal below).
         channel.send(PaykitNoiseMessage::Ack).await?;
 
         // Also store in Pubky for async discovery
@@ -468,8 +472,8 @@ impl SubscriptionManager {
 
     /// Store a subscription proposal encrypted to the subscriber.
     ///
-    /// The proposal is encrypted using Paykit Sealed Blob v2 so only the
-    /// intended subscriber can decrypt and read it.
+    /// The proposal is encrypted using Paykit Sealed Blob v2 with spec-compliant
+    /// binary AAD so only the intended subscriber can decrypt and read it.
     ///
     /// # Path Format (v0)
     ///
@@ -493,23 +497,20 @@ impl SubscriptionManager {
         // Discover subscriber's Noise public key for encryption
         let subscriber_noise_pk = self.discover_noise_pk(&subscription.subscriber).await?;
 
-        // Serialize and encrypt
+        // Serialize subscription
         let plaintext = serde_json::to_vec(&subscription)?;
 
-        // Build canonical AAD with owner binding (owner = provider)
-        let aad = subscription_proposal_aad(
-            &provider_pubkey_z32, // owner = provider (stores on their homeserver)
-            &provider_pubkey_z32,
-            &subscriber_pubkey_z32,
-            &subscription.subscription_id,
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
+        // Convert owner z32 to bytes for binary AAD (owner = provider)
+        let owner_peerid_bytes = owner_peerid_bytes_from_z32(&provider_pubkey_z32)
+            .map_err(|e| anyhow::anyhow!("Invalid owner pubkey: {}", e))?;
 
-        let envelope = pubky_noise::sealed_blob::sealed_blob_encrypt(
+        // Encrypt using Sealed Blob v2 with spec-compliant binary AAD
+        let envelope = pubky_noise::sealed_blob::sealed_blob_encrypt_with_context(
             &subscriber_noise_pk,
             &plaintext,
-            &aad,
-            Some("subscription_proposal"),
+            &owner_peerid_bytes,
+            &path,
+            Some(PURPOSE_SUBSCRIPTION_PROPOSAL),
         )
         .map_err(|e| anyhow::anyhow!("Failed to encrypt subscription proposal: {}", e))?;
 

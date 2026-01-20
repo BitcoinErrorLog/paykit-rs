@@ -128,10 +128,10 @@ impl TestContext {
     async fn new(test_name: &str) -> (Self, TcpListener, Arc<NoiseServer<TestRing, ()>>) {
         let server_seed = test_seed(&format!("{}_server", test_name));
         let server_ring = Arc::new(TestRing::new(server_seed));
-        let server_pk = server_pubkey(&server_ring, b"server_device");
+        let server_pk = server_pubkey(&server_ring, b"server_device_id");
         let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
             "server_kid",
-            b"server_device",
+            b"server_device_id",
             server_ring,
         ));
 
@@ -157,7 +157,7 @@ impl TestContext {
     fn create_client(&self) -> NoiseClient<TestRing, ()> {
         NoiseClient::<TestRing, ()>::new_direct(
             "client_kid",
-            b"client_device",
+            b"client_device_id",
             self.client_ring.clone(),
         )
     }
@@ -436,10 +436,10 @@ async fn test_e2e_concurrent_clients() {
 
     let server_seed = test_seed("concurrent_server");
     let server_ring = Arc::new(TestRing::new(server_seed));
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring,
     ));
 
@@ -504,7 +504,7 @@ async fn test_e2e_concurrent_clients() {
         let client_ring = Arc::new(TestRing::new(client_seed));
         let client = NoiseClient::<TestRing, ()>::new_direct(
             &format!("client_{}", i),
-            format!("device_{}", i).as_bytes(),
+            format!("device_padding_{:04}", i).as_bytes(),
             client_ring,
         );
 
@@ -811,10 +811,10 @@ async fn test_e2e_reconnection() {
 
     let server_seed = test_seed("reconnect_server");
     let server_ring = Arc::new(TestRing::new(server_seed));
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring,
     ));
 
@@ -860,7 +860,7 @@ async fn test_e2e_reconnection() {
     {
         let client = NoiseClient::<TestRing, ()>::new_direct(
             "client_kid",
-            b"client_device",
+            b"client_device_id",
             client_ring.clone(),
         );
         let stream = TcpStream::connect(server_addr).await.unwrap();
@@ -888,7 +888,7 @@ async fn test_e2e_reconnection() {
     // Second connection (reconnect)
     {
         let client =
-            NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
+            NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
         let stream = TcpStream::connect(server_addr).await.unwrap();
         let mut channel = PubkyNoiseChannel::connect(&client, stream, &server_pk)
             .await

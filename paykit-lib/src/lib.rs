@@ -35,9 +35,11 @@ pub use pubky::PublicKey;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PublicKey(pub String);
 
+pub mod atomicity;
 pub mod errors;
 pub mod executors;
 pub mod health;
+pub mod keys;
 pub mod methods;
 pub mod prelude;
 pub mod private_endpoints;
@@ -45,6 +47,7 @@ pub mod protocol;
 pub mod rotation;
 pub mod routing;
 pub mod secure_storage;
+pub mod security;
 pub mod selection;
 mod transport;
 pub mod uri;

@@ -8,9 +8,9 @@ edition = "2021"
 
 [features]
 default = ["pubky"]
-pubky = ["dep:pubky"]
+pubky = ["dep:pubky", "dep:pubky-noise"]
 tracing = ["dep:tracing"]
-file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:rand", "dep:zeroize", "dep:argon2"]
+file-storage = ["dep:md5", "dep:aes-gcm", "dep:hkdf", "dep:zeroize", "dep:argon2"]
 # Enable test utilities for integration testing
 test-utils = []
 # Integration tests that require network access (opt-in only)
@@ -26,7 +26,10 @@ async-trait = "0.1.89"
 chrono = "0.4"
 hex = "0.4"
 md5 = { version = "0.7", optional = true }
+# pubky-core: Aligned to implement PUBKY_CRYPTO_SPEC v2.5 and PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2
 pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801", optional = true }
+# pubky-noise: SB2 binary format and Noise transport per PUBKY_CRYPTO_SPEC v2.5
+pubky-noise = { path = "../../pubky-noise", optional = true }
 sha2 = "0.10"
 thiserror = "2.0"
 tokio = "1.48.0"
@@ -36,7 +39,10 @@ tracing = { version = "0.1", optional = true }
 # Encryption dependencies for file-storage feature
 aes-gcm = { version = "0.10", optional = true }
 hkdf = { version = "0.12", optional = true }
-rand = { version = "0.8", optional = true }
+# rand is now required for generate_context_id() per PUBKY_CRYPTO_SPEC v2.5
+rand = "0.8"
+# x25519_dalek is required for InboxKey/TransportKey per PUBKY_CRYPTO_SPEC v2.5
+x25519-dalek = "2"
 # Secure memory zeroization
 zeroize = { version = "1", features = ["derive"], optional = true }
 # Argon2 password-based KDF (memory-hard, resistant to brute-force attacks)

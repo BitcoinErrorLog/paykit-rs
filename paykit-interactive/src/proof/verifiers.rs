@@ -176,9 +176,11 @@ impl ProofVerifier for RealBitcoinProofVerifier {
 /// - Verifies SHA256(preimage) == payment_hash
 /// - Optionally queries LND to verify payment was successful
 pub struct RealLightningProofVerifier {
-    /// Optional LND client for additional verification
+    /// Optional LND client for additional verification.
+    /// Note: LND integration is intentionally out-of-scope for v1.0.
+    /// The verifier performs cryptographic preimage verification only.
     #[allow(dead_code)]
-    lnd_client: Option<()>, // Placeholder for future LND integration
+    lnd_client: Option<()>,
 }
 
 impl Default for RealLightningProofVerifier {

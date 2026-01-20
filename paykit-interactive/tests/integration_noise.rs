@@ -346,10 +346,10 @@ async fn test_complete_payment_flow_encrypted() {
     // Setup server (payee) with deterministic seed
     let server_seed = generate_test_seed("payee_server_test_3");
     let server_ring = Arc::new(DummyRing::new(server_seed));
-    let server_pk = get_server_pubkey(&server_ring, b"payee_device");
+    let server_pk = get_server_pubkey(&server_ring, b"payee_device_idx");
     let server = Arc::new(NoiseServer::<DummyRing, ()>::new_direct(
         "payee_kid",
-        b"payee_device",
+        b"payee_device_idx",
         server_ring,
     ));
 
@@ -410,7 +410,7 @@ async fn test_complete_payment_flow_encrypted() {
     let client_seed = generate_test_seed("payer_client_test_3");
     let client_ring = Arc::new(DummyRing::new(client_seed));
     let client =
-        NoiseClient::<DummyRing, ()>::new_direct("payer_kid", b"payer_device", client_ring);
+        NoiseClient::<DummyRing, ()>::new_direct("payer_kid", b"payer_device_idx", client_ring);
 
     let payer_storage = Arc::new(Box::new(MockStorage::new()) as Box<dyn PaykitStorage>);
     let payer_generator =

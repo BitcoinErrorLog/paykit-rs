@@ -1,7 +1,28 @@
-//! Pubkey normalization and scope hashing.
+//! Pubkey normalization, ContextId generation, and scope hashing.
+//!
+//! # ContextId (PUBKY_CRYPTO_SPEC v2.5)
+//!
+//! Per PUBKY_CRYPTO_SPEC v2.5 Section 7.2, a ContextId is 32 random bytes
+//! chosen by the thread initiator. It identifies a message thread and is
+//! included in the SB2 header.
+//!
+//! ## Random ContextId (Recommended)
+//!
+//! Use `generate_context_id()` for new threads:
+//! - 32 random bytes (cryptographically secure)
+//! - Chosen by the initiator (sender)
+//! - Stored in SB2 header field `context_id`
+//!
+//! ## Legacy Pair-Derived ContextId (Migration)
+//!
+//! The legacy `pair_context_id()` derives a symmetric ID from two peer pubkeys.
+//! This is kept for backward compatibility during migration.
+//!
+//! # Scope (Legacy)
 //!
 //! The `scope` is a per-recipient directory hash used in storage paths
 //! to avoid leaking the recipient's pubkey while remaining deterministic.
+//! This is deprecated in favor of ContextId-based paths.
 
 use crate::{PaykitError, Result};
 use sha2::{Digest, Sha256};
@@ -71,11 +92,104 @@ pub fn normalize_pubkey_z32(pubkey: &str) -> Result<String> {
     Ok(lowercased)
 }
 
+// ============================================================================
+// Random ContextId (PUBKY_CRYPTO_SPEC v2.5)
+// ============================================================================
+
+/// ContextId length in bytes.
+pub const CONTEXT_ID_LEN: usize = 32;
+
+/// Generate a random ContextId per PUBKY_CRYPTO_SPEC v2.5 Section 7.2.
+///
+/// A ContextId is 32 cryptographically random bytes chosen by the thread
+/// initiator to identify a message thread.
+///
+/// # Returns
+///
+/// 32 random bytes suitable for use as a thread identifier.
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::protocol::generate_context_id;
+///
+/// let ctx = generate_context_id();
+/// assert_eq!(ctx.len(), 32);
+/// ```
+pub fn generate_context_id() -> [u8; CONTEXT_ID_LEN] {
+    use rand::RngCore;
+    let mut ctx = [0u8; CONTEXT_ID_LEN];
+    rand::thread_rng().fill_bytes(&mut ctx);
+    ctx
+}
+
+/// Generate a random ContextId and return as hex string.
+///
+/// # Returns
+///
+/// Lowercase hex string (64 chars) representing 32 random bytes.
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::protocol::generate_context_id_hex;
+///
+/// let ctx = generate_context_id_hex();
+/// assert_eq!(ctx.len(), 64);
+/// ```
+pub fn generate_context_id_hex() -> String {
+    hex::encode(generate_context_id())
+}
+
+/// Parse a hex-encoded ContextId into bytes.
+///
+/// # Errors
+///
+/// Returns `PaykitError::InvalidData` if the hex string is malformed or wrong length.
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::protocol::{generate_context_id_hex, parse_context_id_hex};
+///
+/// let hex = generate_context_id_hex();
+/// let bytes = parse_context_id_hex(&hex).unwrap();
+/// assert_eq!(bytes.len(), 32);
+/// ```
+pub fn parse_context_id_hex(hex_str: &str) -> Result<[u8; CONTEXT_ID_LEN]> {
+    let bytes = hex::decode(hex_str).map_err(|_| PaykitError::InvalidData {
+        field: "context_id".into(),
+        reason: "invalid hex encoding".into(),
+    })?;
+
+    if bytes.len() != CONTEXT_ID_LEN {
+        return Err(PaykitError::InvalidData {
+            field: "context_id".into(),
+            reason: format!(
+                "context_id must be {} bytes, got {}",
+                CONTEXT_ID_LEN,
+                bytes.len()
+            ),
+        });
+    }
+
+    let mut arr = [0u8; CONTEXT_ID_LEN];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
+}
+
+// ============================================================================
+// Legacy Pair-Derived ContextId (for migration)
+// ============================================================================
+
 /// Compute ContextId for a peer pair (symmetric).
+///
+/// **DEPRECATED**: Use `generate_context_id()` for new threads per PUBKY_CRYPTO_SPEC v2.5.
+/// This function is retained for backward compatibility during migration.
 ///
 /// Formula: `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))`
 ///
-/// ContextId is symmetric: `context_id(A, B) == context_id(B, A)`
+/// ContextId is symmetric: `pair_context_id(A, B) == pair_context_id(B, A)`
 ///
 /// # Arguments
 ///
@@ -93,13 +207,17 @@ pub fn normalize_pubkey_z32(pubkey: &str) -> Result<String> {
 /// # Example
 ///
 /// ```
-/// use paykit_lib::protocol::context_id;
+/// use paykit_lib::protocol::pair_context_id;
 ///
-/// let ctx = context_id("pk:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
-///                      "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo").unwrap();
+/// let ctx = pair_context_id("pk:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
+///                           "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo").unwrap();
 /// assert_eq!(ctx.len(), 64);
 /// ```
-pub fn context_id(pubkey_a: &str, pubkey_b: &str) -> Result<String> {
+#[deprecated(
+    since = "0.4.0",
+    note = "Use generate_context_id() for new threads per PUBKY_CRYPTO_SPEC v2.5"
+)]
+pub fn pair_context_id(pubkey_a: &str, pubkey_b: &str) -> Result<String> {
     let norm_a = normalize_pubkey_z32(pubkey_a)?;
     let norm_b = normalize_pubkey_z32(pubkey_b)?;
     let (first, second) = if norm_a <= norm_b {
@@ -111,6 +229,18 @@ pub fn context_id(pubkey_a: &str, pubkey_b: &str) -> Result<String> {
     let mut hasher = Sha256::new();
     hasher.update(format!("paykit:v0:context:{}:{}", first, second).as_bytes());
     Ok(hex::encode(hasher.finalize()))
+}
+
+/// Alias for `pair_context_id` - kept for backward compatibility.
+///
+/// **DEPRECATED**: Use `generate_context_id()` for new threads per PUBKY_CRYPTO_SPEC v2.5.
+#[deprecated(
+    since = "0.4.0",
+    note = "Use generate_context_id() for new threads per PUBKY_CRYPTO_SPEC v2.5"
+)]
+pub fn context_id(pubkey_a: &str, pubkey_b: &str) -> Result<String> {
+    #[allow(deprecated)]
+    pair_context_id(pubkey_a, pubkey_b)
 }
 
 /// Compute the scope hash for a pubkey.
@@ -227,29 +357,78 @@ mod tests {
         assert!(err.to_string().contains("invalid z32 character"));
     }
 
-    // ContextId tests
+    // ========================================================================
+    // Random ContextId Tests (PUBKY_CRYPTO_SPEC v2.5)
+    // ========================================================================
+
     #[test]
-    fn context_id_is_symmetric() {
+    fn generate_context_id_has_correct_length() {
+        let ctx = generate_context_id();
+        assert_eq!(ctx.len(), CONTEXT_ID_LEN);
+        assert_eq!(ctx.len(), 32);
+    }
+
+    #[test]
+    fn generate_context_id_is_random() {
+        let ctx1 = generate_context_id();
+        let ctx2 = generate_context_id();
+        // Should be different (with overwhelming probability)
+        assert_ne!(ctx1, ctx2);
+    }
+
+    #[test]
+    fn generate_context_id_hex_has_correct_length() {
+        let ctx = generate_context_id_hex();
+        assert_eq!(ctx.len(), 64); // 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn parse_context_id_hex_roundtrip() {
+        let ctx = generate_context_id();
+        let hex = hex::encode(ctx);
+        let parsed = parse_context_id_hex(&hex).unwrap();
+        assert_eq!(ctx, parsed);
+    }
+
+    #[test]
+    fn parse_context_id_hex_rejects_invalid() {
+        // Wrong length
+        let result = parse_context_id_hex("abcd");
+        assert!(result.is_err());
+
+        // Invalid hex
+        let result = parse_context_id_hex("not-hex-at-all");
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Legacy Pair-Derived ContextId Tests (with #[allow(deprecated)])
+    // ========================================================================
+
+    #[test]
+    #[allow(deprecated)]
+    fn pair_context_id_is_symmetric() {
         let pubkey_a = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
         let pubkey_b = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
 
-        let ctx_ab = context_id(pubkey_a, pubkey_b).unwrap();
-        let ctx_ba = context_id(pubkey_b, pubkey_a).unwrap();
+        let ctx_ab = pair_context_id(pubkey_a, pubkey_b).unwrap();
+        let ctx_ba = pair_context_id(pubkey_b, pubkey_a).unwrap();
 
         assert_eq!(ctx_ab, ctx_ba);
         assert_eq!(ctx_ab.len(), 64);
     }
 
     #[test]
-    fn context_id_handles_pubky_prefix() {
+    #[allow(deprecated)]
+    fn pair_context_id_handles_pubky_prefix() {
         let pubkey_a = "pubky://ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
         let pubkey_b = "pk:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
 
-        let ctx = context_id(pubkey_a, pubkey_b).unwrap();
+        let ctx = pair_context_id(pubkey_a, pubkey_b).unwrap();
         assert_eq!(ctx.len(), 64);
 
         // Should match without prefixes
-        let ctx_no_prefix = context_id(
+        let ctx_no_prefix = pair_context_id(
             "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u",
             "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo",
         )
@@ -258,10 +437,22 @@ mod tests {
     }
 
     #[test]
-    fn context_id_same_pubkey() {
+    #[allow(deprecated)]
+    fn pair_context_id_same_pubkey() {
         let pubkey = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
-        let ctx = context_id(pubkey, pubkey).unwrap();
+        let ctx = pair_context_id(pubkey, pubkey).unwrap();
         assert_eq!(ctx.len(), 64);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn context_id_alias_works() {
+        let pubkey_a = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+        let pubkey_b = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+
+        let ctx1 = context_id(pubkey_a, pubkey_b).unwrap();
+        let ctx2 = pair_context_id(pubkey_a, pubkey_b).unwrap();
+        assert_eq!(ctx1, ctx2);
     }
 
     // Legacy tests (with #[allow(deprecated)])
@@ -323,5 +514,83 @@ mod tests {
         let pubkey4_upper = "YBNDRFG8EJKMCPQXOT1UWISZA345H769YBNDRFG8EJKMCPQXOT1U";
         let scope4 = recipient_scope(pubkey4_upper).unwrap();
         assert_eq!(scope1, scope4);
+    }
+
+    // ========================================================================
+    // Interop Test Vectors (INTEROP_TEST_VECTORS.md)
+    //
+    // These tests verify exact matches with the documented test vectors.
+    // If any of these fail, the implementation is incompatible with the spec.
+    // ========================================================================
+
+    #[test]
+    #[allow(deprecated)]
+    fn interop_context_id_vector_1_same_pubkey() {
+        // From INTEROP_TEST_VECTORS.md: identical pubkeys
+        let pubkey = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy";
+        let ctx = pair_context_id(pubkey, pubkey).unwrap();
+        assert_eq!(
+            ctx,
+            "9d88e67d72ad84aff9c61bd356da55c802febcfd2f86c9ca239a1a9d6e8db576",
+            "ContextId vector 1 mismatch"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn interop_context_id_vector_2_different_pubkeys() {
+        // From INTEROP_TEST_VECTORS.md: different pubkeys
+        let pubkey_a = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+        let pubkey_b = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+        let ctx = pair_context_id(pubkey_a, pubkey_b).unwrap();
+        assert_eq!(
+            ctx,
+            "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+            "ContextId vector 2 mismatch"
+        );
+
+        // Also verify symmetry
+        let ctx_reversed = pair_context_id(pubkey_b, pubkey_a).unwrap();
+        assert_eq!(ctx, ctx_reversed, "ContextId should be symmetric");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn interop_context_id_vector_3_with_prefixes() {
+        // From INTEROP_TEST_VECTORS.md: with prefixes (should normalize to same)
+        let pubkey_a = "pk:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+        let pubkey_b = "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+        let ctx = pair_context_id(pubkey_a, pubkey_b).unwrap();
+        assert_eq!(
+            ctx,
+            "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+            "ContextId vector 3 mismatch (should match vector 2 after normalization)"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn interop_legacy_scope_vector_1() {
+        // From INTEROP_TEST_VECTORS.md
+        let pubkey = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
+        let scope = recipient_scope(pubkey).unwrap();
+        assert_eq!(
+            scope,
+            "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80",
+            "Legacy scope vector 1 mismatch"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn interop_legacy_scope_vector_2() {
+        // From INTEROP_TEST_VECTORS.md
+        let pubkey = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
+        let scope = recipient_scope(pubkey).unwrap();
+        assert_eq!(
+            scope,
+            "04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12",
+            "Legacy scope vector 2 mismatch"
+        );
     }
 }

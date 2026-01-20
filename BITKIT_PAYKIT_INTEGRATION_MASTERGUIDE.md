@@ -1,9 +1,21 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 2.5  
-> **Last Updated**: January 7, 2026  
+> **Version**: 2.7  
+> **Last Updated**: January 20, 2026  
 > **Status**: Production Ready - E2E Verified
+>
+> **v2.7 Changes**: Fixed secure handoff decryption across all platforms:
+> - **Bitkit iOS + Android**: Switched from `sealedBlobDecrypt` with legacy AAD to `sealedBlobDecryptWithContext` which internally builds the spec-compliant AAD (`pubky-envelope/v2:` || owner_peerid || canonical_path || header_bytes)
+> - **Timestamp units**: Fixed timestamp handling to expect Unix seconds (as sent by Ring) instead of milliseconds
+> - **pubky-ring bindings**: Updated native UniFFI bindings (Kotlin + Swift) and native libraries (.so + .xcframework) to include all spec-compliant functions
+> - **UKD clarification**: Ring README now correctly states that UKD functions are available in native bindings but not yet exposed to JavaScript layer
+>
+> **v2.6 Changes**: Aligned Paykit handoff/Sealed Blob AAD construction with PUBKY_CRYPTO_SPEC and added Unified Key Delegation (UKD v0.2) guidance for delegated app keys:
+> - **AAD bytes** now follow `pubky-envelope/v2:` + owner peerid bytes + canonical path bytes + header bytes
+> - **Delegation**: AppCerts bind AppKey/TransportKey/InboxKey and publish via KeyBinding `app_keys[]` with `cert_id`
+> - **Sealed Blob headers** include `cert_id` when delegated keys are used
+> - **Key roles** clarified: AppKey (Ed25519 signing), TransportKey (Noise static), InboxKey (stored delivery)
 >
 > **v2.5 Changes**: Upgraded Sealed Blob from v1 to v2 across all platforms. Key changes:
 > - **XChaCha20-Poly1305** replaces ChaCha20-Poly1305 (24-byte nonces vs 12-byte)
@@ -98,7 +110,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] Homeserver `pubky-host` header required for central homeserver
 - [x] PubkyAppFollow `created_at` timestamp requirement documented
 - [x] Android E2E tests verified with Maestro (session, profile, follows)
-- [x] PaykitV0Protocol: canonical path builders and AAD formats (Rust, Kotlin, Swift)
+- [x] PaykitV0Protocol: canonical path builders and AAD bytes per PUBKY_CRYPTO_SPEC (Rust, Kotlin, Swift)
 - [x] Sender-storage model: payment requests stored on sender's homeserver
 - [x] Recipient-scoped directories: `hex(sha256(normalized_pubkey))` for privacy
 - [x] Mandatory Sealed Blob encryption for payment requests and subscription proposals
@@ -126,6 +138,7 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
    - [7.1 Native Module Architecture](#71-native-module-architecture-pubky-noise-in-ring)
    - [7.2 Paykit Connect Action](#72-paykit-connect-action-ring-side-implementation)
    - [7.3 Bitkit-side Session and Key Handling](#73-bitkit-side-session-and-key-handling)
+   - [7.4 Unified Key Delegation (AppCerts)](#74-unified-key-delegation-appcerts)
 8. [Feature Implementation Guide](#8-feature-implementation-guide)
 9. [Known Quirks & Footguns](#9-known-quirks--footguns)
 10. [Stubs & Mocks Inventory](#10-stubs--mocks-inventory)
@@ -888,7 +901,8 @@ class PaykitKeychainStorage {
 android {
     defaultConfig {
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Note: x86 (32-bit) is NOT supported - only x86_64 for emulators
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
     
@@ -1145,7 +1159,7 @@ export const handlePaykitConnectAction = async (
     // Step 4: Build payload
     const requestId = generateRequestId(); // 256-bit random
     const payload = {
-        version: 1,
+        version: 2,
         pubky: sessionInfo.pubky,
         session_secret: sessionInfo.session_secret,
         capabilities: sessionInfo.capabilities,
@@ -1155,14 +1169,22 @@ export const handlePaykitConnectAction = async (
             keypair1 && { epoch: 1, public_key: keypair1.publicKey, secret_key: keypair1.secretKey },
         ].filter(Boolean),
         noise_seed: noiseSeed,
-        created_at: Date.now(),
-        expires_at: Date.now() + 5 * 60 * 1000, // 5 minutes
+        created_at: Math.floor(Date.now() / 1000),
+        expires_at: Math.floor(Date.now() / 1000) + 5 * 60, // 5 minutes
     };
 
     // Step 5: Encrypt payload using Sealed Blob
     const storagePath = `/pub/paykit.app/v0/handoff/${requestId}`;
-    const aad = `paykit:v0:handoff:${pubky}:${storagePath}:${requestId}`;
-    const envelope = await sealedBlobEncrypt(ephemeralPk, JSON.stringify(payload), aad, 'handoff');
+    const payloadHex = stringToHex(JSON.stringify(payload));
+    const headerBytes = buildSealedBlobHeader({ purpose: 'handoff', msgId: requestId });
+    const aadBytes = concatBytes(
+        utf8('pubky-envelope/v2:'),
+        pubkyPeerIdBytes,
+        utf8(storagePath),
+        headerBytes,
+    );
+    const aadHex = bytesToHex(aadBytes);
+    const envelope = await sealedBlobEncrypt(ephemeralPk, payloadHex, aadHex, 'handoff');
 
     // Step 6: Store encrypted envelope on homeserver
     const handoffPath = `pubky://${pubky}${storagePath}`;
@@ -1184,10 +1206,11 @@ export const handlePaykitConnectAction = async (
 bitkit://paykit-setup?mode=secure_handoff&pubky=<z32_pubkey>&request_id=<256bit_hex>
 ```
 
-**AAD Format (Paykit v0 Protocol)**:
+**AAD Construction (PUBKY_CRYPTO_SPEC)**:
 ```
-paykit:v0:handoff:{pubky}:{storagePath}:{requestId}
+aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_bytes
 ```
+`owner_peerid_bytes` is the 32-byte Pubky identity of the storage owner (the Ring user for handoff). `canonical_path_bytes` must obey PUBKY_CRYPTO_SPEC path canonicalization rules. `header_bytes` is the deterministic CBOR header for the envelope (omit `sig` when computing signature input).
 
 **Bitkit then**:
 1. Fetches encrypted envelope from `pubky://<pubky>/pub/paykit.app/v0/handoff/<request_id>`
@@ -1308,15 +1331,14 @@ Normalization:
 | Noise Endpoint | `/pub/paykit.app/v0/noise` |
 | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
 
-**AAD Formats (for Sealed Blob):**
-| Object Type | AAD Format |
-|-------------|------------|
-| Payment Request | `paykit:v0:request:{path}:{request_id}` |
-| Subscription Proposal | `paykit:v0:subscription_proposal:{path}:{proposal_id}` |
-| Subscription Agreement | `paykit:v0:subscription_agreement:{path}:{subscription_id}` |
-| Subscription Cancellation | `paykit:v0:subscription_cancellation:{path}:{subscription_id}` |
-| Secure Handoff | `paykit:v0:handoff:{owner_pubkey}:{path}:{request_id}` |
-| Cross-device Relay Session | `paykit:v0:relay:session:{request_id}` |
+**AAD Construction (Sealed Blob v2):**
+```
+aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_bytes
+```
+- `owner_peerid_bytes`: 32 raw bytes of the storage owner (Pubky identity).
+- `canonical_path_bytes`: UTF-8 bytes of the canonical path (leading slash, no trailing slash, no percent encoding).
+- `header_bytes`: deterministic CBOR header bytes per PUBKY_CRYPTO_SPEC (use header without `sig` when building signature input).
+- Object type is conveyed via `purpose` in the header and the canonical path; do not build legacy `paykit:v0:*` AAD strings.
 
 **Cross-Platform Test Vectors:**
 See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for pubkey→scope hash test cases that all implementations must pass.
@@ -1401,10 +1423,11 @@ Ring completes auth and posts the **encrypted** session to the relay; Bitkit pol
 - iOS: `PubkyRingBridge.pollForCrossDeviceSession(requestId:timeout:)`
 - Android: `PubkyRingBridge.pollForCrossDeviceSession(requestId, timeoutMs)`
 
-**AAD Format (Paykit v0 Protocol)**:
+**AAD Construction (PUBKY_CRYPTO_SPEC)**:
 ```
-paykit:v0:relay:session:{requestId}
+aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_bytes
 ```
+Relay canonical path: `/relay/sessions/{request_id}` (no trailing slash). The storage owner is the requesting Pubky identity.
 
 Relay default:
 - iOS default: `https://relay.pubky.app/sessions` (override with `PUBKY_RELAY_URL`)
@@ -1527,6 +1550,16 @@ PubkyAuthenticatedStorageAdapter(
 This ensures the `Cookie` header uses the correct format (`{pubkey}={secret}`) and the `pubky-host` header is always included.
 
 ---
+
+### 7.4 Unified Key Delegation (AppCerts)
+
+Pubky Ring must support Unified Key Delegation (UKD v0.2) for Pubky apps:
+
+- **AppCert issuance**: Ring uses the root PKARR Ed25519 key to sign an AppCert binding `app_id`, `app_ed25519_pub`, `transport_x25519_pub`, and `inbox_x25519_pub` (plus optional `device_id` and `scopes`).
+- **cert_id**: `first_16_bytes(SHA256(cert_body_bytes))`, published alongside the AppCert in KeyBinding `app_keys[]` entries for discovery.
+- **AppKey usage**: AppKey signs typed payloads (proof-of-authorship) and DPoP-like request proofs. Ring must expose typed signing APIs only (no generic sign-anything surface).
+- **Key separation**: AppKey, TransportKey, and InboxKey must remain distinct (no key reuse).
+- **Sealed Blob headers**: include `cert_id` when delegated keys are used so recipients can verify against the AppCert from KeyBinding.
 
 ## 8. Feature Implementation Guide
 
@@ -1726,6 +1759,7 @@ Where it is implemented:
 
 **Storage path:** `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
 - `context_id` = `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
+- Use the raw 32-byte `context_id` bytes in Sealed Blob headers; the hex form is for paths only
 - Stored on **sender's** homeserver (not recipient's)
 
 End-to-end steps:
@@ -1751,7 +1785,7 @@ Recipients discover pending requests by polling known contacts' storage:
 **Mandatory Encryption:**
 - All payment requests MUST use Sealed Blob encryption
 - Plaintext requests are REJECTED for security
-- AAD format: `paykit:v0:request:{path}:{request_id}`
+- AAD uses PUBKY_CRYPTO_SPEC bytes: `pubky-envelope/v2:` + owner peerid bytes + canonical path bytes + header bytes
 
 **Implementation:**
 - **Android**: `PaykitPollingWorker.discoverPendingRequests()` polls contacts
@@ -3052,6 +3086,10 @@ This comprehensive checklist covers everything the production team must verify b
 - [ ] Cross-device QR code generation works
 - [ ] Cross-device relay polling works (5-minute timeout)
 - [ ] Ring correctly derives X25519 keys using `deriveDeviceKey`
+- [ ] AppCert issuance and revocation flows work (root key signs only AppCerts)
+- [ ] KeyBinding `app_keys[]` entries published with correct `cert_id`
+- [ ] AppKey typed signing works for pubky apps (proof-of-authorship + DPoP-like proofs)
+- [ ] Sealed Blob headers include `cert_id` when delegated keys are used
 
 ### 16.5 Session Management
 
@@ -3179,7 +3217,7 @@ The following architectural improvements were implemented to enhance security, r
 **Security Properties**:
 - **Encrypted at rest**: Sealed Blob v2 (X25519 ECDH + XChaCha20-Poly1305 + HKDF-SHA256)
 - **Path unguessability**: 256-bit random request_id
-- **AAD binding**: `paykit:v0:handoff:{pubky}:{path}:{requestId}` prevents replay
+- **AAD binding**: `pubky-envelope/v2:` + owner peerid bytes + canonical path bytes + header bytes prevents relocation/replay
 - **Time-limited**: 5-minute `expires_at` timestamp in payload
 - **Forward secrecy**: ephemeral X25519 keypair per handoff
 - **Plaintext rejected**: Bitkit's `isSealedBlob()` check rejects unencrypted payloads

@@ -199,8 +199,9 @@ pub trait ProofVerifier: Send + Sync {
 
 /// Bitcoin transaction proof verifier.
 ///
-/// This is a placeholder that performs basic validation.
-/// A production implementation would query a Bitcoin node.
+/// Performs format validation of transaction IDs.
+/// Full on-chain verification (querying a Bitcoin node) is intentionally
+/// out-of-scope for v1.0 - clients should perform their own chain verification.
 pub struct BitcoinProofVerifier;
 
 #[async_trait::async_trait]

@@ -343,3 +343,176 @@ fn test_is_sealed_blob_detects_v1_and_v2() {
         "Should reject unsupported version"
     );
 }
+
+// ============================================================
+// Binary AAD Tests (PUBKY_CRYPTO_SPEC v2.5)
+// ============================================================
+
+use paykit_lib::protocol::owner_peerid_bytes_from_z32;
+use pubky_noise::sealed_blob::{
+    sealed_blob_decrypt_with_context, sealed_blob_encrypt_with_context,
+};
+
+fn random_owner_peerid_bytes() -> ([u8; 32], String) {
+    let keypair = pkarr::Keypair::random();
+    let z32 = keypair.public_key().to_z32();
+    let bytes = owner_peerid_bytes_from_z32(&z32).unwrap();
+    (bytes, z32)
+}
+
+#[test]
+fn test_binary_aad_encrypt_decrypt_roundtrip() {
+    let subscription = create_test_subscription();
+    let (recipient_sk, recipient_pk) = random_x25519_keypair();
+    let (owner_peerid, _owner_z32) = random_owner_peerid_bytes();
+
+    let plaintext = serde_json::to_vec(&subscription).unwrap();
+    let path = format!(
+        "/pub/paykit.app/v0/subscriptions/proposals/{}/{}",
+        subscription.subscriber, subscription.subscription_id
+    );
+
+    let envelope = sealed_blob_encrypt_with_context(
+        &recipient_pk,
+        &plaintext,
+        &owner_peerid,
+        &path,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption should succeed");
+
+    assert!(check_sealed_blob(&envelope), "Should be valid sealed blob");
+
+    let decrypted = sealed_blob_decrypt_with_context(&recipient_sk, &envelope, &owner_peerid, &path)
+        .expect("Decryption should succeed");
+
+    let recovered: Subscription =
+        serde_json::from_slice(&decrypted).expect("Should deserialize subscription");
+
+    assert_eq!(recovered.subscription_id, subscription.subscription_id);
+    assert_eq!(recovered.provider, subscription.provider);
+}
+
+#[test]
+fn test_binary_aad_wrong_owner_peerid_fails() {
+    let subscription = create_test_subscription();
+    let (recipient_sk, recipient_pk) = random_x25519_keypair();
+    let (owner_peerid, _owner_z32) = random_owner_peerid_bytes();
+    let (wrong_owner, _wrong_z32) = random_owner_peerid_bytes();
+
+    let plaintext = serde_json::to_vec(&subscription).unwrap();
+    let path = format!(
+        "/pub/paykit.app/v0/subscriptions/proposals/{}/{}",
+        subscription.subscriber, subscription.subscription_id
+    );
+
+    let envelope = sealed_blob_encrypt_with_context(
+        &recipient_pk,
+        &plaintext,
+        &owner_peerid,
+        &path,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption should succeed");
+
+    let result = sealed_blob_decrypt_with_context(&recipient_sk, &envelope, &wrong_owner, &path);
+
+    assert!(
+        result.is_err(),
+        "Decryption with wrong owner peerid should fail"
+    );
+}
+
+#[test]
+fn test_binary_aad_wrong_path_fails() {
+    let subscription = create_test_subscription();
+    let (recipient_sk, recipient_pk) = random_x25519_keypair();
+    let (owner_peerid, _owner_z32) = random_owner_peerid_bytes();
+
+    let plaintext = serde_json::to_vec(&subscription).unwrap();
+    let path = "/pub/paykit.app/v0/subscriptions/proposals/correct/id";
+    let wrong_path = "/pub/paykit.app/v0/subscriptions/proposals/wrong/id";
+
+    let envelope = sealed_blob_encrypt_with_context(
+        &recipient_pk,
+        &plaintext,
+        &owner_peerid,
+        path,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption should succeed");
+
+    let result =
+        sealed_blob_decrypt_with_context(&recipient_sk, &envelope, &owner_peerid, wrong_path);
+
+    assert!(
+        result.is_err(),
+        "Decryption with wrong path should fail"
+    );
+}
+
+#[test]
+fn test_binary_and_legacy_aad_not_interchangeable() {
+    let subscription = create_test_subscription();
+    let (recipient_sk, recipient_pk) = random_x25519_keypair();
+    let (owner_peerid, _owner_z32) = random_owner_peerid_bytes();
+
+    let plaintext = serde_json::to_vec(&subscription).unwrap();
+    let path = "/pub/paykit.app/v0/subscriptions/proposals/test/id";
+    let legacy_aad = "paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/test/id:id";
+
+    let envelope = sealed_blob_encrypt_with_context(
+        &recipient_pk,
+        &plaintext,
+        &owner_peerid,
+        path,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption with binary AAD should succeed");
+
+    let legacy_result = decrypt_blob(&recipient_sk, &envelope, legacy_aad);
+    assert!(
+        legacy_result.is_err(),
+        "Binary AAD encrypted data should NOT decrypt with legacy string AAD"
+    );
+
+    let legacy_envelope = encrypt_blob(
+        &recipient_pk,
+        &plaintext,
+        legacy_aad,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption with legacy AAD should succeed");
+
+    let binary_result =
+        sealed_blob_decrypt_with_context(&recipient_sk, &legacy_envelope, &owner_peerid, path);
+    assert!(
+        binary_result.is_err(),
+        "Legacy AAD encrypted data should NOT decrypt with binary AAD"
+    );
+}
+
+#[test]
+fn test_legacy_aad_decrypt_still_works() {
+    let subscription = create_test_subscription();
+    let (recipient_sk, recipient_pk) = random_x25519_keypair();
+
+    let plaintext = serde_json::to_vec(&subscription).unwrap();
+    let legacy_aad = "paykit:v0:subscription_proposal:/pub/paykit.app/v0/subscriptions/proposals/test/id:id";
+
+    let envelope = encrypt_blob(
+        &recipient_pk,
+        &plaintext,
+        legacy_aad,
+        Some("subscription_proposal"),
+    )
+    .expect("Encryption should succeed");
+
+    let decrypted =
+        decrypt_blob(&recipient_sk, &envelope, legacy_aad).expect("Legacy decryption should still work");
+
+    let recovered: Subscription =
+        serde_json::from_slice(&decrypted).expect("Should deserialize subscription");
+
+    assert_eq!(recovered.subscription_id, subscription.subscription_id);
+}

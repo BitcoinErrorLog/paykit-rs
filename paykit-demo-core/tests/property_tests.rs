@@ -18,7 +18,7 @@ proptest! {
     /// Test that X25519 derivation is deterministic
     #[test]
     fn test_x25519_derivation_is_deterministic(
-        device_id in prop::collection::vec(any::<u8>(), 1..64),
+        device_id in prop::collection::vec(any::<u8>(), 16..64),
         epoch in 0u32..100u32
     ) {
         let identity = Identity::generate();
@@ -32,7 +32,7 @@ proptest! {
     /// Test that different epochs produce different keys
     #[test]
     fn test_different_epochs_produce_different_keys(
-        device_id in prop::collection::vec(any::<u8>(), 1..64)
+        device_id in prop::collection::vec(any::<u8>(), 16..64)
     ) {
         let identity = Identity::generate();
 
@@ -88,7 +88,8 @@ proptest! {
 #[test]
 fn test_x25519_key_length() {
     let identity = Identity::generate();
-    let key = identity.derive_x25519_key(b"device", 0).unwrap();
+    // device_id must be at least 16 bytes
+    let key = identity.derive_x25519_key(b"device_id_16byte", 0).unwrap();
     assert_eq!(key.len(), 32);
 }
 

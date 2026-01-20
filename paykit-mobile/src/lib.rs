@@ -193,6 +193,9 @@ impl From<paykit_lib::PaykitError> for PaykitMobileError {
             paykit_lib::PaykitError::RateLimited { retry_after_ms } => Self::RateLimitError {
                 msg: format!("Rate limited, retry after {}ms", retry_after_ms),
             },
+            paykit_lib::PaykitError::Crypto { operation, details } => Self::Internal {
+                msg: format!("Crypto error in {}: {}", operation, details),
+            },
             paykit_lib::PaykitError::Internal(msg) => Self::Internal { msg },
         }
     }

@@ -1,15 +1,25 @@
 # Paykit Protocol v0 Specification
 
-> **Version**: 0.1  
-> **Last Updated**: January 2, 2026  
+> **Version**: 0.2  
+> **Last Updated**: January 20, 2026  
 > **Status**: Canonical Specification
 
 This document is the canonical specification for Paykit Protocol v0. All implementations (Rust, Kotlin, Swift, TypeScript) **must** conform to this spec.
 
+## Upstream Specifications
+
+Paykit builds on and implements these upstream specifications:
+
+| Specification | Version | Scope |
+|--------------|---------|-------|
+| [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) | v2.5 | Sealed Blob SB2, AAD, ContextId, InboxKey/TransportKey |
+| [PUBKY_UNIFIED_KEY_DELEGATION_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_UNIFIED_KEY_DELEGATION_SPEC_v0.2.md) | v0.2 | AppCert, KeyBinding, typed signing |
+
 **Related Documents**:
-- [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format (v2 current, v1 legacy)
+- [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format (implements CRYPTO_SPEC SB2)
 - [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) - Cross-platform test vectors
 - [SECURE_HANDOFF.md](SECURE_HANDOFF.md) - Bitkit/Ring key provisioning
+- [ATOMICITY_INTEGRATION.md](ATOMICITY_INTEGRATION.md) - Atomicity settlement adapter
 
 ---
 
@@ -86,13 +96,35 @@ All Paykit v0 data is stored under `/pub/paykit.app/v0/` on user homeservers.
 
 ## 3. ContextId Derivation
 
-ContextId creates per-peer-pair directories that:
-- Bind sender and recipient symmetrically
-- Hide both pubkeys from directory listings
-- Enable efficient discovery by either party
-- Prevent enumeration attacks
+Per **PUBKY_CRYPTO_SPEC v2.5 Section 7.4**, ContextId is a **32-byte random value** chosen by the thread initiator.
 
-### Algorithm
+### SPEC-Compliant ContextId (v2.5)
+
+For all **new threads**, the thread initiator generates a random ContextId:
+
+```
+context_id = random_bytes(32)  # 32 cryptographically random bytes
+context_id_hex = hex(context_id)  # 64 lowercase hex characters
+```
+
+**Key properties**:
+- **Random**: 32 cryptographically random bytes
+- **Initiator-chosen**: The thread starter selects the ContextId
+- **Non-symmetric**: Different parties initiating threads with the same peer get different ContextIds
+- **Included in SB2 headers**: The ContextId is stored in the `context_id` field of SB2 headers
+
+### Properties
+
+| Property | Value |
+|----------|-------|
+| Length | 32 bytes (64 hex chars) |
+| Source | Cryptographically secure random |
+| Storage | In SB2 header `context_id` field |
+| Discovery | Via bounded directory polling |
+
+### Legacy Pair-Derived ContextId (Deprecated)
+
+For **backward compatibility only**, the legacy symmetric pair-derived ContextId is still supported:
 
 ```
 context_id = hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))
@@ -100,35 +132,18 @@ context_id = hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))
 
 Where `first_z32` and `second_z32` are normalized pubkeys sorted lexicographically.
 
-**Key property**: ContextId is symmetric: `context_id(A, B) == context_id(B, A)`
+**Properties of legacy ContextId**:
+- Symmetric: `context_id(A, B) == context_id(B, A)`
+- Deterministic: Same inputs → same output
 
-### Normalization
+**This approach is DEPRECATED**. Use random ContextId for all new implementations.
 
-1. Trim whitespace
-2. Strip `pubky://` prefix if present
-3. Strip `pk:` prefix if present
-4. Lowercase
-5. Validate length (52 chars) and z-base-32 alphabet
+### Migration Path
 
-### Properties
-
-| Property | Value |
-|----------|-------|
-| Input | Two z-base-32 encoded Ed25519 pubkeys (52 chars each) |
-| Output | Lowercase hex SHA-256 hash (64 chars) |
-| Deterministic | Yes (same inputs → same output) |
-| Symmetric | Yes (`context_id(A,B) == context_id(B,A)`) |
-| Collision-resistant | SHA-256 provides 128-bit security |
-
-### Legacy Scope (Deprecated)
-
-The legacy `recipient_scope` function computed a single-party hash:
-```
-recipient_scope = hex(sha256(utf8(normalize(pubkey_z32))))
-```
-
-This is retained for backward compatibility but **should not be used for new code**.
-Use `context_id()` for all new paths.
+1. **New threads**: Always use random ContextId via `generate_context_id()`
+2. **Existing threads**: May continue using legacy pair-derived ContextId
+3. **Detection**: SB2 headers contain the ContextId; use it for response messages
+4. **Bounded discovery**: Recipients poll sender directories with resource limits
 
 See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors.
 
@@ -176,67 +191,101 @@ See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors
 
 ## 5. Encryption Requirements
 
+Per **PUBKY_CRYPTO_SPEC v2.5**, all stored delivery uses **Sealed Blob v2 (SB2)** format.
+
+### Key Separation
+
+| Key Type | Purpose | Usage |
+|----------|---------|-------|
+| **InboxKey** | Sealed Blob encryption | Stored delivery (payment requests, ACKs) |
+| **TransportKey** | Noise sessions | Real-time encrypted channels |
+
+Keys are published via **KeyBinding** (CBOR-encoded) for peer discovery.
+
 ### Mandatory Encryption
 
-All payment requests and subscription proposals **MUST** use Sealed Blob encryption.
+All payment requests and subscription proposals **MUST** use Sealed Blob v2 encryption.
 
 **Plaintext storage is REJECTED** for security reasons.
 
-### Encryption Flow
+### Encryption Flow (SB2)
 
-1. **Fetch recipient's Noise endpoint**: `GET /pub/paykit.app/v0/noise`
-2. **Extract recipient's X25519 public key** from the endpoint
-3. **Construct AAD** using the canonical format (see Section 8)
-4. **Encrypt** using Sealed Blob
-5. **Store** encrypted envelope at the appropriate path
+1. **Fetch recipient's KeyBinding** from PKARR or directory
+2. **Select recipient's InboxKey** (X25519 public key for stored delivery)
+3. **Generate random ContextId** (32 bytes) for new threads
+4. **Construct binary AAD** per CRYPTO_SPEC Section 7.5:
+   ```
+   aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_no_sig
+   ```
+5. **Encrypt** using SB2 (XChaCha20-Poly1305, deterministic CBOR header)
+6. **Store** encrypted SB2 blob at the appropriate path
 
-### Decryption Flow
+### Decryption Flow (SB2)
 
-1. **Fetch encrypted envelope** from contact's storage
-2. **Verify it's a Sealed Blob** (check for `v`, `epk`, `nonce`, `ct` fields)
-3. **Construct AAD** matching the encryption context
-4. **Decrypt** using recipient's Noise secret key
-5. **Parse** decrypted JSON payload
+1. **Fetch encrypted SB2 blob** from contact's storage
+2. **Verify SB2 magic bytes** (0x53 0x42 0x32 = "SB2")
+3. **Parse CBOR header** to extract `context_id`, `msg_id`, `inbox_kid`
+4. **Select InboxKey secret** matching `inbox_kid` (O(1) lookup)
+5. **Construct binary AAD** using header fields
+6. **Decrypt** using recipient's InboxKey secret key
+7. **Parse** decrypted JSON payload
 
-### Legacy Migration
+### Legacy JSON Envelope (Deprecated)
 
-During the transition period:
-- Writers: Always encrypt (no plaintext writes)
-- Readers: Accept Sealed Blob only, reject plaintext
+For backward compatibility, readers MAY accept legacy JSON Sealed Blob format:
+- Magic: Starts with `{` (JSON object)
+- Fields: `v`, `epk`, `nonce`, `ct` (all base64url-encoded)
 
-After transition (hard break):
-- Plaintext data is orphaned (not read, not migrated)
+**New implementations MUST write SB2 format only.**
 
 ---
 
 ## 6. Discovery Algorithm
+
+### Bounded Discovery
+
+Per CRYPTO_SPEC v2.5, discovery uses **bounded polling** with resource limits:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_entries_per_dir` | 100 | Maximum entries to enumerate per directory |
+| `max_blob_size` | 64KB | Maximum SB2 blob size to fetch |
+| `poll_interval_secs` | 300 | Minimum seconds between polls |
 
 ### For Payment Requests (Recipient)
 
 1. Get list of known contacts (follows, past senders)
 2. For each contact `C`:
    ```
-   ctx_id = context_id(C, my_pubkey)  # symmetric
-   path = "pubky://{C}/pub/paykit.app/v0/requests/{ctx_id}/"
-   entries = list_directory(path)
-   for entry in entries:
-       blob = fetch(path + entry)
-       if is_sealed_blob(blob):
-           aad = payment_request_aad(C, C, my_pubkey, entry)  # owner=C
-           request = decrypt(blob, my_noise_sk, aad)
-           process(request)
+   # List ALL context_id directories (bounded)
+   requests_path = "pubky://{C}/pub/paykit.app/v0/requests/"
+   ctx_dirs = list_directory(requests_path, max_entries=100)
+   
+   for ctx_id_dir in ctx_dirs:
+       entries = list_directory(requests_path + ctx_id_dir, max_entries=100)
+       for entry in entries:
+           blob = fetch(requests_path + ctx_id_dir + entry)
+           if is_sb2(blob):
+               # AAD uses owner=C (sender's storage)
+               aad = build_binary_aad(C, canonical_path, header_bytes)
+               request = sb2_decrypt(blob, my_inbox_sk, aad)
+               if can_decrypt(request):  # I'm the intended recipient
+                   process(request)
    ```
 3. Deduplicate by `request_id` locally
 4. Track processed requests to avoid reprocessing
+5. Extract `context_id` from SB2 header for response messages
 
 ### For Subscription Proposals (Subscriber)
 
 1. Get list of known providers (past subscriptions, follows)
 2. For each provider `P`:
    ```
-   ctx_id = context_id(P, my_pubkey)  # symmetric
-   path = "pubky://{P}/pub/paykit.app/v0/subscriptions/proposals/{ctx_id}/"
-   entries = list_directory(path)
+   proposals_path = "pubky://{P}/pub/paykit.app/v0/subscriptions/proposals/"
+   ctx_dirs = list_directory(proposals_path, max_entries=100)
+   
+   for ctx_id_dir in ctx_dirs:
+       entries = list_directory(proposals_path + ctx_id_dir, max_entries=100)
    for entry in entries:
        blob = fetch(path + entry)
        if is_sealed_blob(blob):

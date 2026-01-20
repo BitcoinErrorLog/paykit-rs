@@ -49,6 +49,8 @@ pub enum PaykitErrorCode {
     QuotaExceeded = 7001,
     /// Rate limited
     RateLimited = 8000,
+    /// Cryptographic operation failed
+    Crypto = 8500,
     /// Internal/unexpected error
     Internal = 9999,
 }
@@ -169,6 +171,14 @@ pub enum PaykitError {
         retry_after_ms: u64,
     },
 
+    /// Cryptographic operation failed.
+    Crypto {
+        /// Operation that failed (e.g., "sb2_encrypt", "sb2_decrypt")
+        operation: String,
+        /// Error details
+        details: String,
+    },
+
     /// Internal/unexpected error.
     Internal(String),
 }
@@ -197,6 +207,7 @@ impl PaykitError {
             Self::Storage(_) => PaykitErrorCode::Storage,
             Self::QuotaExceeded { .. } => PaykitErrorCode::QuotaExceeded,
             Self::RateLimited { .. } => PaykitErrorCode::RateLimited,
+            Self::Crypto { .. } => PaykitErrorCode::Crypto,
             Self::Internal(_) => PaykitErrorCode::Internal,
         }
     }
@@ -323,6 +334,9 @@ impl fmt::Display for PaykitError {
             }
             Self::RateLimited { retry_after_ms } => {
                 write!(f, "rate limited, retry after {}ms", retry_after_ms)
+            }
+            Self::Crypto { operation, details } => {
+                write!(f, "crypto error in {}: {}", operation, details)
             }
             Self::Internal(msg) => write!(f, "internal error: {}", msg),
         }

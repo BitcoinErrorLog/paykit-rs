@@ -126,3 +126,14 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
 
+
+  crypto-spec:
+    name: CRYPTO_SPEC Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test protocol modules
+        run: cargo test --package paykit-lib -- aad:: scope:: keys:: ack:: atomicity:: security::
+      - name: Verify typed signing
+        run: cargo test --package paykit-mobile typed

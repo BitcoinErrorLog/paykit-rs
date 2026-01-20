@@ -505,7 +505,8 @@ mod tests {
     #[test]
     fn test_x25519_derivation() {
         let identity = Identity::generate();
-        let device_id = b"test_device";
+        // device_id must be at least 16 bytes
+        let device_id = b"test_device_1234";
         let key1 = identity.derive_x25519_key(device_id, 0).unwrap();
         let key2 = identity.derive_x25519_key(device_id, 0).unwrap();
 

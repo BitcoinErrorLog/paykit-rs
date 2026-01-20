@@ -12,7 +12,16 @@
 //! | ACK | `/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}` |
 //! | Noise Endpoint | `/pub/paykit.app/v0/noise` |
 //! | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
+//!
+//! ## ContextId Usage
+//!
+//! Per PUBKY_CRYPTO_SPEC v2.5, ContextId should be 32 random bytes chosen by the
+//! thread initiator. The legacy pair-derived context_id is deprecated.
+//!
+//! - **New threads**: Use `generate_context_id()` and pass to `*_with_context_id()` functions
+//! - **Legacy compatibility**: Use `payment_request_path()` which derives from peer pair
 
+#[allow(deprecated)]
 use super::scope::context_id;
 use crate::Result;
 
@@ -64,6 +73,7 @@ pub const ACKS_SUBPATH: &str = "acks";
 /// assert!(path.starts_with("/pub/paykit.app/v0/requests/"));
 /// assert!(path.ends_with("/abc123"));
 /// ```
+#[allow(deprecated)]
 pub fn payment_request_path(
     sender_pubkey_z32: &str,
     recipient_pubkey_z32: &str,
@@ -90,6 +100,7 @@ pub fn payment_request_path(
 /// # Returns
 ///
 /// The directory path (with trailing slash for listing).
+#[allow(deprecated)]
 pub fn payment_requests_dir(
     sender_pubkey_z32: &str,
     recipient_pubkey_z32: &str,
@@ -131,6 +142,7 @@ pub fn payment_requests_dir(
 /// assert!(path.starts_with("/pub/paykit.app/v0/subscriptions/proposals/"));
 /// assert!(path.ends_with("/prop-456"));
 /// ```
+#[allow(deprecated)]
 pub fn subscription_proposal_path(
     provider_pubkey_z32: &str,
     subscriber_pubkey_z32: &str,
@@ -157,6 +169,7 @@ pub fn subscription_proposal_path(
 /// # Returns
 ///
 /// The directory path (with trailing slash for listing).
+#[allow(deprecated)]
 pub fn subscription_proposals_dir(
     provider_pubkey_z32: &str,
     subscriber_pubkey_z32: &str,
@@ -227,6 +240,7 @@ pub fn secure_handoff_path(request_id: &str) -> String {
 /// assert!(path.starts_with("/pub/paykit.app/v0/acks/request/"));
 /// assert!(path.ends_with("/req_001"));
 /// ```
+#[allow(deprecated)]
 pub fn ack_path(
     object_type: &str,
     sender_pubkey_z32: &str,
@@ -238,6 +252,99 @@ pub fn ack_path(
         "{}/{}/{}/{}/{}",
         PAYKIT_V0_PREFIX, ACKS_SUBPATH, object_type, ctx_id, msg_id
     ))
+}
+
+// ============================================================================
+// Random ContextId Path Builders (PUBKY_CRYPTO_SPEC v2.5)
+// ============================================================================
+
+/// Build the storage path for a payment request using a random ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}`
+///
+/// Per PUBKY_CRYPTO_SPEC v2.5, the ContextId should be 32 random bytes chosen
+/// by the thread initiator. Use `generate_context_id_hex()` to create one.
+///
+/// # Arguments
+///
+/// * `context_id_hex` - Hex-encoded 32-byte random ContextId (64 chars)
+/// * `request_id` - Unique identifier for this request
+///
+/// # Returns
+///
+/// The full storage path (without the `pubky://owner` prefix).
+///
+/// # Example
+///
+/// ```
+/// use paykit_lib::protocol::{generate_context_id_hex, payment_request_path_with_context_id};
+///
+/// let ctx_id = generate_context_id_hex();
+/// let path = payment_request_path_with_context_id(&ctx_id, "req-123");
+/// assert!(path.starts_with("/pub/paykit.app/v0/requests/"));
+/// assert!(path.ends_with("/req-123"));
+/// ```
+pub fn payment_request_path_with_context_id(context_id_hex: &str, request_id: &str) -> String {
+    format!(
+        "{}/{}/{}/{}",
+        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, context_id_hex, request_id
+    )
+}
+
+/// Build the directory path for listing payment requests with a known ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/requests/{context_id_hex}/`
+///
+/// Used when polling a contact's storage to discover pending requests.
+pub fn payment_requests_dir_with_context_id(context_id_hex: &str) -> String {
+    format!("{}/{}/{}/", PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, context_id_hex)
+}
+
+/// Build the storage path for a subscription proposal using a random ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{context_id_hex}/{proposal_id}`
+pub fn subscription_proposal_path_with_context_id(
+    context_id_hex: &str,
+    proposal_id: &str,
+) -> String {
+    format!(
+        "{}/{}/{}/{}",
+        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, context_id_hex, proposal_id
+    )
+}
+
+/// Build the directory path for listing subscription proposals with a known ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/subscriptions/proposals/{context_id_hex}/`
+pub fn subscription_proposals_dir_with_context_id(context_id_hex: &str) -> String {
+    format!(
+        "{}/{}/{}/",
+        PAYKIT_V0_PREFIX, SUBSCRIPTION_PROPOSALS_SUBPATH, context_id_hex
+    )
+}
+
+/// Build the storage path for an ACK using a random ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/acks/{object_type}/{context_id_hex}/{msg_id}`
+pub fn ack_path_with_context_id(
+    object_type: &str,
+    context_id_hex: &str,
+    msg_id: &str,
+) -> String {
+    format!(
+        "{}/{}/{}/{}/{}",
+        PAYKIT_V0_PREFIX, ACKS_SUBPATH, object_type, context_id_hex, msg_id
+    )
+}
+
+/// Build the directory path for listing ACKs with a known ContextId.
+///
+/// Path format: `/pub/paykit.app/v0/acks/{object_type}/{context_id_hex}/`
+pub fn acks_dir_with_context_id(object_type: &str, context_id_hex: &str) -> String {
+    format!(
+        "{}/{}/{}/{}/",
+        PAYKIT_V0_PREFIX, ACKS_SUBPATH, object_type, context_id_hex
+    )
 }
 
 #[cfg(test)]

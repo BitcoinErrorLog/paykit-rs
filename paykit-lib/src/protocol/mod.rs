@@ -34,11 +34,15 @@
 //! - Enables symmetric discovery from either party
 
 mod aad;
+mod ack;
 mod paths;
+mod sb2;
 mod scope;
 
 pub use aad::*;
+pub use ack::*;
 pub use paths::*;
+pub use sb2::*;
 pub use scope::*;
 
 /// Protocol version string.

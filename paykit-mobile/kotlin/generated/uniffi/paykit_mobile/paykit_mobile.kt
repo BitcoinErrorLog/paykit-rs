@@ -681,6 +681,18 @@ internal interface UniffiCallbackInterfaceLightningExecutorFfiMethod3 : com.sun.
 internal interface UniffiCallbackInterfaceLightningExecutorFfiMethod4 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`preimage`: RustBuffer.ByValue,`paymentHash`: RustBuffer.ByValue,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,)
 }
+internal interface UniffiCallbackInterfaceNonceStorageFfiMethod0 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`nonceHex`: RustBuffer.ByValue,`expiresAt`: Long,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
+internal interface UniffiCallbackInterfaceNonceStorageFfiMethod1 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`nonceHex`: RustBuffer.ByValue,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
+internal interface UniffiCallbackInterfaceNonceStorageFfiMethod2 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`before`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
+internal interface UniffiCallbackInterfaceNonceStorageFfiMethod3 : com.sun.jna.Callback {
+    fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,)
+}
 internal interface UniffiCallbackInterfacePubkyAuthenticatedStorageCallbackMethod0 : com.sun.jna.Callback {
     fun callback(`uniffiHandle`: Long,`path`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,)
 }
@@ -755,6 +767,31 @@ internal open class UniffiVTableCallbackInterfaceLightningExecutorFfi(
     }
 
 }
+@Structure.FieldOrder("checkAndMark", "isUsed", "cleanupExpired", "count", "uniffiFree")
+internal open class UniffiVTableCallbackInterfaceNonceStorageFfi(
+    @JvmField internal var `checkAndMark`: UniffiCallbackInterfaceNonceStorageFfiMethod0? = null,
+    @JvmField internal var `isUsed`: UniffiCallbackInterfaceNonceStorageFfiMethod1? = null,
+    @JvmField internal var `cleanupExpired`: UniffiCallbackInterfaceNonceStorageFfiMethod2? = null,
+    @JvmField internal var `count`: UniffiCallbackInterfaceNonceStorageFfiMethod3? = null,
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+) : Structure() {
+    class UniffiByValue(
+        `checkAndMark`: UniffiCallbackInterfaceNonceStorageFfiMethod0? = null,
+        `isUsed`: UniffiCallbackInterfaceNonceStorageFfiMethod1? = null,
+        `cleanupExpired`: UniffiCallbackInterfaceNonceStorageFfiMethod2? = null,
+        `count`: UniffiCallbackInterfaceNonceStorageFfiMethod3? = null,
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    ): UniffiVTableCallbackInterfaceNonceStorageFfi(`checkAndMark`,`isUsed`,`cleanupExpired`,`count`,`uniffiFree`,), Structure.ByValue
+
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceNonceStorageFfi) {
+        `checkAndMark` = other.`checkAndMark`
+        `isUsed` = other.`isUsed`
+        `cleanupExpired` = other.`cleanupExpired`
+        `count` = other.`count`
+        `uniffiFree` = other.`uniffiFree`
+    }
+
+}
 @Structure.FieldOrder("put", "get", "delete", "list", "uniffiFree")
 internal open class UniffiVTableCallbackInterfacePubkyAuthenticatedStorageCallback(
     @JvmField internal var `put`: UniffiCallbackInterfacePubkyAuthenticatedStorageCallbackMethod0? = null,
@@ -815,6 +852,13 @@ internal open class UniffiVTableCallbackInterfaceReceiptGeneratorCallback(
     }
 
 }
+
+
+
+
+
+
+
 
 
 
@@ -1289,9 +1333,11 @@ fun uniffi_paykit_mobile_checksum_func_publish_noise_endpoint(
 ): Short
 fun uniffi_paykit_mobile_checksum_func_remove_noise_endpoint(
 ): Short
-fun uniffi_paykit_mobile_checksum_func_sign_message(
+fun uniffi_paykit_mobile_checksum_func_sign_typed_content(
 ): Short
 fun uniffi_paykit_mobile_checksum_func_verify_signature(
+): Short
+fun uniffi_paykit_mobile_checksum_func_verify_typed_content(
 ): Short
 fun uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete(
 ): Short
@@ -1555,6 +1601,14 @@ fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_get_payment(
 ): Short
 fun uniffi_paykit_mobile_checksum_method_lightningexecutorffi_verify_preimage(
 ): Short
+fun uniffi_paykit_mobile_checksum_method_noncestorageffi_check_and_mark(
+): Short
+fun uniffi_paykit_mobile_checksum_method_noncestorageffi_is_used(
+): Short
+fun uniffi_paykit_mobile_checksum_method_noncestorageffi_cleanup_expired(
+): Short
+fun uniffi_paykit_mobile_checksum_method_noncestorageffi_count(
+): Short
 fun uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_put(
 ): Short
 fun uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_get(
@@ -1609,6 +1663,7 @@ internal interface UniffiLib : Library {
             // we already did that with `IntegrityCheckingUniffiLib` above.
             uniffiCallbackInterfaceBitcoinExecutorFFI.register(lib)
             uniffiCallbackInterfaceLightningExecutorFFI.register(lib)
+            uniffiCallbackInterfaceNonceStorageFFI.register(lib)
             uniffiCallbackInterfacePubkyAuthenticatedStorageCallback.register(lib)
             uniffiCallbackInterfacePubkyUnauthenticatedStorageCallback.register(lib)
             uniffiCallbackInterfaceReceiptGeneratorCallback.register(lib)
@@ -1911,6 +1966,8 @@ fun uniffi_paykit_mobile_fn_init_callback_vtable_bitcoinexecutorffi(`vtable`: Un
 ): Unit
 fun uniffi_paykit_mobile_fn_init_callback_vtable_lightningexecutorffi(`vtable`: UniffiVTableCallbackInterfaceLightningExecutorFfi,
 ): Unit
+fun uniffi_paykit_mobile_fn_init_callback_vtable_noncestorageffi(`vtable`: UniffiVTableCallbackInterfaceNonceStorageFfi,
+): Unit
 fun uniffi_paykit_mobile_fn_init_callback_vtable_pubkyauthenticatedstoragecallback(`vtable`: UniffiVTableCallbackInterfacePubkyAuthenticatedStorageCallback,
 ): Unit
 fun uniffi_paykit_mobile_fn_init_callback_vtable_pubkyunauthenticatedstoragecallback(`vtable`: UniffiVTableCallbackInterfacePubkyUnauthenticatedStorageCallback,
@@ -1973,9 +2030,11 @@ fun uniffi_paykit_mobile_fn_func_publish_noise_endpoint(`transport`: Pointer,`ho
 ): Unit
 fun uniffi_paykit_mobile_fn_func_remove_noise_endpoint(`transport`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_paykit_mobile_fn_func_sign_message(`secretKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_paykit_mobile_fn_func_sign_typed_content(`secretKeyHex`: RustBuffer.ByValue,`issuerPeeridHex`: RustBuffer.ByValue,`certIdHex`: RustBuffer.ByValue,`contentType`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_paykit_mobile_fn_func_verify_signature(`publicKeyHex`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,`signatureHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_paykit_mobile_fn_func_verify_typed_content(`publicKeyHex`: RustBuffer.ByValue,`issuerPeeridHex`: RustBuffer.ByValue,`certIdHex`: RustBuffer.ByValue,`contentType`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,`signatureHex`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun ffi_paykit_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -2187,10 +2246,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_paykit_mobile_checksum_func_remove_noise_endpoint() != 4253.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_paykit_mobile_checksum_func_sign_message() != 33882.toShort()) {
+    if (lib.uniffi_paykit_mobile_checksum_func_sign_typed_content() != 39032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_func_verify_signature() != 15460.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_func_verify_typed_content() != 24129.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_authenticatedtransportffi_delete() != 27910.toShort()) {
@@ -2584,6 +2646,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_lightningexecutorffi_verify_preimage() != 46457.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_noncestorageffi_check_and_mark() != 20325.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_noncestorageffi_is_used() != 55089.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_noncestorageffi_cleanup_expired() != 14457.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_paykit_mobile_checksum_method_noncestorageffi_count() != 11572.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_paykit_mobile_checksum_method_pubkyauthenticatedstoragecallback_put() != 27074.toShort()) {
@@ -12969,6 +13043,168 @@ public object FfiConverterTypeLightningExecutorFFI: FfiConverterCallbackInterfac
 
 
 /**
+ * FFI callback interface for persistent nonce storage.
+ *
+ * Mobile apps implement this trait to provide platform-native
+ * persistent storage for nonces used in replay attack prevention.
+ *
+ * # Security
+ *
+ * Implementations MUST:
+ * - Persist nonces across app restarts (critical for replay attack prevention)
+ * - Be thread-safe for concurrent access
+ * - Atomically check-and-mark nonces to prevent race conditions
+ *
+ * # Platform Recommendations
+ *
+ * - **Android**: Use SharedPreferences or Room database
+ * - **iOS**: Use UserDefaults or Keychain
+ *
+ * # Thread Safety
+ *
+ * All methods may be called from any thread. Implementations must be
+ * thread-safe.
+ */
+public interface NonceStorageFfi {
+    
+    /**
+     * Check if a nonce has been used, and mark it as used if not.
+     *
+     * This is the critical function for replay attack prevention.
+     * This operation MUST be atomic to prevent TOCTOU race conditions.
+     *
+     * # Arguments
+     *
+     * * `nonce_hex` - The 32-byte nonce as a hex string (64 characters)
+     * * `expires_at` - When this nonce's signature expires (Unix timestamp)
+     *
+     * # Returns
+     *
+     * - `true` - Nonce is fresh (never seen before), now marked as used
+     * - `false` - Nonce has been used (potential replay attack)
+     */
+    fun `checkAndMark`(`nonceHex`: kotlin.String, `expiresAt`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * Check if a nonce has been used (read-only).
+     *
+     * Does not modify state. Useful for validation without marking.
+     *
+     * # Arguments
+     *
+     * * `nonce_hex` - The 32-byte nonce as a hex string (64 characters)
+     */
+    fun `isUsed`(`nonceHex`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Clean up expired nonces to prevent unbounded storage growth.
+     *
+     * Should be called periodically (e.g., hourly or on app startup).
+     *
+     * # Arguments
+     *
+     * * `before` - Remove nonces that expired before this timestamp (Unix seconds)
+     *
+     * # Returns
+     *
+     * The number of nonces removed.
+     */
+    fun `cleanupExpired`(`before`: kotlin.Long): kotlin.UInt
+    
+    /**
+     * Get the count of tracked nonces (for monitoring/debugging).
+     */
+    fun `count`(): kotlin.UInt
+    
+    companion object
+}
+
+
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceNonceStorageFFI {
+    internal object `checkAndMark`: UniffiCallbackInterfaceNonceStorageFfiMethod0 {
+        override fun callback(`uniffiHandle`: Long,`nonceHex`: RustBuffer.ByValue,`expiresAt`: Long,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeNonceStorageFFI.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`checkAndMark`(
+                    FfiConverterString.lift(`nonceHex`),
+                    FfiConverterLong.lift(`expiresAt`),
+                )
+            }
+            val writeReturn = { value: kotlin.Boolean -> uniffiOutReturn.setValue(FfiConverterBoolean.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+    internal object `isUsed`: UniffiCallbackInterfaceNonceStorageFfiMethod1 {
+        override fun callback(`uniffiHandle`: Long,`nonceHex`: RustBuffer.ByValue,`uniffiOutReturn`: ByteByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeNonceStorageFFI.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`isUsed`(
+                    FfiConverterString.lift(`nonceHex`),
+                )
+            }
+            val writeReturn = { value: kotlin.Boolean -> uniffiOutReturn.setValue(FfiConverterBoolean.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+    internal object `cleanupExpired`: UniffiCallbackInterfaceNonceStorageFfiMethod2 {
+        override fun callback(`uniffiHandle`: Long,`before`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeNonceStorageFFI.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`cleanupExpired`(
+                    FfiConverterLong.lift(`before`),
+                )
+            }
+            val writeReturn = { value: kotlin.UInt -> uniffiOutReturn.setValue(FfiConverterUInt.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+    internal object `count`: UniffiCallbackInterfaceNonceStorageFfiMethod3 {
+        override fun callback(`uniffiHandle`: Long,`uniffiOutReturn`: IntByReference,uniffiCallStatus: UniffiRustCallStatus,) {
+            val uniffiObj = FfiConverterTypeNonceStorageFFI.handleMap.get(uniffiHandle)
+            val makeCall = { ->
+                uniffiObj.`count`(
+                )
+            }
+            val writeReturn = { value: kotlin.UInt -> uniffiOutReturn.setValue(FfiConverterUInt.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeNonceStorageFFI.handleMap.remove(handle)
+        }
+    }
+
+    internal var vtable = UniffiVTableCallbackInterfaceNonceStorageFfi.UniffiByValue(
+        `checkAndMark`,
+        `isUsed`,
+        `cleanupExpired`,
+        `count`,
+        uniffiFree,
+    )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_paykit_mobile_fn_init_callback_vtable_noncestorageffi(vtable)
+    }
+}
+
+/**
+ * The ffiConverter which transforms the Callbacks in to handles to pass to Rust.
+ *
+ * @suppress
+ */
+public object FfiConverterTypeNonceStorageFFI: FfiConverterCallbackInterface<NonceStorageFfi>()
+
+
+
+
+
+/**
  * Callback interface for authenticated Pubky storage operations.
  *
  * Mobile apps implement this to wrap their Pubky SDK session.
@@ -14559,22 +14795,41 @@ public object FfiConverterSequenceTypeReceiptRequest: FfiConverterRustBuffer<Lis
     
 
         /**
-         * Sign a message with Ed25519 secret key.
+         * Sign typed content per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2.
+         *
+         * This is a TYPED signing function, not a generic "sign anything" API.
+         * The content_type parameter constrains what is being signed.
          *
          * # Arguments
          *
-         * * `secret_key_hex` - The Ed25519 secret key in hex format.
-         * * `message` - The message bytes to sign.
+         * * `secret_key_hex` - Ed25519 secret key (AppKey) in hex format
+         * * `issuer_peerid_hex` - Root PKARR Ed25519 public key in hex (32 bytes)
+         * * `cert_id_hex` - AppCert identifier in hex (16 bytes)
+         * * `content_type` - ASCII label describing what is being signed (e.g., "pubky.post", "paykit.receipt")
+         * * `payload` - The content payload bytes
          *
          * # Returns
          *
-         * The 64-byte signature in hex format.
+         * 64-byte Ed25519 signature in hex format.
+         *
+         * # Example
+         *
+         * ```ignore
+         * // Sign a payment receipt
+         * let sig = sign_typed_content(
+         * app_secret_hex,
+         * issuer_peerid_hex,
+         * cert_id_hex,
+         * "paykit.receipt",
+         * receipt_bytes,
+         * )?;
+         * ```
          */
-    @Throws(PaykitMobileException::class) fun `signMessage`(`secretKeyHex`: kotlin.String, `message`: kotlin.ByteArray): kotlin.String {
+    @Throws(PaykitMobileException::class) fun `signTypedContent`(`secretKeyHex`: kotlin.String, `issuerPeeridHex`: kotlin.String, `certIdHex`: kotlin.String, `contentType`: kotlin.String, `payload`: kotlin.ByteArray): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCallWithError(PaykitMobileException) { _status ->
-    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_sign_message(
-        FfiConverterString.lower(`secretKeyHex`),FfiConverterByteArray.lower(`message`),_status)
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_sign_typed_content(
+        FfiConverterString.lower(`secretKeyHex`),FfiConverterString.lower(`issuerPeeridHex`),FfiConverterString.lower(`certIdHex`),FfiConverterString.lower(`contentType`),FfiConverterByteArray.lower(`payload`),_status)
 }
     )
     }
@@ -14598,6 +14853,32 @@ public object FfiConverterSequenceTypeReceiptRequest: FfiConverterRustBuffer<Lis
     uniffiRustCallWithError(PaykitMobileException) { _status ->
     UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_verify_signature(
         FfiConverterString.lower(`publicKeyHex`),FfiConverterByteArray.lower(`message`),FfiConverterString.lower(`signatureHex`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Verify typed content signature per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2.
+         *
+         * # Arguments
+         *
+         * * `public_key_hex` - Ed25519 public key (AppKey) in hex format
+         * * `issuer_peerid_hex` - Root PKARR Ed25519 public key in hex (32 bytes)
+         * * `cert_id_hex` - AppCert identifier in hex (16 bytes)
+         * * `content_type` - ASCII label describing what was signed
+         * * `payload` - The content payload bytes
+         * * `signature_hex` - The signature to verify in hex (64 bytes)
+         *
+         * # Returns
+         *
+         * True if the signature is valid, false otherwise.
+         */
+    @Throws(PaykitMobileException::class) fun `verifyTypedContent`(`publicKeyHex`: kotlin.String, `issuerPeeridHex`: kotlin.String, `certIdHex`: kotlin.String, `contentType`: kotlin.String, `payload`: kotlin.ByteArray, `signatureHex`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCallWithError(PaykitMobileException) { _status ->
+    UniffiLib.INSTANCE.uniffi_paykit_mobile_fn_func_verify_typed_content(
+        FfiConverterString.lower(`publicKeyHex`),FfiConverterString.lower(`issuerPeeridHex`),FfiConverterString.lower(`certIdHex`),FfiConverterString.lower(`contentType`),FfiConverterByteArray.lower(`payload`),FfiConverterString.lower(`signatureHex`),_status)
 }
     )
     }

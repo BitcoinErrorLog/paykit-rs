@@ -169,6 +169,22 @@ pub fn derive_x25519_keypair(
 /// # Returns
 ///
 /// The 64-byte signature in hex format.
+///
+/// # Deprecation Warning
+///
+/// **This function is DEPRECATED and will be removed in a future version.**
+///
+/// Per PUBKY_CRYPTO_SPEC v2.5, generic "sign-anything" APIs are prohibited.
+/// Use typed signing APIs instead:
+/// - `sign_typed_content()` for typed content with content_type parameter
+/// - AppCert-based signing via pubky-noise UKD module
+///
+/// This function is only available with the `legacy-signing` feature enabled.
+#[cfg(feature = "legacy-signing")]
+#[deprecated(
+    since = "0.3.0",
+    note = "Use sign_typed_content() instead per PUBKY_CRYPTO_SPEC v2.5"
+)]
 #[uniffi::export]
 pub fn sign_message(secret_key_hex: String, message: Vec<u8>) -> Result<String> {
     use ed25519_dalek::{Signer, SigningKey};
@@ -178,6 +194,167 @@ pub fn sign_message(secret_key_hex: String, message: Vec<u8>) -> Result<String> 
     let signature = signing_key.sign(&message);
 
     Ok(hex::encode(signature.to_bytes()))
+}
+
+/// Sign typed content per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2.
+///
+/// This is a TYPED signing function, not a generic "sign anything" API.
+/// The content_type parameter constrains what is being signed.
+///
+/// # Arguments
+///
+/// * `secret_key_hex` - Ed25519 secret key (AppKey) in hex format
+/// * `issuer_peerid_hex` - Root PKARR Ed25519 public key in hex (32 bytes)
+/// * `cert_id_hex` - AppCert identifier in hex (16 bytes)
+/// * `content_type` - ASCII label describing what is being signed (e.g., "pubky.post", "paykit.receipt")
+/// * `payload` - The content payload bytes
+///
+/// # Returns
+///
+/// 64-byte Ed25519 signature in hex format.
+///
+/// # Example
+///
+/// ```ignore
+/// // Sign a payment receipt
+/// let sig = sign_typed_content(
+///     app_secret_hex,
+///     issuer_peerid_hex,
+///     cert_id_hex,
+///     "paykit.receipt",
+///     receipt_bytes,
+/// )?;
+/// ```
+#[uniffi::export]
+pub fn sign_typed_content(
+    secret_key_hex: String,
+    issuer_peerid_hex: String,
+    cert_id_hex: String,
+    content_type: String,
+    payload: Vec<u8>,
+) -> Result<String> {
+    use ed25519_dalek::{Signer, SigningKey};
+    use sha2::{Digest, Sha256};
+
+    // Validate content_type
+    if !content_type.is_ascii() || content_type.is_empty() || content_type.len() > 64 {
+        return Err(PaykitMobileError::Validation {
+            msg: "content_type must be non-empty ASCII, max 64 bytes".to_string(),
+        });
+    }
+
+    let secret_bytes = hex_to_32_bytes(&secret_key_hex)?;
+    let issuer_peerid = hex_to_32_bytes(&issuer_peerid_hex)?;
+
+    let cert_id_bytes = hex::decode(&cert_id_hex).map_err(|e| PaykitMobileError::Validation {
+        msg: format!("Invalid cert_id hex: {}", e),
+    })?;
+    if cert_id_bytes.len() != 16 {
+        return Err(PaykitMobileError::Validation {
+            msg: format!("cert_id must be 16 bytes, got {}", cert_id_bytes.len()),
+        });
+    }
+
+    // Compute payload_hash = SHA256(payload)
+    let payload_hash = Sha256::digest(&payload);
+
+    // sign_input = prefix || issuer_peerid || cert_id || content_type || payload_hash
+    const SIGNED_CONTENT_PREFIX: &[u8] = b"pubky-content-sig/v1:";
+    let mut sign_input = Vec::with_capacity(
+        SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32,
+    );
+    sign_input.extend_from_slice(SIGNED_CONTENT_PREFIX);
+    sign_input.extend_from_slice(&issuer_peerid);
+    sign_input.extend_from_slice(&cert_id_bytes);
+    sign_input.extend_from_slice(content_type.as_bytes());
+    sign_input.extend_from_slice(&payload_hash);
+
+    // Sign
+    let signing_key = SigningKey::from_bytes(&secret_bytes);
+    let signature: ed25519_dalek::Signature = signing_key.sign(&sign_input);
+
+    Ok(hex::encode(signature.to_bytes()))
+}
+
+/// Verify typed content signature per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2.
+///
+/// # Arguments
+///
+/// * `public_key_hex` - Ed25519 public key (AppKey) in hex format
+/// * `issuer_peerid_hex` - Root PKARR Ed25519 public key in hex (32 bytes)
+/// * `cert_id_hex` - AppCert identifier in hex (16 bytes)
+/// * `content_type` - ASCII label describing what was signed
+/// * `payload` - The content payload bytes
+/// * `signature_hex` - The signature to verify in hex (64 bytes)
+///
+/// # Returns
+///
+/// True if the signature is valid, false otherwise.
+#[uniffi::export]
+pub fn verify_typed_content(
+    public_key_hex: String,
+    issuer_peerid_hex: String,
+    cert_id_hex: String,
+    content_type: String,
+    payload: Vec<u8>,
+    signature_hex: String,
+) -> Result<bool> {
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+    use sha2::{Digest, Sha256};
+
+    // Validate content_type
+    if !content_type.is_ascii() || content_type.is_empty() || content_type.len() > 64 {
+        return Err(PaykitMobileError::Validation {
+            msg: "content_type must be non-empty ASCII, max 64 bytes".to_string(),
+        });
+    }
+
+    let public_bytes = hex_to_32_bytes(&public_key_hex)?;
+    let issuer_peerid = hex_to_32_bytes(&issuer_peerid_hex)?;
+
+    let cert_id_bytes = hex::decode(&cert_id_hex).map_err(|e| PaykitMobileError::Validation {
+        msg: format!("Invalid cert_id hex: {}", e),
+    })?;
+    if cert_id_bytes.len() != 16 {
+        return Err(PaykitMobileError::Validation {
+            msg: format!("cert_id must be 16 bytes, got {}", cert_id_bytes.len()),
+        });
+    }
+
+    let sig_bytes = hex::decode(&signature_hex).map_err(|e| PaykitMobileError::Validation {
+        msg: format!("Invalid signature hex: {}", e),
+    })?;
+    if sig_bytes.len() != 64 {
+        return Err(PaykitMobileError::Validation {
+            msg: format!("Signature must be 64 bytes, got {}", sig_bytes.len()),
+        });
+    }
+
+    // Compute payload_hash
+    let payload_hash = Sha256::digest(&payload);
+
+    // Reconstruct sign_input
+    const SIGNED_CONTENT_PREFIX: &[u8] = b"pubky-content-sig/v1:";
+    let mut sign_input = Vec::with_capacity(
+        SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32,
+    );
+    sign_input.extend_from_slice(SIGNED_CONTENT_PREFIX);
+    sign_input.extend_from_slice(&issuer_peerid);
+    sign_input.extend_from_slice(&cert_id_bytes);
+    sign_input.extend_from_slice(content_type.as_bytes());
+    sign_input.extend_from_slice(&payload_hash);
+
+    // Verify
+    let verifying_key =
+        VerifyingKey::from_bytes(&public_bytes).map_err(|e| PaykitMobileError::Validation {
+            msg: format!("Invalid public key: {}", e),
+        })?;
+
+    let mut sig_arr = [0u8; 64];
+    sig_arr.copy_from_slice(&sig_bytes);
+    let signature = Signature::from_bytes(&sig_arr);
+
+    Ok(verifying_key.verify(&sign_input, &signature).is_ok())
 }
 
 /// Verify an Ed25519 signature.
@@ -570,14 +747,75 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_and_verify() {
+    #[cfg(feature = "legacy-signing")]
+    fn test_sign_and_verify_legacy() {
         let keypair = generate_ed25519_keypair().unwrap();
         let message = b"Hello, World!".to_vec();
 
+        #[allow(deprecated)]
         let signature = sign_message(keypair.secret_key_hex, message.clone()).unwrap();
         let valid = verify_signature(keypair.public_key_hex, message, signature).unwrap();
 
         assert!(valid);
+    }
+
+    #[test]
+    fn test_sign_and_verify_typed() {
+        let keypair = generate_ed25519_keypair().unwrap();
+        let message = b"Hello, World!".to_vec();
+
+        // Create a fake cert_id (16 bytes)
+        let cert_id_hex = "0102030405060708090a0b0c0d0e0f10".to_string();
+
+        let signature = sign_typed_content(
+            keypair.secret_key_hex.clone(),
+            keypair.public_key_hex.clone(),
+            cert_id_hex.clone(),
+            "paykit.test".to_string(),
+            message.clone(),
+        )
+        .unwrap();
+
+        let valid = verify_typed_content(
+            keypair.public_key_hex.clone(),
+            keypair.public_key_hex,
+            cert_id_hex,
+            "paykit.test".to_string(),
+            message,
+            signature,
+        )
+        .unwrap();
+
+        assert!(valid);
+    }
+
+    #[test]
+    fn test_typed_content_wrong_type_fails() {
+        let keypair = generate_ed25519_keypair().unwrap();
+        let message = b"Hello".to_vec();
+        let cert_id_hex = "0102030405060708090a0b0c0d0e0f10".to_string();
+
+        let signature = sign_typed_content(
+            keypair.secret_key_hex.clone(),
+            keypair.public_key_hex.clone(),
+            cert_id_hex.clone(),
+            "paykit.receipt".to_string(),
+            message.clone(),
+        )
+        .unwrap();
+
+        // Verify with wrong content_type should fail
+        let valid = verify_typed_content(
+            keypair.public_key_hex.clone(),
+            keypair.public_key_hex,
+            cert_id_hex,
+            "paykit.wrong".to_string(), // Wrong type
+            message,
+            signature,
+        )
+        .unwrap();
+
+        assert!(!valid);
     }
 
     #[test]

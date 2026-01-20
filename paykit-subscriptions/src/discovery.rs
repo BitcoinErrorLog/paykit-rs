@@ -24,11 +24,15 @@
 
 use crate::PaymentRequest;
 use paykit_lib::protocol::{
-    payment_request_aad, payment_request_path, payment_requests_dir, subscription_proposal_aad,
-    subscription_proposal_path, subscription_proposals_dir,
+    owner_peerid_bytes_from_z32, payment_request_aad, payment_request_path, payment_requests_dir,
+    subscription_proposal_aad, subscription_proposal_path, subscription_proposals_dir,
+    PURPOSE_REQUEST,
 };
 use paykit_lib::{AuthenticatedTransport, PublicKey, UnauthenticatedTransportRead};
-use pubky_noise::sealed_blob::{is_sealed_blob, sealed_blob_decrypt, sealed_blob_encrypt};
+use pubky_noise::sealed_blob::{
+    is_sealed_blob, sealed_blob_decrypt, sealed_blob_decrypt_with_context,
+    sealed_blob_encrypt_with_context,
+};
 use serde::{Deserialize, Serialize};
 
 /// Path prefix for payment requests in Pubky storage (v0).
@@ -103,18 +107,19 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
     let path = payment_request_path(sender_pubkey_z32, &recipient_pubkey_z32, &request.request_id)
         .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
-    // Build canonical AAD with owner binding
-    let aad = payment_request_aad(
-        sender_pubkey_z32,
-        sender_pubkey_z32,
-        &recipient_pubkey_z32,
-        &request.request_id,
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to build AAD: {}", e))?;
+    // Convert owner z32 to bytes for binary AAD (owner = sender for requests)
+    let owner_peerid_bytes = owner_peerid_bytes_from_z32(sender_pubkey_z32)
+        .map_err(|e| anyhow::anyhow!("Invalid owner pubkey: {}", e))?;
 
-    // Encrypt using Sealed Blob v2
-    let envelope = sealed_blob_encrypt(recipient_noise_pk, &plaintext, &aad, Some("request"))
-        .map_err(|e| anyhow::anyhow!("Failed to encrypt payment request: {}", e))?;
+    // Encrypt using Sealed Blob v2 with spec-compliant binary AAD
+    let envelope = sealed_blob_encrypt_with_context(
+        recipient_noise_pk,
+        &plaintext,
+        &owner_peerid_bytes,
+        &path,
+        Some(PURPOSE_REQUEST),
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to encrypt payment request: {}", e))?;
 
     // Store encrypted blob on sender storage
     transport
@@ -235,6 +240,10 @@ pub async fn discover_request<R: UnauthenticatedTransportRead>(
 
 /// Decrypt a sealed blob payment request.
 ///
+/// Implements dual decryption per PUBKY_CRYPTO_SPEC v2.5 migration strategy:
+/// 1. First try binary AAD (spec-compliant, new writes)
+/// 2. Fallback to legacy string AAD for backward compatibility
+///
 /// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 /// Plaintext storage is REJECTED for security reasons.
 fn try_decrypt_request(
@@ -253,7 +262,68 @@ fn try_decrypt_request(
         return None;
     }
 
-    // Build canonical AAD (must match encryption) with owner binding
+    // Build canonical path for binary AAD
+    let path = match payment_request_path(sender_pubkey_z32, recipient_pubkey_z32, request_id) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("Failed to build path for request {}: {}", request_id, e);
+            return None;
+        }
+    };
+
+    // Convert owner z32 to bytes (owner = sender for requests)
+    let owner_peerid_bytes = match owner_peerid_bytes_from_z32(sender_pubkey_z32) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to convert owner z32 for request {}: {}",
+                request_id,
+                e
+            );
+            // Cannot try binary AAD, but can still try legacy
+            return try_decrypt_request_legacy(
+                content,
+                sender_pubkey_z32,
+                recipient_pubkey_z32,
+                request_id,
+                my_noise_sk,
+            );
+        }
+    };
+
+    // Try binary AAD first (spec-compliant, new writes)
+    match sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_peerid_bytes, &path) {
+        Ok(plaintext) => {
+            return serde_json::from_slice(&plaintext).ok();
+        }
+        Err(_) => {
+            // Fallback to legacy string AAD for backward compatibility
+            tracing::debug!(
+                "Binary AAD decryption failed for request {}, trying legacy",
+                request_id
+            );
+        }
+    }
+
+    // Fallback to legacy string AAD
+    try_decrypt_request_legacy(
+        content,
+        sender_pubkey_z32,
+        recipient_pubkey_z32,
+        request_id,
+        my_noise_sk,
+    )
+}
+
+/// Legacy decryption with string AAD format.
+fn try_decrypt_request_legacy(
+    content: &str,
+    sender_pubkey_z32: &str,
+    recipient_pubkey_z32: &str,
+    request_id: &str,
+    my_noise_sk: &[u8; 32],
+) -> Option<PublishedRequest> {
+    // Build legacy string AAD
     let aad = match payment_request_aad(
         sender_pubkey_z32,
         sender_pubkey_z32,
@@ -262,12 +332,15 @@ fn try_decrypt_request(
     ) {
         Ok(aad) => aad,
         Err(e) => {
-            tracing::warn!("Failed to build AAD for request {}: {}", request_id, e);
+            tracing::warn!(
+                "Failed to build legacy AAD for request {}: {}",
+                request_id,
+                e
+            );
             return None;
         }
     };
 
-    // Decrypt
     match sealed_blob_decrypt(my_noise_sk, content, &aad) {
         Ok(plaintext) => serde_json::from_slice(&plaintext).ok(),
         Err(e) => {
@@ -540,12 +613,13 @@ pub async fn discover_subscription_agreements<R: UnauthenticatedTransportRead>(
         .await
         .unwrap_or_default();
 
+    let party_z32 = party.to_z32();
     let mut agreements = Vec::new();
     for entry in entries {
         let full_path = format!("{}{}", path, entry);
         if let Ok(Some(content)) = reader.get(party, &full_path).await {
             if let Some(signed) =
-                try_decrypt_signed_subscription(&content, &full_path, &entry, my_noise_sk)
+                try_decrypt_signed_subscription(&content, &full_path, &entry, &party_z32, my_noise_sk)
             {
                 agreements.push(signed);
             }
@@ -563,11 +637,12 @@ pub async fn discover_subscription_agreement<R: UnauthenticatedTransportRead>(
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Option<crate::SignedSubscription>> {
     let path = format!("{}{}/{}", PAYKIT_AGREEMENTS_PATH, party, subscription_id);
+    let party_z32 = party.to_z32();
 
     match reader.get(party, &path).await {
         Ok(Some(content)) => {
             let signed =
-                try_decrypt_signed_subscription(&content, &path, subscription_id, my_noise_sk);
+                try_decrypt_signed_subscription(&content, &path, subscription_id, &party_z32, my_noise_sk);
             Ok(signed)
         }
         Ok(None) => Ok(None),
@@ -582,6 +657,7 @@ pub async fn discover_subscription_cancellations<R: UnauthenticatedTransportRead
     my_noise_sk: &[u8; 32],
 ) -> crate::Result<Vec<serde_json::Value>> {
     let path = format!("{}{}/", PAYKIT_CANCELLATIONS_PATH, party);
+    let party_z32 = party.to_z32();
 
     let entries: Vec<String> = reader
         .list_directory(party, &path)
@@ -593,7 +669,7 @@ pub async fn discover_subscription_cancellations<R: UnauthenticatedTransportRead
         let full_path = format!("{}{}", path, entry);
         if let Ok(Some(content)) = reader.get(party, &full_path).await {
             if let Some(cancellation) =
-                try_decrypt_cancellation(&content, &full_path, &entry, my_noise_sk)
+                try_decrypt_cancellation(&content, &full_path, &entry, &party_z32, my_noise_sk)
             {
                 cancellations.push(cancellation);
             }
@@ -604,6 +680,10 @@ pub async fn discover_subscription_cancellations<R: UnauthenticatedTransportRead
 }
 
 /// Decrypt an encrypted subscription proposal.
+///
+/// Implements dual decryption per PUBKY_CRYPTO_SPEC v2.5 migration strategy:
+/// 1. First try binary AAD (spec-compliant, new writes)
+/// 2. Fallback to legacy string AAD for backward compatibility
 ///
 /// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
 fn try_decrypt_subscription_proposal(
@@ -621,7 +701,68 @@ fn try_decrypt_subscription_proposal(
         return None;
     }
 
-    // Build canonical AAD with owner binding (owner = provider for proposals)
+    // Build canonical path for binary AAD
+    let path = match subscription_proposal_path(provider_pubkey_z32, subscriber_pubkey_z32, proposal_id) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!("Failed to build path for proposal {}: {}", proposal_id, e);
+            return None;
+        }
+    };
+
+    // Convert owner z32 to bytes (owner = provider for proposals)
+    let owner_peerid_bytes = match owner_peerid_bytes_from_z32(provider_pubkey_z32) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to convert owner z32 for proposal {}: {}",
+                proposal_id,
+                e
+            );
+            // Cannot try binary AAD, but can still try legacy
+            return try_decrypt_subscription_proposal_legacy(
+                content,
+                provider_pubkey_z32,
+                subscriber_pubkey_z32,
+                proposal_id,
+                my_noise_sk,
+            );
+        }
+    };
+
+    // Try binary AAD first (spec-compliant, new writes)
+    match sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_peerid_bytes, &path) {
+        Ok(plaintext) => {
+            return serde_json::from_slice(&plaintext).ok();
+        }
+        Err(_) => {
+            // Fallback to legacy string AAD for backward compatibility
+            tracing::debug!(
+                "Binary AAD decryption failed for proposal {}, trying legacy",
+                proposal_id
+            );
+        }
+    }
+
+    // Fallback to legacy string AAD
+    try_decrypt_subscription_proposal_legacy(
+        content,
+        provider_pubkey_z32,
+        subscriber_pubkey_z32,
+        proposal_id,
+        my_noise_sk,
+    )
+}
+
+/// Legacy decryption with string AAD format for subscription proposals.
+fn try_decrypt_subscription_proposal_legacy(
+    content: &str,
+    provider_pubkey_z32: &str,
+    subscriber_pubkey_z32: &str,
+    proposal_id: &str,
+    my_noise_sk: &[u8; 32],
+) -> Option<crate::Subscription> {
+    // Build legacy string AAD with owner binding (owner = provider for proposals)
     let aad = match subscription_proposal_aad(
         provider_pubkey_z32, // owner = provider (stores on their homeserver)
         provider_pubkey_z32,
@@ -630,7 +771,11 @@ fn try_decrypt_subscription_proposal(
     ) {
         Ok(aad) => aad,
         Err(e) => {
-            tracing::warn!("Failed to build AAD for proposal {}: {}", proposal_id, e);
+            tracing::warn!(
+                "Failed to build legacy AAD for proposal {}: {}",
+                proposal_id,
+                e
+            );
             return None;
         }
     };
@@ -651,11 +796,12 @@ fn try_decrypt_subscription_proposal(
 /// Decrypt an encrypted signed subscription agreement.
 ///
 /// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
-/// AAD format: `paykit:v0:subscription_agreement:{path}:{subscription_id}` (matches manager.rs storage)
+/// Supports both binary AAD (PUBKY_CRYPTO_SPEC v2.5) and legacy string AAD formats.
 fn try_decrypt_signed_subscription(
     content: &str,
     path: &str,
     subscription_id: &str,
+    owner_pubkey_z32: &str,
     my_noise_sk: &[u8; 32],
 ) -> Option<crate::SignedSubscription> {
     if !is_sealed_blob(content) {
@@ -666,7 +812,18 @@ fn try_decrypt_signed_subscription(
         return None;
     }
 
-    // AAD format matches store_signed_subscription in manager.rs
+    // Try binary AAD first (spec-compliant)
+    if let Ok(owner_bytes) = owner_peerid_bytes_from_z32(owner_pubkey_z32) {
+        if let Ok(plaintext) = sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path) {
+            return serde_json::from_slice(&plaintext).ok();
+        }
+        tracing::debug!(
+            "Binary AAD decryption failed for agreement at {}, trying legacy",
+            path
+        );
+    }
+
+    // Fallback to legacy string AAD format
     let aad = format!(
         "paykit:v0:subscription_agreement:{}:{}",
         path, subscription_id
@@ -683,11 +840,12 @@ fn try_decrypt_signed_subscription(
 /// Decrypt an encrypted cancellation.
 ///
 /// SECURITY: Only encrypted Sealed Blob v2 format is accepted.
-/// AAD format: `paykit:v0:subscription_cancellation:{path}:{subscription_id}` (matches manager.rs storage)
+/// Supports both binary AAD (PUBKY_CRYPTO_SPEC v2.5) and legacy string AAD formats.
 fn try_decrypt_cancellation(
     content: &str,
     path: &str,
     subscription_id: &str,
+    owner_pubkey_z32: &str,
     my_noise_sk: &[u8; 32],
 ) -> Option<serde_json::Value> {
     if !is_sealed_blob(content) {
@@ -698,7 +856,18 @@ fn try_decrypt_cancellation(
         return None;
     }
 
-    // AAD format matches store_subscription_cancellation in manager.rs
+    // Try binary AAD first (spec-compliant)
+    if let Ok(owner_bytes) = owner_peerid_bytes_from_z32(owner_pubkey_z32) {
+        if let Ok(plaintext) = sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path) {
+            return serde_json::from_slice(&plaintext).ok();
+        }
+        tracing::debug!(
+            "Binary AAD decryption failed for cancellation at {}, trying legacy",
+            path
+        );
+    }
+
+    // Fallback to legacy string AAD format
     let aad = format!(
         "paykit:v0:subscription_cancellation:{}:{}",
         path, subscription_id

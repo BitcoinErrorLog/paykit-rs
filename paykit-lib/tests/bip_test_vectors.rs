@@ -8,7 +8,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::Value;
 use std::fs;
 
-const TEST_VECTORS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/bip-paykit/test-vectors.json");
+const TEST_VECTORS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../bip-paykit/test-vectors.json");
 
 fn load_test_vectors() -> Value {
     let content = fs::read_to_string(TEST_VECTORS_PATH)

@@ -116,7 +116,7 @@ async fn test_server_accepts_connection() {
     let server_ring = Arc::new(TestRing::new(server_seed));
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring.clone(),
     ));
 
@@ -128,9 +128,9 @@ async fn test_server_accepts_connection() {
     let client_seed = test_seed("client_accept");
     let client_ring = Arc::new(TestRing::new(client_seed));
     let client =
-        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
 
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
 
     // Spawn server accepting connection
     let server_handle = tokio::spawn(async move {
@@ -173,7 +173,7 @@ async fn test_server_processes_payment_request() {
     let server_ring = Arc::new(TestRing::new(server_seed));
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring.clone(),
     ));
 
@@ -185,9 +185,9 @@ async fn test_server_processes_payment_request() {
     let client_seed = test_seed("client_process");
     let client_ring = Arc::new(TestRing::new(client_seed));
     let client =
-        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
 
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
     let payer_pk = test_pubkey("payer");
     let payee_pk = test_pubkey("payee");
 
@@ -286,7 +286,7 @@ async fn test_server_multiple_concurrent_connections() {
     let server_ring = Arc::new(TestRing::new(server_seed));
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring.clone(),
     ));
 
@@ -295,7 +295,7 @@ async fn test_server_multiple_concurrent_connections() {
         .expect("Failed to bind");
     let server_addr = listener.local_addr().expect("Failed to get address");
 
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
     let payer_pk = test_pubkey("payer");
     let payee_pk = test_pubkey("payee");
 
@@ -364,7 +364,7 @@ async fn test_server_multiple_concurrent_connections() {
             let client_ring = Arc::new(TestRing::new(client_seed));
             let client = NoiseClient::<TestRing, ()>::new_direct(
                 "client_kid",
-                b"client_device",
+                b"client_device_id",
                 client_ring,
             );
 
@@ -429,7 +429,7 @@ async fn test_server_handles_errors() {
     let server_ring = Arc::new(TestRing::new(server_seed));
     let server = Arc::new(NoiseServer::<TestRing, ()>::new_direct(
         "server_kid",
-        b"server_device",
+        b"server_device_id",
         server_ring.clone(),
     ));
 
@@ -441,9 +441,9 @@ async fn test_server_handles_errors() {
     let client_seed = test_seed("client_error");
     let client_ring = Arc::new(TestRing::new(client_seed));
     let client =
-        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device", client_ring);
+        NoiseClient::<TestRing, ()>::new_direct("client_kid", b"client_device_id", client_ring);
 
-    let server_pk = server_pubkey(&server_ring, b"server_device");
+    let server_pk = server_pubkey(&server_ring, b"server_device_id");
     let payer_pk = test_pubkey("payer");
     let wrong_payee_pk = test_pubkey("wrong_payee");
     let correct_payee_pk = test_pubkey("correct_payee");

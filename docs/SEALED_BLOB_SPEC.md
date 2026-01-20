@@ -1,9 +1,19 @@
 # Paykit Sealed Blob Specification (v1 and v2)
 
+> **Canonical Reference**: This specification implements the Sealed Blob format defined in
+> [PUBKY_CRYPTO_SPEC v2.5](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md)
+> Section 7.5 (Sealed Blob v2 / SB2). The PUBKY_CRYPTO_SPEC is the authoritative source for:
+> - Binary wire format (magic bytes, version, CBOR header, ciphertext)
+> - Deterministic CBOR header encoding with integer keys
+> - AAD construction: `prefix || owner_peerid || canonical_path || header_bytes`
+> - inbox_kid derivation for key selection
+>
+> This document describes Paykit-specific usage and integration patterns.
+
 This document specifies the encrypted envelope format used for storing secret-bearing data on Pubky homeservers. Since all data under `/pub/` is publicly readable, any sensitive payload must be encrypted before storage.
 
-**Current Version**: v2 (XChaCha20-Poly1305)  
-**Backward Compatible**: Decryption supports both v1 and v2
+**Current Version**: v2 (XChaCha20-Poly1305) / SB2 wire format  
+**Backward Compatible**: Decryption supports both v1 (JSON) and v2 (SB2 binary)
 
 ## Table of Contents
 

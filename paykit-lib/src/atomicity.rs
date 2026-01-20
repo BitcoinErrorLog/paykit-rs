@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 //! Atomicity Protocol Settlement Adapter for Paykit.
 //!
 //! This module provides integration between Paykit and the Atomicity decentralized

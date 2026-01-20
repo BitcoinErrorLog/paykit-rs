@@ -402,8 +402,7 @@ rustup target add aarch64-apple-ios-sim
 rustup target add x86_64-apple-ios
 rustup target add aarch64-linux-android
 rustup target add armv7-linux-androideabi
-rustup target add i686-linux-android
-rustup target add x86_64-linux-android
+rustup target add x86_64-linux-android  # x86 (32-bit) not supported
 rustup target add wasm32-unknown-unknown
 ```
 
@@ -496,8 +495,7 @@ export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
 # This creates libraries for each ABI:
 # - jniLibs/arm64-v8a/libpaykit_mobile.so
 # - jniLibs/armeabi-v7a/libpaykit_mobile.so
-# - jniLibs/x86/libpaykit_mobile.so
-# - jniLibs/x86_64/libpaykit_mobile.so
+# - jniLibs/x86_64/libpaykit_mobile.so (emulator only)
 ```
 
 ---

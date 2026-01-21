@@ -21,12 +21,15 @@ pubkyring://{action}?{params}&callback={callback_url}
 
 ### Supported Actions
 
-| Action | Description | Parameters |
-|--------|-------------|------------|
-| `session` | Request a session | `callback` |
-| `derive-keypair` | Request noise keypair | `deviceId`, `epoch`, `callback` |
-| `get-profile` | Request profile data | `pubkey`, `callback` |
-| `get-follows` | Request follows list | `callback` |
+| Action | Description | Parameters | Status |
+|--------|-------------|------------|--------|
+| `paykit-connect` | Secure session + noise seed handoff | `deviceId`, `callback`, `ephemeralPk` | **Preferred** |
+| `session` | Request a session (legacy) | `callback` | Deprecated |
+| `derive-keypair` | Request noise keypair | `deviceId`, `epoch`, `callback` | **Removed** (security) |
+| `get-profile` | Request profile data | `pubkey`, `callback` |  |
+| `get-follows` | Request follows list | `callback` |  |
+
+> **Security Note**: The `derive-keypair` action has been removed because it exposed secret keys in callback URLs. Use `paykit-connect` instead, which uses encrypted handoff.
 
 ### Callback URL Format
 
@@ -39,7 +42,101 @@ Bitkit registers the `bitkit://` URL scheme and handles callbacks at these paths
 | `paykit-profile` | Profile response | `name`, `bio`, `image` |
 | `paykit-follows` | Follows response | `follows` (comma-separated pubkeys) |
 
-## Session Request Flow
+## Secure Handoff Flow (paykit-connect)
+
+The `paykit-connect` action is the **preferred** method for Paykit setup. It provides session credentials and a noise seed in a single encrypted handoff, ensuring secrets are never exposed in URLs.
+
+```mermaid
+sequenceDiagram
+    participant Bitkit
+    participant PubkyRing
+    participant Homeserver
+
+    Note over Bitkit: Generate ephemeral X25519 keypair
+    Bitkit->>PubkyRing: pubkyring://paykit-connect?deviceId=...&ephemeralPk=...&callback=...
+    PubkyRing->>PubkyRing: User selects pubky
+    PubkyRing->>Homeserver: Sign in with secret key
+    Homeserver-->>PubkyRing: Session info
+    Note over PubkyRing: Encrypt payload to ephemeralPk (Sealed Blob)
+    PubkyRing->>Homeserver: PUT /pub/paykit.app/v0/handoff/{requestId}
+    PubkyRing->>Bitkit: bitkit://paykit-setup?pubkey=...&request_id=...&homeserver=...
+    Bitkit->>Homeserver: GET /pub/paykit.app/v0/handoff/{requestId}
+    Homeserver-->>Bitkit: Encrypted Sealed Blob
+    Note over Bitkit: Decrypt with ephemeral secret key
+    Note over Bitkit: Store session, derive noise keys locally
+```
+
+### Request
+
+```
+pubkyring://paykit-connect?deviceId={id}&callback={url}&ephemeralPk={pk}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `deviceId` | Unique device identifier (UUID) |
+| `callback` | URL-encoded callback (e.g., `bitkit://paykit-setup`) |
+| `ephemeralPk` | Ephemeral X25519 public key (hex, 64 chars) for encrypted response |
+
+### Callback
+
+```
+bitkit://paykit-setup?pubkey={pubkey}&request_id={id}&homeserver={url}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `pubkey` | User's public key (z-base32) |
+| `request_id` | ID to fetch encrypted payload from homeserver |
+| `homeserver` | Homeserver URL where payload is stored (optional, defaults to user's homeserver) |
+
+### Encrypted Payload Structure
+
+The payload at `/pub/paykit.app/v0/handoff/{requestId}` is a **Sealed Blob** encrypted to `ephemeralPk`:
+
+```json
+{
+  "version": 1,
+  "pubky": "z-base32 pubkey",
+  "session_secret": "hex session secret",
+  "capabilities": ["read", "write"],
+  "noise_seed": "hex 32-byte seed for local key derivation",
+  "timestamp": 1706123456
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `version` | Protocol version (must be `1`) |
+| `pubky` | User's z-base32 public key |
+| `session_secret` | Hex-encoded session secret for homeserver auth |
+| `capabilities` | List of granted capabilities |
+| `noise_seed` | 32-byte seed (hex) for deriving X25519 keypairs locally |
+| `timestamp` | Unix timestamp in **seconds** when payload was created |
+
+### Local Key Derivation
+
+With the `noise_seed`, Bitkit can derive X25519 keypairs locally without calling Ring again:
+
+```
+secret_key = HKDF-SHA256(
+  ikm = noise_seed,
+  salt = deviceId (UTF-8 bytes),
+  info = "noise_key_v1:{epoch}" (UTF-8),
+  length = 32
+)
+public_key = X25519_basepoint(secret_key)
+```
+
+### Timestamp Validation
+
+The `timestamp` field uses **Unix seconds** (not milliseconds). Bitkit should:
+1. Reject payloads older than 5 minutes (`now - timestamp > 300`)
+2. Reject payloads from the future (`timestamp > now + 60`)
+
+## Legacy Session Request Flow (Deprecated)
+
+> **Warning**: This flow is deprecated because it exposes secrets in callback URLs.
 
 ```mermaid
 sequenceDiagram
@@ -72,47 +169,37 @@ bitkit://paykit-session?pubkey={pubkey}&session_secret={secret}&capabilities={ca
 | `session_secret` | Session secret for authenticated requests |
 | `capabilities` | Comma-separated list of capabilities |
 
-## Noise Keypair Derivation Flow
+## Noise Keypair Derivation
 
-Pubky-ring derives X25519 keypairs from the Ed25519 seed, never exposing the seed itself.
+### Current Approach: Local Derivation
 
-```mermaid
-sequenceDiagram
-    participant Bitkit
-    participant PubkyRing
-    participant Keychain
+With `paykit-connect`, Bitkit receives a `noise_seed` and derives keypairs locally:
 
-    Bitkit->>PubkyRing: pubkyring://derive-keypair?deviceId=...&epoch=...
-    PubkyRing->>Keychain: Get Ed25519 seed
-    Keychain-->>PubkyRing: Seed
-    PubkyRing->>PubkyRing: Derive X25519 keypair
-    PubkyRing->>Bitkit: bitkit://paykit-keypair?public_key=...&secret_key=...
+```kotlin
+// Kotlin (Android)
+val secretKeyBytes = com.pubky.noise.deriveDeviceKey(
+    seedBytes,      // 32-byte noise_seed from handoff
+    deviceIdBytes,  // UTF-8 encoded device ID
+    epoch,          // UInt: 0, 1, 2, ...
+)
+val publicKeyBytes = com.pubky.noise.publicKeyFromSecret(secretKeyBytes)
 ```
 
-### Request
-
-```
-pubkyring://derive-keypair?deviceId={id}&epoch={epoch}&callback=bitkit://paykit-keypair
-```
-
-| Parameter | Description |
-|-----------|-------------|
-| `deviceId` | Unique device identifier |
-| `epoch` | Key rotation epoch (0-based) |
-| `callback` | Callback URL |
-
-### Response
-
-```
-bitkit://paykit-keypair?public_key={pk}&secret_key={sk}&device_id={id}&epoch={epoch}
+```swift
+// Swift (iOS)
+let secretKey = try NoiseModule.deriveDeviceKey(
+    seed: seedBytes,
+    deviceId: deviceIdBytes,
+    epoch: epoch
+)
+let publicKey = try NoiseModule.publicKeyFromSecret(secretKey)
 ```
 
-| Parameter | Description |
-|-----------|-------------|
-| `public_key` | X25519 public key (hex) |
-| `secret_key` | X25519 secret key (hex) |
-| `device_id` | Echo of device ID |
-| `epoch` | Echo of epoch |
+### Deprecated: URL-Based Derivation (Removed)
+
+> **Security Warning**: The `derive-keypair` action has been **removed** because it exposed X25519 secret keys in callback URLs. Secret keys in URLs are logged by system URL handlers, appear in app history, and can be captured by malicious URL handlers.
+
+If you have code using `derive-keypair`, migrate to `paykit-connect` which provides a `noise_seed` for local derivation.
 
 ## iOS Integration
 
@@ -262,7 +349,14 @@ See `e2e/pubky-ring-integration-tests.md` for automated test scenarios.
 
 | Bitkit Version | Pubky-ring Version | Notes |
 |----------------|-------------------|-------|
-| 1.0.0+ | 1.0.0+ | Initial integration |
+| 1.0.0+ | 1.0.0+ | Initial integration (legacy URL flow) |
+| 2.0.0+ | 2.0.0+ | Secure handoff (`paykit-connect`), `derive-keypair` removed |
+
+### Protocol Version Negotiation
+
+The handoff payload includes a `version` field:
+- `version: 1` - Current protocol with `noise_seed` for local derivation
+- Future versions will be rejected until Bitkit is updated
 
 ## References
 

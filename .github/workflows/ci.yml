@@ -137,3 +137,14 @@ jobs:
         run: cargo test --package paykit-lib -- aad:: scope:: keys:: ack:: atomicity:: security::
       - name: Verify typed signing
         run: cargo test --package paykit-mobile typed
+
+  crypto-deps:
+    name: Crypto Dependency Drift Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check for duplicate crypto crate versions
+        run: |
+          chmod +x scripts/check-crypto-deps.sh
+          ./scripts/check-crypto-deps.sh

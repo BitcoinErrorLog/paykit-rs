@@ -41,8 +41,9 @@ aes-gcm = { version = "0.10", optional = true }
 hkdf = { version = "0.12", optional = true }
 # rand is now required for generate_context_id() per PUBKY_CRYPTO_SPEC v2.5
 rand = "0.8"
-# x25519_dalek is required for InboxKey/TransportKey per PUBKY_CRYPTO_SPEC v2.5
-x25519-dalek = "2"
+# NOTE: x25519-dalek removed from direct dependencies as of v2.1.0
+# When the `pubky` feature is enabled (default), all X25519 operations delegate
+# to pubky-noise to avoid version drift. Non-pubky builds do not expose crypto helpers.
 # Secure memory zeroization
 zeroize = { version = "1", features = ["derive"], optional = true }
 # Argon2 password-based KDF (memory-hard, resistant to brute-force attacks)

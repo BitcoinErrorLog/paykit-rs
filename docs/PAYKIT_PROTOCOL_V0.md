@@ -1,7 +1,7 @@
 # Paykit Protocol v0 Specification
 
-> **Version**: 0.2  
-> **Last Updated**: January 20, 2026  
+> **Version**: 0.3  
+> **Last Updated**: January 21, 2026  
 > **Status**: Canonical Specification
 
 This document is the canonical specification for Paykit Protocol v0. All implementations (Rust, Kotlin, Swift, TypeScript) **must** conform to this spec.
@@ -12,8 +12,14 @@ Paykit builds on and implements these upstream specifications:
 
 | Specification | Version | Scope |
 |--------------|---------|-------|
-| [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) | v2.5 | Sealed Blob SB2, AAD, ContextId, InboxKey/TransportKey |
-| [PUBKY_UNIFIED_KEY_DELEGATION_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_UNIFIED_KEY_DELEGATION_SPEC_v0.2.md) | v0.2 | AppCert, KeyBinding, typed signing |
+| [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) | v2.5 | Sealed Blob SB2 binary format, AAD construction, ContextId, InboxKey/TransportKey separation, KeyBinding, signing hierarchy |
+| [PUBKY_UNIFIED_KEY_DELEGATION_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_UNIFIED_KEY_DELEGATION_SPEC_v0.2.md) | v0.2 | AppCert, delegated AppKey signing, typed content signatures |
+
+**Key Upstream Sections** (CRYPTO_SPEC):
+- Section 4.7: InboxKey vs TransportKey separation (normative)
+- Section 6.8.1: KeyBinding object with `app_id`, `inbox_keys[]`, `transport_keys[]`, `app_keys[]`
+- Section 7.2: Sealed Blob v2 binary wire format (magic bytes, CBOR header, ciphertext)
+- Section 7.6.1: Signing hierarchy (RootKey, AppKey, TransportKey, InboxKey roles)
 
 **Related Documents**:
 - [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format (implements CRYPTO_SPEC SB2)
@@ -193,14 +199,38 @@ See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for complete test vectors
 
 Per **PUBKY_CRYPTO_SPEC v2.5**, all stored delivery uses **Sealed Blob v2 (SB2)** format.
 
-### Key Separation
+### Key Separation (Normative)
 
-| Key Type | Purpose | Usage |
-|----------|---------|-------|
-| **InboxKey** | Sealed Blob encryption | Stored delivery (payment requests, ACKs) |
-| **TransportKey** | Noise sessions | Real-time encrypted channels |
+Per CRYPTO_SPEC Section 4.7, InboxKey and TransportKey MUST be distinct X25519 keys:
 
-Keys are published via **KeyBinding** (CBOR-encoded) for peer discovery.
+| Key Type | Purpose | Usage | Discovery |
+|----------|---------|-------|-----------|
+| **InboxKey** | Sealed Blob encryption | Stored delivery (payment requests, ACKs) | PKARR KeyBinding `inbox_keys[]` |
+| **TransportKey** | Noise sessions | Real-time encrypted channels | PKARR KeyBinding `transport_keys[]` or `/pub/{app_id}/v0/noise` |
+
+**Separation Rule**:
+- Implementations MUST NOT use TransportKey for Sealed Blob encryption
+- Implementations MUST NOT use InboxKey for Noise handshakes
+
+### Key Discovery via KeyBinding
+
+Keys are discovered via **KeyBinding** objects (CRYPTO_SPEC Section 6.8.1), published in PKARR DNS records:
+
+| KeyBinding Field | Type | Description |
+|------------------|------|-------------|
+| `peerid` | bytes(32) | Ed25519 identity |
+| `app_id` | text | Application identifier (e.g., `"paykit"`) |
+| `inbox_keys` | array | InboxKeyEntry list for Sealed Blob encryption |
+| `transport_keys` | array | TransportKeyEntry list for Noise sessions |
+| `app_keys` | array | (Optional) AppKeyEntry list for delegated signing |
+| `signature` | bytes(64) | Ed25519 signature by peerid |
+
+**inbox_kid Derivation** (for O(1) key selection):
+```
+inbox_kid = first_16_bytes(SHA256(inbox_x25519_pub))
+```
+
+The `inbox_kid` is included in SB2 headers to enable efficient key lookup.
 
 ### Mandatory Encryption
 
@@ -210,25 +240,43 @@ All payment requests and subscription proposals **MUST** use Sealed Blob v2 encr
 
 ### Encryption Flow (SB2)
 
-1. **Fetch recipient's KeyBinding** from PKARR or directory
-2. **Select recipient's InboxKey** (X25519 public key for stored delivery)
-3. **Generate random ContextId** (32 bytes) for new threads
-4. **Construct binary AAD** per CRYPTO_SPEC Section 7.5:
+1. **Fetch recipient's KeyBinding** from PKARR for `app_id = "paykit"`
+2. **Select recipient's InboxKey** from `inbox_keys[]` array (X25519 public key for stored delivery)
+3. **Derive inbox_kid**: `first_16_bytes(SHA256(inbox_x25519_pub))`
+4. **Generate random ContextId** (32 bytes) for new threads
+5. **Construct binary AAD** per CRYPTO_SPEC Section 7.5:
    ```
-   aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_no_sig
+   aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_bytes
    ```
-5. **Encrypt** using SB2 (XChaCha20-Poly1305, deterministic CBOR header)
-6. **Store** encrypted SB2 blob at the appropriate path
+6. **Build SB2 header** (deterministic CBOR with integer keys, see CRYPTO_SPEC Section 7.2):
+   - Key 0: `context_id` (32 bytes)
+   - Key 3: `inbox_kid` (16 bytes, REQUIRED)
+   - Key 4: `msg_id` (text, max 128 chars)
+   - Key 5: `nonce` (24 random bytes)
+   - Key 7: `recipient_peerid` (32 bytes)
+   - Key 8: `sender_ephemeral_pub` (32 bytes)
+   - Key 9: `sender_peerid` (32 bytes)
+   - Key 10: `sig` (64 bytes, REQUIRED for Paykit)
+   - Key 11: `cert_id` (16 bytes, optional - for AppKey delegation)
+7. **Encrypt** using XChaCha20-Poly1305 with constructed AAD
+8. **Serialize** SB2 binary format: `magic (0x53 0x42 0x32) || version (0x02) || header_len || header_bytes || ciphertext`
+9. **Store** encrypted SB2 blob at the appropriate path
 
 ### Decryption Flow (SB2)
 
 1. **Fetch encrypted SB2 blob** from contact's storage
-2. **Verify SB2 magic bytes** (0x53 0x42 0x32 = "SB2")
-3. **Parse CBOR header** to extract `context_id`, `msg_id`, `inbox_kid`
-4. **Select InboxKey secret** matching `inbox_kid` (O(1) lookup)
-5. **Construct binary AAD** using header fields
-6. **Decrypt** using recipient's InboxKey secret key
-7. **Parse** decrypted JSON payload
+2. **Verify SB2 magic bytes** (0x53 0x42 0x32 = "SB2") and version (0x02)
+3. **Read header_len** (u16 big-endian, MUST be <= 2048 bytes)
+4. **Parse CBOR header** to extract fields (integer keys 0-11)
+5. **Extract inbox_kid** (key 3) for key selection
+6. **Select InboxKey secret** matching `inbox_kid` from local keyring (O(1) lookup)
+   - If `inbox_kid` is unknown, reject immediately WITHOUT calling Ring derivation (DoS prevention)
+7. **Construct binary AAD** using header fields (per CRYPTO_SPEC Section 7.5)
+8. **Decrypt** using XChaCha20-Poly1305 with selected InboxKey
+9. **Verify signature** (key 10) if present:
+   - If `cert_id` (key 11) present: verify via AppKey from AppCert
+   - Otherwise: verify directly against `sender_peerid` (key 9)
+10. **Parse** decrypted JSON payload
 
 ### Legacy JSON Envelope (Deprecated)
 
@@ -332,43 +380,59 @@ Per CRYPTO_SPEC v2.5, discovery uses **bounded polling** with resource limits:
 
 All Sealed Blob v2 encryption uses AAD to bind ciphertext to its storage context and owner.
 
-### Format Pattern (Owner-Bound)
+### Binary AAD Format (Normative)
+
+Per **CRYPTO_SPEC Section 7.5**, AAD is constructed as binary concatenation (no delimiters):
+
+```
+aad = aad_prefix || owner_peerid_bytes || canonical_path_bytes || header_bytes
+```
+
+Where:
+- `aad_prefix`: ASCII bytes `"pubky-envelope/v2:"` (18 bytes, includes colon)
+- `owner_peerid_bytes`: Raw 32-byte Ed25519 public key of storage owner
+- `canonical_path_bytes`: UTF-8 bytes of canonical storage path (see Path Canonicalization)
+- `header_bytes`: Deterministic CBOR serialization of header (without signature for signing)
+
+**Storage Owner**: The peer who writes the object to their homeserver storage:
+- Payment requests: sender is owner
+- ACKs: receiver is owner (writes to their storage)
+- Subscription proposals: provider is owner
+- Secure handoff: Ring user is owner
+
+### Path Canonicalization (Normative)
+
+Per CRYPTO_SPEC Section 7.12.5:
+
+| Rule | Description |
+|------|-------------|
+| Encoding | UTF-8 bytes, no BOM |
+| Leading slash | REQUIRED (must start with `/`) |
+| Trailing slash | PROHIBITED (except root `"/"`) |
+| Duplicate slashes | PROHIBITED (no `//`) |
+| Character set | ASCII alphanumeric + `/-_.` only |
+| Max length | 1024 bytes |
+
+### Legacy String AAD (Deprecated)
+
+For backward compatibility only, implementations MAY accept legacy string-based AAD:
 
 ```
 paykit:v0:{purpose}:{owner_z32}:{path}:{id}
 ```
 
-Where `owner_z32` is the normalized z-base-32 pubkey of the storage owner.
+**New implementations MUST use binary AAD format.**
 
-### Specific Formats
-
-| Object Type | AAD Format |
-|-------------|------------|
-| Payment Request | `paykit:v0:request:{owner_z32}:{path}:{request_id}` |
-| Subscription Proposal | `paykit:v0:subscription_proposal:{owner_z32}:{path}:{proposal_id}` |
-| Encrypted ACK | `paykit:v0:ack_{object_type}:{ack_writer_z32}:{path}:{msg_id}` |
-| Secure Handoff | `paykit:v0:handoff:{owner_z32}:{path}:{request_id}` |
-
-### Examples
+### AAD Examples (Binary Format)
 
 **Payment Request** (sender is owner):
 ```
-paykit:v0:request:8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo:/pub/paykit.app/v0/requests/a7b8c9d0.../req_001:req_001
-```
-
-**Subscription Proposal** (provider is owner):
-```
-paykit:v0:subscription_proposal:ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u:/pub/paykit.app/v0/subscriptions/proposals/b3c4d5e6.../prop_001:prop_001
+"pubky-envelope/v2:" || <32-byte sender Ed25519 pub> || "/pub/paykit.app/v0/requests/{ctx}/{req_id}" || <CBOR header>
 ```
 
 **Encrypted ACK** (receiver is owner):
 ```
-paykit:v0:ack_request:tj1igr...abc:/pub/paykit.app/v0/acks/request/a7b8c9d0.../req_001:req_001
-```
-
-**Secure Handoff** (Ring user is owner):
-```
-paykit:v0:handoff:8um71us3fyw6h8wbcxb5ar3rwusy1a6u49956ikzojg3gcwd1dty:/pub/paykit.app/v0/handoff/f3a7b2c1d4e5f6a7b8c9:f3a7b2c1d4e5f6a7b8c9
+"pubky-envelope/v2:" || <32-byte receiver Ed25519 pub> || "/pub/paykit.app/v0/acks/request/{ctx}/{acked_msg_id}" || <CBOR header>
 ```
 
 ---
@@ -428,17 +492,37 @@ For clients that prefer a single JSON array (PDF-style compatibility):
 | Component | Description |
 |-----------|-------------|
 | `normalize_pubkey_z32` | Normalize pubkey: trim, strip `pubky://` and `pk:` prefixes, lowercase |
-| `context_id` | Compute symmetric ContextId for peer pair |
+| `generate_context_id` | Generate 32 random bytes for new threads |
+| `derive_inbox_kid` | Compute `first_16_bytes(SHA256(inbox_x25519_pub))` |
+| `fetch_keybinding` | Fetch and verify KeyBinding from PKARR for given `(peerid, app_id)` |
 | `payment_request_path` | Build path for payment request (uses ContextId) |
 | `subscription_proposal_path` | Build path for subscription proposal (uses ContextId) |
 | `ack_path` | Build path for encrypted ACK (uses ContextId) |
-| `payment_request_aad` | Build owner-bound AAD for payment request |
-| `subscription_proposal_aad` | Build owner-bound AAD for subscription proposal |
-| `ack_aad` | Build AAD for encrypted ACK |
-| `is_sealed_blob` | Check if content is Sealed Blob v1 or v2 format |
+| `build_binary_aad` | Build AAD as: `prefix \|\| owner_bytes \|\| path_bytes \|\| header_bytes` |
+| `serialize_sb2` | Serialize SB2 binary format: `magic \|\| version \|\| header_len \|\| header \|\| ciphertext` |
+| `parse_sb2` | Parse SB2 binary format and validate bounds |
+| `is_sealed_blob_v2` | Check for SB2 magic bytes (0x53 0x42 0x32) |
+
+### KeyBinding Implementation
+
+| Component | Description |
+|-----------|-------------|
+| `parse_keybinding` | Parse deterministic CBOR KeyBinding object |
+| `verify_keybinding_sig` | Verify KeyBinding signature against `peerid` |
+| `select_inbox_key` | Select InboxKey from `inbox_keys[]` by `kid` or latest `key_version` |
+| `select_transport_key` | Select TransportKey from `transport_keys[]` for Noise sessions |
+
+### AppKey Delegation (Optional)
+
+| Component | Description |
+|-----------|-------------|
+| `fetch_appcert` | Fetch AppCert by `cert_id` from KeyBinding `app_keys[]` |
+| `verify_appcert` | Verify AppCert signature against issuer's RootKey |
+| `verify_appkey_sig` | Verify SB2 signature when `cert_id` is present in header |
 
 **Deprecated** (legacy compatibility only):
 | `recipient_scope` | Legacy single-party scope hash (use `context_id` instead) |
+| `string_aad` | Legacy string-based AAD format (use binary AAD) |
 
 ### Security Requirements
 
@@ -561,6 +645,16 @@ fun verifyProviderBinding(proposal: SubscriptionProposal, polledPubkey: String):
 ---
 
 ## Appendix B: Changelog
+
+### v0.3 (January 21, 2026)
+- Aligned with PUBKY_CRYPTO_SPEC v2.5 KeyBinding discovery (Section 6.8.1)
+- Added normative InboxKey vs TransportKey separation (Section 4.7)
+- Updated encryption/decryption flows to use binary SB2 format with CBOR headers
+- Added `inbox_kid` derivation and O(1) key lookup requirement
+- Updated AAD to binary format per CRYPTO_SPEC Section 7.5
+- Added KeyBinding and AppKey delegation implementation requirements
+- Added `cert_id` header field for AppKey-signed envelopes (Section 7.2.2)
+- Marked legacy string AAD as deprecated
 
 ### v0.2 (January 8, 2026)
 - Migrated from `recipient_scope`/`subscriber_scope` to symmetric `context_id`

@@ -1,19 +1,20 @@
-# Paykit Sealed Blob Specification (v1 and v2)
+# Paykit Sealed Blob Specification
 
 > **Canonical Reference**: This specification implements the Sealed Blob format defined in
 > [PUBKY_CRYPTO_SPEC v2.5](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md)
-> Section 7.5 (Sealed Blob v2 / SB2). The PUBKY_CRYPTO_SPEC is the authoritative source for:
+> Section 7.2 (Sealed Blob v2 / SB2). The PUBKY_CRYPTO_SPEC is the authoritative source for:
 > - Binary wire format (magic bytes, version, CBOR header, ciphertext)
 > - Deterministic CBOR header encoding with integer keys
 > - AAD construction: `prefix || owner_peerid || canonical_path || header_bytes`
 > - inbox_kid derivation for key selection
+> - Signature construction and AppKey delegation via cert_id
 >
 > This document describes Paykit-specific usage and integration patterns.
 
 This document specifies the encrypted envelope format used for storing secret-bearing data on Pubky homeservers. Since all data under `/pub/` is publicly readable, any sensitive payload must be encrypted before storage.
 
-**Current Version**: v2 (XChaCha20-Poly1305) / SB2 wire format  
-**Backward Compatible**: Decryption supports both v1 (JSON) and v2 (SB2 binary)
+**Current Format**: SB2 binary wire format (XChaCha20-Poly1305, CBOR header)  
+**Legacy Format**: JSON envelope (v1/v2) - decryption only, deprecated for new implementations
 
 ## Table of Contents
 
@@ -83,56 +84,78 @@ info          = b"paykit-sealed-blob-v1"
 
 ## Envelope Format
 
-### v2 Envelope (Current)
+### SB2 Binary Wire Format (Current)
+
+Per CRYPTO_SPEC Section 7.2, the SB2 binary format is:
+
+```
+Wire Format:
+  magic: 0x53 0x42 0x32 ("SB2", 3 bytes)
+  version: u8 (0x02)
+  header_len: u16 (big-endian, MUST be <= 2048 bytes)
+  header_bytes: [u8; header_len] (deterministic CBOR)
+  ciphertext: [u8] (remainder, includes 16-byte Poly1305 tag)
+```
+
+### CBOR Header Fields (Integer Keys)
+
+The header is a deterministic CBOR map using integer keys for compactness:
+
+| Key | Field Name | Type | Required | Description |
+|-----|------------|------|----------|-------------|
+| 0 | `context_id` | bytes(32) | REQUIRED (Paykit) | Thread identifier, raw bytes |
+| 1 | `created_at` | uint | RECOMMENDED | Unix timestamp (seconds) |
+| 2 | `expires_at` | uint | REQUIRED (Paykit) | Expiration for requests/proposals |
+| 3 | `inbox_kid` | bytes(16) | **REQUIRED** | Key identifier for recipient InboxKey |
+| 4 | `msg_id` | text | REQUIRED (Paykit) | Idempotency key, ASCII, max 128 chars |
+| 5 | `nonce` | bytes(24) | **REQUIRED** | XChaCha20-Poly1305 nonce (random per message) |
+| 6 | `purpose` | text | Optional | Hint: `"request"`, `"proposal"`, `"ack"`, `"handoff"` |
+| 7 | `recipient_peerid` | bytes(32) | **REQUIRED** | Recipient's Ed25519 public key |
+| 8 | `sender_ephemeral_pub` | bytes(32) | **REQUIRED** | Sender's ephemeral X25519 public key for DH |
+| 9 | `sender_peerid` | bytes(32) | **REQUIRED** | Sender's Ed25519 public key |
+| 10 | `sig` | bytes(64) | REQUIRED (Paykit) | Ed25519 signature for sender authenticity |
+| 11 | `cert_id` | bytes(16) | Optional | AppCert identifier; if present, `sig` uses AppKey |
+
+### inbox_kid Derivation
+
+```
+inbox_kid = first_16_bytes(SHA256(recipient_inbox_x25519_pub))
+```
+
+The `inbox_kid` enables O(1) key selection. Unknown `inbox_kid` MUST be rejected immediately WITHOUT calling Ring derivation (DoS prevention).
+
+### Resource Bounds (DoS Prevention)
+
+| Limit | Value | Rationale |
+|-------|-------|-----------|
+| `header_len` | MUST be <= 2048 bytes | Prevents memory exhaustion |
+| `msg_id` length | MUST be <= 128 characters | Bounds path lengths |
+| CBOR nesting depth | MUST be <= 2 | Prevents parsing complexity |
+| CBOR top-level keys | MUST be <= 16 | Bounds field count |
+| Indefinite-length CBOR | PROHIBITED | Determinism requirement |
+
+### Legacy JSON Envelope (Deprecated)
+
+For backward compatibility, decryption MAY support legacy JSON format:
 
 ```json
 {
   "v": 2,
-  "epk": "<base64url-encoded sender ephemeral public key, 32 bytes>",
-  "nonce": "<base64url-encoded nonce, 24 bytes>",
-  "ct": "<base64url-encoded ciphertext + 16-byte Poly1305 tag>"
+  "epk": "<base64url ephemeral public key, 32 bytes>",
+  "nonce": "<base64url nonce, 24 bytes>",
+  "ct": "<base64url ciphertext + 16-byte tag>"
 }
 ```
 
-### v1 Envelope (Legacy)
-
-```json
-{
-  "v": 1,
-  "epk": "<base64url-encoded sender ephemeral public key, 32 bytes>",
-  "nonce": "<base64url-encoded nonce, 12 bytes>",
-  "ct": "<base64url-encoded ciphertext + 16-byte Poly1305 tag>"
-}
-```
-
-### Field Definitions
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `v` | integer | Yes | Version number. `1` for legacy, `2` for current. |
-| `epk` | string | Yes | Sender's ephemeral X25519 public key, base64url-encoded (no padding). |
-| `nonce` | string | Yes | Nonce, base64url-encoded (24 bytes for v2, 12 bytes for v1). |
-| `ct` | string | Yes | Ciphertext concatenated with 16-byte Poly1305 authentication tag, base64url-encoded (no padding). |
-
-### Optional Fields
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `kid` | string | No | Key identifier: first 8 bytes of SHA-256(recipient_pk), hex-encoded. Allows recipient to select correct decryption key when multiple keys are cached. |
-| `purpose` | string | No | Human-readable purpose hint: `"handoff"`, `"request"`, `"proposal"`. Informational only; not authenticated. |
-
-### Encoding Rules
-
-- **Base64url**: RFC 4648 §5, without padding (`=`)
-- **JSON**: UTF-8 encoded, no BOM, compact (no extra whitespace in production)
-- **Key order**: Fields should appear in order: `v`, `epk`, `nonce`, `ct`, then optional fields
+**New implementations MUST use binary SB2 format for writing.**
 
 ### Size Limits
 
 | Component | Maximum Size |
 |-----------|--------------|
 | Plaintext | 64 KiB |
-| Envelope JSON | 100 KiB |
+| Header | 2 KiB |
+| Total blob | ~66 KiB |
 
 ---
 
@@ -140,93 +163,148 @@ info          = b"paykit-sealed-blob-v1"
 
 **Associated Authenticated Data (AAD)** binds the ciphertext to its storage context, preventing blob relocation attacks.
 
-### AAD Format
+### Binary AAD Format (Normative)
+
+Per CRYPTO_SPEC Section 7.5, AAD is constructed as binary concatenation (no delimiters):
 
 ```
-aad = <purpose>:<owner_pubkey>:<path>
+aad = aad_prefix || owner_peerid_bytes || canonical_path_bytes || header_bytes
 ```
 
 Where:
-- `purpose`: One of `handoff`, `request`, `proposal`
-- `owner_pubkey`: The z32-encoded Ed25519 public key of the homeserver owner where the blob is stored
-- `path`: The full storage path (e.g., `/pub/paykit.app/v0/handoff/abc123`)
+- `aad_prefix`: ASCII bytes `"pubky-envelope/v2:"` (18 bytes, includes colon)
+- `owner_peerid_bytes`: Raw 32-byte Ed25519 public key of storage owner
+- `canonical_path_bytes`: UTF-8 bytes of canonical storage path
+- `header_bytes`: Deterministic CBOR serialization of header (without signature for signing)
 
-### AAD Examples
+**No delimiters between components.** Fields are concatenated directly:
+- aad_prefix: 18 bytes (fixed)
+- owner_peerid_bytes: 32 bytes (fixed)
+- canonical_path_bytes: variable length
+- header_bytes: variable length (self-delimiting CBOR)
 
-**Handoff** (Ring → Bitkit):
-```
-handoff:8um71us...xyz:/pub/paykit.app/v0/handoff/f3a7b2c1d4e5
-```
+### Storage Owner
 
-**Payment Request** (Alice → Bob):
-```
-request:o1j5bz6...abc:/pub/paykit.app/v0/requests/o1j5bz6...abc/req_123
-```
+The peer who writes the object to their homeserver storage:
 
-**Subscription Proposal** (Service → User):
-```
-proposal:8um71us...xyz:/pub/paykit.app/v0/subscriptions/proposals/8um71us...xyz/prop_456
-```
+| Object Type | Storage Owner |
+|-------------|---------------|
+| Payment request | Sender |
+| Subscription proposal | Provider |
+| ACK | Receiver |
+| Handoff | Ring user |
+
+### Path Canonicalization
+
+Per CRYPTO_SPEC Section 7.12.5:
+
+| Rule | Description |
+|------|-------------|
+| Encoding | UTF-8 bytes, no BOM |
+| Leading slash | REQUIRED (must start with `/`) |
+| Trailing slash | PROHIBITED (except root `"/"`) |
+| Duplicate slashes | PROHIBITED (no `//`) |
+| Character set | ASCII alphanumeric + `/-_.` only |
+| Max length | 1024 bytes |
 
 ### AAD Validation
 
 On decryption:
-1. Recipient reconstructs AAD from known context (purpose, owner, path)
+1. Recipient reconstructs AAD from known context (owner, path, header)
 2. Decryption with wrong AAD fails with authentication error
 3. This prevents an attacker from copying a blob to a different path
+
+### Legacy String AAD (Deprecated)
+
+For backward compatibility only:
+```
+aad = <purpose>:<owner_z32>:<path>
+```
+
+**New implementations MUST use binary AAD format.**
 
 ---
 
 ## Operations
 
-### Encrypt (Seal) — v2
+### Encrypt (Seal) — SB2 Binary
 
 **Inputs**:
-- `recipient_pk`: Recipient's X25519 public key (32 bytes)
+- `recipient_inbox_pk`: Recipient's InboxKey X25519 public key (32 bytes)
+- `recipient_peerid`: Recipient's Ed25519 public key (32 bytes)
+- `sender_peerid`: Sender's Ed25519 public key (32 bytes)
 - `plaintext`: Data to encrypt (≤64 KiB)
-- `aad`: Associated data string (see AAD Construction)
+- `owner_peerid`: Storage owner's Ed25519 public key (32 bytes)
+- `path`: Canonical storage path
+- `context_id`: Thread identifier (32 bytes)
+- `msg_id`: Idempotency key (text)
 
 **Algorithm**:
 ```
 1. Generate ephemeral X25519 keypair: (epk, esk)
-2. Compute shared_secret = X25519(esk, recipient_pk)
+2. Compute shared_secret = X25519(esk, recipient_inbox_pk)
 3. Derive key via HKDF:
-   salt = epk || recipient_pk
+   salt = epk || recipient_inbox_pk
    key = HKDF-SHA256(salt, shared_secret, b"pubky-envelope/v2", 32)
 4. Generate random 24-byte nonce
-5. Encrypt: ct = XChaCha20-Poly1305.seal(key, nonce, plaintext, aad)
-6. Zeroize: esk, shared_secret, key
-7. Return Envelope { v: 2, epk, nonce, ct }
+5. Compute inbox_kid = first_16_bytes(SHA256(recipient_inbox_pk))
+6. Build CBOR header (deterministic encoding, integer keys):
+   { 0: context_id, 3: inbox_kid, 4: msg_id, 5: nonce,
+     7: recipient_peerid, 8: epk, 9: sender_peerid, ... }
+7. Construct AAD = "pubky-envelope/v2:" || owner_peerid || path || header_bytes
+8. Encrypt: ct = XChaCha20-Poly1305.seal(key, nonce, plaintext, aad)
+9. Sign (optional): compute sig over header + ciphertext (CRYPTO_SPEC Section 7.2.1)
+10. Add sig to header (key 10), optionally cert_id (key 11) if using AppKey
+11. Re-encode final header with signature
+12. Serialize: magic (0x53 0x42 0x32) || version (0x02) || header_len || header || ct
+13. Zeroize: esk, shared_secret, key
 ```
 
-**Output**: JSON-encoded envelope
+**Output**: Binary SB2 blob
 
-### Decrypt (Open) — v1/v2 Auto-Detect
+### Decrypt (Open) — SB2 Binary
 
 **Inputs**:
-- `recipient_sk`: Recipient's X25519 secret key (32 bytes)
-- `envelope`: JSON-encoded envelope
-- `aad`: Associated data string (must match encryption)
+- `recipient_inbox_sk`: Recipient's InboxKey X25519 secret key (32 bytes)
+- `blob`: Binary SB2 blob
+- `owner_peerid`: Storage owner's Ed25519 public key (32 bytes)
+- `path`: Canonical storage path
 
 **Algorithm**:
 ```
-1. Parse envelope JSON
-2. Read v field
-3. Decode epk, nonce, ct from base64url
-4. Compute shared_secret = X25519(recipient_sk, epk)
-5. Derive key via HKDF (version-specific info string):
-   salt = epk || recipient_pk
-   if v == 1: key = HKDF-SHA256(salt, shared_secret, b"paykit-sealed-blob-v1", 32)
-   if v == 2: key = HKDF-SHA256(salt, shared_secret, b"pubky-envelope/v2", 32)
-   else: return UNSUPPORTED_VERSION
-6. Decrypt (version-specific AEAD):
-   if v == 1: plaintext = ChaCha20-Poly1305.open(key, nonce, ct, aad)
-   if v == 2: plaintext = XChaCha20-Poly1305.open(key, nonce, ct, aad)
-7. Zeroize: shared_secret, key
-8. Return plaintext
+1. Verify magic bytes (0x53 0x42 0x32) and version (0x02)
+2. Read header_len (u16 big-endian), reject if > 2048
+3. Parse CBOR header, extract fields by integer key
+4. Extract inbox_kid (key 3)
+5. Look up recipient_inbox_sk by inbox_kid in local keyring
+   - If not found: reject immediately (DoS prevention)
+6. Extract sender_ephemeral_pub (key 8)
+7. Compute shared_secret = X25519(recipient_inbox_sk, sender_ephemeral_pub)
+8. Derive key via HKDF:
+   salt = sender_ephemeral_pub || recipient_inbox_pk
+   key = HKDF-SHA256(salt, shared_secret, b"pubky-envelope/v2", 32)
+9. Construct AAD = "pubky-envelope/v2:" || owner_peerid || path || header_no_sig
+10. Decrypt: plaintext = XChaCha20-Poly1305.open(key, nonce, ct, aad)
+11. If sig (key 10) present:
+    - If cert_id (key 11) present: verify via AppKey from AppCert
+    - Else: verify sig against sender_peerid (key 9)
+12. Zeroize: shared_secret, key
 ```
 
 **Output**: Decrypted plaintext or error
+
+### Legacy Decrypt (JSON Format)
+
+For backward compatibility, implementations MAY support legacy JSON envelope decryption:
+
+```
+1. Check if blob starts with '{' (JSON)
+2. Parse JSON envelope
+3. Decode base64url fields (epk, nonce, ct)
+4. Proceed with key derivation and decryption
+```
+
+**This is for decryption only. New writes MUST use binary SB2 format.**
 
 ---
 
@@ -262,39 +340,45 @@ On decryption:
 
 ## Versioning
 
-### Current Version: 2
+### Current Format: SB2 Binary
 
-This specification defines version 2 as the current encryption format. Decryption supports both v1 (legacy) and v2.
+This specification defines SB2 binary wire format as the current standard. Decryption MAY support legacy JSON formats for backward compatibility.
 
-| Version | Status | AEAD | Nonce | HKDF Info |
-|---------|--------|------|-------|-----------|
-| 2 | Current | XChaCha20-Poly1305 | 24 bytes | `pubky-envelope/v2` |
-| 1 | Legacy (decrypt only) | ChaCha20-Poly1305 | 12 bytes | `paykit-sealed-blob-v1` |
+| Format | Status | Wire Format | AEAD | Nonce | HKDF Info |
+|--------|--------|-------------|------|-------|-----------|
+| SB2 | **Current** | Binary (magic + CBOR header) | XChaCha20-Poly1305 | 24 bytes | `pubky-envelope/v2` |
+| JSON v2 | Legacy (decrypt only) | JSON | XChaCha20-Poly1305 | 24 bytes | `pubky-envelope/v2` |
+| JSON v1 | Legacy (decrypt only) | JSON | ChaCha20-Poly1305 | 12 bytes | `paykit-sealed-blob-v1` |
+
+### Format Detection
+
+```
+if blob[0:3] == 0x53 0x42 0x32 ("SB2"):
+    # Binary SB2 format
+    parse_sb2_binary(blob)
+elif blob[0] == 0x7B ('{'):
+    # Legacy JSON format
+    parse_json_envelope(blob)
+else:
+    return ERROR_UNKNOWN_FORMAT
+```
 
 ### Version History
 
-- **v2** (January 2026): Upgraded to XChaCha20-Poly1305 with 24-byte nonce for better security margins
-- **v1** (December 2025): Initial version using ChaCha20-Poly1305 with 12-byte nonce
-
-### Future Versions
-
-When a new version is introduced:
-1. Increment `v` field
-2. Document changes in this spec
-3. Decryption should auto-detect and handle all supported versions
-4. Old clients return `UNSUPPORTED_VERSION` for unknown versions
+- **SB2 Binary** (January 2026): Binary wire format with CBOR header, full header fields, inbox_kid for key selection
+- **JSON v2** (January 2026): XChaCha20-Poly1305 with 24-byte nonce (deprecated for new writes)
+- **JSON v1** (December 2025): ChaCha20-Poly1305 with 12-byte nonce (deprecated)
 
 ### Breaking vs Non-Breaking Changes
 
-**Breaking** (requires version bump):
+**Breaking** (requires new format):
 - Changing AEAD algorithm
 - Changing key derivation
 - Changing AAD format
-- Changing field encodings
+- Changing header encoding
 
-**Non-Breaking** (same version):
-- Adding optional fields
-- Increasing size limits
+**Non-Breaking** (same format):
+- Adding optional header fields (new integer keys)
 - Adding new `purpose` values
 
 ---
@@ -314,15 +398,16 @@ When a new version is introduced:
 ### Key Management
 
 1. **Ephemeral keys**: Sender generates fresh X25519 keypair per blob; zeroize after use
-2. **Recipient keys**: Static X25519 key (derived from Ed25519 in Ring, or published Noise endpoint key)
-3. **Key rotation**: Use `kid` field to help recipients select among multiple cached keys
+2. **Recipient InboxKey**: Static X25519 key discovered via KeyBinding `inbox_keys[]`
+3. **Key rotation**: Use `inbox_kid` field (key 3) for O(1) key selection among cached keys
+4. **Key separation**: InboxKey for Sealed Blob ONLY; TransportKey for Noise ONLY
 
 ### Handoff-Specific Security
 
 For handoff blobs (`purpose: "handoff"`):
 
 1. **Ephemeral recipient key**: Bitkit generates one-time X25519 keypair for receiving handoff
-2. **Time-limited**: Handoff payloads include `expires_at` in plaintext; Bitkit rejects expired
+2. **Time-limited**: Handoff payloads include `expires_at` in header; Bitkit rejects expired
 3. **Single-use**: Bitkit deletes remote blob immediately after successful decryption
 4. **No legacy fallback**: Ring rejects handoff requests without `ephemeralPk` parameter
 
@@ -330,9 +415,10 @@ For handoff blobs (`purpose: "handoff"`):
 
 For payment requests and subscription proposals:
 
-1. **Recipient Noise key**: Encrypt to recipient's published Noise endpoint public key
-2. **Discovery**: Sender fetches recipient's Noise endpoint from `/pub/paykit.app/v0/noise`
-3. **Epoch handling**: Try current epoch key first, fall back to previous epoch if `kid` matches
+1. **Recipient InboxKey**: Encrypt to recipient's InboxKey (NOT TransportKey)
+2. **Discovery**: Sender fetches recipient's KeyBinding from PKARR, extracts `inbox_keys[]`
+3. **inbox_kid derivation**: `first_16_bytes(SHA256(inbox_x25519_pub))`
+4. **Key rotation**: Try key matching `inbox_kid` first; retain old keys for 7+ days
 4. **Legacy migration**: Readers accept plaintext during transition (write-encrypted only)
 
 ### Memory Safety
@@ -348,41 +434,62 @@ For payment requests and subscription proposals:
 ### Rust (pubky-noise)
 
 ```rust
-// Seal
-pub fn sealed_blob_encrypt(
-    recipient_pk: &[u8; 32],
+// SB2 Binary Format
+pub fn sb2_encrypt(
+    recipient_inbox_pk: &[u8; 32],
+    recipient_peerid: &[u8; 32],
+    sender_peerid: &[u8; 32],
     plaintext: &[u8],
-    aad: &str,
-) -> Result<String, SealedBlobError>;
-
-// Open
-pub fn sealed_blob_decrypt(
-    recipient_sk: &[u8; 32],
-    envelope_json: &str,
-    aad: &str,
+    owner_peerid: &[u8; 32],
+    path: &str,
+    context_id: &[u8; 32],
+    msg_id: &str,
 ) -> Result<Vec<u8>, SealedBlobError>;
+
+pub fn sb2_decrypt(
+    recipient_inbox_sk: &[u8; 32],
+    blob: &[u8],
+    owner_peerid: &[u8; 32],
+    path: &str,
+) -> Result<Vec<u8>, SealedBlobError>;
+
+// inbox_kid derivation
+pub fn derive_inbox_kid(inbox_pk: &[u8; 32]) -> [u8; 16];
 
 // Key generation
 pub fn x25519_generate_keypair() -> ([u8; 32], [u8; 32]); // (secret, public)
 pub fn x25519_public_from_secret(secret: &[u8; 32]) -> [u8; 32];
+
+// Legacy JSON (decryption only)
+pub fn sealed_blob_decrypt_legacy(
+    recipient_sk: &[u8; 32],
+    envelope_json: &str,
+    aad: &str,
+) -> Result<Vec<u8>, SealedBlobError>;
 ```
 
 ### Swift (via UniFFI)
 
 ```swift
-func sealedBlobEncrypt(recipientPk: Data, plaintext: Data, aad: String) throws -> String
-func sealedBlobDecrypt(recipientSk: Data, envelopeJson: String, aad: String) throws -> Data
+func sb2Encrypt(recipientInboxPk: Data, recipientPeerid: Data, senderPeerid: Data,
+                plaintext: Data, ownerPeerid: Data, path: String, 
+                contextId: Data, msgId: String) throws -> Data
+func sb2Decrypt(recipientInboxSk: Data, blob: Data, 
+                ownerPeerid: Data, path: String) throws -> Data
+func deriveInboxKid(inboxPk: Data) -> Data
 func x25519GenerateKeypair() -> (secret: Data, publicKey: Data)
-func x25519PublicFromSecret(secret: Data) -> Data
 ```
 
 ### Kotlin (via UniFFI)
 
 ```kotlin
-fun sealedBlobEncrypt(recipientPk: ByteArray, plaintext: ByteArray, aad: String): String
-fun sealedBlobDecrypt(recipientSk: ByteArray, envelopeJson: String, aad: String): ByteArray
+fun sb2Encrypt(recipientInboxPk: ByteArray, recipientPeerid: ByteArray, senderPeerid: ByteArray,
+               plaintext: ByteArray, ownerPeerid: ByteArray, path: String,
+               contextId: ByteArray, msgId: String): ByteArray
+fun sb2Decrypt(recipientInboxSk: ByteArray, blob: ByteArray,
+               ownerPeerid: ByteArray, path: String): ByteArray
+fun deriveInboxKid(inboxPk: ByteArray): ByteArray
 fun x25519GenerateKeypair(): Pair<ByteArray, ByteArray> // (secret, public)
-fun x25519PublicFromSecret(secret: ByteArray): ByteArray
 ```
 
 ---
@@ -413,7 +520,7 @@ See `pubky-noise/tests/fixtures/test_vectors.json` for cross-language test vecto
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: January 7, 2026  
-**Status**: Specification - v2 Implemented
+**Document Version**: 3.0  
+**Last Updated**: January 21, 2026  
+**Status**: Aligned with PUBKY_CRYPTO_SPEC v2.5 SB2 Binary Format
 

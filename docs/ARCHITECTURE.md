@@ -208,10 +208,33 @@ flowchart TB
 ## Security Model
 
 ### Cryptographic Primitives
-- **Ed25519**: Identity and signature operations
-- **X25519**: Key exchange for Noise protocol
-- **SHA-256**: Message hashing
-- **Noise Protocol**: End-to-end encryption
+- **Ed25519**: Identity (RootKey) and signature operations
+- **X25519**: Key exchange for Noise protocol and Sealed Blob encryption
+- **SHA-256**: Message hashing, inbox_kid derivation
+- **Noise Protocol**: End-to-end encryption for live transport
+- **XChaCha20-Poly1305**: Sealed Blob v2 encryption for stored delivery
+
+### Key Hierarchy
+
+Per [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) Section 4.7:
+
+| Key Type | Purpose | Usage |
+|----------|---------|-------|
+| **RootKey** | Ed25519 identity | Signs KeyBinding, AppCerts; semi-cold in Ring |
+| **AppKey** | Delegated Ed25519 | Typed application signatures (via AppCert) |
+| **InboxKey** | X25519 | Sealed Blob stored delivery ONLY |
+| **TransportKey** | X25519 | Noise session authentication ONLY |
+
+**Key Separation Rule**: InboxKey and TransportKey MUST be distinct keys.
+
+### Key Discovery
+
+Keys are discovered via **KeyBinding** objects published in PKARR:
+- `inbox_keys[]`: For Sealed Blob encryption
+- `transport_keys[]`: For Noise sessions
+- `app_keys[]`: For delegated signing (optional)
+
+See CRYPTO_SPEC Section 6.8.1 for KeyBinding schema.
 
 ### Key Management
 - **Demo**: Plaintext JSON files (development only)
@@ -219,7 +242,8 @@ flowchart TB
 
 ### Replay Protection
 - Unique nonces for all signatures
-- Timestamp and expiration validation
+- `msg_id` idempotency keys for message deduplication
+- Timestamp and expiration validation (`created_at`, `expires_at`)
 - Nonce store for subscription signatures
 
 ## Transport Layer
@@ -263,5 +287,12 @@ flowchart TB
 
 - [Repository Root README](../README.md)
 - [Component READMEs](../README.md#documentation)
-- [Security Guide](../SECURITY.md)
+- [PAYKIT_PROTOCOL_V0.md](PAYKIT_PROTOCOL_V0.md) - Canonical protocol specification
+- [SECURITY_ARCHITECTURE.md](SECURITY_ARCHITECTURE.md) - Security model and threat analysis
+- [SEALED_BLOB_SPEC.md](SEALED_BLOB_SPEC.md) - Encryption envelope format
+
+### Upstream Specifications
+
+- [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) - Cryptographic primitives, KeyBinding, Sealed Blob v2
+- [PUBKY_UNIFIED_KEY_DELEGATION_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_UNIFIED_KEY_DELEGATION_SPEC_v0.2.md) - AppCert, delegated signing
 

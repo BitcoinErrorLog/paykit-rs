@@ -57,23 +57,44 @@ This document describes the security model, threat assumptions, and cryptographi
 
 ## Key Hierarchy
 
+### Key Roles (Normative)
+
+Per [PUBKY_CRYPTO_SPEC](https://github.com/pubky/pubky-core/blob/main/docs/PUBKY_CRYPTO_SPEC.md) Section 4.7 and 7.6.1:
+
+| Key | Name | Custody | Purpose |
+|-----|------|---------|---------|
+| **RootKey** | PKARR Ed25519 identity | Ring (semi-cold) | Identity anchor; signs only binding artifacts |
+| **AppKey** | Delegated Ed25519 | App (via AppCert) | Typed application signatures |
+| **TransportKey** | X25519 static | App | Noise session authentication ONLY |
+| **InboxKey** | X25519 static | App | Sealed Blob stored delivery encryption ONLY |
+
+### Key Separation Rule (Normative)
+
+- InboxKey and TransportKey MUST be distinct X25519 keys
+- Implementations MUST NOT use TransportKey for Sealed Blob encryption
+- Implementations MUST NOT use InboxKey for Noise handshakes
+
 ### Derivation Path
 
 ```
-Ed25519 Master Key (Ring)
+Ed25519 Master Key (Ring) = RootKey
     │
-    ├─── derives ───> X25519 Keypair (Epoch 0)
-    │                 deviceId: <uuid>
-    │                 epoch: 0
+    ├─── derives ───> InboxKey (X25519)
+    │                 app_id: "paykit"
+    │                 key_version: 0
+    │                 purpose: Sealed Blob stored delivery
+    │
+    ├─── derives ───> TransportKey (X25519)
+    │                 app_id: "paykit"
+    │                 device_id: <uuid>
+    │                 key_version: 0
     │                 purpose: Noise IK handshake
     │
-    ├─── derives ───> X25519 Keypair (Epoch 1)
-    │                 deviceId: <uuid>
-    │                 epoch: 1
-    │                 purpose: Key rotation
+    ├─── issues ────> AppCert (optional)
+    │                 Delegates signing authority to AppKey
     │
-    └─── signs ────> API Signatures
-                      (push relay, etc.)
+    └─── signs ────> KeyBinding, AppCerts, Push Relay auth
+                      (semi-cold RootKey signatures)
 ```
 
 ### Derivation Function
@@ -96,12 +117,64 @@ pub fn derive_device_key(
 
 | Key Type | Lifetime | Storage | Rotation |
 |----------|----------|---------|----------|
-| Ed25519 | Permanent | Ring only | Never |
+| RootKey (Ed25519) | Permanent | Ring only | Never |
+| AppKey (Ed25519) | Until AppCert expires | App secure storage | On cert expiry or revocation |
+| InboxKey (X25519) | 30-90 days | App secure storage | Via key_version increment |
+| TransportKey (X25519) | 30-90 days | App secure storage | Via key_version increment |
 | Noise Seed | Permanent per device | Bitkit secure storage | On device reset |
-| X25519 Epoch 0 | 30-90 days | Bitkit cache | To Epoch 1 |
-| X25519 Epoch 1 | 30-90 days | Bitkit cache | To Epoch 2 (local derivation) |
 | Session Secret | Until revoked | Bitkit secure storage | On 401/403 |
 | Ephemeral Handoff Key | Minutes | Bitkit temp storage | Zeroized after handoff |
+
+### inbox_kid Derivation
+
+For O(1) key selection in Sealed Blob v2:
+
+```
+inbox_kid = first_16_bytes(SHA256(inbox_x25519_pub))
+```
+
+The `inbox_kid` is included in SB2 headers (key 3) to enable efficient key lookup without brute-forcing.
+
+### KeyBinding Discovery
+
+Keys are published and discovered via **KeyBinding** objects (CRYPTO_SPEC Section 6.8.1):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `peerid` | bytes(32) | Ed25519 identity (RootKey) |
+| `app_id` | text | Application identifier (e.g., `"paykit"`) |
+| `inbox_keys` | array | InboxKeyEntry list for Sealed Blob encryption |
+| `transport_keys` | array | TransportKeyEntry list for Noise sessions |
+| `app_keys` | array | (Optional) AppKeyEntry list for delegated signing |
+| `signature` | bytes(64) | Ed25519 signature by RootKey |
+
+**Discovery Flow**:
+1. Fetch KeyBinding from PKARR for `(peerid, app_id)`
+2. Verify signature against `peerid`
+3. Select InboxKey from `inbox_keys[]` for Sealed Blob encryption
+4. Select TransportKey from `transport_keys[]` for Noise sessions
+
+### Signing Hierarchy
+
+Per CRYPTO_SPEC Section 7.6.1, signing authority follows this policy:
+
+| Context | Signature Required? | Signing Key | Notes |
+|---------|---------------------|-------------|-------|
+| **KeyBinding publication** | REQUIRED | RootKey | Self-signed binding artifact |
+| **AppCert issuance** | REQUIRED | RootKey | Delegates authority to AppKey |
+| **Noise live session** | NOT REQUIRED | N/A | Session provides auth |
+| **Sealed Blob (stored delivery)** | RECOMMENDED | AppKey (preferred) OR RootKey | Use `cert_id` header for AppKey |
+| **Settlement proof (Atomicity)** | REQUIRED | AppKey (preferred) OR RootKey | Verifiable offline |
+
+**Delegated Signing via AppKey**:
+
+When SB2 header field 11 (`cert_id`) is present:
+1. Signature (key 10) is verified against AppKey, not RootKey
+2. Verifier fetches AppCert by `cert_id` from KeyBinding `app_keys[]`
+3. Verifier confirms AppCert is signed by RootKey (`sender_peerid`)
+4. Verifier extracts AppKey from AppCert and verifies SB2 signature
+
+This keeps RootKey semi-cold while enabling routine signing.
 
 ### Noise Seed for Local Epoch Derivation
 
@@ -1027,7 +1100,7 @@ For security issues, contact:
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: January 5, 2026  
-**Status**: Security Hardening - Core Components Complete
+**Document Version**: 2.1  
+**Last Updated**: January 21, 2026  
+**Status**: Aligned with PUBKY_CRYPTO_SPEC v2.5
 

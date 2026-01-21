@@ -40,6 +40,11 @@
 //! signing certificates (AppCert) that allow typed content signing without exposing
 //! generic "sign anything" APIs.
 //!
+//! # Crypto Delegation
+//!
+//! This module delegates cryptographic operations to `pubky-noise` when the `pubky`
+//! feature is enabled. This consolidates crypto primitives and avoids version drift.
+//!
 //! # Example
 //!
 //! ```rust
@@ -52,8 +57,6 @@
 //! let kid = compute_inbox_kid(&inbox_key.public_key());
 //! assert_eq!(kid.len(), 16);
 //! ```
-
-use sha2::{Digest, Sha256};
 
 // Re-export KeyBinding types from pubky-noise when the feature is enabled
 #[cfg(feature = "pubky")]
@@ -100,30 +103,37 @@ pub struct InboxKey {
 
 impl InboxKey {
     /// Generate a new random InboxKey.
+    ///
+    /// Delegates to `pubky_noise::x25519_generate_keypair()`.
+    ///
+    /// Requires the `pubky` feature.
+    #[cfg(feature = "pubky")]
     pub fn generate() -> Self {
-        use rand::RngCore;
-        let mut secret = [0u8; X25519_SECRET_KEY_LEN];
-        rand::thread_rng().fill_bytes(&mut secret);
-
-        // Clamp for X25519 per RFC 7748
-        secret[0] &= 248;
-        secret[31] &= 127;
-        secret[31] |= 64;
-
-        let public = Self::derive_public(&secret);
+        let (secret, public) = pubky_noise::x25519_generate_keypair();
         Self { secret, public }
     }
 
     /// Create an InboxKey from a secret key.
     ///
     /// The secret key should be 32 random bytes. Clamping is applied automatically.
+    ///
+    /// Requires the `pubky` feature.
+    #[cfg(feature = "pubky")]
     pub fn from_secret(mut secret: [u8; X25519_SECRET_KEY_LEN]) -> Self {
         // Clamp for X25519
         secret[0] &= 248;
         secret[31] &= 127;
         secret[31] |= 64;
 
-        let public = Self::derive_public(&secret);
+        let public = pubky_noise::x25519_public_from_secret(&secret);
+        Self { secret, public }
+    }
+
+    /// Create an InboxKey from existing keypair bytes (no derivation).
+    ///
+    /// This constructor accepts pre-computed secret and public keys.
+    /// Use this when loading keys from storage.
+    pub fn from_keypair(secret: [u8; X25519_SECRET_KEY_LEN], public: [u8; X25519_PUBLIC_KEY_LEN]) -> Self {
         Self { secret, public }
     }
 
@@ -146,14 +156,11 @@ impl InboxKey {
     /// ```text
     /// inbox_kid = first_16_bytes(SHA256(public_key))
     /// ```
+    ///
+    /// Requires the `pubky` feature for derivation.
+    #[cfg(feature = "pubky")]
     pub fn inbox_kid(&self) -> [u8; INBOX_KID_LEN] {
         compute_inbox_kid(&self.public)
-    }
-
-    /// Derive public key from secret key.
-    fn derive_public(secret: &[u8; 32]) -> [u8; 32] {
-        use x25519_dalek::{x25519, X25519_BASEPOINT_BYTES};
-        x25519(*secret, X25519_BASEPOINT_BYTES)
     }
 }
 
@@ -180,28 +187,35 @@ pub struct TransportKey {
 
 impl TransportKey {
     /// Generate a new random TransportKey.
+    ///
+    /// Delegates to `pubky_noise::x25519_generate_keypair()`.
+    ///
+    /// Requires the `pubky` feature.
+    #[cfg(feature = "pubky")]
     pub fn generate() -> Self {
-        use rand::RngCore;
-        let mut secret = [0u8; X25519_SECRET_KEY_LEN];
-        rand::thread_rng().fill_bytes(&mut secret);
-
-        // Clamp for X25519
-        secret[0] &= 248;
-        secret[31] &= 127;
-        secret[31] |= 64;
-
-        let public = Self::derive_public(&secret);
+        let (secret, public) = pubky_noise::x25519_generate_keypair();
         Self { secret, public }
     }
 
     /// Create a TransportKey from a secret key.
+    ///
+    /// Requires the `pubky` feature.
+    #[cfg(feature = "pubky")]
     pub fn from_secret(mut secret: [u8; X25519_SECRET_KEY_LEN]) -> Self {
         // Clamp for X25519
         secret[0] &= 248;
         secret[31] &= 127;
         secret[31] |= 64;
 
-        let public = Self::derive_public(&secret);
+        let public = pubky_noise::x25519_public_from_secret(&secret);
+        Self { secret, public }
+    }
+
+    /// Create a TransportKey from existing keypair bytes (no derivation).
+    ///
+    /// This constructor accepts pre-computed secret and public keys.
+    /// Use this when loading keys from storage.
+    pub fn from_keypair(secret: [u8; X25519_SECRET_KEY_LEN], public: [u8; X25519_PUBLIC_KEY_LEN]) -> Self {
         Self { secret, public }
     }
 
@@ -213,12 +227,6 @@ impl TransportKey {
     /// Get the public key bytes.
     pub fn public_key(&self) -> &[u8; X25519_PUBLIC_KEY_LEN] {
         &self.public
-    }
-
-    /// Derive public key from secret key.
-    fn derive_public(secret: &[u8; 32]) -> [u8; 32] {
-        use x25519_dalek::{x25519, X25519_BASEPOINT_BYTES};
-        x25519(*secret, X25519_BASEPOINT_BYTES)
     }
 }
 
@@ -241,6 +249,10 @@ impl std::fmt::Debug for TransportKey {
 /// The inbox_kid is used in SB2 headers for O(1) key selection when
 /// a recipient has multiple InboxKeys.
 ///
+/// Delegates to `pubky_noise::Sb2Header::compute_inbox_kid()`.
+///
+/// Requires the `pubky` feature.
+///
 /// # Example
 ///
 /// ```rust
@@ -250,11 +262,9 @@ impl std::fmt::Debug for TransportKey {
 /// let kid = compute_inbox_kid(inbox_key.public_key());
 /// assert_eq!(kid.len(), 16);
 /// ```
+#[cfg(feature = "pubky")]
 pub fn compute_inbox_kid(inbox_public_key: &[u8; X25519_PUBLIC_KEY_LEN]) -> [u8; INBOX_KID_LEN] {
-    let hash = Sha256::digest(inbox_public_key);
-    let mut kid = [0u8; INBOX_KID_LEN];
-    kid.copy_from_slice(&hash[..INBOX_KID_LEN]);
-    kid
+    pubky_noise::Sb2Header::compute_inbox_kid(inbox_public_key)
 }
 
 /// Compute inbox_kid and return as hex string.

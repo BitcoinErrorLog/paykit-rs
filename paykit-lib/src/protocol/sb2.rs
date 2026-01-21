@@ -35,6 +35,7 @@
 //! - `sb2_encrypt_signed` for producing signed SB2 envelopes
 //! - Signature verification on decrypt via `sb2_decrypt`
 
+#[cfg(feature = "pubky")]
 use crate::{PaykitError, Result};
 
 // =============================================================================
@@ -272,8 +273,9 @@ pub fn sb2_encrypt_signed(
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // Create the unsigned SB2 envelope
-    let mut sb2 = Sb2::encrypt(
+    // Create the unsigned SB2 envelope with cert_id (if signing with AppKey)
+    // cert_id must be included before encryption so AAD includes it
+    let mut sb2 = Sb2::encrypt_with_cert_id(
         &params.recipient_inbox_pk,
         plaintext,
         params.context_id,
@@ -285,14 +287,12 @@ pub fn sb2_encrypt_signed(
         &params.canonical_path,
         Some(now),
         params.expires_at,
+        signer.cert_id(),
     )
     .map_err(|e: pubky_noise::errors::NoiseError| PaykitError::Crypto {
         operation: "sb2_encrypt_signed".into(),
         details: e.to_string(),
     })?;
-
-    // Set cert_id in header if signing with AppKey
-    sb2.header.cert_id = signer.cert_id();
 
     // Compute signature input per PUBKY_CRYPTO_SPEC Section 7.2.1
     let header_no_sig = sb2.header.encode_no_sig();
@@ -964,5 +964,238 @@ mod tests {
 
         assert_eq!(decrypted, plaintext);
         assert!(metadata.signature_verified);
+    }
+
+    // =========================================================================
+    // Delegated Signature (cert_id/AppKey) Tests
+    // =========================================================================
+
+    /// Mock AppCertFetcher for testing that returns a known AppKey public key.
+    #[cfg(feature = "pubky")]
+    struct MockAppCertFetcher {
+        expected_sender: [u8; 32],
+        expected_cert_id: [u8; 16],
+        app_public_key: [u8; 32],
+    }
+
+    #[cfg(feature = "pubky")]
+    impl AppCertFetcher for MockAppCertFetcher {
+        fn fetch_app_key(
+            &self,
+            sender_peerid: &[u8; 32],
+            cert_id: &[u8; 16],
+        ) -> std::result::Result<[u8; 32], String> {
+            if sender_peerid != &self.expected_sender {
+                return Err("Wrong sender".into());
+            }
+            if cert_id != &self.expected_cert_id {
+                return Err("Wrong cert_id".into());
+            }
+            Ok(self.app_public_key)
+        }
+    }
+
+    #[cfg(feature = "pubky")]
+    #[test]
+    fn test_sb2_delegated_signature_success() {
+        use super::super::scope::generate_context_id;
+        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use ed25519_dalek::SigningKey;
+        use rand::RngCore;
+
+        // Generate keys
+        let (inbox_sk, inbox_pk) = x25519_generate_keypair();
+        let mut root_seed = [0u8; 32];
+        let mut app_seed = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut root_seed);
+        rand::thread_rng().fill_bytes(&mut app_seed);
+
+        let root_signing_key = SigningKey::from_bytes(&root_seed);
+        let sender_peerid = root_signing_key.verifying_key().to_bytes();
+
+        let app_signing_key = SigningKey::from_bytes(&app_seed);
+        let app_public_key = app_signing_key.verifying_key().to_bytes();
+
+        let mut owner_peerid = [0u8; 32];
+        let mut recipient_peerid = [0u8; 32];
+        let mut cert_id = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut owner_peerid);
+        rand::thread_rng().fill_bytes(&mut recipient_peerid);
+        rand::thread_rng().fill_bytes(&mut cert_id);
+
+        let context_id = generate_context_id();
+        let path = "/pub/paykit.app/v0/requests/abc123/req_006";
+        let plaintext = b"Delegated signature message";
+
+        let params = Sb2EncryptParams {
+            recipient_inbox_pk: inbox_pk,
+            owner_peerid,
+            sender_peerid,
+            recipient_peerid,
+            context_id,
+            canonical_path: path.to_string(),
+            msg_id: "req_006".to_string(),
+            purpose: Some("request".to_string()),
+            expires_at: None,
+        };
+
+        // Create AppKeySigner
+        let app_signer = AppKeySigner::new(app_seed, sender_peerid, cert_id);
+        let encrypted = sb2_encrypt_signed(plaintext, &params, &app_signer).unwrap();
+
+        // Create mock fetcher that returns the correct AppKey
+        let fetcher = MockAppCertFetcher {
+            expected_sender: sender_peerid,
+            expected_cert_id: cert_id,
+            app_public_key,
+        };
+
+        // Decrypt with required signature - should succeed with fetcher
+        let (decrypted, metadata) = sb2_decrypt_verified(
+            &encrypted,
+            &inbox_sk,
+            &owner_peerid,
+            path,
+            SignatureRequirement::Required,
+            Some(&fetcher),
+        )
+        .unwrap();
+
+        assert_eq!(decrypted, plaintext);
+        assert!(metadata.signature_verified);
+        assert_eq!(metadata.cert_id, Some(cert_id));
+    }
+
+    #[cfg(feature = "pubky")]
+    #[test]
+    fn test_sb2_delegated_signature_no_fetcher_fails() {
+        use super::super::scope::generate_context_id;
+        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use ed25519_dalek::SigningKey;
+        use rand::RngCore;
+
+        // Generate keys
+        let (inbox_sk, inbox_pk) = x25519_generate_keypair();
+        let mut root_seed = [0u8; 32];
+        let mut app_seed = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut root_seed);
+        rand::thread_rng().fill_bytes(&mut app_seed);
+
+        let root_signing_key = SigningKey::from_bytes(&root_seed);
+        let sender_peerid = root_signing_key.verifying_key().to_bytes();
+
+        let mut owner_peerid = [0u8; 32];
+        let mut recipient_peerid = [0u8; 32];
+        let mut cert_id = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut owner_peerid);
+        rand::thread_rng().fill_bytes(&mut recipient_peerid);
+        rand::thread_rng().fill_bytes(&mut cert_id);
+
+        let context_id = generate_context_id();
+        let path = "/pub/paykit.app/v0/requests/abc123/req_007";
+        let plaintext = b"Delegated signature without fetcher";
+
+        let params = Sb2EncryptParams {
+            recipient_inbox_pk: inbox_pk,
+            owner_peerid,
+            sender_peerid,
+            recipient_peerid,
+            context_id,
+            canonical_path: path.to_string(),
+            msg_id: "req_007".to_string(),
+            purpose: Some("request".to_string()),
+            expires_at: None,
+        };
+
+        // Create AppKeySigner
+        let app_signer = AppKeySigner::new(app_seed, sender_peerid, cert_id);
+        let encrypted = sb2_encrypt_signed(plaintext, &params, &app_signer).unwrap();
+
+        // Decrypt with required signature but NO fetcher - should fail
+        let result = sb2_decrypt_verified(
+            &encrypted,
+            &inbox_sk,
+            &owner_peerid,
+            path,
+            SignatureRequirement::Required,
+            None, // No fetcher!
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("no AppCertFetcher provided") || err.contains("cert_id"));
+    }
+
+    #[cfg(feature = "pubky")]
+    #[test]
+    fn test_sb2_delegated_signature_wrong_key_fails() {
+        use super::super::scope::generate_context_id;
+        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use ed25519_dalek::SigningKey;
+        use rand::RngCore;
+
+        // Generate keys
+        let (inbox_sk, inbox_pk) = x25519_generate_keypair();
+        let mut root_seed = [0u8; 32];
+        let mut app_seed = [0u8; 32];
+        let mut wrong_app_seed = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut root_seed);
+        rand::thread_rng().fill_bytes(&mut app_seed);
+        rand::thread_rng().fill_bytes(&mut wrong_app_seed);
+
+        let root_signing_key = SigningKey::from_bytes(&root_seed);
+        let sender_peerid = root_signing_key.verifying_key().to_bytes();
+
+        // Wrong key - different from what we sign with
+        let wrong_signing_key = SigningKey::from_bytes(&wrong_app_seed);
+        let wrong_public_key = wrong_signing_key.verifying_key().to_bytes();
+
+        let mut owner_peerid = [0u8; 32];
+        let mut recipient_peerid = [0u8; 32];
+        let mut cert_id = [0u8; 16];
+        rand::thread_rng().fill_bytes(&mut owner_peerid);
+        rand::thread_rng().fill_bytes(&mut recipient_peerid);
+        rand::thread_rng().fill_bytes(&mut cert_id);
+
+        let context_id = generate_context_id();
+        let path = "/pub/paykit.app/v0/requests/abc123/req_008";
+        let plaintext = b"Delegated signature with wrong key";
+
+        let params = Sb2EncryptParams {
+            recipient_inbox_pk: inbox_pk,
+            owner_peerid,
+            sender_peerid,
+            recipient_peerid,
+            context_id,
+            canonical_path: path.to_string(),
+            msg_id: "req_008".to_string(),
+            purpose: Some("request".to_string()),
+            expires_at: None,
+        };
+
+        // Create AppKeySigner with app_seed (correct key for signing)
+        let app_signer = AppKeySigner::new(app_seed, sender_peerid, cert_id);
+        let encrypted = sb2_encrypt_signed(plaintext, &params, &app_signer).unwrap();
+
+        // Create mock fetcher that returns WRONG key
+        let fetcher = MockAppCertFetcher {
+            expected_sender: sender_peerid,
+            expected_cert_id: cert_id,
+            app_public_key: wrong_public_key, // Wrong key!
+        };
+
+        // Decrypt with required signature - should fail due to wrong key
+        let result = sb2_decrypt_verified(
+            &encrypted,
+            &inbox_sk,
+            &owner_peerid,
+            path,
+            SignatureRequirement::Required,
+            Some(&fetcher),
+        );
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Signature verification failed"));
     }
 }

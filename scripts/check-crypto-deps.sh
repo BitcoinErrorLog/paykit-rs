@@ -10,6 +10,13 @@ set -e
 
 echo "Checking for duplicate versions of core crypto crates..."
 
+# Verify cargo tree is available (built-in since Rust 1.44)
+if ! cargo tree --version >/dev/null 2>&1; then
+    echo "ERROR: 'cargo tree' not available. Requires Rust 1.44+."
+    echo "Current cargo version: $(cargo --version)"
+    exit 1
+fi
+
 # List of crypto crates that must not have duplicate versions
 CRYPTO_CRATES=(
     "x25519-dalek"
@@ -21,19 +28,29 @@ CRYPTO_CRATES=(
     "hkdf"
 )
 
+# Run cargo tree -d once and cache output (optimization)
+echo "Running cargo tree -d..."
+TREE_OUTPUT=$(cargo tree -d 2>/dev/null || true)
+
+if [ -z "$TREE_OUTPUT" ]; then
+    echo "INFO: No duplicate dependencies found in workspace."
+    echo "SUCCESS: No duplicate crypto crate versions detected."
+    exit 0
+fi
+
 ERRORS=0
 
 for crate in "${CRYPTO_CRATES[@]}"; do
-    # Count unique versions of this crate
-    VERSIONS=$(cargo tree -d 2>/dev/null | grep "^$crate " | sort -u | wc -l)
+    # Count unique versions of this crate from cached output
+    VERSIONS=$(echo "$TREE_OUTPUT" | grep "^$crate " | sort -u | wc -l)
     
     if [ "$VERSIONS" -gt 1 ]; then
         echo "ERROR: Multiple versions of '$crate' detected:"
-        cargo tree -d 2>/dev/null | grep "^$crate "
+        echo "$TREE_OUTPUT" | grep "^$crate "
         echo ""
         ERRORS=$((ERRORS + 1))
     elif [ "$VERSIONS" -eq 1 ]; then
-        VERSION=$(cargo tree -d 2>/dev/null | grep "^$crate " | head -1)
+        VERSION=$(echo "$TREE_OUTPUT" | grep "^$crate " | head -1)
         echo "OK: Single version of '$crate': $VERSION"
     else
         echo "INFO: '$crate' not found in dependency tree (may be optional)"

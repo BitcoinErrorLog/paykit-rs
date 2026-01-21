@@ -431,64 +431,96 @@ For payment requests and subscription proposals:
 
 ## Implementation Reference
 
-### Rust (pubky-noise)
+### Rust (pubky-noise + paykit-lib)
+
+SB2 encryption/decryption is handled via the `Sb2` struct in `pubky-noise`:
 
 ```rust
-// SB2 Binary Format
-pub fn sb2_encrypt(
-    recipient_inbox_pk: &[u8; 32],
-    recipient_peerid: &[u8; 32],
-    sender_peerid: &[u8; 32],
-    plaintext: &[u8],
-    owner_peerid: &[u8; 32],
-    path: &str,
-    context_id: &[u8; 32],
-    msg_id: &str,
-) -> Result<Vec<u8>, SealedBlobError>;
+use pubky_noise::sealed_blob_v2::Sb2;
+use pubky_noise::{sb2_build_aad, sb2_compute_sig_input, ed25519_sign, ed25519_verify};
 
-pub fn sb2_decrypt(
-    recipient_inbox_sk: &[u8; 32],
-    blob: &[u8],
-    owner_peerid: &[u8; 32],
-    path: &str,
-) -> Result<Vec<u8>, SealedBlobError>;
+// Encrypt plaintext to SB2 (with optional cert_id for delegated signing)
+let sb2 = Sb2::encrypt_with_cert_id(
+    recipient_inbox_pk, plaintext, context_id, msg_id, purpose,
+    owner_peerid, sender_peerid, recipient_peerid, canonical_path,
+    created_at, expires_at, cert_id,
+)?;
 
+// Sign the envelope (after encryption)
+let header_no_sig = sb2.header.encode_no_sig();
+let aad = sb2_build_aad(owner_peerid, canonical_path, &header_no_sig);
+let sig_input = sb2_compute_sig_input(&aad, &header_no_sig, &sb2.ciphertext);
+let sig = ed25519_sign(sender_sk, &sig_input)?;
+sb2.header.sig = Some(sig);
+
+// Encode to bytes
+let blob = sb2.encode();
+
+// Decrypt and verify (paykit-lib provides higher-level API)
+use paykit_lib::protocol::{sb2_decrypt_verified, SignatureRequirement};
+let (plaintext, metadata) = sb2_decrypt_verified(
+    &blob, recipient_inbox_sk, owner_peerid, canonical_path,
+    SignatureRequirement::Required, // MUST verify for Paykit messages
+    Some(&cert_fetcher), // For delegated signatures (cert_id in header)
+)?;
+assert!(metadata.signature_verified);
+```
+
+Key helpers from `pubky-noise`:
+
+```rust
 // inbox_kid derivation
-pub fn derive_inbox_kid(inbox_pk: &[u8; 32]) -> [u8; 16];
+use pubky_noise::Sb2Header;
+let kid = Sb2Header::compute_inbox_kid(&inbox_pk); // [u8; 16]
 
 // Key generation
-pub fn x25519_generate_keypair() -> ([u8; 32], [u8; 32]); // (secret, public)
-pub fn x25519_public_from_secret(secret: &[u8; 32]) -> [u8; 32];
+use pubky_noise::{x25519_generate_keypair, x25519_public_from_secret};
+let (secret, public) = x25519_generate_keypair();
+let public = x25519_public_from_secret(&secret);
 
-// Legacy JSON (decryption only)
-pub fn sealed_blob_decrypt_legacy(
-    recipient_sk: &[u8; 32],
-    envelope_json: &str,
-    aad: &str,
-) -> Result<Vec<u8>, SealedBlobError>;
+// Ed25519 signing/verification (for SB2 signatures)
+use pubky_noise::{ed25519_sign, ed25519_verify};
+let sig = ed25519_sign(&secret_key, &message)?;
+let valid = ed25519_verify(&public_key, &message, &sig);
+
+// Legacy JSON (decryption only - for migration)
+use pubky_noise::sealed_blob_decrypt;
+let plaintext = sealed_blob_decrypt(&recipient_sk, &json_envelope, aad)?;
 ```
 
 ### Swift (via UniFFI)
 
 ```swift
-func sb2Encrypt(recipientInboxPk: Data, recipientPeerid: Data, senderPeerid: Data,
-                plaintext: Data, ownerPeerid: Data, path: String, 
-                contextId: Data, msgId: String) throws -> Data
-func sb2Decrypt(recipientInboxSk: Data, blob: Data, 
-                ownerPeerid: Data, path: String) throws -> Data
-func deriveInboxKid(inboxPk: Data) -> Data
+// SB2 with signing (REQUIRED for Paykit messages per PUBKY_CRYPTO_SPEC v2.5)
+func sb2EncryptSigned(recipientInboxPk: Data, senderSk: Data, senderPk: Data,
+                      plaintext: Data, ownerPeerid: Data, path: String, 
+                      contextId: Data, msgId: String, certId: Data?) throws -> Data
+
+// Decrypt with signature verification (REQUIRED for Paykit messages)
+func sb2DecryptVerified(recipientInboxSk: Data, blob: Data, 
+                        ownerPeerid: Data, path: String,
+                        requireSignature: Bool) throws -> (plaintext: Data, metadata: Sb2Metadata)
+
+// Helper functions
+func computeInboxKid(inboxPk: Data) -> Data  // [u8; 16]
 func x25519GenerateKeypair() -> (secret: Data, publicKey: Data)
 ```
 
 ### Kotlin (via UniFFI)
 
 ```kotlin
-fun sb2Encrypt(recipientInboxPk: ByteArray, recipientPeerid: ByteArray, senderPeerid: ByteArray,
-               plaintext: ByteArray, ownerPeerid: ByteArray, path: String,
-               contextId: ByteArray, msgId: String): ByteArray
-fun sb2Decrypt(recipientInboxSk: ByteArray, blob: ByteArray,
-               ownerPeerid: ByteArray, path: String): ByteArray
-fun deriveInboxKid(inboxPk: ByteArray): ByteArray
+// SB2 with signing (REQUIRED for Paykit messages per PUBKY_CRYPTO_SPEC v2.5)
+fun sb2EncryptSigned(recipientInboxPk: ByteArray, senderSk: ByteArray, senderPk: ByteArray,
+                     plaintext: ByteArray, ownerPeerid: ByteArray, path: String,
+                     contextId: ByteArray, msgId: String, certId: ByteArray?): ByteArray
+
+// Decrypt with signature verification (REQUIRED for Paykit messages)
+fun sb2DecryptVerified(recipientInboxSk: ByteArray, blob: ByteArray,
+                       ownerPeerid: ByteArray, path: String,
+                       requireSignature: Boolean): Pair<ByteArray, Sb2Metadata>
+
+// Helper functions
+fun computeInboxKid(inboxPk: ByteArray): ByteArray  // 16 bytes
 fun x25519GenerateKeypair(): Pair<ByteArray, ByteArray> // (secret, public)
 ```
 

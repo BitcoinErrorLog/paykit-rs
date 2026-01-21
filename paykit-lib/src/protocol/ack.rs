@@ -49,7 +49,10 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "pubky")]
-use super::sb2::{sb2_encrypt, Sb2EncryptParams};
+use super::sb2::{
+    sb2_decrypt_verified, sb2_encrypt_signed, AppCertFetcher, Sb2EncryptParams, Sb2Signer,
+    SignatureRequirement,
+};
 
 /// Default ACK retention time in seconds (7 days).
 pub const DEFAULT_ACK_RETENTION_SECS: u64 = 604800;
@@ -270,21 +273,27 @@ pub struct EncryptedAckParams {
     pub context_id: [u8; 32],
 }
 
-/// Create an encrypted ACK message using SB2 format.
+/// Create an encrypted ACK message using SB2 format with signature.
 ///
 /// The ACK is encrypted to the original sender's InboxKey, allowing them
-/// to verify receipt of their message.
+/// to verify receipt of their message. Per PUBKY_CRYPTO_SPEC v2.5, all
+/// Paykit protocol messages (including ACKs) MUST be signed.
 ///
 /// # Arguments
 ///
 /// * `ack` - The ACK message to encrypt
 /// * `params` - Encryption parameters including keys and context
+/// * `signer` - Signing capability (RootKey or AppKey via `Sb2Signer` trait)
 ///
 /// # Returns
 ///
-/// SB2-encrypted binary blob suitable for storage
+/// Signed SB2-encrypted binary blob suitable for storage
 #[cfg(feature = "pubky")]
-pub fn encrypt_ack(ack: &AckMessage, params: &EncryptedAckParams) -> Result<Vec<u8>> {
+pub fn encrypt_ack(
+    ack: &AckMessage,
+    params: &EncryptedAckParams,
+    signer: &dyn Sb2Signer,
+) -> Result<Vec<u8>> {
     use super::paths::ack_path_with_context_id;
 
     let plaintext = ack.to_bytes()?;
@@ -313,10 +322,14 @@ pub fn encrypt_ack(ack: &AckMessage, params: &EncryptedAckParams) -> Result<Vec<
         ),
     };
 
-    sb2_encrypt(&plaintext, &sb2_params)
+    sb2_encrypt_signed(&plaintext, &sb2_params, signer)
 }
 
-/// Decrypt an encrypted ACK message.
+/// Decrypt an encrypted ACK message with signature verification.
+///
+/// Per PUBKY_CRYPTO_SPEC v2.5, all Paykit protocol messages (including ACKs)
+/// MUST have valid signatures. This function rejects ACKs with missing or
+/// invalid signatures.
 ///
 /// # Arguments
 ///
@@ -324,20 +337,28 @@ pub fn encrypt_ack(ack: &AckMessage, params: &EncryptedAckParams) -> Result<Vec<
 /// * `inbox_secret_key` - The recipient's InboxKey secret key
 /// * `owner_peerid` - The owner's PKARR peer ID
 /// * `canonical_path` - The storage path for AAD verification
+/// * `cert_fetcher` - Optional AppCert fetcher for delegated signatures.
+///   Pass `None` to reject delegated signatures (cert_id in header).
 ///
 /// # Returns
 ///
-/// The decrypted ACK message
+/// The decrypted ACK message (only if signature is valid)
 #[cfg(feature = "pubky")]
 pub fn decrypt_ack(
     data: &[u8],
     inbox_secret_key: &[u8; 32],
     owner_peerid: &[u8; 32],
     canonical_path: &str,
+    cert_fetcher: Option<&dyn AppCertFetcher>,
 ) -> Result<AckMessage> {
-    use super::sb2::sb2_decrypt;
-
-    let (plaintext, _metadata) = sb2_decrypt(data, inbox_secret_key, owner_peerid, canonical_path)?;
+    let (plaintext, _metadata) = sb2_decrypt_verified(
+        data,
+        inbox_secret_key,
+        owner_peerid,
+        canonical_path,
+        SignatureRequirement::Required,
+        cert_fetcher,
+    )?;
     AckMessage::from_bytes(&plaintext)
 }
 

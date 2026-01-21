@@ -166,10 +166,19 @@ impl InboxKey {
 
 impl std::fmt::Debug for InboxKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InboxKey")
-            .field("public", &hex::encode(&self.public))
-            .field("inbox_kid", &hex::encode(self.inbox_kid()))
-            .finish_non_exhaustive()
+        #[cfg(feature = "pubky")]
+        {
+            f.debug_struct("InboxKey")
+                .field("public", &hex::encode(&self.public))
+                .field("inbox_kid", &hex::encode(self.inbox_kid()))
+                .finish_non_exhaustive()
+        }
+        #[cfg(not(feature = "pubky"))]
+        {
+            f.debug_struct("InboxKey")
+                .field("public", &hex::encode(&self.public))
+                .finish_non_exhaustive()
+        }
     }
 }
 
@@ -270,11 +279,17 @@ pub fn compute_inbox_kid(inbox_public_key: &[u8; X25519_PUBLIC_KEY_LEN]) -> [u8;
 /// Compute inbox_kid and return as hex string.
 ///
 /// Returns a 32-character lowercase hex string.
+///
+/// Requires the `pubky` feature.
+#[cfg(feature = "pubky")]
 pub fn compute_inbox_kid_hex(inbox_public_key: &[u8; X25519_PUBLIC_KEY_LEN]) -> String {
     hex::encode(compute_inbox_kid(inbox_public_key))
 }
 
 /// Check if an inbox_kid matches a given InboxKey public key.
+///
+/// Requires the `pubky` feature.
+#[cfg(feature = "pubky")]
 pub fn verify_inbox_kid(
     inbox_kid: &[u8; INBOX_KID_LEN],
     inbox_public_key: &[u8; X25519_PUBLIC_KEY_LEN],

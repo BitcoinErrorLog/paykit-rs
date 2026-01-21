@@ -148,3 +148,12 @@ jobs:
         run: |
           chmod +x scripts/check-crypto-deps.sh
           ./scripts/check-crypto-deps.sh
+
+  minimal-features:
+    name: Minimal Features Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check paykit-lib builds without default features
+        run: cargo check -p paykit-lib --no-default-features

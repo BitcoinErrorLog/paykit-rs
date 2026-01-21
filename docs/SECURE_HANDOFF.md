@@ -1,7 +1,7 @@
 # Secure Handoff Protocol
 
-> **Version**: 1.0  
-> **Last Updated**: January 2, 2026  
+> **Version**: 2.0  
+> **Last Updated**: January 21, 2026  
 > **Status**: Production
 
 This document specifies the secure handoff protocol between Pubky Ring and Bitkit for provisioning identity sessions and Noise keypairs.
@@ -203,7 +203,7 @@ This ensures:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "pubky": "8um71us3fyw6h8wbcxb5ar3rwusy1a6u49956ikzojg3gcwd1dty",
   "session_secret": "TVQB9B07VD...",
   "capabilities": ["read", "write"],
@@ -221,8 +221,8 @@ This ensures:
     }
   ],
   "noise_seed": "qrst7890...",
-  "created_at": 1704153600000,
-  "expires_at": 1704153900000
+  "created_at": 1704153600,
+  "expires_at": 1704153900
 }
 ```
 
@@ -230,15 +230,15 @@ This ensures:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `version` | integer | Yes | Payload version (must be `1`) |
+| `version` | integer | Yes | Payload version (must be `2`) |
 | `pubky` | string | Yes | z-base-32 encoded Ed25519 public key |
 | `session_secret` | string | Yes | Homeserver session secret |
 | `capabilities` | array | Yes | Session capabilities |
 | `device_id` | string | Yes | Device ID used for key derivation |
 | `noise_keypairs` | array | Yes | Array of epoch-indexed keypairs |
 | `noise_seed` | string | No | 32-byte seed for local key derivation (hex) |
-| `created_at` | integer | Yes | Unix timestamp (ms) of creation |
-| `expires_at` | integer | Yes | Unix timestamp (ms) of expiration |
+| `created_at` | integer | Yes | Unix timestamp (**seconds**) of creation |
+| `expires_at` | integer | Yes | Unix timestamp (**seconds**) of expiration |
 
 ### Noise Keypair Object
 
@@ -252,18 +252,25 @@ This ensures:
 
 ## 6. AAD Construction
 
-The AAD binds the encrypted blob to its storage context.
+The AAD binds the encrypted blob to its storage context per PUBKY_CRYPTO_SPEC v2.5.
 
-### Format
-
-```
-paykit:v0:handoff:{owner_pubkey}:{storage_path}:{request_id}
-```
-
-### Example
+### Format (Spec-Compliant Binary AAD)
 
 ```
-paykit:v0:handoff:8um71us3fyw6h8wbcxb5ar3rwusy1a6u49956ikzojg3gcwd1dty:/pub/paykit.app/v0/handoff/f3a7b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1:f3a7b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1
+"pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || header_bytes
+```
+
+Where:
+- `owner_peerid_bytes`: 32-byte Ed25519 public key (storage owner)
+- `canonical_path_bytes`: UTF-8 encoded storage path
+- `header_bytes`: CBOR-encoded SB2 header (v, epk, nonce, kid, purpose)
+
+**Note**: The AAD is computed internally by `sealedBlobEncryptWithContext()` / `sealedBlobDecryptWithContext()`. Callers provide `owner_peerid` and `canonical_path` as parameters.
+
+### Example Path
+
+```
+/pub/paykit.app/v0/handoff/f3a7b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1
 ```
 
 ---
@@ -293,8 +300,14 @@ func handleSecureHandoff(pubky: String, requestId: String) async throws {
         throw SecureHandoffError.plaintextRejected
     }
     
-    let aad = "paykit:v0:handoff:\(pubky):\(path):\(requestId)"
-    let payload = try sealedBlobDecrypt(ephemeralSk, envelope, aad)
+    // Spec-compliant binary AAD via sealedBlobDecryptWithContext
+    let ownerPeerid = z32Decode(pubky)
+    let payload = try sealedBlobDecryptWithContext(ephemeralSk, envelope, ownerPeerid, path)
+    
+    // Validate version
+    guard payload.version == 2 else {
+        throw SecureHandoffError.invalidVersion
+    }
     
     // Delete immediately
     try await pubkySDK.sessionDelete(pubky: pubky, path: path)
@@ -326,8 +339,12 @@ suspend fun handleSecureHandoff(pubky: String, requestId: String) {
     
     require(isSealedBlob(envelope)) { "Plaintext handoffs rejected" }
     
-    val aad = "paykit:v0:handoff:$pubky:$path:$requestId"
-    val payload = sealedBlobDecrypt(ephemeralSk, envelope, aad)
+    // Spec-compliant binary AAD via sealedBlobDecryptWithContext
+    val ownerPeeridBytes = z32Decode(pubky)
+    val payload = sealedBlobDecryptWithContext(ephemeralSk, envelope, ownerPeeridBytes, path)
+    
+    // Validate version
+    require(payload.version == 2) { "Expected handoff version 2" }
     
     // Delete immediately
     pubkySDK.sessionDelete(pubky, path)
@@ -356,27 +373,32 @@ export const handlePaykitConnectAction = async (
     }
 
     // Get session and derive keys...
-    const payload = buildPayload(session, noiseKeypairs, deviceId);
+    const payload = buildPayload(session, noiseKeypairs, deviceId, noiseSeed);
     
     // Generate random request ID
-    const requestId = crypto.randomBytes(32).toString('hex');
+    const requestId = await generateRequestId(); // 256-bit random hex
     
-    // Build AAD
+    // Derive owner peerid for spec-compliant AAD
+    const ownerPeeridHex = await ed25519PublicFromSecret(ed25519SecretKey);
+    
+    // Storage path
     const storagePath = `/pub/paykit.app/v0/handoff/${requestId}`;
-    const aad = `paykit:v0:handoff:${pubky}:${storagePath}:${requestId}`;
     
-    // Encrypt using Sealed Blob
-    const envelope = await sealedBlobEncrypt(
-        Buffer.from(ephemeralPk, 'hex'),
-        JSON.stringify(payload),
-        aad
+    // Encrypt using spec-compliant binary AAD
+    // AAD = "pubky-envelope/v2:" || owner_peerid || path || header
+    const envelope = await sealedBlobEncryptWithContext(
+        ephemeralPk,          // recipient X25519 pubkey
+        payloadHex,           // plaintext (hex-encoded)
+        ownerPeeridHex,       // storage owner Ed25519 pubkey
+        storagePath,          // canonical path
+        'handoff'             // purpose
     );
     
     // Store on homeserver
-    await put(`pubky://${pubky}${storagePath}`, envelope);
+    await put(`pubky://${pubky}${storagePath}`, JSON.parse(envelope));
     
-    // Return to Bitkit (no secrets in URL!)
-    const callbackUrl = `${callback}?mode=secure_handoff&pubky=${pubky}&request_id=${requestId}`;
+    // Return to Bitkit with homeserver hint
+    const callbackUrl = `${callback}?mode=secure_handoff&pubky=${pubky}&request_id=${requestId}&homeserver=${homeserverPubkey}`;
     await Linking.openURL(callbackUrl);
 };
 ```

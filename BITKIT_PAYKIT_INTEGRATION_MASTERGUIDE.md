@@ -7,7 +7,10 @@
 > **Spec Compliance**: This guide targets **PUBKY_CRYPTO_SPEC v2.5** (January 2026)
 >
 > **v2.8 Changes**: Aligned documentation with PUBKY_CRYPTO_SPEC v2.5:
-> - **ContextId**: Updated to use random 32-byte ContextId per spec Section 7.7.1 (legacy pair-derived marked deprecated)
+> - **ContextId**: Clarified current v0 uses pair-derived contextId for discovery; documented random 32-byte ContextId as spec target (Section 7.7.1)
+> - **API References**: Fixed incorrect `PaykitCrypto.generateContextId()` → actual platform APIs (`PaykitV0Protocol.generateRandomContextId()` on Android, Rust FFI on iOS)
+> - **Legacy Scope**: Moved recipient_scope documentation to explicit "Legacy (deprecated)" subsection
+> - **Platform Claims**: Qualified "across all platforms" AAD claims to note iOS discovery uses legacy patterns
 > - **Noise Protocol**: Added Section 7.5 documenting XX/IK patterns, prologue, and IdentityPayload per spec Section 6
 > - **PeerPairFingerprint**: Added Section 7.5.5 for BLAKE3-based TOFU verification per spec Section 8.5
 > - **SB2 Header Table**: Added complete header field table with integer keys 0-11 per spec Section 7.2
@@ -77,7 +80,23 @@
 > SecureHandoffHandler. Fixed TypeScript errors in pubky-ring (MnemonicForm refs, RootNavigator types,
 > dead DeepLinkData code). Updated storage diagnostic logging in PubkyStorageAdapter.
 >
-
+> **v1.9 Changes**: Security hardening: Ring's `deriveNoiseSeed` now uses HKDF via native module
+> (replaced placeholder XOR-based derivation). Ring's `generateRequestId` now throws if
+> `crypto.getRandomValues` unavailable (no insecure Math.random fallback). Deprecated plaintext
+> `store_notification` in Rust. Added subscription agreement/cancellation/relay AAD formats to docs.
+>
+> **v1.8 Changes**: Dependency version corrections: UniFFI 0.25→0.29.4, LDK Node 0.3.0→0.7.0-rc.1.
+> Fixed NoiseKeyCache path references (Storage/→Services/). This is the canonical version;
+> bitkit-android and pubky-ring copies should sync from paykit-rs.
+>
+> **v1.7 Changes**: Namespace separation clarification (profiles in `/pub/pubky.app/`, paykit 
+> features in `/pub/paykit.app/v0/`), homeserver URL tracking in sessions, pubky-noise API 
+> documentation for `x25519GenerateKeypair` and `sealedBlobDecrypt`, x86_64 simulator support
+> for iOS XCFrameworks, updated `PubkyAuthenticatedStorageAdapter` constructor with `ownerPubkey`.
+>
+> **v1.6 Changes**: Added PaykitV0Protocol (Rust/Kotlin/Swift), sender-storage model, 
+> recipient-scoped directories, mandatory Sealed Blob encryption, payment method 
+> fallback loop with retryable error classification, cross-platform interop test vectors.
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
 
@@ -103,12 +122,12 @@ This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit 
 - [x] Homeserver `pubky-host` header required for central homeserver
 - [x] PubkyAppFollow `created_at` timestamp requirement documented
 - [x] Android E2E tests verified with Maestro (session, profile, follows)
-- [x] PaykitV0Protocol: canonical path builders and AAD bytes per PUBKY_CRYPTO_SPEC (Rust, Kotlin, Swift)
+- [x] PaykitV0Protocol: canonical path builders (Rust, Kotlin, Swift); AAD bytes spec-compliant for handoff (discovery AAD varies by platform)
 - [x] Sender-storage model: payment requests stored on sender's homeserver
-- [x] Recipient-scoped directories: `hex(sha256(normalized_pubkey))` for privacy
+- [x] Pair-derived contextId directories: `hex(sha256("paykit:v0:context:" + sorted_pubkeys))` for discovery (spec target: random contextId)
 - [x] Mandatory Sealed Blob encryption for payment requests and subscription proposals
 - [x] Payment method fallback loop: retryable vs non-retryable error classification
-- [x] Cross-platform test vectors for scope hashing (INTEROP_TEST_VECTORS.md)
+- [x] Cross-platform test vectors for contextId/scope hashing (INTEROP_TEST_VECTORS.md)
 - [x] Namespace separation: profiles in `/pub/pubky.app/`, paykit in `/pub/paykit.app/v0/`
 - [x] Homeserver URL tracking in sessions (prevents staging/prod mismatch)
 - [x] PubkyAuthenticatedStorageAdapter updated with `ownerPubkey` constructor parameter
@@ -202,7 +221,7 @@ Before deploying to production, verify end-to-end:
 - [x] Plaintext session callbacks DISABLED - returns error
 - [x] Session persistence survives app restart (Keychain/EncryptedSharedPrefs)
 - [x] Type-safe HomeserverURL prevents pubkey/URL confusion
-- [x] PaykitV0Protocol provides canonical AAD builders for Sealed Blob
+- [x] PaykitV0Protocol provides AAD builders (handoff uses spec-compliant binary AAD; discovery AAD usage varies)
 
 ### Review Lens (for architecture + assumptions)
 
@@ -1226,30 +1245,40 @@ Per PUBKY_CRYPTO_SPEC v2.5 Section 7.7.1, a ContextId identifies a message threa
 
 **Implementation:**
 - Rust: `paykit_lib::protocol::generate_context_id()`
-- Swift: `PaykitCrypto.generateContextId()` 
-- Kotlin: `PaykitCrypto.generateContextId()`
+- Kotlin: `PaykitV0Protocol.generateRandomContextId()` (returns hex string)
+- Swift: Not yet implemented - iOS currently uses pair-derived `PaykitV0Protocol.contextId()` for discovery; random ContextId generation requires Rust FFI integration (future work)
 
 **Canonical Forms:**
 - `context_id` = 32 raw bytes (used in SB2 headers, AAD computation)
 - `context_id_hex` = `hex(context_id)` (64 lowercase chars, used in storage paths)
 
-**Legacy Compatibility:**
-The deprecated `pair_context_id()` formula is retained for migration:
+**Current v0 Implementation (Pair-Derived):**
+The current Paykit v0 protocol uses pair-derived contextId for discovery because:
+- Deep links contain only `from=<sender-pubkey>` (no contextId parameter)
+- Recipient derives contextId from `(sender_pubkey, recipient_pubkey)`
+- This enables discovery without out-of-band contextId exchange
+
 ```
 pair_context_id = SHA256("paykit:v0:context:" + sorted_pubkeys)
 ```
-- Use ONLY for reading legacy data during migration period
-- New threads MUST use random ContextId
-- See `paykit_lib::protocol::pair_context_id()` (marked `#[deprecated]`)
+- Used in: `PaykitV0Protocol.contextId()` (Android/iOS), `pair_context_id()` (Rust)
+- Status: Current production implementation, deprecated per PUBKY_CRYPTO_SPEC v2.5
+
+**Migration to Random ContextId (Spec Target):**
+Random ContextId per PUBKY_CRYPTO_SPEC v2.5 Section 7.7.1 requires:
+- Deep link format change to include `contextId=<hex>` parameter
+- Update to discovery code to use provided contextId instead of deriving
+- See `PaykitV0Protocol.generateRandomContextId()` (Android), Rust FFI (iOS)
+- Status: Spec-compliant but not yet implemented in discovery flow
 
 **PairContextId vs ContextId (Spec Section 7.7):**
 
-| Term | Purpose | Derivation | Use in Paths |
-|------|---------|------------|--------------|
-| ContextId | Thread identifier | Random 32 bytes | Yes (recommended) |
-| PairContextId | Diagnostics, correlation | SHA256 of sorted pubkeys | Legacy only |
+| Term | Purpose | Derivation | Current Status |
+|------|---------|------------|----------------|
+| ContextId (spec) | Thread identifier | Random 32 bytes | Target (not yet in discovery) |
+| PairContextId (current) | Discovery routing | SHA256 of sorted pubkeys | Used in v0 production |
 
-**Important**: Thread routing uses random `context_id`. Pair-level correlation uses `pair_context_id` for diagnostics only. Do not confuse these.
+**Important**: Paykit v0 currently uses pair-derived contextId for request/proposal discovery paths. The spec-compliant random ContextId is the migration target but requires deep-link format changes (adding `contextId=<hex>` parameter).
 
 ### 7.3 Bitkit-side Session and Key Handling
 
@@ -1341,16 +1370,31 @@ All three codebases (Rust, Android, iOS) now have `PaykitV0Protocol` implementat
 - **Android**: `bitkit-android/app/src/main/java/to/bitkit/paykit/protocol/PaykitV0Protocol.kt`
 - **iOS**: `bitkit-ios/Bitkit/PaykitIntegration/Protocol/PaykitV0Protocol.swift`
 
-**Scope Derivation (per-recipient directories):**
+**Legacy Scope Derivation (DEPRECATED):**
+
+> **Note**: `recipient_scope` was used in early Paykit versions for per-recipient directory organization.
+> It is now deprecated in favor of `context_id` (pair-derived or random). Do not use for new code.
+
 ```
 scope = hex(sha256(utf8(normalized_pubkey_z32)))
 ```
 
-Normalization:
+Where normalization is:
 1. Trim whitespace
 2. Strip `pk:` prefix if present
 3. Lowercase
 4. Validate: 52 chars, z-base-32 alphabet only
+
+See `PaykitV0Protocol.recipientScope()` (marked `@deprecated` in Android/iOS).
+
+**Current Context ID Derivation (Pair-Derived):**
+
+Current v0 production uses pair-derived contextId for discovery paths:
+```
+context_id_hex = hex(sha256("paykit:v0:context:" + sorted_pubkey_1 + ":" + sorted_pubkey_2))
+```
+
+See `PaykitV0Protocol.contextId(pubkeyA, pubkeyB)` in Android/iOS.
 
 **Path Formats (PUBKY_CRYPTO_SPEC v2.5):**
 | Object Type | Path Format |
@@ -1361,8 +1405,9 @@ Normalization:
 | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
 
 **ContextId in Paths:**
-- `context_id_hex` = `hex(generate_context_id())` for new threads (64 lowercase chars)
-- **Legacy (deprecated)**: `hex(pair_context_id(sender, recipient))` - use only for migration
+- **Current v0**: `context_id_hex` = `hex(pair_context_id(sender, recipient))` - derived from pubkeys for discovery
+- **Spec target**: `context_id_hex` = `hex(generate_context_id())` for random 32-byte ContextId
+- Note: Current deep links don't include contextId; recipient must derive it from `from=<sender-pubkey>`
 - See Section 7.2.1 for ContextId generation details
 
 **Sealed Blob v2 Header Fields (PUBKY_CRYPTO_SPEC Section 7.2):**
@@ -1395,7 +1440,8 @@ aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || head
 - `owner_peerid_bytes`: 32 raw bytes of the storage owner (Pubky identity).
 - `canonical_path_bytes`: UTF-8 bytes of the canonical path (leading slash, no trailing slash, no percent encoding).
 - `header_bytes`: deterministic CBOR header bytes per PUBKY_CRYPTO_SPEC (use header without `sig` when building signature input).
-- Object type is conveyed via `purpose` in the header and the canonical path; do not build legacy `paykit:v0:*` AAD strings.
+- Object type is conveyed via `purpose` in the header and the canonical path.
+- **Note**: Legacy `paykit:v0:*` string AAD may still be used in iOS discovery; migration to spec-compliant binary AAD is in progress.
 
 **Deterministic CBOR Encoding (PUBKY_CRYPTO_SPEC Section 7.12):**
 
@@ -1951,7 +1997,7 @@ Reference implementations:
 **Sender-Storage Model (v0 Protocol):**
 Payment requests are stored on the **sender's** homeserver, NOT the recipient's. This:
 - Respects write-only access (sender can write to their own storage)
-- Uses recipient-scoped directories for discovery
+- Uses pair-derived contextId directories for discovery (derived from sender + recipient pubkeys)
 - Requires mandatory Sealed Blob encryption
 
 Where it is implemented:
@@ -1960,10 +2006,11 @@ Where it is implemented:
 
 **Storage path:** `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}`
 
-**ContextId Generation (PUBKY_CRYPTO_SPEC v2.5):**
-- **New threads**: `context_id` = 32 random bytes via `generate_context_id()` (RECOMMENDED)
-- **Legacy (deprecated)**: `pair_context_id` = `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
-- Use the raw 32-byte `context_id` bytes in Sealed Blob headers; the hex form (`context_id_hex`) is for paths only
+**ContextId in Storage Paths:**
+- **Current v0**: `pair_context_id` = derived from sorted pubkeys - used in production for discovery
+- **Spec target**: random 32-byte `context_id` (requires deep-link changes to include `contextId=<hex>`)
+- Formula (current): `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
+- Use the raw 32-byte `context_id` bytes in Sealed Blob headers; the hex form (`context_id_hex`) is for paths
 - Stored on **sender's** homeserver (not recipient's)
 
 End-to-end steps:
@@ -1989,7 +2036,8 @@ Recipients discover pending requests by polling known contacts' storage:
 **Mandatory Encryption:**
 - All payment requests MUST use Sealed Blob encryption
 - Plaintext requests are REJECTED for security
-- AAD uses PUBKY_CRYPTO_SPEC bytes: `pubky-envelope/v2:` + owner peerid bytes + canonical path bytes + header bytes
+- AAD construction (target): `pubky-envelope/v2:` + owner peerid bytes + canonical path bytes + header bytes
+- Note: iOS discovery may use legacy string AAD patterns; Android uses `PaykitV0Protocol.paymentRequestAad()` per spec
 
 **Implementation:**
 - **Android**: `PaykitPollingWorker.discoverPendingRequests()` polls contacts
@@ -2279,9 +2327,10 @@ For interactive Noise payment flows in the UI:
 Like payment requests, subscription proposals are stored on the **provider's** homeserver:
 - Path: `/pub/paykit.app/v0/subscriptions/proposals/{context_id_hex}/{proposal_id}`
 
-**ContextId Generation (PUBKY_CRYPTO_SPEC v2.5):**
-- **New proposals**: `context_id` = 32 random bytes via `generate_context_id()` (RECOMMENDED)
-- **Legacy (deprecated)**: `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))` - retained for migration only
+**ContextId in Storage Paths:**
+- **Current v0**: `context_id` = derived from sorted pubkeys (same as payment requests) for discovery
+- **Spec target**: random 32-byte `context_id` (requires discovery protocol changes)
+- **Legacy scope (deprecated)**: `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))` - no longer used
 
 - Mandatory Sealed Blob encryption
 - Subscribers poll providers' storage to discover proposals
@@ -3184,7 +3233,7 @@ Logger.info("  - AAD: $aad", context = TAG)
 **"0 requests found" but requests were sent**
 
 1. **Discovery Source**: Ensure discovery uses `directoryService.fetchFollows()` (network) NOT `contactStorage.listContacts()` (local)
-2. **ContextId Mismatch**: For new threads, use `generate_context_id()` (random 32 bytes). For legacy compatibility, use `PaykitV0Protocol.pairContextId(sender, recipient)` - note this is deprecated per PUBKY_CRYPTO_SPEC v2.5
+2. **ContextId Mismatch**: For new threads, use `PaykitV0Protocol.generateRandomContextId()` (Android) or Rust FFI (iOS). For legacy compatibility, use `PaykitV0Protocol.contextId(pubkeyA, pubkeyB)` (pair-derived, deprecated per PUBKY_CRYPTO_SPEC v2.5). Note: iOS discovery currently uses the legacy pair-derived method.
 3. **Encryption Target**: Sender must encrypt to recipient's published Noise public key
 4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}` where `context_id_hex` is either random (new) or pair-derived (legacy)
 

@@ -1,9 +1,18 @@
 # Bitkit + Paykit Integration Master Guide
 
 > **For Synonym Development Team**  
-> **Version**: 2.7  
-> **Last Updated**: January 20, 2026  
-> **Status**: Production Ready - E2E Verified
+> **Version**: 2.8  
+> **Last Updated**: January 21, 2026  
+> **Status**: Production Ready - E2E Verified  
+> **Spec Compliance**: This guide targets **PUBKY_CRYPTO_SPEC v2.5** (January 2026)
+>
+> **v2.8 Changes**: Aligned documentation with PUBKY_CRYPTO_SPEC v2.5:
+> - **ContextId**: Updated to use random 32-byte ContextId per spec Section 7.7.1 (legacy pair-derived marked deprecated)
+> - **Noise Protocol**: Added Section 7.5 documenting XX/IK patterns, prologue, and IdentityPayload per spec Section 6
+> - **PeerPairFingerprint**: Added Section 7.5.5 for BLAKE3-based TOFU verification per spec Section 8.5
+> - **SB2 Header Table**: Added complete header field table with integer keys 0-11 per spec Section 7.2
+> - **CBOR Rules**: Added deterministic CBOR encoding requirements per spec Section 7.12
+> - **Domain Strings**: Added domain separation strings table for clarity
 >
 > **v2.7 Changes**: Fixed secure handoff decryption across all platforms:
 > - **Bitkit iOS + Android**: Switched from `sealedBlobDecrypt` with legacy AAD to `sealedBlobDecryptWithContext` which internally builds the spec-compliant AAD (`pubky-envelope/v2:` || owner_peerid || canonical_path || header_bytes)
@@ -68,23 +77,7 @@
 > SecureHandoffHandler. Fixed TypeScript errors in pubky-ring (MnemonicForm refs, RootNavigator types,
 > dead DeepLinkData code). Updated storage diagnostic logging in PubkyStorageAdapter.
 >
-> **v1.9 Changes**: Security hardening: Ring's `deriveNoiseSeed` now uses HKDF via native module
-> (replaced placeholder XOR-based derivation). Ring's `generateRequestId` now throws if
-> `crypto.getRandomValues` unavailable (no insecure Math.random fallback). Deprecated plaintext
-> `store_notification` in Rust. Added subscription agreement/cancellation/relay AAD formats to docs.
->
-> **v1.8 Changes**: Dependency version corrections: UniFFI 0.25→0.29.4, LDK Node 0.3.0→0.7.0-rc.1.
-> Fixed NoiseKeyCache path references (Storage/→Services/). This is the canonical version;
-> bitkit-android and pubky-ring copies should sync from paykit-rs.
->
-> **v1.7 Changes**: Namespace separation clarification (profiles in `/pub/pubky.app/`, paykit 
-> features in `/pub/paykit.app/v0/`), homeserver URL tracking in sessions, pubky-noise API 
-> documentation for `x25519GenerateKeypair` and `sealedBlobDecrypt`, x86_64 simulator support
-> for iOS XCFrameworks, updated `PubkyAuthenticatedStorageAdapter` constructor with `ownerPubkey`.
->
-> **v1.6 Changes**: Added PaykitV0Protocol (Rust/Kotlin/Swift), sender-storage model, 
-> recipient-scoped directories, mandatory Sealed Blob encryption, payment method 
-> fallback loop with retryable error classification, cross-platform interop test vectors.
+
 
 This guide documents the complete integration of Paykit into Bitkit iOS, Bitkit Android, and Pubky Ring. It serves as a detailed map for production developers to follow, including all steps, quirks, stubs, and future work.
 
@@ -1220,6 +1213,44 @@ aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || head
 
 **See**: [ENCRYPTED_RELAY_PROTOCOL.md](ENCRYPTED_RELAY_PROTOCOL.md) for complete protocol specification.
 
+### 7.2.1 ContextId Generation (PUBKY_CRYPTO_SPEC v2.5)
+
+Per PUBKY_CRYPTO_SPEC v2.5 Section 7.7.1, a ContextId identifies a message thread and is included in SB2 headers:
+
+| Property | Value |
+|----------|-------|
+| Format | 32 cryptographically random bytes |
+| Generation | Thread initiator generates via CSPRNG |
+| Lifetime | Stable for thread lifetime |
+| Derivation | MUST NOT derive from peer pubkeys |
+
+**Implementation:**
+- Rust: `paykit_lib::protocol::generate_context_id()`
+- Swift: `PaykitCrypto.generateContextId()` 
+- Kotlin: `PaykitCrypto.generateContextId()`
+
+**Canonical Forms:**
+- `context_id` = 32 raw bytes (used in SB2 headers, AAD computation)
+- `context_id_hex` = `hex(context_id)` (64 lowercase chars, used in storage paths)
+
+**Legacy Compatibility:**
+The deprecated `pair_context_id()` formula is retained for migration:
+```
+pair_context_id = SHA256("paykit:v0:context:" + sorted_pubkeys)
+```
+- Use ONLY for reading legacy data during migration period
+- New threads MUST use random ContextId
+- See `paykit_lib::protocol::pair_context_id()` (marked `#[deprecated]`)
+
+**PairContextId vs ContextId (Spec Section 7.7):**
+
+| Term | Purpose | Derivation | Use in Paths |
+|------|---------|------------|--------------|
+| ContextId | Thread identifier | Random 32 bytes | Yes (recommended) |
+| PairContextId | Diagnostics, correlation | SHA256 of sorted pubkeys | Legacy only |
+
+**Important**: Thread routing uses random `context_id`. Pair-level correlation uses `pair_context_id` for diagnostics only. Do not confuse these.
+
 ### 7.3 Bitkit-side Session and Key Handling
 
 **PubkySDKService - Direct homeserver operations via pubky-core-ffi:**
@@ -1321,13 +1352,41 @@ Normalization:
 3. Lowercase
 4. Validate: 52 chars, z-base-32 alphabet only
 
-**Path Formats:**
+**Path Formats (PUBKY_CRYPTO_SPEC v2.5):**
 | Object Type | Path Format |
 |-------------|-------------|
-| Payment Request | `/pub/paykit.app/v0/requests/{context_id}/{request_id}` |
-| Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}` |
+| Payment Request | `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}` |
+| Subscription Proposal | `/pub/paykit.app/v0/subscriptions/proposals/{context_id_hex}/{proposal_id}` |
 | Noise Endpoint | `/pub/paykit.app/v0/noise` |
 | Secure Handoff | `/pub/paykit.app/v0/handoff/{request_id}` |
+
+**ContextId in Paths:**
+- `context_id_hex` = `hex(generate_context_id())` for new threads (64 lowercase chars)
+- **Legacy (deprecated)**: `hex(pair_context_id(sender, recipient))` - use only for migration
+- See Section 7.2.1 for ContextId generation details
+
+**Sealed Blob v2 Header Fields (PUBKY_CRYPTO_SPEC Section 7.2):**
+
+| Key | Field | Type | Required | Description |
+|-----|-------|------|----------|-------------|
+| 0 | `context_id` | bytes(32) | REQUIRED | Thread identifier (random, see Section 7.2.1) |
+| 1 | `created_at` | uint | RECOMMENDED | Unix timestamp (seconds) |
+| 2 | `expires_at` | uint | REQUIRED | Expiration timestamp |
+| 3 | `inbox_kid` | bytes(16) | **REQUIRED** | Recipient InboxKey identifier |
+| 4 | `msg_id` | text | REQUIRED | Idempotency key (ASCII, max 128 chars) |
+| 5 | `nonce` | bytes(24) | **REQUIRED** | XChaCha20-Poly1305 nonce (random per message) |
+| 6 | `purpose` | text | Optional | `"request"`, `"proposal"`, `"ack"`, `"handoff"` |
+| 7 | `recipient_peerid` | bytes(32) | **REQUIRED** | Recipient Ed25519 pubkey (PeerId) |
+| 8 | `sender_ephemeral_pub` | bytes(32) | **REQUIRED** | Sender's ephemeral X25519 pubkey for ECDH |
+| 9 | `sender_peerid` | bytes(32) | **REQUIRED** | Sender Ed25519 pubkey (for routing) |
+| 10 | `sig` | bytes(64) | REQUIRED | Ed25519 signature for sender authenticity |
+| 11 | `cert_id` | bytes(16) | Optional | AppCert identifier (if using delegated signing) |
+
+**inbox_kid Derivation:**
+```
+inbox_kid = first_16_bytes(SHA256(recipient_inbox_x25519_pub))
+```
+Used for O(1) key selection. Unknown `inbox_kid` MUST be rejected before calling Ring derivation.
 
 **AAD Construction (Sealed Blob v2):**
 ```
@@ -1337,6 +1396,32 @@ aad = "pubky-envelope/v2:" || owner_peerid_bytes || canonical_path_bytes || head
 - `canonical_path_bytes`: UTF-8 bytes of the canonical path (leading slash, no trailing slash, no percent encoding).
 - `header_bytes`: deterministic CBOR header bytes per PUBKY_CRYPTO_SPEC (use header without `sig` when building signature input).
 - Object type is conveyed via `purpose` in the header and the canonical path; do not build legacy `paykit:v0:*` AAD strings.
+
+**Deterministic CBOR Encoding (PUBKY_CRYPTO_SPEC Section 7.12):**
+
+SB2 headers MUST use deterministic CBOR encoding:
+
+| Rule | Requirement |
+|------|-------------|
+| Key type | Integer keys only (0-11 as defined above) |
+| Key order | Ascending numeric order |
+| Integer encoding | Minimal-length encoding (no leading zeros) |
+| Indefinite-length | PROHIBITED |
+| Floating-point | PROHIBITED |
+| Nesting depth | Maximum 2 levels |
+| Top-level keys | Maximum 16 |
+
+**Resource Bounds (DoS Prevention):**
+
+| Limit | Value | Rationale |
+|-------|-------|-----------|
+| `header_len` | MUST be <= 2048 bytes | Prevents memory exhaustion |
+| `msg_id` length | MUST be <= 128 characters | Bounds path lengths |
+| CBOR nesting depth | MUST be <= 2 | Prevents parsing complexity |
+
+Implementations MUST reject messages exceeding these bounds immediately, before cryptographic operations.
+
+**Implementation:** Use `ciborium` (Rust) or verified CBOR libraries with determinism mode. Test vectors in [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) validate encoding correctness.
 
 **Cross-Platform Test Vectors:**
 See [INTEROP_TEST_VECTORS.md](INTEROP_TEST_VECTORS.md) for pubkey→scope hash test cases that all implementations must pass.
@@ -1559,6 +1644,124 @@ Pubky Ring must support Unified Key Delegation (UKD v0.2) for Pubky apps:
 - **Key separation**: AppKey, TransportKey, and InboxKey must remain distinct (no key reuse).
 - **Sealed Blob headers**: include `cert_id` when delegated keys are used so recipients can verify against the AppCert from KeyBinding.
 
+### 7.5 Noise Protocol Configuration (PUBKY_CRYPTO_SPEC v2.5)
+
+This section documents Noise protocol configuration per PUBKY_CRYPTO_SPEC v2.5 Section 6.
+
+#### 7.5.1 Supported Handshake Patterns
+
+| Pattern | Use Case | When to Use |
+|---------|----------|-------------|
+| XX (TOFU) | First contact, no prior keys | Default for new peer discovery |
+| IK | Known peer with cached static key | Payment channels with verified peers |
+| NN | Anonymous, no identity | Not used in Paykit |
+
+**Default**: Use XX for first contact (Trust-On-First-Use). After successful XX handshake, cache the remote static key and use IK for subsequent connections.
+
+#### 7.5.2 Fixed Prologue
+
+All Noise handshakes MUST use the fixed prologue (Spec Section 6.2):
+
+```
+prologue = b"pubky-noise-v1"  // 14 bytes, fixed constant
+```
+
+Arbitrary or caller-supplied prologues are **PROHIBITED**. Rationale:
+1. Covert channels: Arbitrary prologues could leak information
+2. Interoperability: All implementations must agree on prologue for handshake to succeed
+3. Protocol version: Prologue encodes version for future upgrades
+
+#### 7.5.3 IdentityPayload (Spec Section 6.3)
+
+During handshake, each party sends an IdentityPayload to bind their Ed25519 identity to the Noise session:
+
+```rust
+struct IdentityPayload {
+    peerid: [u8; 32],      // Ed25519 public key (PKARR identity)
+    role: u8,              // 0 = client, 1 = server
+    timestamp: u64,        // Unix seconds (freshness check)
+    sig: [u8; 64],         // Ed25519 signature over binding message
+}
+```
+
+**Signature Construction (Spec Section 6.4):**
+```
+binding_message = "pubky-noise-identity-binding/v1:" || handshake_hash || role
+sig = Ed25519_sign(identity_sk, binding_message)
+```
+
+**Verification Steps:**
+1. Extract `peerid` and `sig` from received IdentityPayload
+2. Recompute binding message using local handshake hash and received `role`
+3. Verify Ed25519 signature using received `peerid`
+4. Check timestamp freshness (recommended: reject if >300s old)
+
+**Note**: The `role` field provides domain separation - a client's signature cannot be replayed as a server's signature.
+
+#### 7.5.4 Key Roles in Noise
+
+| Key Type | Algorithm | Purpose |
+|----------|-----------|---------|
+| TransportKey | X25519 | Noise static key for live transport |
+| InboxKey | X25519 | Sealed Blob stored delivery (not used in Noise) |
+| AppKey | Ed25519 | Typed signing (not used in Noise handshake) |
+| PeerId | Ed25519 | Identity in IdentityPayload |
+
+**Important**: TransportKey and InboxKey are distinct keys. Do not reuse keys across purposes.
+
+#### 7.5.5 PeerPairFingerprint (TOFU Verification)
+
+PeerPairFingerprint provides a stable, human-comparable identifier for out-of-band verification (PUBKY_CRYPTO_SPEC Section 8.5).
+
+**Computation:**
+```
+sorted_keys = sort([local_peerid_raw, remote_peerid_raw])  // by raw bytes, lexicographic
+fingerprint = first_8_bytes(BLAKE3("pubky-fingerprint/v1:" || sorted_keys[0] || sorted_keys[1]))
+```
+
+| Property | Value |
+|----------|-------|
+| Length | 8 bytes (16 hex chars for display) |
+| Algorithm | BLAKE3 |
+| Purpose | Human-comparable TOFU verification |
+| Display | Show to user for out-of-band comparison |
+| Symmetric | Same value regardless of which party computes |
+
+**Usage:**
+1. After successful XX handshake, compute PeerPairFingerprint
+2. Display to user as 16 hex characters (e.g., `a1b2c3d4e5f67890`)
+3. User verifies via out-of-band channel (phone call, Signal, in-person)
+4. If fingerprints match, TOFU is confirmed; upgrade to IK pattern
+
+**Distinction from ContextId/PairContextId:**
+
+| Identifier | Purpose | Algorithm | Display to User |
+|------------|---------|-----------|-----------------|
+| ContextId | Thread routing | Random 32 bytes | No |
+| PairContextId | Diagnostics | SHA256 of sorted z32 pubkeys | No |
+| PeerPairFingerprint | TOFU verification | BLAKE3 of sorted raw pubkeys | Yes |
+
+**Security Note**: PeerPairFingerprint is a hint mechanism. It does NOT prevent MITM attacks on its own - users must compare out-of-band.
+
+### 7.6 Domain Separation Strings
+
+This table documents all domain separation strings used across the Pubky/Paykit ecosystem:
+
+| Purpose | Domain String | Source | Used By |
+|---------|---------------|--------|---------|
+| Noise seed (Ring) | `pubky-ring/noise-seed/v1` | PUBKY_CRYPTO_SPEC | Ring internal derivation |
+| Noise seed (Paykit) | `paykit-noise-seed-v1` | Paykit implementation | Paykit derivation |
+| X25519 device key | `pubky-noise-x25519:v1` | PUBKY_CRYPTO_SPEC | Key derivation salt |
+| SB2 AAD prefix | `pubky-envelope/v2:` | PUBKY_CRYPTO_SPEC | AAD construction |
+| SB2 HKDF info | `pubky-envelope/v2` | PUBKY_CRYPTO_SPEC | Symmetric key derivation |
+| SB2 signature prefix | `pubky-envelope-sig/v2` | PUBKY_CRYPTO_SPEC | Signature input construction |
+| Noise prologue | `pubky-noise-v1` | PUBKY_CRYPTO_SPEC | Noise handshake |
+| Identity binding | `pubky-noise-identity-binding/v1:` | PUBKY_CRYPTO_SPEC | IdentityPayload signature |
+| PeerPairFingerprint | `pubky-fingerprint/v1:` | PUBKY_CRYPTO_SPEC | TOFU fingerprint |
+| Legacy pair context | `paykit:v0:context:` | Paykit legacy | Deprecated ContextId derivation |
+
+**Note**: Ring and Paykit use different salt strings for noise seed derivation. This is intentional domain separation to prevent cross-purpose key reuse.
+
 ## 8. Feature Implementation Guide
 
 ### 8.1 Payment Method Discovery
@@ -1755,9 +1958,12 @@ Where it is implemented:
 - **iOS**: `DirectoryService.publishPaymentRequest(_:)` 
 - **Android**: `DirectoryService.publishPaymentRequest()`
 
-**Storage path:** `/pub/paykit.app/v0/requests/{context_id}/{request_id}`
-- `context_id` = `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
-- Use the raw 32-byte `context_id` bytes in Sealed Blob headers; the hex form is for paths only
+**Storage path:** `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}`
+
+**ContextId Generation (PUBKY_CRYPTO_SPEC v2.5):**
+- **New threads**: `context_id` = 32 random bytes via `generate_context_id()` (RECOMMENDED)
+- **Legacy (deprecated)**: `pair_context_id` = `hex(sha256("paykit:v0:context:" + first_z32 + ":" + second_z32))` where first/second are sorted lexicographically
+- Use the raw 32-byte `context_id` bytes in Sealed Blob headers; the hex form (`context_id_hex`) is for paths only
 - Stored on **sender's** homeserver (not recipient's)
 
 End-to-end steps:
@@ -2071,8 +2277,12 @@ For interactive Noise payment flows in the UI:
 
 **Sender-Storage Model for Subscription Proposals:**
 Like payment requests, subscription proposals are stored on the **provider's** homeserver:
-- Path: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
-- `context_id` = `hex(sha256(normalized_subscriber_pubkey))`
+- Path: `/pub/paykit.app/v0/subscriptions/proposals/{context_id_hex}/{proposal_id}`
+
+**ContextId Generation (PUBKY_CRYPTO_SPEC v2.5):**
+- **New proposals**: `context_id` = 32 random bytes via `generate_context_id()` (RECOMMENDED)
+- **Legacy (deprecated)**: `subscriber_scope` = `hex(sha256(normalized_subscriber_pubkey))` - retained for migration only
+
 - Mandatory Sealed Blob encryption
 - Subscribers poll providers' storage to discover proposals
 - Subscribers cannot delete proposals from provider storage (local dedup only)
@@ -2974,9 +3184,9 @@ Logger.info("  - AAD: $aad", context = TAG)
 **"0 requests found" but requests were sent**
 
 1. **Discovery Source**: Ensure discovery uses `directoryService.fetchFollows()` (network) NOT `contactStorage.listContacts()` (local)
-2. **ContextId Mismatch**: Verify sender and recipient compute the same ContextId using `PaykitV0Protocol.contextId(sender, recipient)`
+2. **ContextId Mismatch**: For new threads, use `generate_context_id()` (random 32 bytes). For legacy compatibility, use `PaykitV0Protocol.pairContextId(sender, recipient)` - note this is deprecated per PUBKY_CRYPTO_SPEC v2.5
 3. **Encryption Target**: Sender must encrypt to recipient's published Noise public key
-4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{context_id}/{request_id}` (ContextId is symmetric, same for both peers)
+4. **Path Format**: Verify path is `/pub/paykit.app/v0/requests/{context_id_hex}/{request_id}` where `context_id_hex` is either random (new) or pair-derived (legacy)
 
 **Requests not persisted to UI after discovery**
 

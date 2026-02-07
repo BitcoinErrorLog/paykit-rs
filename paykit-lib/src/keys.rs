@@ -60,25 +60,25 @@
 
 // Re-export KeyBinding types from pubky-noise when the feature is enabled
 #[cfg(feature = "pubky")]
-pub use pubky_noise::ukd::{
+pub use pubky_crypto::ukd::{
     AppKeyEntry, InboxKeyEntry, KeyBinding, TransportKeyEntry,
 };
 
 // Re-export AppCert types for key delegation per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2
 #[cfg(feature = "pubky")]
-pub use pubky_noise::ukd::{
+pub use pubky_crypto::ukd::{
     AppCert, AppCertInput, CERT_ID_LEN as APP_CERT_ID_LEN,
 };
 
 // Re-export AppCert functions
 #[cfg(feature = "pubky")]
-pub use pubky_noise::ukd::{
+pub use pubky_crypto::ukd::{
     derive_cert_id, generate_app_keypair, issue_app_cert, verify_app_cert,
 };
 
 // Re-export typed content signing functions per PUBKY_CRYPTO_SPEC v2.5
 #[cfg(feature = "pubky")]
-pub use pubky_noise::ukd::{sign_typed_content, verify_typed_content};
+pub use pubky_crypto::ukd::{sign_typed_content, verify_typed_content};
 
 /// Length of an inbox_kid in bytes.
 pub const INBOX_KID_LEN: usize = 16;
@@ -104,12 +104,12 @@ pub struct InboxKey {
 impl InboxKey {
     /// Generate a new random InboxKey.
     ///
-    /// Delegates to `pubky_noise::x25519_generate_keypair()`.
+    /// Delegates to `pubky_crypto::x25519_generate_keypair()`.
     ///
     /// Requires the `pubky` feature.
     #[cfg(feature = "pubky")]
     pub fn generate() -> Self {
-        let (secret, public) = pubky_noise::x25519_generate_keypair();
+        let (secret, public) = pubky_crypto::x25519_generate_keypair();
         Self { secret, public }
     }
 
@@ -125,7 +125,7 @@ impl InboxKey {
         secret[31] &= 127;
         secret[31] |= 64;
 
-        let public = pubky_noise::x25519_public_from_secret(&secret);
+        let public = pubky_crypto::x25519_public_from_secret(&secret);
         Self { secret, public }
     }
 
@@ -197,12 +197,12 @@ pub struct TransportKey {
 impl TransportKey {
     /// Generate a new random TransportKey.
     ///
-    /// Delegates to `pubky_noise::x25519_generate_keypair()`.
+    /// Delegates to `pubky_crypto::x25519_generate_keypair()`.
     ///
     /// Requires the `pubky` feature.
     #[cfg(feature = "pubky")]
     pub fn generate() -> Self {
-        let (secret, public) = pubky_noise::x25519_generate_keypair();
+        let (secret, public) = pubky_crypto::x25519_generate_keypair();
         Self { secret, public }
     }
 
@@ -216,7 +216,7 @@ impl TransportKey {
         secret[31] &= 127;
         secret[31] |= 64;
 
-        let public = pubky_noise::x25519_public_from_secret(&secret);
+        let public = pubky_crypto::x25519_public_from_secret(&secret);
         Self { secret, public }
     }
 
@@ -258,7 +258,7 @@ impl std::fmt::Debug for TransportKey {
 /// The inbox_kid is used in SB2 headers for O(1) key selection when
 /// a recipient has multiple InboxKeys.
 ///
-/// Delegates to `pubky_noise::Sb2Header::compute_inbox_kid()`.
+/// Delegates to `pubky_crypto::Sb2Header::compute_inbox_kid()`.
 ///
 /// Requires the `pubky` feature.
 ///
@@ -273,7 +273,7 @@ impl std::fmt::Debug for TransportKey {
 /// ```
 #[cfg(feature = "pubky")]
 pub fn compute_inbox_kid(inbox_public_key: &[u8; X25519_PUBLIC_KEY_LEN]) -> [u8; INBOX_KID_LEN] {
-    pubky_noise::Sb2Header::compute_inbox_kid(inbox_public_key)
+    pubky_crypto::Sb2Header::compute_inbox_kid(inbox_public_key)
 }
 
 /// Compute inbox_kid and return as hex string.

@@ -4,11 +4,15 @@ version = "0.1.0"
 edition = "2021"
 description = "Shared core functionality for Paykit demos"
 
+[lib]
+doctest = false
+
 [dependencies]
 paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
 paykit-interactive = { path = "../paykit-interactive" }
 paykit-subscriptions = { path = "../paykit-subscriptions" }
 pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
+pubky-crypto = { path = "../../pubky-crypto" }
 pubky-noise = { path = "../../pubky-noise", features = ["pubky-sdk"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

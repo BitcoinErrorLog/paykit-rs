@@ -27,7 +27,7 @@ fn create_test_peers() -> (
     let server_sk = ring_server
         .derive_device_x25519("server", b"device", 0)
         .unwrap();
-    let server_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     (client, server, server_pk)
 }
@@ -66,7 +66,7 @@ fn bench_noise_ik_handshake_complete(c: &mut Criterion) {
     let server_sk = ring_server
         .derive_device_x25519("server", b"device", 0)
         .unwrap();
-    let server_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     c.bench_function("noise_ik_handshake_complete", |b| {
         b.iter(|| {
@@ -102,7 +102,7 @@ fn bench_noise_message_encrypt(c: &mut Criterion) {
     let server_sk = ring_server
         .derive_device_x25519("server", b"device", 0)
         .unwrap();
-    let server_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     // Complete handshake
     let (c_hs, first_msg) = client_start_ik_direct(&client, &server_pk, None).unwrap();
@@ -154,7 +154,7 @@ fn bench_noise_message_decrypt(c: &mut Criterion) {
     let server_sk = ring_server
         .derive_device_x25519("server", b"device", 0)
         .unwrap();
-    let server_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     // Complete handshake
     let (c_hs, first_msg) = client_start_ik_direct(&client, &server_pk, None).unwrap();
@@ -185,7 +185,7 @@ fn bench_noise_message_roundtrip(c: &mut Criterion) {
     let server_sk = ring_server
         .derive_device_x25519("server", b"device", 0)
         .unwrap();
-    let server_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     // Complete handshake
     let (c_hs, first_msg) = client_start_ik_direct(&client, &server_pk, None).unwrap();

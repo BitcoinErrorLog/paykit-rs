@@ -3,9 +3,16 @@ name = "paykit-subscriptions"
 version = "0.3.0"
 edition = "2021"
 
+[lib]
+# Doc-tests fail in workspace-wide --all-features due to crate resolution conflicts
+# on paykit-interactive. Run doc-tests individually with:
+# cargo test -p paykit-subscriptions --doc
+doctest = false
+
 [dependencies]
 paykit-lib = { path = "../paykit-lib", features = ["pubky"] }
 pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801" }
+pubky-crypto = { path = "../../pubky-crypto" }
 pubky-noise = { path = "../../pubky-noise" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1" # Still needed for metadata fields

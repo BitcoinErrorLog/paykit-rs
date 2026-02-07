@@ -68,7 +68,7 @@ use crate::{PaykitError, Result};
 ///     }
 ///
 ///     fn sign_sig_input(&self, sig_input: &[u8]) -> Result<[u8; 64], String> {
-///         pubky_noise::ed25519_sign(&self.secret_key, sig_input)
+///         pubky_crypto::ed25519_sign(&self.secret_key, sig_input)
 ///             .map_err(|e| e.to_string())
 ///     }
 /// }
@@ -139,7 +139,7 @@ impl Sb2Signer for RootKeySigner {
     }
 
     fn sign_sig_input(&self, sig_input: &[u8]) -> std::result::Result<[u8; 64], String> {
-        pubky_noise::ed25519_sign(&self.secret_key, sig_input)
+        pubky_crypto::ed25519_sign(&self.secret_key, sig_input)
             .map_err(|e| e.to_string())
     }
 }
@@ -187,7 +187,7 @@ impl Sb2Signer for AppKeySigner {
     }
 
     fn sign_sig_input(&self, sig_input: &[u8]) -> std::result::Result<[u8; 64], String> {
-        pubky_noise::ed25519_sign(&self.app_secret_key, sig_input)
+        pubky_crypto::ed25519_sign(&self.app_secret_key, sig_input)
             .map_err(|e| e.to_string())
     }
 }
@@ -214,12 +214,12 @@ pub fn is_sb2(data: &[u8]) -> bool {
 /// inbox_kid = first_16_bytes(SHA256(recipient_inbox_x25519_pub))
 /// ```
 ///
-/// Delegates to `pubky_noise::Sb2Header::compute_inbox_kid()`.
+/// Delegates to `pubky_crypto::Sb2Header::compute_inbox_kid()`.
 ///
 /// Requires the `pubky` feature.
 #[cfg(feature = "pubky")]
 pub fn compute_inbox_kid(inbox_pk: &[u8; 32]) -> [u8; 16] {
-    pubky_noise::Sb2Header::compute_inbox_kid(inbox_pk)
+    pubky_crypto::Sb2Header::compute_inbox_kid(inbox_pk)
 }
 
 /// Parameters for SB2 encryption.
@@ -265,8 +265,8 @@ pub fn sb2_encrypt_signed(
     params: &Sb2EncryptParams,
     signer: &dyn Sb2Signer,
 ) -> Result<Vec<u8>> {
-    use pubky_noise::sealed_blob_v2::Sb2;
-    use pubky_noise::{sb2_build_aad, sb2_compute_sig_input};
+    use pubky_crypto::sealed_blob_v2::Sb2;
+    use pubky_crypto::{sb2_build_aad, sb2_compute_sig_input};
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -289,7 +289,7 @@ pub fn sb2_encrypt_signed(
         params.expires_at,
         signer.cert_id(),
     )
-    .map_err(|e: pubky_noise::errors::NoiseError| PaykitError::Crypto {
+    .map_err(|e| PaykitError::Crypto {
         operation: "sb2_encrypt_signed".into(),
         details: e.to_string(),
     })?;
@@ -331,7 +331,7 @@ pub fn sb2_encrypt_signed(
     note = "Use sb2_encrypt_signed for Paykit protocol messages which MUST be signed per PUBKY_CRYPTO_SPEC v2.5"
 )]
 pub fn sb2_encrypt(plaintext: &[u8], params: &Sb2EncryptParams) -> Result<Vec<u8>> {
-    use pubky_noise::sealed_blob_v2::Sb2;
+    use pubky_crypto::sealed_blob_v2::Sb2;
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -351,7 +351,7 @@ pub fn sb2_encrypt(plaintext: &[u8], params: &Sb2EncryptParams) -> Result<Vec<u8
         Some(now),
         params.expires_at,
     )
-    .map_err(|e: pubky_noise::errors::NoiseError| PaykitError::Crypto {
+    .map_err(|e| PaykitError::Crypto {
         operation: "sb2_encrypt".into(),
         details: e.to_string(),
     })?;
@@ -445,8 +445,8 @@ pub fn sb2_decrypt_verified(
     sig_requirement: SignatureRequirement,
     cert_fetcher: Option<&dyn AppCertFetcher>,
 ) -> Result<(Vec<u8>, Sb2Metadata)> {
-    use pubky_noise::sealed_blob_v2::Sb2;
-    use pubky_noise::{sb2_build_aad, sb2_compute_sig_input, ed25519_verify};
+    use pubky_crypto::sealed_blob_v2::Sb2;
+    use pubky_crypto::{sb2_build_aad, sb2_compute_sig_input, ed25519_verify};
 
     if !is_sb2(data) {
         return Err(PaykitError::Crypto {
@@ -557,7 +557,7 @@ pub fn sb2_decrypt(
     owner_peerid: &[u8; 32],
     canonical_path: &str,
 ) -> Result<(Vec<u8>, Sb2Metadata)> {
-    use pubky_noise::sealed_blob_v2::Sb2;
+    use pubky_crypto::sealed_blob_v2::Sb2;
 
     if !is_sb2(data) {
         return Err(PaykitError::Crypto {
@@ -661,7 +661,7 @@ pub fn decrypt_any(
             details: "Data is neither SB2 nor valid UTF-8 for JSON envelope".into(),
         })?;
 
-        use pubky_noise::sealed_blob::sealed_blob_decrypt;
+        use pubky_crypto::sealed_blob::sealed_blob_decrypt;
         let plaintext = sealed_blob_decrypt(recipient_inbox_sk, json_str, legacy_aad)
             .map_err(|e| PaykitError::Crypto {
                 operation: "decrypt_any".into(),
@@ -706,7 +706,7 @@ mod tests {
     #[allow(deprecated)]
     fn test_sb2_roundtrip_unsigned_legacy() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         let (inbox_sk, inbox_pk) = x25519_generate_keypair();
@@ -748,7 +748,7 @@ mod tests {
     #[test]
     fn test_sb2_signed_roundtrip() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 
@@ -810,7 +810,7 @@ mod tests {
     #[test]
     fn test_sb2_missing_signature_fails_when_required() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         let (inbox_sk, inbox_pk) = x25519_generate_keypair();
@@ -859,7 +859,7 @@ mod tests {
     #[test]
     fn test_sb2_invalid_signature_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 
@@ -917,7 +917,7 @@ mod tests {
     #[test]
     fn test_sb2_signature_optional_with_valid_signature() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 
@@ -999,7 +999,7 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_success() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 
@@ -1070,7 +1070,7 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_no_fetcher_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 
@@ -1130,7 +1130,7 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_wrong_key_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_noise::sealed_blob::x25519_generate_keypair;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
 

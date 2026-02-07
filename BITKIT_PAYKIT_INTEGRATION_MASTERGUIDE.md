@@ -514,7 +514,7 @@ export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/25.2.9519653
 
 ## 4.5 Building pubky-noise (Required for Noise Payments)
 
-Bitkit and Ring both require `pubky-noise` for encrypted channels. **pubky-noise is a separate repository** from paykit-rs.
+Bitkit and Ring both require `pubky-noise` for Noise transport and crypto operations. **pubky-noise is a separate repository** from paykit-rs. Cryptographic primitives (Sealed Blob, KDF, X25519/Ed25519 helpers, UKD) live in `pubky-crypto` and are re-exported by `pubky-noise` for backward compatibility.
 
 ### Step 1: Build for iOS
 
@@ -627,10 +627,12 @@ import com.pubky.noise.sealedBlobDecrypt
 import com.pubky.noise.deriveDeviceKey
 ```
 
-**Key API (pubky-noise 1.0+):**
+**Key API (pubky-noise 1.0+ / pubky-crypto):**
+
+> **Note**: The crypto functions below (`derive_device_key`, `x25519_generate_keypair`, `sealed_blob_*`, `is_sealed_blob`) are implemented in `pubky-crypto` and re-exported by `pubky-noise`. Rust callers can use either `pubky_crypto::` or `pubky_noise::` imports. FFI bindings continue to use the `com.pubky.noise` / `PubkyNoise` package names.
 
 ```rust
-// From pubky-noise Rust API (what UniFFI exposes)
+// From pubky-crypto (re-exported by pubky-noise for FFI)
 pub fn derive_device_key(
     seed: &[u8],      // 32-byte Ed25519 seed
     device_id: &[u8], // Arbitrary device identifier
@@ -1112,10 +1114,10 @@ func ed25519Verify(
 // Returns: boolean (true if valid)
 ```
 
-**How `deriveDeviceKey` works (from pubky-noise):**
+**How `deriveDeviceKey` works (from pubky-crypto, re-exported by pubky-noise):**
 
 ```rust
-// pubky-noise/src/kdf.rs (conceptual)
+// pubky-crypto/src/ukd.rs (conceptual; re-exported by pubky-noise)
 pub fn derive_device_key(
     ed25519_seed: [u8; 32],   // Master Ed25519 seed
     device_id: &[u8],         // Unique device identifier
@@ -3170,7 +3172,7 @@ This error indicates the recipient cannot decrypt a payment request or subscript
    - Sender used Sealed Blob v2 (XChaCha20-Poly1305) but recipient has v1-only decryption
    - This occurs when apps are not updated simultaneously
    - **Diagnosis**: Check `"v":1` vs `"v":2` in the envelope JSON
-   - **Solution**: Update both sender and recipient apps to latest pubky-noise libs
+   - **Solution**: Update both sender and recipient apps to latest pubky-noise/pubky-crypto libs
    - **Note**: As of v2.5, `sealed_blob_decrypt()` auto-detects and handles both v1 and v2
 
 3. **Key Rotation Mismatch**
@@ -3267,6 +3269,13 @@ seenRequestIds.add(request.requestId)
 | LNURL integration | Medium | Planned |
 | Bolt12 support | Medium | Planned |
 | Desktop Electron app | Low | Not started |
+
+### Deferred Work
+
+| Item | Rationale | Tracking |
+|------|-----------|----------|
+| **`rate_limit.rs` / `metrics.rs` extraction** | Antoine noted these modules in `paykit-interactive` could be shared across crates. Deferred to post-MVP — current usage is localized and not blocking. | IMPLEMENTATION_PLAN.md Cross-Cutting Concerns |
+| **Deterministic subscription nonce derivation** | Subscription nonces are currently random with persistent storage. HKDF-derived nonces from seed + counter would improve crash/data-loss recovery. Design documented in `docs/NONCE_DERIVATION_DESIGN.md`. | Antoine Theme 7; deferred to post-MVP |
 
 ### Known Limitations
 
@@ -3725,7 +3734,7 @@ app/src/test/java/to/bitkit/paykit/
 | Rust | 1.75+ | Via Rustup |
 | UniFFI | 0.29.4 | Must match across all crates |
 | Pubky SDK | 0.6.0-rc.6 | API breaking changes pending |
-| pubky-noise | 1.0.0+ | `deriveDeviceKey` throws in 1.1+ |
+| pubky-noise | 1.0.0+ | `deriveDeviceKey` throws in 1.1+; crypto primitives now in pubky-crypto (re-exported) |
 | pubky-core | 0.6.0-rc.6 | Used via BitkitCore for homeserver ops |
 | LDK Node | 0.7.0-rc.1 | Lightning payments |
 

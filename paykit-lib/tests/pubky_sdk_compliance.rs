@@ -10,9 +10,10 @@
 //!
 //! # Running these tests
 //!
-//! These tests require network access and are feature-gated:
+//! These tests require a running PostgreSQL database (EphemeralTestnet) and are
+//! feature-gated AND ignored by default. To run them:
 //! ```bash
-//! cargo test --features pubky_compliance_tests --test pubky_sdk_compliance
+//! cargo test --features pubky_compliance_tests --test pubky_sdk_compliance -- --ignored
 //! ```
 
 #[cfg(feature = "pubky_compliance_tests")]
@@ -32,6 +33,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_pubky_directory_operations() {
         // Test 1: Directory publish/query roundtrip
 
@@ -155,6 +157,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_pubky_authenticated_transport() {
         // Test 2: Transport adapter compliance
 
@@ -225,6 +228,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_endpoint_rotation_logic() {
         // Test 3: Endpoint rotation
 
@@ -336,6 +340,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_unauthenticated_transport_404_handling() {
         // Test: Verify 404 handling for non-existent users
 
@@ -372,6 +377,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_concurrent_operations() {
         // Test: Verify transport adapters are safe for concurrent use
 

@@ -505,7 +505,7 @@ impl SubscriptionManager {
             .map_err(|e| anyhow::anyhow!("Invalid owner pubkey: {}", e))?;
 
         // Encrypt using Sealed Blob v2 with spec-compliant binary AAD
-        let envelope = pubky_noise::sealed_blob::sealed_blob_encrypt_with_context(
+        let envelope = pubky_crypto::sealed_blob::sealed_blob_encrypt_with_context(
             &subscriber_noise_pk,
             &plaintext,
             &owner_peerid_bytes,
@@ -549,7 +549,7 @@ impl SubscriptionManager {
             "paykit:v0:subscription_agreement:{}:{}",
             path_subscriber, signed.subscription.subscription_id
         );
-        let envelope_subscriber = pubky_noise::sealed_blob::sealed_blob_encrypt(
+        let envelope_subscriber = pubky_crypto::sealed_blob::sealed_blob_encrypt(
             &subscriber_noise_pk,
             &plaintext,
             &aad_subscriber,
@@ -575,7 +575,7 @@ impl SubscriptionManager {
             "paykit:v0:subscription_agreement:{}:{}",
             path_provider, signed.subscription.subscription_id
         );
-        let envelope_provider = pubky_noise::sealed_blob::sealed_blob_encrypt(
+        let envelope_provider = pubky_crypto::sealed_blob::sealed_blob_encrypt(
             &provider_noise_pk,
             &plaintext,
             &aad_provider,
@@ -620,7 +620,7 @@ impl SubscriptionManager {
             "paykit:v0:subscription_cancellation:{}:{}",
             path_subscriber, subscription.subscription.subscription_id
         );
-        let envelope_subscriber = pubky_noise::sealed_blob::sealed_blob_encrypt(
+        let envelope_subscriber = pubky_crypto::sealed_blob::sealed_blob_encrypt(
             &subscriber_noise_pk,
             &plaintext,
             &aad_subscriber,
@@ -646,7 +646,7 @@ impl SubscriptionManager {
             "paykit:v0:subscription_cancellation:{}:{}",
             path_provider, subscription.subscription.subscription_id
         );
-        let envelope_provider = pubky_noise::sealed_blob::sealed_blob_encrypt(
+        let envelope_provider = pubky_crypto::sealed_blob::sealed_blob_encrypt(
             &provider_noise_pk,
             &plaintext,
             &aad_provider,

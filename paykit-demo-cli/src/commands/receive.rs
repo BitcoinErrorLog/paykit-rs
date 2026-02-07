@@ -166,7 +166,7 @@ pub async fn run(storage_dir: &Path, port: u16, verbose: bool) -> Result<()> {
     let server_sk = ring
         .derive_device_x25519("paykit-receiver", b"demo-device", 0)
         .context("Failed to derive server key")?;
-    let server_static_pk = pubky_noise::kdf::x25519_pk_from_sk(&server_sk);
+    let server_static_pk = pubky_crypto::kdf::x25519_pk_from_sk(&server_sk);
 
     ui::info(&format!(
         "Noise public key: {}",

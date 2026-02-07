@@ -28,7 +28,9 @@ hex = "0.4"
 md5 = { version = "0.7", optional = true }
 # pubky-core: Aligned to implement PUBKY_CRYPTO_SPEC v2.5 and PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2
 pubky = { git = "https://github.com/BitcoinErrorLog/pubky-core", rev = "290d801", optional = true }
-# pubky-noise: SB2 binary format and Noise transport per PUBKY_CRYPTO_SPEC v2.5
+# pubky-crypto: Pure cryptographic primitives (SB2, UKD, KDF, ed25519/x25519 helpers)
+pubky-crypto = { path = "../../pubky-crypto" }
+# pubky-noise: Noise transport per PUBKY_CRYPTO_SPEC v2.5 (re-exports pubky-crypto modules)
 pubky-noise = { path = "../../pubky-noise", optional = true }
 sha2 = "0.10"
 thiserror = "2.0"

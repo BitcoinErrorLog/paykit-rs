@@ -9,7 +9,7 @@ use paykit_lib::{MethodId, PublicKey};
 use paykit_subscriptions::{
     Amount, PaymentFrequency, Signature, SignedSubscription, Subscription, SubscriptionTerms,
 };
-use pubky_noise::sealed_blob::{
+use pubky_crypto::sealed_blob::{
     is_sealed_blob as check_sealed_blob, sealed_blob_decrypt as decrypt_blob,
     sealed_blob_encrypt as encrypt_blob,
 };
@@ -30,7 +30,7 @@ fn random_x25519_keypair() -> ([u8; 32], [u8; 32]) {
     rand::thread_rng().fill_bytes(&mut sk);
 
     // Derive public key from secret key
-    let pk = pubky_noise::kdf::x25519_pk_from_sk(&sk);
+    let pk = pubky_crypto::kdf::x25519_pk_from_sk(&sk);
     (sk, pk)
 }
 
@@ -349,7 +349,7 @@ fn test_is_sealed_blob_detects_v1_and_v2() {
 // ============================================================
 
 use paykit_lib::protocol::owner_peerid_bytes_from_z32;
-use pubky_noise::sealed_blob::{
+use pubky_crypto::sealed_blob::{
     sealed_blob_decrypt_with_context, sealed_blob_encrypt_with_context,
 };
 

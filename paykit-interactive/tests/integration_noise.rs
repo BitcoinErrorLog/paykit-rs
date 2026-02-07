@@ -39,7 +39,7 @@ impl RingKeyProvider for DummyRing {
         _epoch: u32,
     ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
         // Use pubky-noise's KDF for proper key derivation
-        pubky_noise::kdf::derive_x25519_for_device_epoch(&self.seed, device_id, 0)
+        Ok(pubky_crypto::kdf::derive_x25519_for_device_epoch(&self.seed, device_id, 0)?)
     }
 
     fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
@@ -75,7 +75,7 @@ fn generate_test_seed(name: &str) -> [u8; 32] {
 /// Helper to get server's X25519 public key from its ring
 fn get_server_pubkey(ring: &DummyRing, device_id: &[u8]) -> [u8; 32] {
     let sk = ring.derive_device_x25519("", device_id, 0).unwrap();
-    pubky_noise::kdf::x25519_pk_from_sk(&sk)
+    pubky_crypto::kdf::x25519_pk_from_sk(&sk)
 }
 
 /// Helper to create test public keys

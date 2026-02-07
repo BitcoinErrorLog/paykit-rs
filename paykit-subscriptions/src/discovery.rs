@@ -29,7 +29,7 @@ use paykit_lib::protocol::{
     PURPOSE_REQUEST,
 };
 use paykit_lib::{HomeserverSessionStorage, PublicKey, HomeserverPublicStorageRead};
-use pubky_noise::sealed_blob::{
+use pubky_crypto::sealed_blob::{
     is_sealed_blob, sealed_blob_decrypt, sealed_blob_decrypt_with_context,
     sealed_blob_encrypt_with_context,
 };

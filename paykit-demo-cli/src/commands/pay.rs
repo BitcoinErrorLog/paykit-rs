@@ -596,7 +596,7 @@ async fn execute_noise_payment(
 }
 
 async fn execute_lightning_payment(
-    _storage_dir: &Path,
+    storage_dir: &Path,
     wallet_config: &Option<WalletConfig>,
     payee_uri: &str,
     amount: Option<&str>,

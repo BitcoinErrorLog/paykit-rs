@@ -10,9 +10,10 @@
 //!
 //! # Running these tests
 //!
-//! These tests require network access and are feature-gated:
+//! These tests require a running PostgreSQL database (EphemeralTestnet) and are
+//! feature-gated AND ignored by default. To run them:
 //! ```bash
-//! cargo test --features pubky_compliance_tests --test pubky_compliance
+//! cargo test --features pubky_compliance_tests --test pubky_compliance -- --ignored
 //! ```
 
 #[cfg(feature = "pubky_compliance_tests")]
@@ -27,6 +28,7 @@ mod pubky_tests {
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_publish_and_discover_compliance() {
         // Start testnet homeserver
         let testnet = EphemeralTestnet::start()
@@ -74,6 +76,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_endpoint_rotation_compliance() {
         // Test that multiple publishes to same method_id replace old values
         // per pubky-sdk spec
@@ -132,6 +135,7 @@ mod pubky_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires running PostgreSQL (EphemeralTestnet)"]
     async fn test_multiple_methods_compliance() {
         // Test publishing multiple payment methods
         let testnet = EphemeralTestnet::start()

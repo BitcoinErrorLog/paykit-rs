@@ -10,7 +10,7 @@
 
 use super::policies::{EndpointTracker, RotationPolicy};
 use crate::methods::PaymentMethodRegistry;
-use crate::{AuthenticatedTransport, EndpointData, MethodId, PaykitError, Result};
+use crate::{HomeserverSessionStorage, EndpointData, MethodId, PaykitError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -229,7 +229,7 @@ impl EndpointRotationManager {
     }
 
     /// Rotate an endpoint and publish to Pubky directory.
-    pub async fn rotate_and_publish<T: AuthenticatedTransport>(
+    pub async fn rotate_and_publish<T: HomeserverSessionStorage>(
         &self,
         method_id: &MethodId,
         transport: &T,

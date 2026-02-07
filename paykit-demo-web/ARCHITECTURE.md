@@ -124,7 +124,7 @@ Paykit Demo Web is a browser-based demonstration of the Paykit payment protocol,
 
 **Protocol**: HTTP GET to `/pub/paykit.app/v0/{method_id}`
 
-**Dependencies**: `paykit_lib::UnauthenticatedTransportRead`
+**Dependencies**: `paykit_lib::HomeserverPublicStorageRead`
 
 ### 7. Subscriptions (`src/subscriptions.rs`)
 

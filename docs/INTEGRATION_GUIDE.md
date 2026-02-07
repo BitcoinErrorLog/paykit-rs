@@ -74,10 +74,10 @@ println!("Address: {}", address.as_str());
 Paykit uses trait-based dependency injection for transport:
 
 ```rust
-use paykit_lib::{AuthenticatedTransport, UnauthenticatedTransportRead};
+use paykit_lib::{HomeserverSessionStorage, HomeserverPublicStorageRead};
 
 // For reading public payment endpoints
-async fn discover_payments<T: UnauthenticatedTransportRead>(
+async fn discover_payments<T: HomeserverPublicStorageRead>(
     transport: &T,
     payee: &PublicKey,
 ) -> Result<SupportedPayments> {
@@ -85,7 +85,7 @@ async fn discover_payments<T: UnauthenticatedTransportRead>(
 }
 
 // For publishing your own endpoints
-async fn publish_endpoint<T: AuthenticatedTransport>(
+async fn publish_endpoint<T: HomeserverSessionStorage>(
     transport: &T,
     method: MethodId,
     data: EndpointData,
@@ -263,12 +263,12 @@ let mock_btc = MockBitcoinExecutor::new();
 When using with Pubky:
 
 ```rust
-use paykit_lib::{PubkyAuthenticatedTransport, PubkyUnauthenticatedTransport};
+use paykit_lib::{PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport};
 use pubky::Session;
 
 // Authenticated transport for publishing
 let session = Session::new(/* ... */);
-let transport = PubkyAuthenticatedTransport::new(session);
+let transport = PubkyHomeserverSessionStorage::new(session);
 
 // Unauthenticated for reading
 let reader = PubkyUnauthenticatedTransport::new();

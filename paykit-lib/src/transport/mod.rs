@@ -3,10 +3,10 @@ pub mod traits;
 #[cfg(feature = "pubky")]
 pub mod pubky;
 
-pub use traits::{AuthenticatedTransport, UnauthenticatedTransportRead};
+pub use traits::{HomeserverSessionStorage, HomeserverPublicStorageRead};
 
 #[cfg(feature = "pubky")]
 pub use self::pubky::{
-    authenticated_transport::PubkyAuthenticatedTransport,
+    homeserver_session_storage::PubkyHomeserverSessionStorage,
     unauthenticated_transport::PubkyUnauthenticatedTransport,
 };

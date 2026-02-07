@@ -21,7 +21,7 @@ This document clearly delineates which components are production-ready and which
 The core library implementing the Paykit protocol.
 
 **Production Features:**
-- Transport trait abstractions (`AuthenticatedTransport`, `UnauthenticatedTransportRead`)
+- Transport trait abstractions (`HomeserverSessionStorage`, `HomeserverPublicStorageRead`)
 - Payment endpoint serialization/deserialization
 - Pubky SDK integration (feature-gated)
 - Secure encryption for private endpoints (`file-storage` feature)
@@ -30,9 +30,9 @@ The core library implementing the Paykit protocol.
 **Usage:**
 ```rust
 use paykit_lib::{
-    AuthenticatedTransport,
-    UnauthenticatedTransportRead,
-    PubkyAuthenticatedTransport,
+    HomeserverSessionStorage,
+    HomeserverPublicStorageRead,
+    PubkyHomeserverSessionStorage,
     PubkyUnauthenticatedTransport,
 };
 ```

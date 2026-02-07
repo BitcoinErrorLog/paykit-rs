@@ -55,10 +55,10 @@ The BIP defines three conformance levels:
 | Feature | Status | Location |
 |---------|--------|----------|
 | Path prefix `/pub/paykit.app/v0/` | ✅ | `PAYKIT_PATH_PREFIX` constant |
-| Publish endpoints | ✅ | `AuthenticatedTransport::upsert_payment_endpoint` |
-| Discover endpoints | ✅ | `UnauthenticatedTransportRead::fetch_payment_endpoint` |
-| List all methods | ✅ | `UnauthenticatedTransportRead::fetch_supported_payments` |
-| Contact discovery | ✅ | `UnauthenticatedTransportRead::fetch_known_contacts` |
+| Publish endpoints | ✅ | `HomeserverSessionStorage::upsert_payment_endpoint` |
+| Discover endpoints | ✅ | `HomeserverPublicStorageRead::fetch_payment_endpoint` |
+| List all methods | ✅ | `HomeserverPublicStorageRead::fetch_supported_payments` |
+| Contact discovery | ✅ | `HomeserverPublicStorageRead::fetch_known_contacts` |
 | Pubky integration | ✅ | `paykit-lib/src/transport/pubky/` |
 | Endpoint rotation | ✅ | `paykit-lib/src/rotation/` |
 

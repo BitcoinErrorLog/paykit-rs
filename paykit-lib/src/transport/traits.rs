@@ -2,10 +2,10 @@ use async_trait::async_trait;
 
 use crate::{EndpointData, MethodId, PublicKey, Result};
 
-/// Trait describing read-only access to public Paykit transport.
+/// Trait describing read-only access to public homeserver storage.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait UnauthenticatedTransportRead {
+pub trait HomeserverPublicStorageRead {
     /// Fetches the raw Supported Payments List for the provided `payee`.
     async fn fetch_supported_payments(&self, payee: &PublicKey)
         -> Result<crate::SupportedPayments>;
@@ -31,10 +31,10 @@ pub trait UnauthenticatedTransportRead {
     async fn list_directory(&self, owner: &PublicKey, path: &str) -> Result<Vec<String>>;
 }
 
-/// Trait describing authenticated write (and optional read) access.
+/// Trait describing authenticated write (and optional read) access to homeserver session storage.
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-pub trait AuthenticatedTransport {
+pub trait HomeserverSessionStorage {
     /// Writes or updates a payment endpoint document.
     async fn upsert_payment_endpoint(&self, method: &MethodId, data: &EndpointData) -> Result<()>;
 

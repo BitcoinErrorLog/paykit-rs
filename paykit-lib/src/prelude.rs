@@ -11,7 +11,7 @@
 //!
 //! - Core types: `MethodId`, `EndpointData`, `SupportedPayments`
 //! - Error types: `PaykitError`, `PaykitErrorCode`, `Result`
-//! - Transport traits: `AuthenticatedTransport`, `UnauthenticatedTransportRead`
+//! - Transport traits: `HomeserverSessionStorage`, `HomeserverPublicStorageRead`
 //! - Payment methods: `PaymentMethodPlugin`, `PaymentMethodRegistry`, `Amount`
 //! - URI parsing: `PaykitUri`, `parse_uri`
 
@@ -23,7 +23,7 @@ pub use crate::errors::{PaykitError, PaykitErrorCode};
 pub use crate::Result;
 
 // Transport traits
-pub use crate::transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
+pub use crate::transport::{HomeserverSessionStorage, HomeserverPublicStorageRead};
 
 // URI parsing
 pub use crate::uri::{parse_uri, PaykitUri};
@@ -45,7 +45,7 @@ pub use crate::secure_storage::{SecureKeyStorage, SecureKeyStorageExt, StoreOpti
 
 // Pubky transport (when available)
 #[cfg(feature = "pubky")]
-pub use crate::transport::{PubkyAuthenticatedTransport, PubkyUnauthenticatedTransport};
+pub use crate::transport::{PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport};
 
 #[cfg(feature = "pubky")]
 pub use crate::PublicKey;

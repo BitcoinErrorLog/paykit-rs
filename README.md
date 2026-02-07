@@ -312,7 +312,7 @@ sequenceDiagram
 **Core library** providing payment method directory operations and transport abstractions.
 
 **Key Features**:
-- Transport trait abstractions (`AuthenticatedTransport`, `UnauthenticatedTransportRead`)
+- Transport trait abstractions (`HomeserverSessionStorage`, `HomeserverPublicStorageRead`)
 - Pubky homeserver integration
 - Payment method discovery and publishing
 - Health monitoring and method selection
@@ -321,16 +321,16 @@ sequenceDiagram
 **Key APIs**:
 ```rust
 use paykit_lib::{
-    AuthenticatedTransport,
-    UnauthenticatedTransportRead,
-    PubkyAuthenticatedTransport,
+    HomeserverSessionStorage,
+    HomeserverPublicStorageRead,
+    PubkyHomeserverSessionStorage,
     PubkyUnauthenticatedTransport,
     MethodId,
     EndpointData,
 };
 
 // Publish payment methods
-let transport = PubkyAuthenticatedTransport::new(session);
+let transport = PubkyHomeserverSessionStorage::new(session);
 transport.upsert_payment_endpoint(&method_id, &endpoint_data).await?;
 
 // Query payment methods

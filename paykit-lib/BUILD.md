@@ -267,12 +267,12 @@ paykit-lib/
 `paykit-lib` uses a transport abstraction to allow different backends:
 
 ```rust
-pub trait AuthenticatedTransport {
+pub trait HomeserverSessionStorage {
     async fn publish_endpoint(&self, method: &MethodId, data: &EndpointData) -> Result<()>;
     async fn remove_endpoint(&self, method: &MethodId) -> Result<()>;
 }
 
-pub trait UnauthenticatedTransportRead {
+pub trait HomeserverPublicStorageRead {
     async fn fetch_payment_endpoint(&self, method: &MethodId) -> Result<Option<EndpointData>>;
     async fn list_contact_pubkeys(&self) -> Result<Vec<PublicKey>>;
 }
@@ -284,12 +284,12 @@ The default `pubky` feature provides implementations that work with the Pubky SD
 
 ```rust
 use paykit_lib::transport::pubky::{
-    PubkyAuthenticatedTransport,
+    PubkyHomeserverSessionStorage,
     PubkyUnauthenticatedTransport,
 };
 
 // For authenticated operations (requires session)
-let transport = PubkyAuthenticatedTransport::new(session);
+let transport = PubkyHomeserverSessionStorage::new(session);
 
 // For read-only operations
 let transport = PubkyUnauthenticatedTransport::new();

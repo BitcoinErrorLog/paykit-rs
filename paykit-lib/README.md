@@ -13,9 +13,9 @@ Everything is transport-agnostic behind traits, with optional adapters for the P
 
 ## Auth & Dependency Injection
 
-- Writes require an authenticated client. Instead of hard-coding `PubkySession`, public APIs accept an argument that implements a thin Paykit-defined trait (e.g., `AuthenticatedTransport`).  
+- Writes require an authenticated client. Instead of hard-coding `PubkySession`, public APIs accept an argument that implements a thin Paykit-defined trait (e.g., `HomeserverSessionStorage`).  
 - The crate provides adapters so callers can wrap [`pubky::PubkySession`](https://docs.rs/pubky/0.6.0-rc.6/pubky/struct.PubkySession.html) or provide mocks for tests.  
-- Public reads only require the `UnauthenticatedTransportRead` trait, keeping unauthenticated flows lightweight. Session lifecycle, capability scoping, and key rotation stay outside this crate.
+- Public reads only require the `HomeserverPublicStorageRead` trait, keeping unauthenticated flows lightweight. Session lifecycle, capability scoping, and key rotation stay outside this crate.
 - The `pubky` feature flag (enabled by default) wires in Pubky adapters under `transport::pubky`. Disable it if you want to use custom transports only.
 
 ## Concepts
@@ -72,7 +72,7 @@ pub async fn set_payment_endpoint<S>(
     data: EndpointData,
 ) -> Result<()>
 where
-    S: AuthenticatedTransport;
+    S: HomeserverSessionStorage;
 ```
 
 Store or update a payee-owned endpoint for a given method using an authenticated client, such as a Pubky session.
@@ -83,7 +83,7 @@ pub async fn remove_payment_endpoint<S>(
     method: MethodId,
 ) -> Result<()>
 where
-    S: AuthenticatedTransport;
+    S: HomeserverSessionStorage;
 ```
 
 Remove a previously published endpoint for a given method.
@@ -94,7 +94,7 @@ pub async fn get_payment_list<R>(
     payee: &PublicKey,
 ) -> Result<SupportedPayments>
 where
-    R: UnauthenticatedTransportRead;
+    R: HomeserverPublicStorageRead;
 ```
 
 Fetch the list of supported payment methods for `payee`. Returns an empty `SupportedPayments` when no endpoints are published.
@@ -106,7 +106,7 @@ pub async fn get_payment_endpoint<R>(
     method: &MethodId,
 ) -> Result<Option<EndpointData>>
 where
-    R: UnauthenticatedTransportRead;
+    R: HomeserverPublicStorageRead;
 ```
 
 Convenience resolver for a single method. Returns `Ok(None)` if the endpoint is missing or empty.
@@ -117,7 +117,7 @@ pub async fn get_known_contacts<R>(
     key: &PublicKey,
 ) -> Result<Vec<PublicKey>>
 where
-    R: UnauthenticatedTransportRead;
+    R: HomeserverPublicStorageRead;
 ```
 
 Helper for discovering known contacts by listing Pubky follows for `key`. Returns an empty vector when no follows are stored.
@@ -127,7 +127,7 @@ Method/endpoint naming follows the PMIP consensus described in the repository ro
 When the `pubky` feature is enabled the crate exports:
 
 - `transport::pubky::PAYKIT_PATH_PREFIX` (`/pub/paykit.app/v0/`) and `PUBKY_FOLLOWS_PATH` (`/pub/pubky.app/follows/`) to standardize path construction.  
-- `PubkyAuthenticatedTransport` (wraps `PubkySession`) and `PubkyUnauthenticatedTransport` (wraps `pubky::PublicStorage`) as ready-to-use adapters that satisfy the traits above.
+- `PubkyHomeserverSessionStorage` (wraps `PubkySession`) and `PubkyUnauthenticatedTransport` (wraps `pubky::PublicStorage`) as ready-to-use adapters that satisfy the traits above.
 
 ## Transport abstractions
 
@@ -136,7 +136,7 @@ Transports live in `paykit-lib/src/transport`.
 ### Traits
 
 ```rust
-pub trait AuthenticatedTransport {
+pub trait HomeserverSessionStorage {
     async fn upsert_payment_endpoint(
         &self,
         method: MethodId,
@@ -149,7 +149,7 @@ pub trait AuthenticatedTransport {
     ) -> Result<()>;
 }
 
-pub trait UnauthenticatedTransportRead {
+pub trait HomeserverPublicStorageRead {
     async fn fetch_supported_payments(
         &self,
         payee: &PublicKey,
@@ -183,11 +183,11 @@ When the `pubky` feature is enabled, the crate provides:
   - `"/pub/pubky.app/follows/"`
   - Used for the `get_known_contacts` helper.
 
-- `PubkyAuthenticatedTransport`
-  - Wraps `pubky::PubkySession` to implement `AuthenticatedTransport`.
+- `PubkyHomeserverSessionStorage`
+  - Wraps `pubky::PubkySession` to implement `HomeserverSessionStorage`.
 
 - `PubkyUnauthenticatedTransport`
-  - Wraps `pubky::PublicStorage` to implement `UnauthenticatedTransportRead` and public readonly operations.
+  - Wraps `pubky::PublicStorage` to implement `HomeserverPublicStorageRead` and public readonly operations.
 
 This matches the Pubky SDK addressing scheme, where:
 
@@ -213,13 +213,13 @@ use paykit_lib::{
     set_payment_endpoint,
     MethodId,
     EndpointData,
-    transport::pubky::{PubkyAuthenticatedTransport, PubkyUnauthenticatedTransport},
+    transport::pubky::{PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport},
 };
 use pubky::{PubkySession, PublicStorage, PublicKey};
 
 async fn example(session: &PubkySession, public_storage: &PublicStorage) -> anyhow::Result<()> {
     // Wrap Pubky types in Paykit transports
-    let auth = PubkyAuthenticatedTransport::new(session.clone());
+    let auth = PubkyHomeserverSessionStorage::new(session.clone());
     let reader = PubkyUnauthenticatedTransport::new(public_storage.clone());
 
     // Publish a Lightning endpoint

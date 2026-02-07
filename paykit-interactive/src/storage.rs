@@ -102,7 +102,7 @@ pub async fn smart_checkout<S, R>(
 ) -> Result<Option<EndpointData>>
 where
     S: PaykitStorage,
-    R: paykit_lib::UnauthenticatedTransportRead,
+    R: paykit_lib::HomeserverPublicStorageRead,
 {
     // Step 1: Check for private endpoint (preferred)
     if let Some(private) = storage.get_private_endpoint(peer, method_id).await? {
@@ -135,7 +135,7 @@ pub async fn smart_checkout_detailed<S, R>(
 ) -> Result<Option<CheckoutResult>>
 where
     S: PaykitStorage,
-    R: paykit_lib::UnauthenticatedTransportRead,
+    R: paykit_lib::HomeserverPublicStorageRead,
 {
     // Step 1: Check for private endpoint (preferred)
     if let Some(private) = storage.get_private_endpoint(peer, method_id).await? {
@@ -169,7 +169,7 @@ pub async fn smart_checkout_all_methods<S, R>(
 ) -> Result<Vec<CheckoutResult>>
 where
     S: PaykitStorage,
-    R: paykit_lib::UnauthenticatedTransportRead,
+    R: paykit_lib::HomeserverPublicStorageRead,
 {
     let mut results = Vec::new();
     let mut seen_methods = std::collections::HashSet::new();

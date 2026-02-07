@@ -19,8 +19,8 @@
 - Prefer descriptive module names such as `routing`, `payments`, `endpoints` to mirror protocol sections.
 
 ## Transport Abstraction & Dependency Injection
-- Keep the library stateless. Functions that touch remote state must accept `AuthenticatedTransport` or `UnauthenticatedTransportRead` implementors instead of concrete SDK types.
-- Pubky support lives behind the default `pubky` feature; adapters such as `PubkyAuthenticatedTransport` and `PubkyUnauthenticatedTransport` simply wrap `PubkySession` and `pubky::PublicStorage`. Disable the feature if you need to compile without the SDK.
+- Keep the library stateless. Functions that touch remote state must accept `HomeserverSessionStorage` or `HomeserverPublicStorageRead` implementors instead of concrete SDK types.
+- Pubky support lives behind the default `pubky` feature; adapters such as `PubkyHomeserverSessionStorage` and `PubkyUnauthenticatedTransport` simply wrap `PubkySession` and `pubky::PublicStorage`. Disable the feature if you need to compile without the SDK.
 - When adding or updating adapters, follow the convention: `fetch_payment_endpoint` returns `Option`, list operations treat 404s as empty, and contact discovery relies on directory listings rather than file contents.
 - Document in each API that session creation, capability scope, and key rotation remain the caller’s responsibility; Paykit only consumes the trait methods it needs.
 

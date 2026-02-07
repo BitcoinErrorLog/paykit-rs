@@ -28,7 +28,7 @@ use paykit_lib::protocol::{
     subscription_proposal_aad, subscription_proposal_path, subscription_proposals_dir,
     PURPOSE_REQUEST,
 };
-use paykit_lib::{AuthenticatedTransport, PublicKey, UnauthenticatedTransportRead};
+use paykit_lib::{HomeserverSessionStorage, PublicKey, HomeserverPublicStorageRead};
 use pubky_noise::sealed_blob::{
     is_sealed_blob, sealed_blob_decrypt, sealed_blob_decrypt_with_context,
     sealed_blob_encrypt_with_context,
@@ -93,7 +93,7 @@ impl PublishedRequest {
 /// let request = PaymentRequest::new(from, to, amount, currency, method);
 /// publish_payment_request(&transport, &sender_z32, &request, &recipient_noise_pk).await?;
 /// ```
-pub async fn publish_payment_request<T: AuthenticatedTransport>(
+pub async fn publish_payment_request<T: HomeserverSessionStorage>(
     transport: &T,
     sender_pubkey_z32: &str,
     request: &PaymentRequest,
@@ -151,7 +151,7 @@ pub async fn publish_payment_request<T: AuthenticatedTransport>(
 /// # Returns
 ///
 /// A list of published payment requests from the sender addressed to me.
-pub async fn discover_requests<R: UnauthenticatedTransportRead>(
+pub async fn discover_requests<R: HomeserverPublicStorageRead>(
     reader: &R,
     sender: &PublicKey,
     sender_pubkey_z32: &str,
@@ -209,7 +209,7 @@ pub async fn discover_requests<R: UnauthenticatedTransportRead>(
 /// # Returns
 ///
 /// The published request if found.
-pub async fn discover_request<R: UnauthenticatedTransportRead>(
+pub async fn discover_request<R: HomeserverPublicStorageRead>(
     reader: &R,
     sender: &PublicKey,
     sender_pubkey_z32: &str,
@@ -360,7 +360,7 @@ fn try_decrypt_request_legacy(
 /// * `sender_pubkey_z32` - The sender's z-base-32 pubkey
 /// * `recipient_pubkey_z32` - The recipient's z-base-32 pubkey
 /// * `request_id` - The request ID to cancel
-pub async fn cancel_payment_request<T: AuthenticatedTransport>(
+pub async fn cancel_payment_request<T: HomeserverSessionStorage>(
     transport: &T,
     sender_pubkey_z32: &str,
     recipient_pubkey_z32: &str,
@@ -388,7 +388,7 @@ pub async fn cancel_payment_request<T: AuthenticatedTransport>(
 ///
 /// The poller iterates over known peers (contacts) and lists each peer's
 /// `.../{context_id}/` directory to find requests addressed to me.
-pub struct RequestDiscoveryPoller<R: UnauthenticatedTransportRead> {
+pub struct RequestDiscoveryPoller<R: HomeserverPublicStorageRead> {
     reader: R,
     known_peers: Vec<PublicKey>,
     last_poll: i64,
@@ -399,7 +399,7 @@ pub struct RequestDiscoveryPoller<R: UnauthenticatedTransportRead> {
     noise_sk: [u8; 32],
 }
 
-impl<R: UnauthenticatedTransportRead> RequestDiscoveryPoller<R> {
+impl<R: HomeserverPublicStorageRead> RequestDiscoveryPoller<R> {
     /// Create a new poller.
     ///
     /// # Arguments
@@ -520,7 +520,7 @@ pub const PAYKIT_CANCELLATIONS_PATH: &str = "/pub/paykit.app/v0/subscriptions/ca
 /// * `provider_pubkey_z32` - The provider's z-base-32 encoded pubkey (to compute context_id)
 /// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute context_id)
 /// * `my_noise_sk` - My Noise secret key for decryption
-pub async fn discover_subscription_proposals<R: UnauthenticatedTransportRead>(
+pub async fn discover_subscription_proposals<R: HomeserverPublicStorageRead>(
     reader: &R,
     provider: &PublicKey,
     provider_pubkey_z32: &str,
@@ -570,7 +570,7 @@ pub async fn discover_subscription_proposals<R: UnauthenticatedTransportRead>(
 /// * `my_pubkey_z32` - My z-base-32 encoded pubkey (to compute context_id)
 /// * `proposal_id` - The proposal ID
 /// * `my_noise_sk` - My Noise secret key for decryption
-pub async fn discover_subscription_proposal<R: UnauthenticatedTransportRead>(
+pub async fn discover_subscription_proposal<R: HomeserverPublicStorageRead>(
     reader: &R,
     provider: &PublicKey,
     provider_pubkey_z32: &str,
@@ -601,7 +601,7 @@ pub async fn discover_subscription_proposal<R: UnauthenticatedTransportRead>(
 /// Discover subscription agreements for a party.
 ///
 /// Decrypts Sealed Blob v2 encrypted agreements using the party's Noise secret key.
-pub async fn discover_subscription_agreements<R: UnauthenticatedTransportRead>(
+pub async fn discover_subscription_agreements<R: HomeserverPublicStorageRead>(
     reader: &R,
     party: &PublicKey,
     my_noise_sk: &[u8; 32],
@@ -630,7 +630,7 @@ pub async fn discover_subscription_agreements<R: UnauthenticatedTransportRead>(
 }
 
 /// Discover a specific subscription agreement by ID.
-pub async fn discover_subscription_agreement<R: UnauthenticatedTransportRead>(
+pub async fn discover_subscription_agreement<R: HomeserverPublicStorageRead>(
     reader: &R,
     party: &PublicKey,
     subscription_id: &str,
@@ -651,7 +651,7 @@ pub async fn discover_subscription_agreement<R: UnauthenticatedTransportRead>(
 }
 
 /// Discover subscription cancellations for a party.
-pub async fn discover_subscription_cancellations<R: UnauthenticatedTransportRead>(
+pub async fn discover_subscription_cancellations<R: HomeserverPublicStorageRead>(
     reader: &R,
     party: &PublicKey,
     my_noise_sk: &[u8; 32],

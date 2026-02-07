@@ -21,8 +21,8 @@ mod common;
 #[cfg(feature = "pubky_compliance_tests")]
 mod pubky_tests {
     use paykit_lib::{
-        AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
-        PubkyUnauthenticatedTransport, UnauthenticatedTransportRead,
+        HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
+        PubkyUnauthenticatedTransport, HomeserverPublicStorageRead,
     };
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 
@@ -45,8 +45,8 @@ mod pubky_tests {
             .await
             .expect("Signup must succeed");
 
-        // 2. Publish via AuthenticatedTransport
-        let auth_transport = PubkyAuthenticatedTransport::new(session);
+        // 2. Publish via HomeserverSessionStorage
+        let auth_transport = PubkyHomeserverSessionStorage::new(session);
 
         let method_id = MethodId("lightning".to_string());
         let endpoint = EndpointData("lnbc1...test".to_string());
@@ -92,7 +92,7 @@ mod pubky_tests {
             .await
             .expect("Failed to signup");
 
-        let auth_transport = PubkyAuthenticatedTransport::new(session);
+        let auth_transport = PubkyHomeserverSessionStorage::new(session);
 
         // Publish initial endpoint
         let method_id = MethodId("onchain".to_string());
@@ -149,7 +149,7 @@ mod pubky_tests {
             .await
             .expect("Failed to signup");
 
-        let auth_transport = PubkyAuthenticatedTransport::new(session);
+        let auth_transport = PubkyHomeserverSessionStorage::new(session);
 
         // Publish multiple methods
         let methods_to_publish = vec![

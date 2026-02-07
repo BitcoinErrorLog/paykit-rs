@@ -18,8 +18,8 @@
 #[cfg(feature = "pubky_compliance_tests")]
 mod pubky_tests {
     use paykit_lib::{
-        AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
-        PubkyUnauthenticatedTransport, PublicKey, SupportedPayments, UnauthenticatedTransportRead,
+        HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
+        PubkyUnauthenticatedTransport, PublicKey, SupportedPayments, HomeserverPublicStorageRead,
     };
     use pubky::PublicStorage;
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
@@ -54,7 +54,7 @@ mod pubky_tests {
             .expect("Failed to signup");
 
         // Create authenticated transport adapter
-        let auth_transport = PubkyAuthenticatedTransport::new(session.clone());
+        let auth_transport = PubkyHomeserverSessionStorage::new(session.clone());
 
         // Test: Publish multiple payment methods
         let (onchain_method, onchain_data) =
@@ -175,15 +175,15 @@ mod pubky_tests {
             .await
             .expect("Failed to signup");
 
-        // Test: PubkyAuthenticatedTransport correctly wraps PubkySession
-        let auth_transport = PubkyAuthenticatedTransport::new(session.clone());
+        // Test: PubkyHomeserverSessionStorage correctly wraps PubkySession
+        let auth_transport = PubkyHomeserverSessionStorage::new(session.clone());
 
         // Verify we can access the wrapped session
         // Note: We verify the transport works by using it, not by checking session.public_key()
         // since that method may not exist in the current PubkySession API
 
         // Test: from() trait implementation
-        let auth_transport2: PubkyAuthenticatedTransport = session.clone().into();
+        let auth_transport2: PubkyHomeserverSessionStorage = session.clone().into();
         // Both transports should work identically
 
         // Test: Upsert and remove operations
@@ -245,7 +245,7 @@ mod pubky_tests {
             .await
             .expect("Failed to signup");
 
-        let auth_transport = PubkyAuthenticatedTransport::new(session);
+        let auth_transport = PubkyHomeserverSessionStorage::new(session);
         let unauth_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
         // Step 1: Publish initial endpoints
@@ -392,7 +392,7 @@ mod pubky_tests {
             .await
             .expect("Failed to signup");
 
-        let auth_transport = PubkyAuthenticatedTransport::new(session);
+        let auth_transport = PubkyHomeserverSessionStorage::new(session);
 
         // Spawn multiple concurrent upsert operations
         let mut handles = vec![];

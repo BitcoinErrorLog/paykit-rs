@@ -237,7 +237,7 @@ pub async fn resolve_endpoint<S, R>(
 ) -> Result<Option<EndpointData>>
 where
     S: PrivateEndpointStore,
-    R: crate::UnauthenticatedTransportRead,
+    R: crate::HomeserverPublicStorageRead,
 {
     // First, check for private endpoint
     if let Some(private) = manager.get_endpoint(peer, method_id).await? {

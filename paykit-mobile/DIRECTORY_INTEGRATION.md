@@ -145,7 +145,7 @@ For publishing endpoints, use authenticated transport:
 
 ```swift
 // Configure authenticated transport
-directoryService.configureAuthenticatedTransport(
+directoryService.configureHomeserverSessionStorage(
     sessionId: sessionId,
     ownerPubkey: myPubkey,
     homeserverBaseURL: "https://pubky.example.com"

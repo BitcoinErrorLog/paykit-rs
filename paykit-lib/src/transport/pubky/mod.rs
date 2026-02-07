@@ -1,4 +1,4 @@
-pub mod authenticated_transport;
+pub mod homeserver_session_storage;
 pub mod unauthenticated_transport;
 
 /// Conventional prefix for Paykit data hosted on Pubky storage.

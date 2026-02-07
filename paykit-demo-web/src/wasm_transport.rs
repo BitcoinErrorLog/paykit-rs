@@ -1,12 +1,12 @@
 //! WASM-compatible transport adapter for Paykit
 //!
-//! This module provides a WASM-compatible implementation of `UnauthenticatedTransportRead`
+//! This module provides a WASM-compatible implementation of `HomeserverPublicStorageRead`
 //! using the web demo's `DirectoryClient` for HTTP-based directory queries.
 
 use js_sys::{Object, Reflect};
 use paykit_lib::{
     EndpointData, MethodId, PaykitError, PublicKey, Result, SupportedPayments,
-    UnauthenticatedTransportRead,
+    HomeserverPublicStorageRead,
 };
 use wasm_bindgen::JsCast;
 
@@ -35,7 +35,7 @@ impl WasmUnauthenticatedTransport {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl UnauthenticatedTransportRead for WasmUnauthenticatedTransport {
+impl HomeserverPublicStorageRead for WasmUnauthenticatedTransport {
     async fn fetch_supported_payments(&self, payee: &PublicKey) -> Result<SupportedPayments> {
         let payee_str = payee.to_string();
         let methods_js = self

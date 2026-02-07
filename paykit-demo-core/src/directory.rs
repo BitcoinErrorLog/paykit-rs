@@ -3,8 +3,8 @@
 use crate::models::PaymentMethod;
 use anyhow::{Context, Result};
 use paykit_lib::{
-    AuthenticatedTransport, EndpointData, MethodId, PubkyAuthenticatedTransport,
-    PubkyUnauthenticatedTransport, PublicKey, UnauthenticatedTransportRead,
+    HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
+    PubkyUnauthenticatedTransport, PublicKey, HomeserverPublicStorageRead,
 };
 use pubky::{Pubky, PubkySession, PublicStorage};
 
@@ -32,7 +32,7 @@ impl DirectoryClient {
         session: &PubkySession,
         methods: &[PaymentMethod],
     ) -> Result<()> {
-        let transport = PubkyAuthenticatedTransport::new(session.clone());
+        let transport = PubkyHomeserverSessionStorage::new(session.clone());
 
         for method in methods {
             let method_id = MethodId(method.method_id.clone());
@@ -71,7 +71,7 @@ impl DirectoryClient {
 
     /// Delete a payment method from the directory
     pub async fn delete_method(&self, session: &PubkySession, method_id: &str) -> Result<()> {
-        let transport = PubkyAuthenticatedTransport::new(session.clone());
+        let transport = PubkyHomeserverSessionStorage::new(session.clone());
         let method_id = MethodId(method_id.to_string());
 
         transport

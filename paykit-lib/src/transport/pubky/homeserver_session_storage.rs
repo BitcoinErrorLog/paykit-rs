@@ -2,16 +2,16 @@ use async_trait::async_trait;
 use pubky::{errors::RequestError, Error as PubkyError, PubkySession, StatusCode};
 
 use super::PAYKIT_PATH_PREFIX;
-use crate::transport::traits::AuthenticatedTransport;
+use crate::transport::traits::HomeserverSessionStorage;
 use crate::{EndpointData, MethodId, PaykitError, Result};
 
-/// Adapter around `pubky::PubkySession` implementing `AuthenticatedTransport`.
+/// Adapter around `pubky::PubkySession` implementing `HomeserverSessionStorage`.
 #[derive(Clone)]
-pub struct PubkyAuthenticatedTransport {
+pub struct PubkyHomeserverSessionStorage {
     session: PubkySession,
 }
 
-impl PubkyAuthenticatedTransport {
+impl PubkyHomeserverSessionStorage {
     /// Create a new adapter from an existing session.
     pub fn new(session: PubkySession) -> Self {
         Self { session }
@@ -23,7 +23,7 @@ impl PubkyAuthenticatedTransport {
     }
 }
 
-impl From<PubkySession> for PubkyAuthenticatedTransport {
+impl From<PubkySession> for PubkyHomeserverSessionStorage {
     fn from(session: PubkySession) -> Self {
         Self { session }
     }
@@ -40,7 +40,7 @@ fn is_not_found(err: &PubkyError) -> bool {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl AuthenticatedTransport for PubkyAuthenticatedTransport {
+impl HomeserverSessionStorage for PubkyHomeserverSessionStorage {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self, data), fields(method = %method.0, data_len = data.0.len())))]
     async fn upsert_payment_endpoint(&self, method: &MethodId, data: &EndpointData) -> Result<()> {
         let path = format!("{PAYKIT_PATH_PREFIX}{}", method.0);

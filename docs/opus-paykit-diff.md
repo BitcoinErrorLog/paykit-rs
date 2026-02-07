@@ -464,12 +464,12 @@ The transport traits model **binary authentication**, not capability URLs:
 
 ```rust
 // paykit-lib/src/transport/traits.rs
-pub trait AuthenticatedTransport: Send + Sync {
+pub trait HomeserverSessionStorage: Send + Sync {
     async fn put(&self, path: &str, data: &str) -> Result<()>;
     async fn delete(&self, path: &str) -> Result<()>;
 }
 
-pub trait UnauthenticatedTransportRead: Send + Sync {
+pub trait HomeserverPublicStorageRead: Send + Sync {
     async fn get(&self, uri: &str) -> Result<Option<Vec<u8>>>;
     async fn list(&self, uri: &str) -> Result<Vec<DirEntry>>;
 }
@@ -560,7 +560,7 @@ pub enum PaykitDataType {
 }
 
 pub fn publish_data(
-    transport: &impl AuthenticatedTransport,
+    transport: &impl HomeserverSessionStorage,
     data_type: PaykitDataType,
     payload: &[u8],
     encryption: EncryptionPolicy,

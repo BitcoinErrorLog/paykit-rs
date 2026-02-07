@@ -251,12 +251,12 @@ See CRYPTO_SPEC Section 6.8.1 for KeyBinding schema.
 ```mermaid
 flowchart TB
     subgraph traits [Transport Traits]
-        AUTH[AuthenticatedTransport]
-        UNAUTH[UnauthenticatedTransportRead]
+        AUTH[HomeserverSessionStorage]
+        UNAUTH[HomeserverPublicStorageRead]
     end
 
     subgraph impls [Implementations]
-        PUBKY_AUTH[PubkyAuthenticatedTransport]
+        PUBKY_AUTH[PubkyHomeserverSessionStorage]
         PUBKY_UNAUTH[PubkyUnauthenticatedTransport]
         WASM_UNAUTH[WasmUnauthenticatedTransport]
         MOCK[MockTransport - testing]
@@ -276,12 +276,12 @@ flowchart TB
 ### Authenticated Transport
 - Requires `PubkySession` or equivalent
 - Used for: Publishing payment methods, writing private data
-- Trait: `AuthenticatedTransport`
+- Trait: `HomeserverSessionStorage`
 
 ### Unauthenticated Transport
 - Requires `PublicStorage` or equivalent
 - Used for: Reading public directory, discovering methods
-- Trait: `UnauthenticatedTransportRead`
+- Trait: `HomeserverPublicStorageRead`
 
 ## Related Documentation
 

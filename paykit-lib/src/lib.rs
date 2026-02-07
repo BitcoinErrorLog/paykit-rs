@@ -59,12 +59,12 @@ pub mod uri;
 pub mod test_utils;
 
 pub use errors::{PaykitError, PaykitErrorCode};
-pub use transport::{AuthenticatedTransport, UnauthenticatedTransportRead};
+pub use transport::{HomeserverSessionStorage, HomeserverPublicStorageRead};
 pub use uri::{parse_uri, PaykitUri};
 
 /// Pubky adapters are only exposed when the default `pubky` feature is enabled.
 #[cfg(feature = "pubky")]
-pub use transport::{PubkyAuthenticatedTransport, PubkyUnauthenticatedTransport};
+pub use transport::{PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport};
 
 /// Common result alias for Paykit operations.
 pub type Result<T> = std::result::Result<T, PaykitError>;
@@ -232,8 +232,8 @@ impl SupportedPayments {
 /// # Examples
 /// ```
 /// # use paykit_lib::{set_payment_endpoint, MethodId, EndpointData, PublicKey};
-/// # use paykit_lib::AuthenticatedTransport;
-/// # async fn demo(client: &impl AuthenticatedTransport) -> paykit_lib::Result<()> {
+/// # use paykit_lib::HomeserverSessionStorage;
+/// # async fn demo(client: &impl HomeserverSessionStorage) -> paykit_lib::Result<()> {
 /// let method = MethodId("lightning".into());
 /// let data = EndpointData("{\"bolt11\":\"ln...\"}".into());
 /// set_payment_endpoint(client, method, data).await?;
@@ -243,7 +243,7 @@ impl SupportedPayments {
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(client, data), fields(method = %method.0, data_len = data.0.len())))]
 pub async fn set_payment_endpoint<S>(client: &S, method: MethodId, data: EndpointData) -> Result<()>
 where
-    S: AuthenticatedTransport,
+    S: HomeserverSessionStorage,
 {
     client
         .upsert_payment_endpoint(&method, &data)
@@ -255,7 +255,7 @@ where
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(client), fields(method = %method.0)))]
 pub async fn remove_payment_endpoint<S>(client: &S, method: MethodId) -> Result<()>
 where
-    S: AuthenticatedTransport,
+    S: HomeserverSessionStorage,
 {
     client
         .remove_payment_endpoint(&method)
@@ -273,8 +273,8 @@ where
 /// # Examples
 /// ```
 /// # use paykit_lib::{get_payment_list, MethodId, EndpointData, SupportedPayments};
-/// # use paykit_lib::{AuthenticatedTransport, UnauthenticatedTransportRead};
-/// # async fn demo(reader: &impl UnauthenticatedTransportRead, pk: &paykit_lib::PublicKey) -> paykit_lib::Result<()> {
+/// # use paykit_lib::{HomeserverSessionStorage, HomeserverPublicStorageRead};
+/// # async fn demo(reader: &impl HomeserverPublicStorageRead, pk: &paykit_lib::PublicKey) -> paykit_lib::Result<()> {
 /// let payments = get_payment_list(reader, pk).await?;
 /// if payments.entries.is_empty() {
 ///     println!("payee published no endpoints yet");
@@ -289,7 +289,7 @@ where
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(reader)))]
 pub async fn get_payment_list<R>(reader: &R, payee: &PublicKey) -> Result<SupportedPayments>
 where
-    R: UnauthenticatedTransportRead,
+    R: HomeserverPublicStorageRead,
 {
     reader
         .fetch_supported_payments(payee)
@@ -298,7 +298,7 @@ where
 }
 
 /// Path for the optional supported payments snapshot file.
-pub const SUPPORTED_SNAPSHOT_PATH: &str = "/pub/paykit.app/v0/supported.json";
+pub const SUPPORTED_METHODS_INDEX_PATH: &str = "/pub/paykit.app/v0/supported.json";
 
 /// Entry in the supported payments snapshot array.
 ///
@@ -345,8 +345,8 @@ impl SupportedPaymentEntry {
 /// # Examples
 /// ```ignore
 /// # use paykit_lib::{publish_supported_snapshot, MethodId, EndpointData};
-/// # use paykit_lib::AuthenticatedTransport;
-/// # async fn demo(client: &impl AuthenticatedTransport) -> paykit_lib::Result<()> {
+/// # use paykit_lib::HomeserverSessionStorage;
+/// # async fn demo(client: &impl HomeserverSessionStorage) -> paykit_lib::Result<()> {
 /// let entries = vec![
 ///     SupportedPaymentEntry::new("lightning", "lnbc..."),
 ///     SupportedPaymentEntry::new("onchain", "bc1q..."),
@@ -361,14 +361,14 @@ pub async fn publish_supported_snapshot<S>(
     entries: &[SupportedPaymentEntry],
 ) -> Result<()>
 where
-    S: AuthenticatedTransport,
+    S: HomeserverSessionStorage,
 {
     let json = serde_json::to_string(entries).map_err(|e| PaykitError::InvalidData {
         field: "entries".into(),
         reason: format!("failed to serialize snapshot: {}", e),
     })?;
     client
-        .put(SUPPORTED_SNAPSHOT_PATH, &json)
+        .put(SUPPORTED_METHODS_INDEX_PATH, &json)
         .await
         .map_err(|err| map_transport_error("publish_supported_snapshot", err))
 }
@@ -385,8 +385,8 @@ where
 /// # Examples
 /// ```ignore
 /// # use paykit_lib::{get_supported_snapshot, SupportedPaymentEntry};
-/// # use paykit_lib::UnauthenticatedTransportRead;
-/// # async fn demo(reader: &impl UnauthenticatedTransportRead, pk: &paykit_lib::PublicKey) -> paykit_lib::Result<()> {
+/// # use paykit_lib::HomeserverPublicStorageRead;
+/// # async fn demo(reader: &impl HomeserverPublicStorageRead, pk: &paykit_lib::PublicKey) -> paykit_lib::Result<()> {
 /// if let Some(entries) = get_supported_snapshot(reader, pk).await? {
 ///     for entry in entries {
 ///         println!("method={} enabled={}", entry.method_id, entry.enabled);
@@ -401,9 +401,9 @@ pub async fn get_supported_snapshot<R>(
     payee: &PublicKey,
 ) -> Result<Option<Vec<SupportedPaymentEntry>>>
 where
-    R: UnauthenticatedTransportRead,
+    R: HomeserverPublicStorageRead,
 {
-    match reader.get(payee, SUPPORTED_SNAPSHOT_PATH).await {
+    match reader.get(payee, SUPPORTED_METHODS_INDEX_PATH).await {
         Ok(Some(content)) => {
             let entries: Vec<SupportedPaymentEntry> =
                 serde_json::from_str(&content).map_err(|e| PaykitError::InvalidData {
@@ -421,10 +421,10 @@ where
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(client)))]
 pub async fn remove_supported_snapshot<S>(client: &S) -> Result<()>
 where
-    S: AuthenticatedTransport,
+    S: HomeserverSessionStorage,
 {
     client
-        .delete(SUPPORTED_SNAPSHOT_PATH)
+        .delete(SUPPORTED_METHODS_INDEX_PATH)
         .await
         .map_err(|err| map_transport_error("remove_supported_snapshot", err))
 }
@@ -438,8 +438,8 @@ where
 /// # Examples
 /// ```
 /// # use paykit_lib::{get_payment_endpoint, MethodId, PublicKey};
-/// # use paykit_lib::UnauthenticatedTransportRead;
-/// # async fn inspect(reader: &impl UnauthenticatedTransportRead, pk: &PublicKey) -> paykit_lib::Result<()> {
+/// # use paykit_lib::HomeserverPublicStorageRead;
+/// # async fn inspect(reader: &impl HomeserverPublicStorageRead, pk: &PublicKey) -> paykit_lib::Result<()> {
 /// let lightning = MethodId("lightning".into());
 /// if let Some(endpoint) = get_payment_endpoint(reader, pk, &lightning).await? {
 ///     println!("lightning endpoint: {}", endpoint.0);
@@ -456,7 +456,7 @@ pub async fn get_payment_endpoint<R>(
     method: &MethodId,
 ) -> Result<Option<EndpointData>>
 where
-    R: UnauthenticatedTransportRead,
+    R: HomeserverPublicStorageRead,
 {
     reader
         .fetch_payment_endpoint(payee, method)
@@ -474,8 +474,8 @@ where
 /// # Examples
 /// ```
 /// # use paykit_lib::{get_known_contacts, PublicKey};
-/// # use paykit_lib::UnauthenticatedTransportRead;
-/// # async fn contacts(reader: &impl UnauthenticatedTransportRead, pk: &PublicKey) -> paykit_lib::Result<()> {
+/// # use paykit_lib::HomeserverPublicStorageRead;
+/// # async fn contacts(reader: &impl HomeserverPublicStorageRead, pk: &PublicKey) -> paykit_lib::Result<()> {
 /// for contact in get_known_contacts(reader, pk).await? {
 ///     println!("known contact: {}", contact);
 /// }
@@ -485,7 +485,7 @@ where
 #[cfg_attr(feature = "tracing", tracing::instrument(skip(reader)))]
 pub async fn get_known_contacts<R>(reader: &R, key: &PublicKey) -> Result<Vec<PublicKey>>
 where
-    R: UnauthenticatedTransportRead,
+    R: HomeserverPublicStorageRead,
 {
     reader
         .fetch_known_contacts(key)
@@ -521,7 +521,7 @@ mod tests {
 
     struct TestSetup {
         _testnet: EphemeralTestnet,
-        session_transport: PubkyAuthenticatedTransport,
+        session_transport: PubkyHomeserverSessionStorage,
         reader_transport: PubkyUnauthenticatedTransport,
         raw_session: PubkySession,
         public_key: PublicKey,
@@ -556,7 +556,7 @@ mod tests {
                 .await
                 .map_err(|e| TestSetupError(format!("Failed to signup: {}", e)))?;
 
-            let session_transport = PubkyAuthenticatedTransport::new(session.clone());
+            let session_transport = PubkyHomeserverSessionStorage::new(session.clone());
             let reader_transport = PubkyUnauthenticatedTransport::new(sdk.public_storage());
 
             Ok(Self {

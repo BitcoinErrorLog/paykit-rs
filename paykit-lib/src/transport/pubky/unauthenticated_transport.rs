@@ -7,10 +7,10 @@ use pubky::{
 };
 
 use super::{PAYKIT_PATH_PREFIX, PUBKY_FOLLOWS_PATH};
-use crate::transport::traits::UnauthenticatedTransportRead;
+use crate::transport::traits::HomeserverPublicStorageRead;
 use crate::{EndpointData, MethodId, PaykitError, PublicKey, Result, SupportedPayments};
 
-/// Adapter around `pubky::PublicStorage` implementing `UnauthenticatedTransportRead`.
+/// Adapter around `pubky::PublicStorage` implementing `HomeserverPublicStorageRead`.
 #[derive(Clone)]
 pub struct PubkyUnauthenticatedTransport {
     inner: SdkUnauthenticatedTransport,
@@ -73,7 +73,7 @@ impl PubkyUnauthenticatedTransport {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl UnauthenticatedTransportRead for PubkyUnauthenticatedTransport {
+impl HomeserverPublicStorageRead for PubkyUnauthenticatedTransport {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
     async fn fetch_supported_payments(&self, payee: &PublicKey) -> Result<SupportedPayments> {
         let addr = format!("pubky{payee}{PAYKIT_PATH_PREFIX}");

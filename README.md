@@ -1,3 +1,5 @@
+✨🚨100% VIBES🚨✨ - This app was prompted using ai tools. No human eyes have reviewed this code.
+
 # Paykit
 
 > ⚠️ **WIP - NOT FOR PRODUCTION** ⚠️

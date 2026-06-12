@@ -4,6 +4,8 @@
 
 > ⚠️ **WIP - NOT FOR PRODUCTION** ⚠️
 
+> **Relationship to the official library** (recorded June 2026): the official [`pubky/paykit-rs`](https://github.com/pubky/paykit-rs) (0.1.0-rc12) is an independent rewrite with **no shared git history** with this repository (290 commits here vs 218 there, no merge-base), so merging upstream is not possible. Decision: this fork is maintained **in parallel**. It carries features the official library lacks — the `paykit_lib::atomicity` settlement module, ContextId pair routing, owner-bound AAD, ACK helpers, and `docs/` (SEALED_BLOB_SPEC, PAYKIT_PROTOCOL_V0, ATOMICITY_INTEGRATION) — which are candidates for upstreaming as patches, not merges. The Atomicity v1.1 specification treats the official library as the normative settlement transport and this fork as **Proposed upstream** for the features listed above (see `atomicity-research/ATOMICITY_MESSAGING_PROFILE_PUBKY.md`).
+
 > **A flexible, decentralized payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).**
 
 Paykit enables seamless payment discovery, negotiation, and coordination through public directories and private encrypted channels. It provides a unified interface for managing payments across different methods while maintaining privacy and cryptographic security.

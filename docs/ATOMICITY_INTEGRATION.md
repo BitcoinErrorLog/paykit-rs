@@ -2,7 +2,7 @@
 
 > **Version**: 1.0  
 > **Last Updated**: January 20, 2026  
-> **Status**: Implementation Guide
+> **Status**: ⚠️ **PENDING UPSTREAM WORK — fork-only, OPTIONAL for Atomicity.** The `paykit_lib::atomicity` module documented here exists only in this BitcoinErrorLog fork, not in the official [`pubky/paykit-rs`](https://github.com/pubky/paykit-rs). Atomicity v1.1 does not require it: settlement maps onto official Payment Requests/Proofs/Receipts per `atomicity-research/ATOMICITY_MESSAGING_PROFILE_PUBKY.md` Section 6.2. This guide is retained as the upstream proposal for a typed settlement adapter.
 
 This document describes how Paykit serves as the settlement layer for the Atomicity decentralized credit protocol.
 

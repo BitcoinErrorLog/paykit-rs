@@ -4,7 +4,15 @@
 
 > ⚠️ **WIP - NOT FOR PRODUCTION** ⚠️
 
-> **Relationship to the official library** (recorded June 2026): the official [`pubky/paykit-rs`](https://github.com/pubky/paykit-rs) (0.1.0-rc12) is an independent rewrite with **no shared git history** with this repository (290 commits here vs 218 there, no merge-base), so merging upstream is not possible. Decision: this fork is maintained **in parallel**. It carries features the official library lacks — the `paykit_lib::atomicity` settlement module, ContextId pair routing, owner-bound AAD, ACK helpers, and `docs/` (SEALED_BLOB_SPEC, PAYKIT_PROTOCOL_V0, ATOMICITY_INTEGRATION) — which are candidates for upstreaming as patches, not merges. The Atomicity v1.1 specification treats the official library as the normative settlement transport and this fork as **Proposed upstream** for the features listed above (see `atomicity-research/ATOMICITY_MESSAGING_PROFILE_PUBKY.md`).
+> **Relationship to the official library** (recorded June 2026): the official [`pubky/paykit-rs`](https://github.com/pubky/paykit-rs) (0.1.0-rc12) is an independent rewrite with **no shared git history** with this repository (290 commits here vs 218 there, no merge-base), so merging upstream is not possible. Decision: this fork is maintained **in parallel**. The Atomicity v1.1 specification treats the official library as the normative settlement transport and this fork as **Proposed upstream** for the features below (see `atomicity-research/ATOMICITY_MESSAGING_PROFILE_PUBKY.md`, "Upstream Work Items").
+>
+> **Fork-only features — all PENDING upstream work, none shipped in the official library, all OPTIONAL for Atomicity:**
+>
+> - [ ] `paykit_lib::atomicity` settlement adapter (`SettlementRequest`/`SettlementProof`/`SettlementExecutor`) — Atomicity works without it via official Payment Requests/Proofs/Receipts
+> - [ ] ContextId symmetric pair routing
+> - [ ] Owner-bound AAD migration
+> - [ ] ACK helpers (`ack_path`/`ack_aad`)
+> - [ ] `docs/` protocol documents (SEALED_BLOB_SPEC, PAYKIT_PROTOCOL_V0, ATOMICITY_INTEGRATION) — superseded for Atomicity purposes by the v1.1 spec set; retained as upstream proposal material
 
 > **A flexible, decentralized payment protocol built on Pubky for discovering and coordinating payments across multiple methods (Bitcoin onchain, Lightning, and more).**
 

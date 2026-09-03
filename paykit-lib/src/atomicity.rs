@@ -155,7 +155,7 @@ impl SettlementRequest {
     pub fn compute_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(self.iou_id.as_bytes());
-        hasher.update(&self.amount_sats.to_le_bytes());
+        hasher.update(self.amount_sats.to_le_bytes());
         hasher.update(self.payment_details.as_bytes());
         hasher.update(&self.nonce);
         let result = hasher.finalize();
@@ -229,8 +229,7 @@ impl SettlementProof {
         preimage_hex: impl Into<String>,
     ) -> Self {
         let preimage = preimage_hex.into();
-        let preimage_bytes =
-            hex::decode(&preimage).unwrap_or_default();
+        let preimage_bytes = hex::decode(&preimage).unwrap_or_default();
         let payment_hash = Sha256::digest(&preimage_bytes);
 
         Self {
@@ -282,12 +281,11 @@ impl SettlementProof {
                         reason: format!("Invalid hex: {}", e),
                     })?;
                 let computed = Sha256::digest(&preimage_bytes);
-                let expected = hex::decode(payment_hash).map_err(|e| {
-                    crate::PaykitError::InvalidData {
+                let expected =
+                    hex::decode(payment_hash).map_err(|e| crate::PaykitError::InvalidData {
                         field: "payment_hash".into(),
                         reason: format!("Invalid hex: {}", e),
-                    }
-                })?;
+                    })?;
                 Ok(computed.as_slice() == expected.as_slice())
             }
             SettlementProofData::Onchain { txid, .. } => {
@@ -363,7 +361,8 @@ pub trait SettlementExecutor: Send + Sync {
 #[cfg(feature = "lnd")]
 pub struct LndSettlementAdapter<E> {
     inner: E,
-    pending_settlements: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, SettlementRequest>>>,
+    pending_settlements:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, SettlementRequest>>>,
 }
 
 #[cfg(feature = "lnd")]
@@ -468,9 +467,10 @@ impl Default for InMemoryNonceStorage {
 
 impl SettlementNonceStorage for InMemoryNonceStorage {
     fn check_and_mark(&self, nonce: &[u8; 32], expires_at: u64) -> Result<bool> {
-        let mut storage = self.used.lock().map_err(|_| {
-            crate::PaykitError::Internal("Failed to lock nonce storage".into())
-        })?;
+        let mut storage = self
+            .used
+            .lock()
+            .map_err(|_| crate::PaykitError::Internal("Failed to lock nonce storage".into()))?;
 
         if storage.contains_key(nonce) {
             return Ok(false);
@@ -481,16 +481,18 @@ impl SettlementNonceStorage for InMemoryNonceStorage {
     }
 
     fn is_used(&self, nonce: &[u8; 32]) -> Result<bool> {
-        let storage = self.used.lock().map_err(|_| {
-            crate::PaykitError::Internal("Failed to lock nonce storage".into())
-        })?;
+        let storage = self
+            .used
+            .lock()
+            .map_err(|_| crate::PaykitError::Internal("Failed to lock nonce storage".into()))?;
         Ok(storage.contains_key(nonce))
     }
 
     fn cleanup_expired(&self, before: u64) -> Result<()> {
-        let mut storage = self.used.lock().map_err(|_| {
-            crate::PaykitError::Internal("Failed to lock nonce storage".into())
-        })?;
+        let mut storage = self
+            .used
+            .lock()
+            .map_err(|_| crate::PaykitError::Internal("Failed to lock nonce storage".into()))?;
         storage.retain(|_, expires_at| *expires_at > before);
         Ok(())
     }
@@ -538,25 +540,16 @@ mod tests {
     #[test]
     fn settlement_request_expiry() {
         let now = current_unix_timestamp();
-        let request = SettlementRequest::new(
-            "iou-123",
-            1000,
-            "addr",
-            SettlementMethod::Onchain,
-        )
-        .with_expiry(now - 100); // Already expired
+        let request = SettlementRequest::new("iou-123", 1000, "addr", SettlementMethod::Onchain)
+            .with_expiry(now - 100); // Already expired
 
         assert!(request.is_expired());
     }
 
     #[test]
     fn settlement_request_hash_is_deterministic() {
-        let mut request = SettlementRequest::new(
-            "iou-123",
-            1000,
-            "lnbc...",
-            SettlementMethod::Lightning,
-        );
+        let mut request =
+            SettlementRequest::new("iou-123", 1000, "lnbc...", SettlementMethod::Lightning);
         request.nonce = "test_nonce".to_string();
 
         let hash1 = request.compute_hash();

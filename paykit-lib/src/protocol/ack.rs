@@ -112,6 +112,10 @@ impl std::fmt::Display for AckObjectType {
 
 impl AckObjectType {
     /// Convert from string.
+    ///
+    /// Kept as an inherent method (rather than `std::str::FromStr`) to avoid
+    /// breaking downstream callers; the name precedes the lint.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "request" => Some(AckObjectType::Request),
@@ -246,8 +250,8 @@ impl Default for AckRetryConfig {
 impl AckRetryConfig {
     /// Calculate the delay for a given attempt number (0-indexed).
     pub fn delay_for_attempt(&self, attempt: u32) -> u64 {
-        let delay = (self.initial_delay_secs as f64 * self.backoff_multiplier.powi(attempt as i32))
-            as u64;
+        let delay =
+            (self.initial_delay_secs as f64 * self.backoff_multiplier.powi(attempt as i32)) as u64;
         delay.min(self.max_delay_secs)
     }
 

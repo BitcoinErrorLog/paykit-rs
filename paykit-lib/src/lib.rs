@@ -41,6 +41,7 @@ pub mod executors;
 pub mod health;
 pub mod keys;
 pub mod methods;
+pub mod molt_adapters;
 pub mod prelude;
 pub mod private_endpoints;
 pub mod protocol;
@@ -59,7 +60,7 @@ pub mod uri;
 pub mod test_utils;
 
 pub use errors::{PaykitError, PaykitErrorCode};
-pub use transport::{HomeserverSessionStorage, HomeserverPublicStorageRead};
+pub use transport::{HomeserverPublicStorageRead, HomeserverSessionStorage};
 pub use uri::{parse_uri, PaykitUri};
 
 /// Pubky adapters are only exposed when the default `pubky` feature is enabled.

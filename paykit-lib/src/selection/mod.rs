@@ -42,4 +42,4 @@ mod preferences;
 mod selector;
 
 pub use preferences::{AmountThresholds, SelectionPreferences, SelectionStrategy};
-pub use selector::{PaymentMethodSelector, SelectionResult};
+pub use selector::{select_route, PaymentMethodSelector, SelectionResult};

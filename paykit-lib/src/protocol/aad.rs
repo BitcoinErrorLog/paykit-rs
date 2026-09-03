@@ -34,7 +34,9 @@
 //! 2. **Decrypt**: Support both binary AAD (SB2) and legacy string AAD (JSON envelopes)
 //! 3. **Detect format**: Check for SB2 magic bytes to determine which AAD format to use
 
-use super::paths::{ack_path, payment_request_path, secure_handoff_path, subscription_proposal_path};
+use super::paths::{
+    ack_path, payment_request_path, secure_handoff_path, subscription_proposal_path,
+};
 use crate::errors::PaykitError;
 use crate::Result;
 
@@ -264,9 +266,8 @@ pub fn build_binary_aad(
     header_bytes: &[u8],
 ) -> Vec<u8> {
     let path_bytes = canonical_path.as_bytes();
-    let mut aad = Vec::with_capacity(
-        BINARY_AAD_PREFIX.len() + 32 + path_bytes.len() + header_bytes.len()
-    );
+    let mut aad =
+        Vec::with_capacity(BINARY_AAD_PREFIX.len() + 32 + path_bytes.len() + header_bytes.len());
     aad.extend_from_slice(BINARY_AAD_PREFIX);
     aad.extend_from_slice(owner_peerid);
     aad.extend_from_slice(path_bytes);
@@ -287,10 +288,7 @@ pub fn build_binary_aad(
 /// # Returns
 ///
 /// Binary AAD bytes without the header component.
-pub fn build_binary_aad_prefix(
-    owner_peerid: &[u8; 32],
-    canonical_path: &str,
-) -> Vec<u8> {
+pub fn build_binary_aad_prefix(owner_peerid: &[u8; 32], canonical_path: &str) -> Vec<u8> {
     let path_bytes = canonical_path.as_bytes();
     let mut aad = Vec::with_capacity(BINARY_AAD_PREFIX.len() + 32 + path_bytes.len());
     aad.extend_from_slice(BINARY_AAD_PREFIX);
@@ -371,8 +369,7 @@ mod tests {
     #[test]
     fn payment_request_aad_format() {
         let aad =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         assert!(aad.starts_with("paykit:v0:request:"));
         assert!(aad.contains(SENDER_PUBKEY));
         assert!(aad.contains("/pub/paykit.app/v0/requests/"));
@@ -381,13 +378,9 @@ mod tests {
 
     #[test]
     fn subscription_proposal_aad_format() {
-        let aad = subscription_proposal_aad(
-            SENDER_PUBKEY,
-            SENDER_PUBKEY,
-            RECIPIENT_PUBKEY,
-            "prop-456",
-        )
-        .unwrap();
+        let aad =
+            subscription_proposal_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "prop-456")
+                .unwrap();
         assert!(aad.starts_with("paykit:v0:subscription_proposal:"));
         assert!(aad.contains(SENDER_PUBKEY));
         assert!(aad.contains("/pub/paykit.app/v0/subscriptions/proposals/"));
@@ -405,9 +398,14 @@ mod tests {
 
     #[test]
     fn ack_aad_format() {
-        let aad =
-            ack_aad("request", RECIPIENT_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req_001")
-                .unwrap();
+        let aad = ack_aad(
+            "request",
+            RECIPIENT_PUBKEY,
+            SENDER_PUBKEY,
+            RECIPIENT_PUBKEY,
+            "req_001",
+        )
+        .unwrap();
         assert!(aad.starts_with("paykit:v0:ack_request:"));
         assert!(aad.contains(RECIPIENT_PUBKEY));
         assert!(aad.contains("/pub/paykit.app/v0/acks/request/"));
@@ -423,30 +421,25 @@ mod tests {
     #[test]
     fn aad_is_deterministic() {
         let aad1 =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         let aad2 =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         assert_eq!(aad1, aad2);
     }
 
     #[test]
     fn aad_differs_for_different_ids() {
         let aad1 =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         let aad2 =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-456")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-456").unwrap();
         assert_ne!(aad1, aad2);
     }
 
     #[test]
     fn aad_differs_for_different_owners() {
         let aad1 =
-            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
-                .unwrap();
+            payment_request_aad(SENDER_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123").unwrap();
         let aad2 =
             payment_request_aad(RECIPIENT_PUBKEY, SENDER_PUBKEY, RECIPIENT_PUBKEY, "req-123")
                 .unwrap();
@@ -588,8 +581,8 @@ mod tests {
 
             // Both should succeed or both should fail consistently
             assert_eq!(result1.is_ok(), result2.is_ok());
-            if result1.is_ok() {
-                assert_eq!(result1.unwrap(), result2.unwrap());
+            if let Ok(bytes1) = result1 {
+                assert_eq!(bytes1, result2.expect("consistent with first call"));
             }
         }
 

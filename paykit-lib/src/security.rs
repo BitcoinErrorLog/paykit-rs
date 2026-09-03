@@ -205,10 +205,7 @@ impl NoiseHandshakeRateLimiter {
     /// Create a new handshake rate limiter with default settings (10/min).
     pub fn new() -> Self {
         Self {
-            inner: RateLimiter::new(
-                DEFAULT_MAX_HANDSHAKES_PER_MINUTE,
-                Duration::from_secs(60),
-            ),
+            inner: RateLimiter::new(DEFAULT_MAX_HANDSHAKES_PER_MINUTE, Duration::from_secs(60)),
         }
     }
 

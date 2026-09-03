@@ -380,6 +380,51 @@ impl PaymentMethodSelector {
     }
 }
 
+/// Plan and score Molt routes from `from` to `to` over `adapters` (plan v11,
+/// S9).
+///
+/// This is a **thin delegation** into `pubky-molt`: the bounded planner runs
+/// with an empty [`pubky_molt::route::ConstraintEvaluators`] registry (every
+/// v1 adapter declares no route constraints) and each planned route is scored
+/// with Paykit's own [`pubky_molt::score::SingleAsset`] cost policy
+/// (`BTC`/`sat`). Routes the scorer rejects — segment violations, cost-policy
+/// rejections, inconsistent bookkeeping — are ineligible rather than badly
+/// ranked, so they are omitted from the result (the planner's
+/// [`pubky_molt::planner::PlanResult::rejected`] already records partial
+/// routes for diagnostics). Results are sorted by ascending
+/// [`pubky_molt::score::RouteScore::total`] under `weights`. No routing logic
+/// lives in Paykit.
+pub fn select_route(
+    from: &pubky_molt::route::RouteState,
+    to: &pubky_molt::route::RouteState,
+    adapters: &[&dyn pubky_molt::route::Adapter],
+    weights: &pubky_molt::score::Weights,
+    registry: &pubky_molt::witness::DomainRegistry,
+    assumptions: &pubky_molt::witness::Assumptions,
+) -> Vec<(pubky_molt::route::Route, pubky_molt::score::RouteScore)> {
+    use pubky_molt::planner::{plan, PlanResult, PlannerLimits};
+    use pubky_molt::route::ConstraintEvaluators;
+    use pubky_molt::score::{score, SingleAsset};
+
+    let evals = ConstraintEvaluators::new();
+    let PlanResult { routes, .. } = plan(from, to, adapters, &evals, &PlannerLimits::default());
+    let policy = SingleAsset::new("BTC", "sat");
+    let mut scored: Vec<(pubky_molt::route::Route, pubky_molt::score::RouteScore)> = routes
+        .into_iter()
+        .filter_map(|route| {
+            score(&route, adapters, registry, assumptions, weights, &policy)
+                .ok()
+                .map(|s| (route, s))
+        })
+        .collect();
+    scored.sort_by(|a, b| {
+        a.1.total(weights)
+            .partial_cmp(&b.1.total(weights))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    scored
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +544,122 @@ mod tests {
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].0, "lightning");
         assert_eq!(all[1].0, "onchain");
+    }
+
+    mod molt_routes {
+        use crate::methods::OnchainPlugin;
+        use crate::molt_adapters::{
+            drop_adapter::{DropTransportAdapter, DROP_TRANSPORT_ADAPTER_ID},
+            intro_adapter::{IntroAdapter, INTRO_SESSION_ADAPTER_ID},
+            payment_bridge::PaymentPluginBridge,
+        };
+        use crate::selection::select_route;
+        use pubky_molt::route::{Adapter, Holder, IdentityScope, RouteState};
+        use pubky_molt::score;
+        use pubky_molt::witness::{Assumptions, DomainRegistry};
+        use std::sync::Arc;
+
+        fn three_adapters() -> (IntroAdapter, DropTransportAdapter, PaymentPluginBridge) {
+            (
+                IntroAdapter::session(),
+                DropTransportAdapter::new(),
+                PaymentPluginBridge::new(Arc::new(OnchainPlugin::new())),
+            )
+        }
+
+        fn identity(scope: IdentityScope) -> RouteState {
+            RouteState::Identity {
+                scope,
+                holder: Holder::Self_,
+            }
+        }
+
+        #[test]
+        fn select_route_plans_identity_root_to_pairwise() {
+            let (intro, drop, bridge) = three_adapters();
+            let adapters: Vec<&dyn Adapter> = vec![&intro, &drop, &bridge];
+            let routes = select_route(
+                &identity(IdentityScope::Root),
+                &identity(IdentityScope::Pairwise),
+                &adapters,
+                &score::PRIVATE,
+                &DomainRegistry::new(),
+                &Assumptions::default(),
+            );
+            assert_eq!(routes.len(), 1);
+            assert_eq!(routes[0].0.hops, vec![INTRO_SESSION_ADAPTER_ID]);
+            assert_eq!(routes[0].0.states.len(), 2);
+        }
+
+        #[test]
+        fn select_route_plans_pubky_storage_to_drop_transport() {
+            let (intro, drop, bridge) = three_adapters();
+            let adapters: Vec<&dyn Adapter> = vec![&intro, &drop, &bridge];
+            let routes = select_route(
+                &DropTransportAdapter::accepts_state(),
+                &DropTransportAdapter::produces_state(),
+                &adapters,
+                &score::PRIVATE,
+                &DomainRegistry::new(),
+                &Assumptions::default(),
+            );
+            assert_eq!(routes.len(), 1);
+            assert_eq!(routes[0].0.hops, vec![DROP_TRANSPORT_ADAPTER_ID]);
+        }
+
+        #[test]
+        fn select_route_returns_empty_when_no_route_exists() {
+            let (intro, drop, bridge) = three_adapters();
+            let adapters: Vec<&dyn Adapter> = vec![&intro, &drop, &bridge];
+            // No adapter leads to a Session-scoped identity.
+            let routes = select_route(
+                &identity(IdentityScope::Root),
+                &identity(IdentityScope::Session),
+                &adapters,
+                &score::PRIVATE,
+                &DomainRegistry::new(),
+                &Assumptions::default(),
+            );
+            assert!(routes.is_empty());
+            // No adapters at all: trivially unplannable.
+            let routes = select_route(
+                &identity(IdentityScope::Root),
+                &identity(IdentityScope::Pairwise),
+                &[],
+                &score::PRIVATE,
+                &DomainRegistry::new(),
+                &Assumptions::default(),
+            );
+            assert!(routes.is_empty());
+        }
+
+        #[test]
+        fn select_route_plans_value_self_to_counterparty_via_bridge() {
+            let (_, _, bridge) = three_adapters();
+            let adapters: Vec<&dyn Adapter> = vec![&bridge];
+            let from = RouteState::Value {
+                network: "bitcoin".into(),
+                amount: None,
+                holder: Holder::Self_,
+            };
+            let to = RouteState::Value {
+                network: "bitcoin".into(),
+                amount: None,
+                holder: Holder::Counterparty,
+            };
+            let routes = select_route(
+                &from,
+                &to,
+                &adapters,
+                &score::PRIVATE,
+                &DomainRegistry::new(),
+                &Assumptions::default(),
+            );
+            assert_eq!(routes.len(), 1);
+            assert_eq!(routes[0].0.hops.len(), 1);
+            // The score is computable under the SingleAsset(BTC, sat) policy
+            // (the v1 adapters quote no costs, so it reduces to zero).
+            assert_eq!(routes[0].1.reduced_cost, 0.0);
+        }
     }
 }

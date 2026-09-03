@@ -530,8 +530,7 @@ mod tests {
         let pubkey = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy";
         let ctx = pair_context_id(pubkey, pubkey).unwrap();
         assert_eq!(
-            ctx,
-            "9d88e67d72ad84aff9c61bd356da55c802febcfd2f86c9ca239a1a9d6e8db576",
+            ctx, "9d88e67d72ad84aff9c61bd356da55c802febcfd2f86c9ca239a1a9d6e8db576",
             "ContextId vector 1 mismatch"
         );
     }
@@ -544,8 +543,7 @@ mod tests {
         let pubkey_b = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
         let ctx = pair_context_id(pubkey_a, pubkey_b).unwrap();
         assert_eq!(
-            ctx,
-            "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+            ctx, "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
             "ContextId vector 2 mismatch"
         );
 
@@ -562,8 +560,7 @@ mod tests {
         let pubkey_b = "pubky://8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
         let ctx = pair_context_id(pubkey_a, pubkey_b).unwrap();
         assert_eq!(
-            ctx,
-            "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
+            ctx, "762732a6bd789d03abd23de709ab0990593217566d098381d50fac87f0c58c74",
             "ContextId vector 3 mismatch (should match vector 2 after normalization)"
         );
     }
@@ -575,8 +572,7 @@ mod tests {
         let pubkey = "ybndrfg8ejkmcpqxot1uwisza345h769ybndrfg8ejkmcpqxot1u";
         let scope = recipient_scope(pubkey).unwrap();
         assert_eq!(
-            scope,
-            "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80",
+            scope, "55340b54f918470e1f025a80bb3347934fad3f57189eef303d620e65468cde80",
             "Legacy scope vector 1 mismatch"
         );
     }
@@ -588,8 +584,7 @@ mod tests {
         let pubkey = "8pinxxgqs41n4aididenw5apqp1urfmzdztr8jt4abrkdn435ewo";
         let scope = recipient_scope(pubkey).unwrap();
         assert_eq!(
-            scope,
-            "04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12",
+            scope, "04dc3323da61313c6f5404cf7921af2432ef867afe6cc4c32553858b8ac07f12",
             "Legacy scope vector 2 mismatch"
         );
     }

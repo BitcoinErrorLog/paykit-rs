@@ -36,8 +36,8 @@ impl DemoPaymentPlugin {
 
     /// Validate a demo URI.
     fn validate_demo_uri(&self, uri: &str) -> ValidationResult {
-        if uri.starts_with("demo://") {
-            let path = &uri[7..]; // Strip "demo://"
+        if let Some(path) = uri.strip_prefix("demo://") {
+            // Strip "demo://"
             if path.is_empty() {
                 ValidationResult::invalid(vec!["Demo URI path is empty".to_string()])
             } else if path.contains(' ') {

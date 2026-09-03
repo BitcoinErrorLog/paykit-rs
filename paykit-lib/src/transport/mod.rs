@@ -3,7 +3,7 @@ pub mod traits;
 #[cfg(feature = "pubky")]
 pub mod pubky;
 
-pub use traits::{HomeserverSessionStorage, HomeserverPublicStorageRead};
+pub use traits::{HomeserverPublicStorageRead, HomeserverSessionStorage};
 
 #[cfg(feature = "pubky")]
 pub use self::pubky::{

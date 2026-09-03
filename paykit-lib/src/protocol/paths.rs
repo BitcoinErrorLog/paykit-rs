@@ -101,10 +101,7 @@ pub fn payment_request_path(
 ///
 /// The directory path (with trailing slash for listing).
 #[allow(deprecated)]
-pub fn payment_requests_dir(
-    sender_pubkey_z32: &str,
-    recipient_pubkey_z32: &str,
-) -> Result<String> {
+pub fn payment_requests_dir(sender_pubkey_z32: &str, recipient_pubkey_z32: &str) -> Result<String> {
     let ctx_id = context_id(sender_pubkey_z32, recipient_pubkey_z32)?;
     Ok(format!(
         "{}/{}/{}/",
@@ -297,7 +294,10 @@ pub fn payment_request_path_with_context_id(context_id_hex: &str, request_id: &s
 ///
 /// Used when polling a contact's storage to discover pending requests.
 pub fn payment_requests_dir_with_context_id(context_id_hex: &str) -> String {
-    format!("{}/{}/{}/", PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, context_id_hex)
+    format!(
+        "{}/{}/{}/",
+        PAYKIT_V0_PREFIX, REQUESTS_SUBPATH, context_id_hex
+    )
 }
 
 /// Build the storage path for a subscription proposal using a random ContextId.
@@ -326,11 +326,7 @@ pub fn subscription_proposals_dir_with_context_id(context_id_hex: &str) -> Strin
 /// Build the storage path for an ACK using a random ContextId.
 ///
 /// Path format: `/pub/paykit.app/v0/acks/{object_type}/{context_id_hex}/{msg_id}`
-pub fn ack_path_with_context_id(
-    object_type: &str,
-    context_id_hex: &str,
-    msg_id: &str,
-) -> String {
+pub fn ack_path_with_context_id(object_type: &str, context_id_hex: &str, msg_id: &str) -> String {
     format!(
         "{}/{}/{}/{}/{}",
         PAYKIT_V0_PREFIX, ACKS_SUBPATH, object_type, context_id_hex, msg_id
@@ -374,8 +370,7 @@ mod tests {
 
     #[test]
     fn subscription_proposal_path_format() {
-        let path =
-            subscription_proposal_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "prop-456").unwrap();
+        let path = subscription_proposal_path(SENDER_PUBKEY, RECIPIENT_PUBKEY, "prop-456").unwrap();
         assert!(path.starts_with("/pub/paykit.app/v0/subscriptions/proposals/"));
         assert!(path.ends_with("/prop-456"));
         let parts: Vec<&str> = path.split('/').collect();

@@ -19,10 +19,10 @@
 #[cfg(feature = "pubky_compliance_tests")]
 mod pubky_tests {
     use paykit_lib::{
-        HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
-        PubkyUnauthenticatedTransport, PublicKey, SupportedPayments, HomeserverPublicStorageRead,
+        EndpointData, HomeserverPublicStorageRead, HomeserverSessionStorage, MethodId,
+        PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport,
     };
-    use pubky::PublicStorage;
+
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
     use std::time::Duration;
     use tokio::time::timeout;
@@ -186,7 +186,7 @@ mod pubky_tests {
         // since that method may not exist in the current PubkySession API
 
         // Test: from() trait implementation
-        let auth_transport2: PubkyHomeserverSessionStorage = session.clone().into();
+        let _auth_transport2: PubkyHomeserverSessionStorage = session.clone().into();
         // Both transports should work identically
 
         // Test: Upsert and remove operations

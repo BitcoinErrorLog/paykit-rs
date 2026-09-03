@@ -101,7 +101,7 @@ impl MerchantServer {
         let request = PaymentRequest::new(
             self.merchant_key.clone(),
             customer,
-            product.price.clone(),
+            product.price,
             product.currency.clone(),
             method_id,
         )

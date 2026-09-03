@@ -124,7 +124,10 @@ impl RootKeySigner {
     /// * `secret_key` - 32-byte Ed25519 secret key (seed)
     /// * `public_key` - 32-byte Ed25519 public key
     pub fn new(secret_key: [u8; 32], public_key: [u8; 32]) -> Self {
-        Self { secret_key, public_key }
+        Self {
+            secret_key,
+            public_key,
+        }
     }
 }
 
@@ -139,8 +142,7 @@ impl Sb2Signer for RootKeySigner {
     }
 
     fn sign_sig_input(&self, sig_input: &[u8]) -> std::result::Result<[u8; 64], String> {
-        pubky_crypto::ed25519_sign(&self.secret_key, sig_input)
-            .map_err(|e| e.to_string())
+        pubky_crypto::ed25519_sign(&self.secret_key, sig_input).map_err(|e| e.to_string())
     }
 }
 
@@ -187,8 +189,7 @@ impl Sb2Signer for AppKeySigner {
     }
 
     fn sign_sig_input(&self, sig_input: &[u8]) -> std::result::Result<[u8; 64], String> {
-        pubky_crypto::ed25519_sign(&self.app_secret_key, sig_input)
-            .map_err(|e| e.to_string())
+        pubky_crypto::ed25519_sign(&self.app_secret_key, sig_input).map_err(|e| e.to_string())
     }
 }
 
@@ -300,10 +301,12 @@ pub fn sb2_encrypt_signed(
     let sig_input = sb2_compute_sig_input(&aad, &header_no_sig, &sb2.ciphertext);
 
     // Sign and set signature
-    let sig = signer.sign_sig_input(&sig_input).map_err(|e| PaykitError::Crypto {
-        operation: "sb2_encrypt_signed".into(),
-        details: format!("Signing failed: {}", e),
-    })?;
+    let sig = signer
+        .sign_sig_input(&sig_input)
+        .map_err(|e| PaykitError::Crypto {
+            operation: "sb2_encrypt_signed".into(),
+            details: format!("Signing failed: {}", e),
+        })?;
     sb2.header.sig = Some(sig);
 
     Ok(sb2.encode())
@@ -360,20 +363,15 @@ pub fn sb2_encrypt(plaintext: &[u8], params: &Sb2EncryptParams) -> Result<Vec<u8
 }
 
 /// Signature verification options for SB2 decryption.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignatureRequirement {
     /// Signature is required. Fails if missing or invalid.
+    #[default]
     Required,
     /// Signature is optional. Verifies if present, allows missing.
     Optional,
     /// Skip signature verification entirely.
     Skip,
-}
-
-impl Default for SignatureRequirement {
-    fn default() -> Self {
-        Self::Required
-    }
 }
 
 /// Callback trait for fetching AppCert to verify delegated signatures.
@@ -446,7 +444,7 @@ pub fn sb2_decrypt_verified(
     cert_fetcher: Option<&dyn AppCertFetcher>,
 ) -> Result<(Vec<u8>, Sb2Metadata)> {
     use pubky_crypto::sealed_blob_v2::Sb2;
-    use pubky_crypto::{sb2_build_aad, sb2_compute_sig_input, ed25519_verify};
+    use pubky_crypto::{ed25519_verify, sb2_build_aad, sb2_compute_sig_input};
 
     if !is_sb2(data) {
         return Err(PaykitError::Crypto {
@@ -524,7 +522,8 @@ pub fn sb2_decrypt_verified(
         created_at: sb2.header.created_at,
         expires_at: sb2.header.expires_at,
         cert_id: sb2.header.cert_id,
-        signature_verified: sb2.header.sig.is_some() && sig_requirement != SignatureRequirement::Skip,
+        signature_verified: sb2.header.sig.is_some()
+            && sig_requirement != SignatureRequirement::Skip,
     };
 
     Ok((plaintext, metadata))
@@ -662,10 +661,12 @@ pub fn decrypt_any(
         })?;
 
         use pubky_crypto::sealed_blob::sealed_blob_decrypt;
-        let plaintext = sealed_blob_decrypt(recipient_inbox_sk, json_str, legacy_aad)
-            .map_err(|e| PaykitError::Crypto {
-                operation: "decrypt_any".into(),
-                details: format!("Legacy decryption failed: {}", e),
+        let plaintext =
+            sealed_blob_decrypt(recipient_inbox_sk, json_str, legacy_aad).map_err(|e| {
+                PaykitError::Crypto {
+                    operation: "decrypt_any".into(),
+                    details: format!("Legacy decryption failed: {}", e),
+                }
             })?;
 
         Ok((plaintext, None))
@@ -736,7 +737,8 @@ mod tests {
         let encrypted = sb2_encrypt(plaintext, &params).unwrap();
         assert!(is_sb2(&encrypted));
 
-        let (decrypted, metadata) = sb2_decrypt(&encrypted, &inbox_sk, &owner_peerid, path).unwrap();
+        let (decrypted, metadata) =
+            sb2_decrypt(&encrypted, &inbox_sk, &owner_peerid, path).unwrap();
         assert_eq!(decrypted, plaintext);
         assert_eq!(metadata.context_id, context_id);
         assert_eq!(metadata.msg_id, Some("req_001".to_string()));
@@ -748,8 +750,8 @@ mod tests {
     #[test]
     fn test_sb2_signed_roundtrip() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         // Generate keys
@@ -852,15 +854,18 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Signature required but missing"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Signature required but missing"));
     }
 
     #[cfg(feature = "pubky")]
     #[test]
     fn test_sb2_invalid_signature_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         // Generate keys
@@ -917,8 +922,8 @@ mod tests {
     #[test]
     fn test_sb2_signature_optional_with_valid_signature() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         let (inbox_sk, inbox_pk) = x25519_generate_keypair();
@@ -999,8 +1004,8 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_success() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         // Generate keys
@@ -1070,8 +1075,8 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_no_fetcher_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         // Generate keys
@@ -1130,8 +1135,8 @@ mod tests {
     #[test]
     fn test_sb2_delegated_signature_wrong_key_fails() {
         use super::super::scope::generate_context_id;
-        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use ed25519_dalek::SigningKey;
+        use pubky_crypto::sealed_blob::x25519_generate_keypair;
         use rand::RngCore;
 
         // Generate keys

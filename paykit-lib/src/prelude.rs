@@ -23,7 +23,7 @@ pub use crate::errors::{PaykitError, PaykitErrorCode};
 pub use crate::Result;
 
 // Transport traits
-pub use crate::transport::{HomeserverSessionStorage, HomeserverPublicStorageRead};
+pub use crate::transport::{HomeserverPublicStorageRead, HomeserverSessionStorage};
 
 // URI parsing
 pub use crate::uri::{parse_uri, PaykitUri};

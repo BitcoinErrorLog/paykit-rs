@@ -60,15 +60,11 @@
 
 // Re-export KeyBinding types from pubky-noise when the feature is enabled
 #[cfg(feature = "pubky")]
-pub use pubky_crypto::ukd::{
-    AppKeyEntry, InboxKeyEntry, KeyBinding, TransportKeyEntry,
-};
+pub use pubky_crypto::ukd::{AppKeyEntry, InboxKeyEntry, KeyBinding, TransportKeyEntry};
 
 // Re-export AppCert types for key delegation per PUBKY_UNIFIED_KEY_DELEGATION_SPEC v0.2
 #[cfg(feature = "pubky")]
-pub use pubky_crypto::ukd::{
-    AppCert, AppCertInput, CERT_ID_LEN as APP_CERT_ID_LEN,
-};
+pub use pubky_crypto::ukd::{AppCert, AppCertInput, CERT_ID_LEN as APP_CERT_ID_LEN};
 
 // Re-export AppCert functions
 #[cfg(feature = "pubky")]
@@ -133,7 +129,10 @@ impl InboxKey {
     ///
     /// This constructor accepts pre-computed secret and public keys.
     /// Use this when loading keys from storage.
-    pub fn from_keypair(secret: [u8; X25519_SECRET_KEY_LEN], public: [u8; X25519_PUBLIC_KEY_LEN]) -> Self {
+    pub fn from_keypair(
+        secret: [u8; X25519_SECRET_KEY_LEN],
+        public: [u8; X25519_PUBLIC_KEY_LEN],
+    ) -> Self {
         Self { secret, public }
     }
 
@@ -169,7 +168,7 @@ impl std::fmt::Debug for InboxKey {
         #[cfg(feature = "pubky")]
         {
             f.debug_struct("InboxKey")
-                .field("public", &hex::encode(&self.public))
+                .field("public", &hex::encode(self.public))
                 .field("inbox_kid", &hex::encode(self.inbox_kid()))
                 .finish_non_exhaustive()
         }
@@ -224,7 +223,10 @@ impl TransportKey {
     ///
     /// This constructor accepts pre-computed secret and public keys.
     /// Use this when loading keys from storage.
-    pub fn from_keypair(secret: [u8; X25519_SECRET_KEY_LEN], public: [u8; X25519_PUBLIC_KEY_LEN]) -> Self {
+    pub fn from_keypair(
+        secret: [u8; X25519_SECRET_KEY_LEN],
+        public: [u8; X25519_PUBLIC_KEY_LEN],
+    ) -> Self {
         Self { secret, public }
     }
 
@@ -242,7 +244,7 @@ impl TransportKey {
 impl std::fmt::Debug for TransportKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TransportKey")
-            .field("public", &hex::encode(&self.public))
+            .field("public", &hex::encode(self.public))
             .finish_non_exhaustive()
     }
 }
@@ -317,7 +319,10 @@ pub fn verify_inbox_kid(
 /// let encoded = binding.encode();
 /// ```
 #[cfg(feature = "pubky")]
-pub fn create_key_binding(inbox_keys: &[&InboxKey], transport_keys: &[&TransportKey]) -> KeyBinding {
+pub fn create_key_binding(
+    inbox_keys: &[&InboxKey],
+    transport_keys: &[&TransportKey],
+) -> KeyBinding {
     let mut binding = KeyBinding::new();
 
     for inbox_key in inbox_keys {
@@ -359,8 +364,13 @@ pub fn get_primary_transport_key(binding: &KeyBinding) -> Option<[u8; X25519_PUB
 ///
 /// For Sealed Blob encryption when inbox_kid is not specified.
 #[cfg(feature = "pubky")]
-pub fn get_primary_inbox_key(binding: &KeyBinding) -> Option<([u8; INBOX_KID_LEN], [u8; X25519_PUBLIC_KEY_LEN])> {
-    binding.inbox_keys.first().map(|e| (e.inbox_kid, e.x25519_pub))
+pub fn get_primary_inbox_key(
+    binding: &KeyBinding,
+) -> Option<([u8; INBOX_KID_LEN], [u8; X25519_PUBLIC_KEY_LEN])> {
+    binding
+        .inbox_keys
+        .first()
+        .map(|e| (e.inbox_kid, e.x25519_pub))
 }
 
 #[cfg(test)]
@@ -490,7 +500,10 @@ mod tests {
         assert_eq!(decoded.inbox_keys.len(), 1);
         assert_eq!(decoded.transport_keys.len(), 1);
         assert_eq!(decoded.inbox_keys[0].x25519_pub, *inbox.public_key());
-        assert_eq!(decoded.transport_keys[0].x25519_pub, *transport.public_key());
+        assert_eq!(
+            decoded.transport_keys[0].x25519_pub,
+            *transport.public_key()
+        );
     }
 
     #[cfg(feature = "pubky")]
@@ -527,13 +540,16 @@ mod tests {
             let mut seed = [0u8; 32];
             rand::thread_rng().fill_bytes(&mut seed);
             let signing_key = SigningKey::from_bytes(&seed);
-            (*signing_key.as_bytes(), *signing_key.verifying_key().as_bytes())
+            (
+                *signing_key.as_bytes(),
+                *signing_key.verifying_key().as_bytes(),
+            )
         }
 
         #[test]
         fn app_cert_issue_and_verify() {
             let (root_sk, root_pk) = generate_ed25519_keypair();
-            let (app_sk, app_pk) = generate_app_keypair();
+            let (_app_sk, app_pk) = generate_app_keypair();
             let transport = TransportKey::generate();
             let inbox = InboxKey::generate();
 
@@ -609,18 +625,20 @@ mod tests {
 
             // Sign typed content
             let content = b"payment receipt data";
-            let sig = sign_typed_content(
-                &app_sk,
+            let sig =
+                sign_typed_content(&app_sk, &root_pk, &cert.cert_id, "paykit.receipt", content)
+                    .expect("sign_typed_content should succeed");
+
+            // Verify
+            verify_typed_content(
+                &app_pk,
                 &root_pk,
                 &cert.cert_id,
                 "paykit.receipt",
                 content,
+                &sig,
             )
-            .expect("sign_typed_content should succeed");
-
-            // Verify
-            verify_typed_content(&app_pk, &root_pk, &cert.cert_id, "paykit.receipt", content, &sig)
-                .expect("verify_typed_content should succeed");
+            .expect("verify_typed_content should succeed");
         }
 
         #[test]
@@ -646,8 +664,9 @@ mod tests {
             let cert = issue_app_cert(&root_sk, &input).unwrap();
 
             let content = b"payment data";
-            let sig = sign_typed_content(&app_sk, &root_pk, &cert.cert_id, "paykit.receipt", content)
-                .unwrap();
+            let sig =
+                sign_typed_content(&app_sk, &root_pk, &cert.cert_id, "paykit.receipt", content)
+                    .unwrap();
 
             // Verify with wrong content_type should fail
             let result = verify_typed_content(
@@ -685,8 +704,9 @@ mod tests {
             let cert = issue_app_cert(&root_sk, &input).unwrap();
 
             let content = b"original data";
-            let sig = sign_typed_content(&app_sk, &root_pk, &cert.cert_id, "paykit.receipt", content)
-                .unwrap();
+            let sig =
+                sign_typed_content(&app_sk, &root_pk, &cert.cert_id, "paykit.receipt", content)
+                    .unwrap();
 
             // Verify with wrong payload should fail
             let result = verify_typed_content(
@@ -774,10 +794,13 @@ mod tests {
             let inbox_pk = [0x42u8; 32];
             let kid = compute_inbox_kid(&inbox_pk);
 
-            let hash = Sha256::digest(&inbox_pk);
+            let hash = Sha256::digest(inbox_pk);
             let expected: [u8; 16] = hash[..16].try_into().unwrap();
 
-            assert_eq!(kid, expected, "inbox_kid should be first 16 bytes of SHA256");
+            assert_eq!(
+                kid, expected,
+                "inbox_kid should be first 16 bytes of SHA256"
+            );
         }
     }
 }

@@ -35,6 +35,7 @@
 
 mod aad;
 mod ack;
+pub mod drop_transport;
 mod paths;
 mod sb2;
 mod scope;

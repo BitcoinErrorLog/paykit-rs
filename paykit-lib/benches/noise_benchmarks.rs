@@ -106,7 +106,7 @@ fn bench_noise_message_encrypt(c: &mut Criterion) {
 
     // Complete handshake
     let (c_hs, first_msg) = client_start_ik_direct(&client, &server_pk, None).unwrap();
-    let (s_hs, _, response) = server_accept_ik(&server, &first_msg).unwrap();
+    let (_s_hs, _, response) = server_accept_ik(&server, &first_msg).unwrap();
     let mut c_link = client_complete_ik(c_hs, &response).unwrap();
 
     // Prepare test messages

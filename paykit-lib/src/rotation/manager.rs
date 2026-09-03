@@ -10,7 +10,7 @@
 
 use super::policies::{EndpointTracker, RotationPolicy};
 use crate::methods::PaymentMethodRegistry;
-use crate::{HomeserverSessionStorage, EndpointData, MethodId, PaykitError, Result};
+use crate::{EndpointData, HomeserverSessionStorage, MethodId, PaykitError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

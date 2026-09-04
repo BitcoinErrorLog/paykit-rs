@@ -45,7 +45,8 @@
 //! - Senders should poll for ACKs with exponential backoff
 //! - If no ACK is received within the retry window, the message may be resent
 
-use crate::Result;
+use crate::protocol::drop_transport::{DropHttp, OutboundTransport, ProtocolMessageKind};
+use crate::{PaykitError, Result};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "pubky")]
@@ -364,6 +365,41 @@ pub fn decrypt_ack(
         cert_fetcher,
     )?;
     AckMessage::from_bytes(&plaintext)
+}
+
+/// Store an encrypted ACK (as produced by `encrypt_ack`) through an
+/// explicit outbound route (W2b).
+///
+/// - With [`OutboundTransport::Bonded`], the signed ACK bytes are sealed and
+///   sent over the counterparty's Drop channel with purpose
+///   `pubky.molt.paykit.v1` ([`ProtocolMessageKind::Ack`], declared
+///   `ExternallyAuthenticated` so the evidence inside the body stays
+///   independently verifiable). No `/pub/` path is touched, and a failed
+///   bonded send is returned as an error — it never falls back to the
+///   public outbox.
+/// - With [`OutboundTransport::PublicOutbox`], `public_write` performs the
+///   caller's existing public-outbox write
+///   (`/pub/paykit.app/v0/acks/{object_type}/{context_id}/{msg_id}`)
+///   unchanged.
+///
+/// # Errors
+///
+/// Bonded route: `E::from(PaykitError)` from the seal/send. Public route:
+/// whatever `public_write` returns.
+pub async fn store_encrypted_ack<H, F, Fut, E>(
+    encrypted_ack: &[u8],
+    outbound: &mut OutboundTransport<'_, H>,
+    public_write: F,
+) -> std::result::Result<(), E>
+where
+    H: DropHttp,
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<(), E>>,
+    E: From<PaykitError>,
+{
+    outbound
+        .deliver(ProtocolMessageKind::Ack, encrypted_ack, public_write)
+        .await
 }
 
 /// Pending ACK entry for tracking unacknowledged messages.

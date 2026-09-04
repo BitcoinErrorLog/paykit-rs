@@ -51,6 +51,37 @@
     matches the `BondSession`-derived id — the same assertion as before,
     made stronger. No product code changed.
 
+## W2b — bonded outbound dispatch (2026-09-04)
+
+22. **`OutboundTransport` is an enum with no shared transport inside.**
+    `PublicOutbox` and `Bonded { session, client }` carry no cross-variant
+    state, so a failed bonded send cannot "fall back" to the public outbox —
+    the bonded route holds no public transport at all (fail closed by
+    construction). The public variant also holds no transport: the two
+    existing outbox write interfaces in use (`HomeserverSessionStorage` in
+    `paykit-subscriptions::discovery`, `pubky::PubkySession` in
+    `paykit-subscriptions::manager`) are not unifiable without new
+    dependencies, so `OutboundTransport::deliver` invokes the caller's own
+    unchanged write path as a closure (`public_write`). This keeps the
+    public-outbox bytes byte-identical per call site instead of forcing a
+    single storage encoding the ecosystem does not currently have (requests/
+    proposals store text Sealed Blobs; ACKs are binary SB2). `deliver` is
+    generic over the caller's error type (`E: From<PaykitError>`) so
+    `anyhow`-based callers need no mapping glue.
+
+23. **ACK storage gets a named entry point, not a format.** `encrypt_ack`
+    previously had no in-repo storage caller (the public-outbox write lived
+    entirely downstream), so "route ACK storage" is realized as
+    `store_encrypted_ack(encrypted_ack, outbound, public_write)` in
+    `protocol/ack.rs` — a thin, fully tested dispatch through
+    `OutboundTransport::deliver` with `ProtocolMessageKind::Ack`
+    (`ExternallyAuthenticated`). No new public storage encoding is invented;
+    the caller's existing write path is used on the public route.
+
+24. **`DropHttp` is implemented for `Box<dyn DropHttp>`.** Lets
+    `paykit-subscriptions` store type-erased relay clients in its manager
+    registry without making `SubscriptionManager` generic.
+
 
 
 Ambiguities in `molt_v11.plan.md` section S9 resolved during implementation,

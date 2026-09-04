@@ -6,6 +6,9 @@ use crate::{
     SignedSubscription, Subscription, SubscriptionStorage,
 };
 use paykit_interactive::{PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage};
+use paykit_lib::protocol::drop_transport::{
+    send_protocol_message, BondSession, DropClient, DropHttp, ProtocolMessageKind,
+};
 use paykit_lib::protocol::{
     owner_peerid_bytes_from_z32, subscription_proposal_path, PURPOSE_SUBSCRIPTION_PROPOSAL,
 };
@@ -28,6 +31,13 @@ pub enum SubscriptionMessage {
     },
 }
 
+/// A registered bonded route to one peer (W2b): the Molt `BondSession` and
+/// the Drop relay client used to reach that peer's channels.
+struct BondedRoute {
+    session: BondSession,
+    client: DropClient<Box<dyn DropHttp>>,
+}
+
 pub struct SubscriptionManager {
     storage: Arc<Box<dyn SubscriptionStorage>>,
     interactive: Arc<PaykitInteractiveManager>,
@@ -37,6 +47,9 @@ pub struct SubscriptionManager {
     my_noise_sk: Option<[u8; 32]>,
     /// Cache of peer Noise public keys (pubkey -> noise_pk)
     noise_pk_cache: Arc<RwLock<HashMap<String, [u8; 32]>>>,
+    /// Bonded outbound routes per peer z32 (W2b). A peer present here gets
+    /// protocol traffic over the Drop channel instead of the public outbox.
+    bonded_outbounds: RwLock<HashMap<String, BondedRoute>>,
 }
 
 impl SubscriptionManager {
@@ -51,8 +64,9 @@ impl SubscriptionManager {
     /// # Security
     ///
     /// The `nonce_storage` MUST be persistent across app restarts to prevent replay attacks.
-    /// Use [`NonceStore`] only for testing; production apps should use [`FileNonceStorage`]
-    /// or a platform-specific implementation (SharedPreferences, UserDefaults, etc.).
+    /// Use [`NonceStore`](crate::NonceStore) only for testing; production apps should use
+    /// [`FileNonceStorage`](crate::FileNonceStorage) or a platform-specific
+    /// implementation (SharedPreferences, UserDefaults, etc.).
     pub fn new(
         storage: Arc<Box<dyn SubscriptionStorage>>,
         interactive: Arc<PaykitInteractiveManager>,
@@ -65,6 +79,7 @@ impl SubscriptionManager {
             nonce_storage,
             my_noise_sk: None,
             noise_pk_cache: Arc::new(RwLock::new(HashMap::new())),
+            bonded_outbounds: RwLock::new(HashMap::new()),
         }
     }
 
@@ -96,6 +111,44 @@ impl SubscriptionManager {
     /// Get the Noise secret key if configured
     pub fn noise_sk(&self) -> Option<&[u8; 32]> {
         self.my_noise_sk.as_ref()
+    }
+
+    /// Register a bonded outbound route for a peer (W2b).
+    ///
+    /// Once registered, protocol messages to `peer` (e.g. subscription
+    /// proposals) are delivered over the peer's Drop channel with purpose
+    /// `pubky.molt.paykit.v1` instead of the public homeserver outbox, and a
+    /// failed bonded send fails closed (no silent public fallback). The
+    /// caller owns session establishment and capability scope; `session`
+    /// must be the `BondSession` for this exact peer.
+    pub async fn add_bonded_outbound(
+        &self,
+        peer: &PublicKey,
+        session: BondSession,
+        client: DropClient<Box<dyn DropHttp>>,
+    ) {
+        self.bonded_outbounds
+            .write()
+            .await
+            .insert(peer.to_string(), BondedRoute { session, client });
+    }
+
+    /// Remove a previously registered bonded route; returns `true` if one
+    /// existed.
+    pub async fn remove_bonded_outbound(&self, peer: &PublicKey) -> bool {
+        self.bonded_outbounds
+            .write()
+            .await
+            .remove(&peer.to_string())
+            .is_some()
+    }
+
+    /// `true` when a bonded route is registered for `peer`.
+    pub async fn has_bonded_outbound(&self, peer: &PublicKey) -> bool {
+        self.bonded_outbounds
+            .read()
+            .await
+            .contains_key(&peer.to_string())
     }
 
     /// Validate payment request
@@ -234,8 +287,37 @@ impl SubscriptionManager {
         // and discovered via polling (see store_subscription_proposal below).
         channel.send(PaykitNoiseMessage::Ack).await?;
 
-        // Also store in Pubky for async discovery
-        if let Some(session) = &self.pubky_session {
+        // Deliver the proposal for async discovery: over the bonded Drop
+        // channel when a BondSession is registered for the subscriber (W2b),
+        // otherwise to the public homeserver outbox as before. Fail closed:
+        // a failed bonded send returns an error and never falls back to the
+        // public outbox.
+        let subscriber_z32 = subscription.subscriber.to_string();
+        let is_bonded = self
+            .bonded_outbounds
+            .read()
+            .await
+            .contains_key(&subscriber_z32);
+        if is_bonded {
+            let (_path, envelope) = self.seal_subscription_proposal(&subscription).await?;
+            let mut routes = self.bonded_outbounds.write().await;
+            let route = routes
+                .get_mut(&subscriber_z32)
+                .expect("presence checked above");
+            send_protocol_message(
+                &mut route.session,
+                ProtocolMessageKind::Proposal,
+                envelope.as_bytes(),
+                &route.client,
+            )
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to deliver bonded subscription proposal (no public fallback): {}",
+                    e
+                )
+            })?;
+        } else if let Some(session) = &self.pubky_session {
             self.store_subscription_proposal(session, &subscription)
                 .await?;
         }
@@ -479,11 +561,17 @@ impl SubscriptionManager {
     ///
     /// Proposals are stored at: `/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`
     /// where `context_id = hex(sha256("paykit:v0:context:" || sorted(provider_z32, subscriber_z32)))`.
-    async fn store_subscription_proposal(
+    /// Build the canonical path and encrypted blob for a subscription
+    /// proposal (shared by the public-outbox and bonded delivery paths).
+    ///
+    /// Returns `(path, envelope)`: the public-outbox path
+    /// (`/pub/paykit.app/v0/subscriptions/proposals/{context_id}/{proposal_id}`,
+    /// also the AAD's canonical path) and the Sealed Blob v2 encrypted to
+    /// the subscriber's Noise endpoint public key.
+    async fn seal_subscription_proposal(
         &self,
-        session: &pubky::PubkySession,
         subscription: &Subscription,
-    ) -> Result<()> {
+    ) -> Result<(String, String)> {
         // Build canonical path using context_id
         let provider_pubkey_z32 = subscription.provider.to_string();
         let subscriber_pubkey_z32 = subscription.subscriber.to_string();
@@ -513,6 +601,16 @@ impl SubscriptionManager {
             Some(PURPOSE_SUBSCRIPTION_PROPOSAL),
         )
         .map_err(|e| anyhow::anyhow!("Failed to encrypt subscription proposal: {}", e))?;
+
+        Ok((path, envelope))
+    }
+
+    async fn store_subscription_proposal(
+        &self,
+        session: &pubky::PubkySession,
+        subscription: &Subscription,
+    ) -> Result<()> {
+        let (path, envelope) = self.seal_subscription_proposal(subscription).await?;
 
         // Store encrypted envelope on provider storage
         session
@@ -792,7 +890,7 @@ impl SubscriptionManager {
     ///
     /// # Security
     ///
-    /// Uses [`SpendingGuard`] for panic-safe spending limit enforcement.
+    /// Uses [`SpendingGuard`](crate::SpendingGuard) for panic-safe spending limit enforcement.
     /// The guard automatically rolls back the reservation if:
     /// - The payment fails and we return early
     /// - A panic occurs during payment execution
@@ -943,10 +1041,17 @@ impl SubscriptionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{storage::FileSubscriptionStorage, Amount};
+    use crate::{storage::FileSubscriptionStorage, Amount, PaymentFrequency, SubscriptionTerms};
     use paykit_interactive::{PaykitInteractiveManager, PaykitStorage, ReceiptGenerator};
+    use paykit_lib::protocol::drop_transport::{receive_bonded, DropHttp};
     use paykit_lib::{MethodId, PublicKey};
+    use pubky_crypto::molt::{
+        derive_bond, derive_pair_secret, pair_public, Bond, BondRecord, PairPublic, PeerId,
+        PurposeId,
+    };
     use std::str::FromStr;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Mutex;
     use tempfile::tempdir;
 
     // Mock implementations
@@ -1128,5 +1233,340 @@ mod tests {
         // Test valid request
         request.expires_at = None;
         assert!(manager.validate_request(&request).is_ok());
+    }
+
+    // ============================================================
+    // W2b: bonded proposal delivery
+    // ============================================================
+
+    /// In-process mock of the S8 Drop relay (test-only).
+    /// One stored relay message: (cursor, timestamp, body).
+    type StoredMessage = (u64, u64, Vec<u8>);
+
+    struct StubDropRelay {
+        channels: Mutex<HashMap<String, Vec<StoredMessage>>>,
+        next_cursor: AtomicU64,
+        fail_writes: AtomicBool,
+    }
+
+    impl StubDropRelay {
+        fn new() -> Self {
+            StubDropRelay {
+                channels: Mutex::new(HashMap::new()),
+                next_cursor: AtomicU64::new(1),
+                fail_writes: AtomicBool::new(false),
+            }
+        }
+
+        fn channel_key(url: &str) -> paykit_lib::Result<String> {
+            let path =
+                url.split("/drop/")
+                    .nth(1)
+                    .ok_or_else(|| paykit_lib::PaykitError::InvalidData {
+                        field: "url".into(),
+                        reason: "missing /drop/ prefix".into(),
+                    })?;
+            let channel = path.split(['?', '/']).next().unwrap_or("");
+            use base64::Engine;
+            let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(channel)
+                .map_err(|_| paykit_lib::PaykitError::InvalidData {
+                    field: "channel".into(),
+                    reason: "invalid base64url".into(),
+                })?;
+            if decoded.len() != 32 {
+                return Err(paykit_lib::PaykitError::InvalidData {
+                    field: "channel".into(),
+                    reason: "must decode to 32 bytes".into(),
+                });
+            }
+            Ok(channel.to_string())
+        }
+
+        fn message_count(&self) -> usize {
+            self.channels
+                .lock()
+                .expect("lock")
+                .values()
+                .map(Vec::len)
+                .sum()
+        }
+    }
+
+    /// Local `Arc` wrapper so `DropHttp` can be implemented (orphan rule).
+    #[derive(Clone)]
+    struct SharedRelay(Arc<StubDropRelay>);
+
+    #[async_trait::async_trait]
+    impl DropHttp for SharedRelay {
+        async fn http_put(&self, url: &str, body: Vec<u8>) -> paykit_lib::Result<u64> {
+            if self.0.fail_writes.load(Ordering::SeqCst) {
+                return Err(paykit_lib::PaykitError::Transport(
+                    "relay write failure".into(),
+                ));
+            }
+            let key = StubDropRelay::channel_key(url)?;
+            let cursor = self.0.next_cursor.fetch_add(1, Ordering::SeqCst);
+            self.0
+                .channels
+                .lock()
+                .expect("lock")
+                .entry(key)
+                .or_default()
+                .push((cursor, 1_700_000_000, body));
+            Ok(cursor)
+        }
+
+        async fn http_get(
+            &self,
+            url: &str,
+            _max_response_bytes: usize,
+        ) -> paykit_lib::Result<Vec<u8>> {
+            let key = StubDropRelay::channel_key(url)?;
+            let messages = self
+                .0
+                .channels
+                .lock()
+                .expect("lock")
+                .get(&key)
+                .cloned()
+                .unwrap_or_default();
+            let items: Vec<serde_cbor::Value> = messages
+                .into_iter()
+                .map(|(cursor, ts, body)| {
+                    serde_cbor::Value::Map(
+                        [
+                            (
+                                serde_cbor::Value::Integer(0.into()),
+                                serde_cbor::Value::Integer(cursor as i128),
+                            ),
+                            (
+                                serde_cbor::Value::Integer(1.into()),
+                                serde_cbor::Value::Integer(ts as i128),
+                            ),
+                            (
+                                serde_cbor::Value::Integer(2.into()),
+                                serde_cbor::Value::Bytes(body),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )
+                })
+                .collect();
+            serde_cbor::to_vec(&serde_cbor::Value::Array(items))
+                .map_err(|e| paykit_lib::PaykitError::Serialization(e.to_string()))
+        }
+
+        async fn http_delete(&self, url: &str) -> paykit_lib::Result<()> {
+            let key = StubDropRelay::channel_key(url)?;
+            let cursor_str = url.rsplit('/').next().unwrap_or("");
+            let cursor: u64 =
+                cursor_str
+                    .parse()
+                    .map_err(|_| paykit_lib::PaykitError::InvalidData {
+                        field: "cursor".into(),
+                        reason: "must be an unsigned integer".into(),
+                    })?;
+            let mut channels = self.0.channels.lock().expect("lock");
+            if let Some(messages) = channels.get_mut(&key) {
+                messages.retain(|(c, _, _)| *c != cursor);
+            }
+            Ok(())
+        }
+    }
+
+    fn bonded_pair() -> (PeerId, PeerId, BondSession, BondSession) {
+        let provider = PeerId([0x01; 32]);
+        let subscriber = PeerId([0x02; 32]);
+        let sk_p = derive_pair_secret(&[0x11; 32], &subscriber);
+        let sk_s = derive_pair_secret(&[0x22; 32], &provider);
+        let pk_p = pair_public(&sk_p);
+        let pk_s = pair_public(&sk_s);
+        let bond_p: Bond = derive_bond(&provider, &sk_p, &subscriber, &pk_s).expect("bond");
+        let bond_s: Bond = derive_bond(&subscriber, &sk_s, &provider, &pk_p).expect("bond");
+        let record = |peer: PeerId, pair_pk_peer: PairPublic| BondRecord {
+            peer,
+            pair_pk_peer,
+            epoch_secs: 86_400,
+            relays: vec!["http://relay.test".into()],
+        };
+        (
+            provider,
+            subscriber,
+            BondSession::new(&provider, subscriber, bond_p, record(subscriber, pk_s)),
+            BondSession::new(&subscriber, provider, bond_s, record(provider, pk_p)),
+        )
+    }
+
+    fn test_subscription(subscriber: &PublicKey, provider: &PublicKey) -> Subscription {
+        Subscription::new(
+            subscriber.clone(),
+            provider.clone(),
+            SubscriptionTerms::new(
+                Amount::from_sats(1000),
+                "SAT".to_string(),
+                PaymentFrequency::Monthly { day_of_month: 1 },
+                MethodId("lightning".to_string()),
+                "test subscription".to_string(),
+            ),
+        )
+    }
+
+    fn test_manager(
+        temp_dir: &tempfile::TempDir,
+    ) -> (SubscriptionManager, Arc<Box<dyn SubscriptionStorage>>) {
+        let storage: Arc<Box<dyn SubscriptionStorage>> = Arc::new(Box::new(
+            FileSubscriptionStorage::new(temp_dir.path().to_path_buf()).unwrap(),
+        ));
+        let mock_storage: Arc<Box<dyn PaykitStorage>> = Arc::new(Box::new(MockStorage));
+        let mock_generator: Arc<Box<dyn ReceiptGenerator>> = Arc::new(Box::new(MockGenerator));
+        let interactive = Arc::new(PaykitInteractiveManager::new(mock_storage, mock_generator));
+        let manager = SubscriptionManager::new_for_testing(storage.clone(), interactive);
+        (manager, storage)
+    }
+
+    #[tokio::test]
+    async fn test_propose_subscription_bonded_skips_public_outbox() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let provider = test_pubkey();
+        let subscriber = test_pubkey();
+        let (_provider_id, _subscriber_id, provider_session, mut subscriber_session) =
+            bonded_pair();
+
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager
+            .add_bonded_outbound(&subscriber, provider_session, client)
+            .await;
+        assert!(manager.has_bonded_outbound(&subscriber).await);
+
+        // The proposal is encrypted to the subscriber's Noise key; seed the
+        // cache so no network lookup is attempted.
+        let (noise_sk, noise_pk) = pubky_crypto::sealed_blob::x25519_generate_keypair();
+        manager
+            .noise_pk_cache
+            .write()
+            .await
+            .insert(subscriber.to_string(), noise_pk);
+
+        let subscription = test_subscription(&subscriber, &provider);
+        let keypair = pkarr::Keypair::random();
+        let mut channel = MockChannel;
+        manager
+            .propose_subscription(&mut channel, subscription.clone(), &keypair)
+            .await
+            .expect("bonded propose");
+
+        // The manager holds no pubky session at all, so no `/pub/` write is
+        // even possible; the proposal reached the Drop relay instead.
+        assert!(manager.pubky_session.is_none());
+        assert_eq!(relay.0.message_count(), 1);
+
+        // The subscriber opens it over its own receive channel; the body is
+        // the same encrypted blob the public path would have stored.
+        let sub_client: DropClient<SharedRelay> =
+            DropClient::new("http://relay.test", relay.clone()).unwrap();
+        let received = receive_bonded(
+            std::slice::from_mut(&mut subscriber_session),
+            &[PurposeId::paykit()],
+            &sub_client,
+        )
+        .await
+        .expect("subscriber receive");
+        assert_eq!(received.len(), 1);
+        let body = String::from_utf8(received[0].3.clone()).expect("blob is text");
+        assert!(pubky_crypto::sealed_blob::is_sealed_blob(&body));
+
+        // ...and it decrypts to exactly the proposed subscription.
+        let provider_z32 = provider.to_string();
+        let subscriber_z32 = subscriber.to_string();
+        let path = subscription_proposal_path(
+            &provider_z32,
+            &subscriber_z32,
+            &subscription.subscription_id,
+        )
+        .expect("path");
+        let owner_bytes = owner_peerid_bytes_from_z32(&provider_z32).expect("owner bytes");
+        let plaintext = pubky_crypto::sealed_blob::sealed_blob_decrypt_with_context(
+            &noise_sk,
+            &body,
+            &owner_bytes,
+            &path,
+        )
+        .expect("decrypt proposal");
+        let decoded: Subscription = serde_json::from_slice(&plaintext).expect("decode");
+        assert_eq!(decoded, subscription);
+    }
+
+    #[tokio::test]
+    async fn test_propose_subscription_bonded_failure_fails_closed() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let provider = test_pubkey();
+        let subscriber = test_pubkey();
+        let (_p, _s, provider_session, _subscriber_session) = bonded_pair();
+
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        relay.0.fail_writes.store(true, Ordering::SeqCst);
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager
+            .add_bonded_outbound(&subscriber, provider_session, client)
+            .await;
+
+        let (_noise_sk, noise_pk) = pubky_crypto::sealed_blob::x25519_generate_keypair();
+        manager
+            .noise_pk_cache
+            .write()
+            .await
+            .insert(subscriber.to_string(), noise_pk);
+
+        let subscription = test_subscription(&subscriber, &provider);
+        let keypair = pkarr::Keypair::random();
+        let mut channel = MockChannel;
+        let err = manager
+            .propose_subscription(&mut channel, subscription, &keypair)
+            .await
+            .expect_err("bonded send must fail");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("bonded subscription proposal"),
+            "unexpected error: {msg}"
+        );
+        // Fail closed: nothing on the relay, and with no pubky session there
+        // was no public-outbox fallback either.
+        assert_eq!(relay.0.message_count(), 0);
+        assert!(manager.pubky_session.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_bonded_outbound_registry() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+        let peer = test_pubkey();
+        assert!(!manager.has_bonded_outbound(&peer).await);
+        assert!(!manager.remove_bonded_outbound(&peer).await);
+
+        let (_p, _s, provider_session, _sub) = bonded_pair();
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> =
+            DropClient::new("http://relay.test", Box::new(relay) as Box<dyn DropHttp>).unwrap();
+        manager
+            .add_bonded_outbound(&peer, provider_session, client)
+            .await;
+        assert!(manager.has_bonded_outbound(&peer).await);
+        assert!(manager.remove_bonded_outbound(&peer).await);
+        assert!(!manager.has_bonded_outbound(&peer).await);
     }
 }

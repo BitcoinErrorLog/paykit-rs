@@ -23,12 +23,13 @@
 //! storage (deduplication is local-only).
 
 use crate::PaymentRequest;
+use paykit_lib::protocol::drop_transport::{DropHttp, OutboundTransport, ProtocolMessageKind};
 use paykit_lib::protocol::{
     owner_peerid_bytes_from_z32, payment_request_aad, payment_request_path, payment_requests_dir,
     subscription_proposal_aad, subscription_proposal_path, subscription_proposals_dir,
     PURPOSE_REQUEST,
 };
-use paykit_lib::{HomeserverSessionStorage, PublicKey, HomeserverPublicStorageRead};
+use paykit_lib::{HomeserverPublicStorageRead, HomeserverSessionStorage, PublicKey};
 use pubky_crypto::sealed_blob::{
     is_sealed_blob, sealed_blob_decrypt, sealed_blob_decrypt_with_context,
     sealed_blob_encrypt_with_context,
@@ -99,13 +100,84 @@ pub async fn publish_payment_request<T: HomeserverSessionStorage>(
     request: &PaymentRequest,
     recipient_noise_pk: &[u8; 32],
 ) -> crate::Result<()> {
+    let (path, envelope) = seal_payment_request(sender_pubkey_z32, request, recipient_noise_pk)?;
+
+    // Store encrypted blob on sender storage
+    transport
+        .put(&path, &envelope)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to publish request: {}", e))?;
+
+    Ok(())
+}
+
+/// Publish a payment request through an explicit outbound route (W2b).
+///
+/// The payload (Sealed Blob, canonical path) is built exactly as for
+/// [`publish_payment_request`]. When `outbound` is
+/// [`OutboundTransport::Bonded`], the encrypted blob is sent over the
+/// counterparty's Drop channel with purpose `pubky.molt.paykit.v1` and
+/// nothing is written to any `/pub/` path; a failed bonded send is returned
+/// as an error and never falls back to the public outbox. When `outbound`
+/// is [`OutboundTransport::PublicOutbox`], the behavior is identical to
+/// [`publish_payment_request`].
+///
+/// # Arguments
+///
+/// * `transport` - Authenticated transport for the sender (used only on the
+///   public route)
+/// * `outbound` - The selected outbound route for this peer
+/// * `sender_pubkey_z32` - Sender's z-base-32 pubkey (storage owner)
+/// * `request` - The payment request to publish
+/// * `recipient_noise_pk` - Recipient's Noise endpoint X25519 public key
+pub async fn publish_payment_request_routed<T, H>(
+    transport: &T,
+    outbound: &mut OutboundTransport<'_, H>,
+    sender_pubkey_z32: &str,
+    request: &PaymentRequest,
+    recipient_noise_pk: &[u8; 32],
+) -> crate::Result<()>
+where
+    T: HomeserverSessionStorage,
+    H: DropHttp,
+{
+    let (path, envelope) = seal_payment_request(sender_pubkey_z32, request, recipient_noise_pk)?;
+    outbound
+        .deliver(
+            ProtocolMessageKind::Request,
+            envelope.as_bytes(),
+            || async {
+                transport
+                    .put(&path, &envelope)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to publish request: {}", e))
+            },
+        )
+        .await
+}
+
+/// Build the canonical path and encrypted blob for a payment request.
+///
+/// Returns `(path, envelope)`: the public-outbox path
+/// (`/pub/paykit.app/v0/requests/{context_id}/{request_id}`, also the AAD's
+/// canonical path) and the Sealed Blob v2 encrypted to the recipient's
+/// Noise endpoint public key.
+fn seal_payment_request(
+    sender_pubkey_z32: &str,
+    request: &PaymentRequest,
+    recipient_noise_pk: &[u8; 32],
+) -> crate::Result<(String, String)> {
     let published = PublishedRequest::new(request.clone());
     let plaintext = serde_json::to_vec(&published)?;
 
     // Build canonical path using context_id
     let recipient_pubkey_z32 = request.to.to_string();
-    let path = payment_request_path(sender_pubkey_z32, &recipient_pubkey_z32, &request.request_id)
-        .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
+    let path = payment_request_path(
+        sender_pubkey_z32,
+        &recipient_pubkey_z32,
+        &request.request_id,
+    )
+    .map_err(|e| anyhow::anyhow!("Invalid pubkey: {}", e))?;
 
     // Convert owner z32 to bytes for binary AAD (owner = sender for requests)
     let owner_peerid_bytes = owner_peerid_bytes_from_z32(sender_pubkey_z32)
@@ -121,13 +193,7 @@ pub async fn publish_payment_request<T: HomeserverSessionStorage>(
     )
     .map_err(|e| anyhow::anyhow!("Failed to encrypt payment request: {}", e))?;
 
-    // Store encrypted blob on sender storage
-    transport
-        .put(&path, &envelope)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to publish request: {}", e))?;
-
-    Ok(())
+    Ok((path, envelope))
 }
 
 /// Discover payment requests from a sender addressed to me.
@@ -451,7 +517,15 @@ impl<R: HomeserverPublicStorageRead> RequestDiscoveryPoller<R> {
         for peer in &self.known_peers {
             // Convert peer PublicKey to z32 for context_id computation
             let peer_z32 = peer.to_string();
-            match discover_requests(&self.reader, peer, &peer_z32, &self.my_pubkey_z32, &self.noise_sk).await {
+            match discover_requests(
+                &self.reader,
+                peer,
+                &peer_z32,
+                &self.my_pubkey_z32,
+                &self.noise_sk,
+            )
+            .await
+            {
                 Ok(requests) if !requests.is_empty() => {
                     results.push((peer.clone(), requests));
                 }
@@ -618,9 +692,13 @@ pub async fn discover_subscription_agreements<R: HomeserverPublicStorageRead>(
     for entry in entries {
         let full_path = format!("{}{}", path, entry);
         if let Ok(Some(content)) = reader.get(party, &full_path).await {
-            if let Some(signed) =
-                try_decrypt_signed_subscription(&content, &full_path, &entry, &party_z32, my_noise_sk)
-            {
+            if let Some(signed) = try_decrypt_signed_subscription(
+                &content,
+                &full_path,
+                &entry,
+                &party_z32,
+                my_noise_sk,
+            ) {
                 agreements.push(signed);
             }
         }
@@ -641,8 +719,13 @@ pub async fn discover_subscription_agreement<R: HomeserverPublicStorageRead>(
 
     match reader.get(party, &path).await {
         Ok(Some(content)) => {
-            let signed =
-                try_decrypt_signed_subscription(&content, &path, subscription_id, &party_z32, my_noise_sk);
+            let signed = try_decrypt_signed_subscription(
+                &content,
+                &path,
+                subscription_id,
+                &party_z32,
+                my_noise_sk,
+            );
             Ok(signed)
         }
         Ok(None) => Ok(None),
@@ -702,13 +785,14 @@ fn try_decrypt_subscription_proposal(
     }
 
     // Build canonical path for binary AAD
-    let path = match subscription_proposal_path(provider_pubkey_z32, subscriber_pubkey_z32, proposal_id) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::warn!("Failed to build path for proposal {}: {}", proposal_id, e);
-            return None;
-        }
-    };
+    let path =
+        match subscription_proposal_path(provider_pubkey_z32, subscriber_pubkey_z32, proposal_id) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Failed to build path for proposal {}: {}", proposal_id, e);
+                return None;
+            }
+        };
 
     // Convert owner z32 to bytes (owner = provider for proposals)
     let owner_peerid_bytes = match owner_peerid_bytes_from_z32(provider_pubkey_z32) {
@@ -814,7 +898,9 @@ fn try_decrypt_signed_subscription(
 
     // Try binary AAD first (spec-compliant)
     if let Ok(owner_bytes) = owner_peerid_bytes_from_z32(owner_pubkey_z32) {
-        if let Ok(plaintext) = sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path) {
+        if let Ok(plaintext) =
+            sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path)
+        {
             return serde_json::from_slice(&plaintext).ok();
         }
         tracing::debug!(
@@ -858,7 +944,9 @@ fn try_decrypt_cancellation(
 
     // Try binary AAD first (spec-compliant)
     if let Ok(owner_bytes) = owner_peerid_bytes_from_z32(owner_pubkey_z32) {
-        if let Ok(plaintext) = sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path) {
+        if let Ok(plaintext) =
+            sealed_blob_decrypt_with_context(my_noise_sk, content, &owner_bytes, path)
+        {
             return serde_json::from_slice(&plaintext).ok();
         }
         tracing::debug!(

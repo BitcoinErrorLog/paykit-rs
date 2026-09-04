@@ -3556,6 +3556,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "chrono",
  "criterion",
  "curve25519-dalek",
@@ -3575,6 +3576,7 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "serde_bytes",
+ "serde_cbor",
  "serde_json",
  "sha2",
  "subtle",

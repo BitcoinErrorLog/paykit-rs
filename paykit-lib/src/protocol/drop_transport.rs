@@ -83,6 +83,21 @@ pub trait DropHttp: Send + Sync {
     async fn http_delete(&self, url: &str) -> Result<()>;
 }
 
+#[async_trait]
+impl DropHttp for Box<dyn DropHttp> {
+    async fn http_put(&self, url: &str, body: Vec<u8>) -> Result<u64> {
+        (**self).http_put(url, body).await
+    }
+
+    async fn http_get(&self, url: &str, max_response_bytes: usize) -> Result<Vec<u8>> {
+        (**self).http_get(url, max_response_bytes).await
+    }
+
+    async fn http_delete(&self, url: &str) -> Result<()> {
+        (**self).http_delete(url).await
+    }
+}
+
 /// Client for the S8 Drop relay endpoints.
 ///
 /// | Method | Endpoint |
@@ -651,6 +666,74 @@ pub async fn send_protocol_message<H: DropHttp>(
         body,
     };
     send_bonded(s, &env, c).await
+}
+
+/// Outbound route for a Paykit protocol message (request, proposal, ACK)
+/// when a [`BondSession`] may exist with the counterparty (W2b).
+///
+/// Selection rule: the caller chooses the variant — bonded **if and only
+/// if** it holds a [`BondSession`] for that peer. The bonded variant carries
+/// no public transport and [`OutboundTransport::deliver`] never retries a
+/// failed bonded send on the public path, so falling back from bonded to
+/// public is structurally impossible (fail closed).
+///
+/// Neither variant holds the public transport: the two existing outbox
+/// write interfaces in use (`HomeserverSessionStorage`,
+/// `pubky::PubkySession`) differ, so on the public route the caller's own
+/// unchanged write path runs (the `public_write` closure). See
+/// `DECISIONS.md`.
+pub enum OutboundTransport<'a, H: DropHttp> {
+    /// The legacy public, root-anchored homeserver outbox
+    /// (`/pub/paykit.app/v0/…`).
+    PublicOutbox,
+    /// A bonded Drop channel to the counterparty (purpose
+    /// `pubky.molt.paykit.v1`).
+    Bonded {
+        /// The bonded session with the counterparty.
+        session: &'a mut BondSession,
+        /// The Drop relay client.
+        client: &'a DropClient<H>,
+    },
+}
+
+impl<'a, H: DropHttp> OutboundTransport<'a, H> {
+    /// `true` when this route is bonded.
+    pub fn is_bonded(&self) -> bool {
+        matches!(self, Self::Bonded { .. })
+    }
+
+    /// Deliver an already-serialized protocol payload for `kind`.
+    ///
+    /// - Bonded: sealed with the session's next send key and appended to the
+    ///   peer's Drop channel under purpose `pubky.molt.paykit.v1` via
+    ///   [`send_protocol_message`]. Any error is returned and the public
+    ///   outbox is never touched as a fallback.
+    /// - Public: `public_write()` runs — the caller's existing outbox write,
+    ///   unchanged (byte-identical to the pre-W2b behavior).
+    ///
+    /// # Errors
+    ///
+    /// Bonded route: `E::from(PaykitError)` from the seal/send. Public
+    /// route: whatever `public_write` returns.
+    pub async fn deliver<F, Fut, E>(
+        &mut self,
+        kind: ProtocolMessageKind,
+        body: &[u8],
+        public_write: F,
+    ) -> std::result::Result<(), E>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = std::result::Result<(), E>>,
+        E: From<PaykitError>,
+    {
+        match self {
+            OutboundTransport::Bonded { session, client } => {
+                send_protocol_message(session, kind, body, client).await?;
+                Ok(())
+            }
+            OutboundTransport::PublicOutbox => public_write().await,
+        }
+    }
 }
 
 /// Reqwest-backed [`DropHttp`] for native targets (feature

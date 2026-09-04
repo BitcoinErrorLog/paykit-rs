@@ -210,7 +210,9 @@ impl Identity {
         epoch: u32,
     ) -> Result<[u8; 32], pubky_noise::NoiseError> {
         let seed = self.keypair.secret_key();
-        Ok(pubky_crypto::kdf::derive_x25519_for_device_epoch(&seed, device_id, epoch)?)
+        Ok(pubky_crypto::kdf::derive_x25519_for_device_epoch(
+            &seed, device_id, epoch,
+        )?)
     }
 }
 

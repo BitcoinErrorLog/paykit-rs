@@ -3,8 +3,8 @@
 use crate::models::PaymentMethod;
 use anyhow::{Context, Result};
 use paykit_lib::{
-    HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
-    PubkyUnauthenticatedTransport, PublicKey, HomeserverPublicStorageRead,
+    EndpointData, HomeserverPublicStorageRead, HomeserverSessionStorage, MethodId,
+    PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport, PublicKey,
 };
 use pubky::{Pubky, PubkySession, PublicStorage};
 

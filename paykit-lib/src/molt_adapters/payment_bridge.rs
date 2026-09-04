@@ -2,7 +2,7 @@
 //! [`crate::methods::PaymentMethodPlugin`] as a Molt adapter
 //! `Value{…, Self} → Value{…, Counterparty}`.
 //!
-//! Per-method manifests (plan v11, S9 table):
+//! Per-method manifests (plan v14, S9 table):
 //!
 //! - **onchain** (`Value{bitcoin}`): the `Chain` witness learns
 //!   `NETWORK_IDENTIFIER | AMOUNT | TIME`; the hop preserves

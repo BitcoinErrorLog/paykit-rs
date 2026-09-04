@@ -1,4 +1,4 @@
-//! Molt v1 adapters — Paykit as a Molt client (plan v11, S9).
+//! Molt v1 adapters — Paykit as a Molt client (plan v14, S9).
 //!
 //! Paykit supplies three [`pubky_molt::route::Adapter`] implementations to the
 //! protocol-neutral routing core in `pubky-molt`:

@@ -198,8 +198,8 @@ impl DropHttp for StubRelay {
 fn bonded_pair() -> (PeerId, PeerId, BondSession, BondSession) {
     let sender = PeerId([0x01; 32]);
     let recipient = PeerId([0x02; 32]);
-    let sk_a = derive_pair_secret(&[0x11; 32], &recipient);
-    let sk_b = derive_pair_secret(&[0x22; 32], &sender);
+    let sk_a = derive_pair_secret(&[0x11; 32], &recipient).expect("pair secret");
+    let sk_b = derive_pair_secret(&[0x22; 32], &sender).expect("pair secret");
     let pk_a = pair_public(&sk_a);
     let pk_b = pair_public(&sk_b);
     let bond_a: Bond = derive_bond(&sender, &sk_a, &recipient, &pk_b).expect("bond");

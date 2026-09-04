@@ -54,7 +54,9 @@ impl RingKeyProvider for TestRing {
         device_id: &[u8],
         _epoch: u32,
     ) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {
-        Ok(pubky_crypto::kdf::derive_x25519_for_device_epoch(&self.seed, device_id, 0)?)
+        Ok(pubky_crypto::kdf::derive_x25519_for_device_epoch(
+            &self.seed, device_id, 0,
+        )?)
     }
 
     fn ed25519_pubkey(&self, _kid: &str) -> std::result::Result<[u8; 32], pubky_noise::NoiseError> {

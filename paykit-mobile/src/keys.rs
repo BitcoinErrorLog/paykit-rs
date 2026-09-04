@@ -260,9 +260,8 @@ pub fn sign_typed_content(
 
     // sign_input = prefix || issuer_peerid || cert_id || content_type || payload_hash
     const SIGNED_CONTENT_PREFIX: &[u8] = b"pubky-content-sig/v1:";
-    let mut sign_input = Vec::with_capacity(
-        SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32,
-    );
+    let mut sign_input =
+        Vec::with_capacity(SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32);
     sign_input.extend_from_slice(SIGNED_CONTENT_PREFIX);
     sign_input.extend_from_slice(&issuer_peerid);
     sign_input.extend_from_slice(&cert_id_bytes);
@@ -335,9 +334,8 @@ pub fn verify_typed_content(
 
     // Reconstruct sign_input
     const SIGNED_CONTENT_PREFIX: &[u8] = b"pubky-content-sig/v1:";
-    let mut sign_input = Vec::with_capacity(
-        SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32,
-    );
+    let mut sign_input =
+        Vec::with_capacity(SIGNED_CONTENT_PREFIX.len() + 32 + 16 + content_type.len() + 32);
     sign_input.extend_from_slice(SIGNED_CONTENT_PREFIX);
     sign_input.extend_from_slice(&issuer_peerid);
     sign_input.extend_from_slice(&cert_id_bytes);

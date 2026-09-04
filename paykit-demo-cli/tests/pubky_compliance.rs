@@ -22,8 +22,8 @@ mod common;
 #[cfg(feature = "pubky_compliance_tests")]
 mod pubky_tests {
     use paykit_lib::{
-        HomeserverSessionStorage, EndpointData, MethodId, PubkyHomeserverSessionStorage,
-        PubkyUnauthenticatedTransport, HomeserverPublicStorageRead,
+        EndpointData, HomeserverPublicStorageRead, HomeserverSessionStorage, MethodId,
+        PubkyHomeserverSessionStorage, PubkyUnauthenticatedTransport,
     };
     use pubky_testnet::{pubky::Keypair, EphemeralTestnet};
 

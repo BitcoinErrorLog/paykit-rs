@@ -53,3 +53,43 @@ items 22–24 for its design.
    `tests/bonded_dispatch.rs`); `base64` and `serde_cbor` were added as
    dev-dependencies for URL-key parsing and CBOR encoding in those stubs.
    No production code path was mocked.
+
+## W4 external-audit fixes (2026-09-04, `feat/molt-route`)
+
+6. **SF-2: one registry guard for bonded check-and-dispatch.**
+   `propose_subscription` used to check `bonded_outbounds` under a read
+   guard, drop it, then re-acquire the write guard and
+   `expect("presence checked above")` — a reachable panic if
+   `remove_bonded_outbound` raced in between. All bonded delivery now
+   funnels through the private `deliver_bonded` helper, which holds ONE
+   write guard across the membership check and the dispatch; a route
+   removed between the caller's presence check and the send yields a clean
+   "no longer registered … no public fallback" error. Sealing stays outside
+   the guard (it performs network I/O); the guard is held across the
+   dispatch await so registration state cannot change mid-send. Regression
+   test: `test_bonded_delivery_route_removed_midflight_fails_closed`
+   (all three message kinds).
+
+7. **SF-3: requests, ACKs, and polling are wired through the registry.**
+   The manager dispatches all three protocol message kinds through the same
+   `BondedRoute` registry the proposals use:
+   `SubscriptionManager::publish_payment_request` (bonded delivery when a
+   route exists for the recipient, byte-identical legacy
+   `discovery::publish_payment_request` otherwise),
+   `SubscriptionManager::store_encrypted_ack` (bonded delivery when a route
+   exists; the caller's `public_write` closure runs untouched otherwise),
+   and `SubscriptionManager::poll_bonded` (the in-repo caller of
+   `paykit_lib::protocol::drop_transport::receive_bonded` across all
+   registered routes; errors only when every route fails to poll, mirroring
+   `receive_bonded`'s partial-failure semantics). All bonded paths fail
+   closed — an explicit error, never a silent public fallback.
+   `discovery::seal_payment_request` is now `pub(crate)` so the manager
+   builds the identical payload on both routes. Tests:
+   `test_publish_payment_request_bonded_arrives_via_drop` (storage mock
+   records zero `/pub/` writes, request arrives via the Drop stub),
+   `test_store_encrypted_ack_bonded_arrives_via_drop` (public write never
+   invoked; ACK arrives `ExternallyAuthenticated`),
+   `test_publish_payment_request_unbonded_is_byte_identical_legacy`,
+   `test_store_encrypted_ack_unbonded_runs_public_write`,
+   `test_poll_bonded_receives_across_registered_routes`,
+   `test_poll_bonded_errors_when_every_route_fails`.

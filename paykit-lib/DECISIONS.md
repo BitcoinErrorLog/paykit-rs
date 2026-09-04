@@ -82,13 +82,54 @@
     `paykit-subscriptions` store type-erased relay clients in its manager
     registry without making `SubscriptionManager` generic.
 
+## W4 external-audit fixes (2026-09-04)
 
+25. **N-1: `MAX_DROP_BODY_BYTES` is now a plaintext bound derived from the
+    wire bound.** The S8 relay bounds the whole SB2 wire blob at 64 KiB
+    (`MAX_DROP_WIRE_BYTES`); previously `MAX_DROP_BODY_BYTES` was also
+    64 KiB, so a 64 KiB body sealed fine but produced a ~64.2 KiB wire the
+    relay then rejected client-side. `MAX_DROP_BODY_BYTES` is now
+    `MAX_DROP_WIRE_BYTES - DROP_SEAL_OVERHEAD_BYTES` (65536 − 244 = 65292),
+    where the 244-byte overhead is computed — not estimated — from the
+    deterministic-CBOR Molt header profile (itemized on the constant; the
+    ratchet index `n` is charged its worst-case 9-byte CBOR varint so the
+    bound holds for every index). `send_bonded` rejects an over-limit body
+    with `QuotaExceeded` *before* the ratchet index is consumed and before
+    any network call, using the exact per-call `drop_wire_size` computation
+    so purposes longer than the 20-byte `pubky.molt.paykit.v1` shrink the
+    allowance precisely. `DropClient::put` keeps the wire-level check
+    against `MAX_DROP_WIRE_BYTES`. The pre-existing test
+    `put_rejects_oversized_body_client_side` was repointed at
+    `MAX_DROP_WIRE_BYTES` (it exercises the wire-level `put` bound; the
+    constant it referenced changed meaning). New tests:
+    `drop_wire_size_pins_overhead_computation`,
+    `drop_wire_size_bounds_actual_seal`,
+    `max_drop_body_seals_within_relay_bound`,
+    `send_bonded_rejects_body_above_max_before_network`.
 
-Ambiguities in `molt_v11.plan.md` section S9 resolved during implementation,
+26. **SF-3: `receive_bonded` has an in-repo caller, and requests/ACKs have
+    in-repo bonded dispatch.** paykit-subscriptions
+    `SubscriptionManager::poll_bonded` polls every registered bonded route
+    via `receive_bonded`, and the manager dispatches payment requests and
+    ACKs through the same `BondedRoute` registry as proposals (see
+    `paykit-subscriptions/DECISIONS.md` items 6–7). The explicit routed
+    entry points in this crate (`OutboundTransport`,
+    `ack::store_encrypted_ack`) are unchanged and remain the downstream
+    integration surface; the legacy public paths stay intentionally
+    fail-open for compatibility when no route is registered.
+
+27. **SF-4: spec citations updated to v14.** All references to older plan
+    drafts now cite `molt_v14.plan.md` (the frozen, executing spec): this
+    file, `molt_adapters/{mod,drop_adapter,payment_bridge}.rs`, and
+    `selection/selector.rs`. No code changed. The same wave adapted
+    molt test call sites to pubky-crypto's self-bond rejection
+    (`derive_pair_secret` now returns `Result`; test-only `.expect`s).
+
+Ambiguities in `molt_v14.plan.md` section S9 resolved during implementation,
 with reasoning. In every case the more conservative reading was chosen.
-Section numbers refer to the v11 plan (the brief named `molt_v10.plan.md`;
-only `molt_v11.plan.md` exists — v11 is the frozen, executing spec and its
-S9 is what was implemented).
+Section numbers refer to the v14 plan (earlier drafts of the brief predated
+it; only `molt_v14.plan.md` exists — v14 is the frozen, executing spec and
+its S9 is what was implemented).
 
 ## PeerId conversion
 

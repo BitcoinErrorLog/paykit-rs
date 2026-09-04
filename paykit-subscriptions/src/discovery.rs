@@ -162,7 +162,10 @@ where
 /// (`/pub/paykit.app/v0/requests/{context_id}/{request_id}`, also the AAD's
 /// canonical path) and the Sealed Blob v2 encrypted to the recipient's
 /// Noise endpoint public key.
-fn seal_payment_request(
+///
+/// Shared by the public-outbox entry points and the manager's bonded
+/// delivery path, so the payload is identical on both routes.
+pub(crate) fn seal_payment_request(
     sender_pubkey_z32: &str,
     request: &PaymentRequest,
     recipient_noise_pk: &[u8; 32],

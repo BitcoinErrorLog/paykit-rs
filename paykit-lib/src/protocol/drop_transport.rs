@@ -31,14 +31,47 @@ use pubky_crypto::molt::{
     Header, MoltEnvelope, PeerId, PurposeId, RatchetState,
 };
 
-/// Maximum Drop message body (S8: SB2 ≤ 64 KiB).
-pub const MAX_DROP_BODY_BYTES: usize = 64 * 1024;
+/// The S8 relay's PUT bound on the whole SB2 wire blob ("SB2 ≤ 64 KiB").
+pub const MAX_DROP_WIRE_BYTES: usize = 64 * 1024;
+
+/// Exact SB2+Molt sealing overhead over the plaintext body for Drop
+/// traffic — computed from the deterministic-CBOR header profile that
+/// [`pubky_crypto::molt::seal`] emits (see `encode_molt_header` and
+/// `Sb2Header::encode_no_sig` in pubky-crypto), not estimated:
+///
+/// | Piece | Bytes |
+/// |---|---|
+/// | SB2 magic + version + u16 header length | 6 |
+/// | header map(10) byte | 1 |
+/// | key 0 `context_id` bytes(32) | 35 |
+/// | key 3 `inbox_kid` bytes(16) | 18 |
+/// | key 5 `nonce` bytes(24) | 27 |
+/// | key 6 `purpose` text(20) `pubky.molt.paykit.v1` | 22 |
+/// | keys 7–9 zeroed peerid/ephemeral bytes(32), ×3 | 105 |
+/// | key 20 `dir` uint | 2 |
+/// | key 21 `n` uint, worst-case 8-byte CBOR varint | 10 |
+/// | key 22 `authenticity` uint | 2 |
+/// | XChaCha20-Poly1305 tag | 16 |
+///
+/// Total 244. The ratchet index `n` is charged its worst-case CBOR varint
+/// (1 key byte + 9 value bytes) so the bound holds for every index, and the
+/// purpose is the 20-byte `pubky.molt.paykit.v1` every product path seals
+/// with; [`send_bonded`] accounts for other purpose lengths exactly via
+/// [`drop_wire_size`].
+pub const DROP_SEAL_OVERHEAD_BYTES: usize = 244;
+
+/// Maximum plaintext body [`send_bonded`] carries: the largest body whose
+/// sealed wire blob stays within the relay's [`MAX_DROP_WIRE_BYTES`] PUT
+/// bound ([`MAX_DROP_WIRE_BYTES`] `−` [`DROP_SEAL_OVERHEAD_BYTES`]). Larger
+/// bodies are rejected with [`PaykitError::QuotaExceeded`] before sealing
+/// and before any network call.
+pub const MAX_DROP_BODY_BYTES: usize = MAX_DROP_WIRE_BYTES - DROP_SEAL_OVERHEAD_BYTES;
 
 /// Maximum poll page size (S8: `limit ≤ 50`).
 pub const MAX_DROP_POLL_LIMIT: u32 = 50;
 
 /// Defensive upper bound on a poll response body
-/// ([`MAX_DROP_POLL_LIMIT`] messages of [`MAX_DROP_BODY_BYTES`] plus
+/// ([`MAX_DROP_POLL_LIMIT`] messages of [`MAX_DROP_WIRE_BYTES`] plus
 /// framing slack).
 pub const MAX_POLL_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
@@ -155,14 +188,14 @@ impl<H: DropHttp> DropClient<H> {
     ///
     /// # Errors
     ///
-    /// - [`PaykitError::QuotaExceeded`]: body larger than
-    ///   [`MAX_DROP_BODY_BYTES`] (rejected client-side, never sent).
+    /// - [`PaykitError::QuotaExceeded`]: wire body larger than
+    ///   [`MAX_DROP_WIRE_BYTES`] (rejected client-side, never sent).
     /// - [`PaykitError::Transport`]: the relay rejected or was unreachable.
     pub async fn put(&self, channel: &ChannelId, body: &[u8]) -> Result<u64> {
-        if body.len() > MAX_DROP_BODY_BYTES {
+        if body.len() > MAX_DROP_WIRE_BYTES {
             return Err(PaykitError::QuotaExceeded {
                 used: body.len() as u64,
-                limit: MAX_DROP_BODY_BYTES as u64,
+                limit: MAX_DROP_WIRE_BYTES as u64,
             });
         }
         self.http
@@ -493,24 +526,59 @@ fn now_unix_secs() -> Result<u64> {
         .map_err(|_| PaykitError::Internal("system clock is before the unix epoch".into()))
 }
 
+/// Exact worst-case sealed wire size for `body_len` plaintext bytes under
+/// `purpose`: [`DROP_SEAL_OVERHEAD_BYTES`] minus its 22-byte paykit-purpose
+/// entry, plus the exact CBOR entry for this purpose (key byte + string
+/// header + string bytes), plus the body. The ratchet index stays charged
+/// at its worst-case 9-byte varint, so the result is an upper bound of the
+/// actual wire size for every index.
+fn drop_wire_size(purpose: &PurposeId, body_len: usize) -> usize {
+    /// All wire bytes except the body and the purpose entry; see the
+    /// itemization on [`DROP_SEAL_OVERHEAD_BYTES`].
+    const FIXED_WITHOUT_PURPOSE: usize = DROP_SEAL_OVERHEAD_BYTES - 22;
+    let purpose_len = purpose.as_str().len();
+    // Mirrors `CborWriter::write_str` in pubky-crypto.
+    let str_header = if purpose_len < 24 {
+        1
+    } else if purpose_len < 256 {
+        2
+    } else {
+        3
+    };
+    FIXED_WITHOUT_PURPOSE + 1 + str_header + purpose_len + body_len
+}
+
 /// Seal `env` with the session's next send-side message key and append it to
 /// the current epoch's Drop channel (S9).
 ///
 /// The header `{dir, n, purpose, authenticity}` is bound in the envelope
-/// AAD by [`pubky_crypto::molt::seal`]. The ratchet index is consumed even
-/// if the relay append fails; the caller may retry with a fresh envelope
-/// (re-sends use a fresh index, and receivers reject replays).
+/// AAD by [`pubky_crypto::molt::seal`]. A body whose sealed wire would
+/// exceed the relay's [`MAX_DROP_WIRE_BYTES`] PUT bound is rejected
+/// **before** the ratchet index is consumed and before any network call
+/// (bodies up to [`MAX_DROP_BODY_BYTES`] always fit under the paykit
+/// purpose; longer purposes shrink the allowance exactly). Otherwise the
+/// ratchet index is consumed even if the relay append fails; the caller may
+/// retry with a fresh envelope (re-sends use a fresh index, and receivers
+/// reject replays).
 ///
 /// # Errors
 ///
 /// - [`PaykitError::Crypto`]: sealing or epoch derivation failed.
-/// - [`PaykitError::QuotaExceeded`]: the sealed body exceeds the S8 bound.
+/// - [`PaykitError::QuotaExceeded`]: the sealed body would exceed the S8
+///   wire bound.
 /// - [`PaykitError::Transport`]: the relay append failed.
 pub async fn send_bonded<H: DropHttp>(
     s: &mut BondSession,
     env: &MoltEnvelope<'_>,
     c: &DropClient<H>,
 ) -> Result<()> {
+    let wire_len = drop_wire_size(env.purpose, env.body.len());
+    if wire_len > MAX_DROP_WIRE_BYTES {
+        return Err(PaykitError::QuotaExceeded {
+            used: wire_len as u64,
+            limit: MAX_DROP_WIRE_BYTES as u64,
+        });
+    }
     let (n, mk) = s.send.next_send();
     let hdr = Header {
         dir: s.send.direction(),
@@ -860,8 +928,8 @@ mod tests {
     fn alice_bob() -> (PeerId, PeerId, Bond) {
         let alice = PeerId([0x01; 32]);
         let bob = PeerId([0x02; 32]);
-        let sk_a = derive_pair_secret(&[0x11; 32], &bob);
-        let pk_b = pair_public(&derive_pair_secret(&[0x22; 32], &alice));
+        let sk_a = derive_pair_secret(&[0x11; 32], &bob).expect("pair secret");
+        let pk_b = pair_public(&derive_pair_secret(&[0x22; 32], &alice).expect("pair secret"));
         let bond = derive_bond(&alice, &sk_a, &bob, &pk_b).expect("bond");
         (alice, bob, bond)
     }
@@ -1126,8 +1194,8 @@ mod tests {
     fn bond_session_channels_match_between_peers() {
         let (alice, bob, bond_a) = alice_bob();
         // Bob derives the same bond from his side.
-        let sk_b = derive_pair_secret(&[0x22; 32], &alice);
-        let pk_a = pair_public(&derive_pair_secret(&[0x11; 32], &bob));
+        let sk_b = derive_pair_secret(&[0x22; 32], &alice).expect("pair secret");
+        let pk_a = pair_public(&derive_pair_secret(&[0x11; 32], &bob).expect("pair secret"));
         let bond_b = derive_bond(&bob, &sk_b, &alice, &pk_a).expect("bond");
         assert_eq!(bond_a.as_bytes(), bond_b.as_bytes());
 
@@ -1166,9 +1234,9 @@ mod tests {
             bob,
             derive_bond(
                 &alice,
-                &derive_pair_secret(&[0x11; 32], &bob),
+                &derive_pair_secret(&[0x11; 32], &bob).expect("pair secret"),
                 &bob,
-                &pair_public(&derive_pair_secret(&[0x22; 32], &alice)),
+                &pair_public(&derive_pair_secret(&[0x22; 32], &alice).expect("pair secret")),
             )
             .expect("bond"),
             bad,
@@ -1190,5 +1258,71 @@ mod tests {
             ProtocolMessageKind::Ack.authenticity(),
             Authenticity::ExternallyAuthenticated
         );
+    }
+
+    #[test]
+    fn drop_wire_size_pins_overhead_computation() {
+        // The itemized overhead (see the constant's doc table) must sum to
+        // the relay-bound derivation exactly.
+        assert_eq!(DROP_SEAL_OVERHEAD_BYTES, 244);
+        assert_eq!(MAX_DROP_BODY_BYTES, 65_292);
+        assert_eq!(MAX_DROP_BODY_BYTES + DROP_SEAL_OVERHEAD_BYTES, 65_536);
+
+        let paykit = PurposeId::paykit();
+        // A maximal body fits the relay bound exactly; one byte more does
+        // not — this is the boundary `send_bonded` enforces.
+        assert_eq!(
+            drop_wire_size(&paykit, MAX_DROP_BODY_BYTES),
+            MAX_DROP_WIRE_BYTES
+        );
+        assert_eq!(
+            drop_wire_size(&paykit, MAX_DROP_BODY_BYTES + 1),
+            MAX_DROP_WIRE_BYTES + 1
+        );
+        // Longer purposes shrink the body allowance byte for byte (plus a
+        // CBOR string-header byte at the 24-char threshold): this 32-char
+        // purpose costs a 35-byte entry vs the paykit purpose's 22.
+        let long_purpose = PurposeId::parse("pubky.molt.abcdefghijklmnopqr.v1").expect("purpose");
+        assert_eq!(long_purpose.as_str().len(), 32);
+        assert_eq!(
+            drop_wire_size(&long_purpose, MAX_DROP_BODY_BYTES),
+            MAX_DROP_WIRE_BYTES + 13
+        );
+    }
+
+    #[test]
+    fn drop_wire_size_bounds_actual_seal() {
+        let (_alice, _bob, bond) = alice_bob();
+        let purpose = PurposeId::paykit();
+        let mut ratchet = RatchetState::bootstrap(&bond, Direction::LoToHi);
+
+        for body_len in [0usize, 1, 1024, MAX_DROP_BODY_BYTES] {
+            let body = vec![0xabu8; body_len];
+            let (n, mk) = ratchet.next_send();
+            let hdr = Header {
+                dir: ratchet.direction(),
+                n,
+                purpose: purpose.clone(),
+                authenticity: Authenticity::SessionAuthenticated,
+            };
+            let env = MoltEnvelope {
+                purpose: &purpose,
+                authenticity: Authenticity::SessionAuthenticated,
+                body: &body,
+            };
+            let wire = molt::seal(&env, &mk, &hdr, &DROP_INBOX_KID).expect("seal");
+            // The computation is an upper bound for every ratchet index...
+            assert!(
+                wire.len() <= drop_wire_size(&purpose, body_len),
+                "wire {} exceeds computed bound {}",
+                wire.len(),
+                drop_wire_size(&purpose, body_len)
+            );
+            // ...and exact up to the worst-case `n` varint it charges: the
+            // first indices encode in one value byte, not nine.
+            assert_eq!(wire.len(), drop_wire_size(&purpose, body_len) - 8);
+            // The maximal body stays within the relay's PUT bound.
+            assert!(wire.len() <= MAX_DROP_WIRE_BYTES);
+        }
     }
 }

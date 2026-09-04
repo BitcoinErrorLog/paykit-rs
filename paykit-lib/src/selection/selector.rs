@@ -380,7 +380,7 @@ impl PaymentMethodSelector {
     }
 }
 
-/// Plan and score Molt routes from `from` to `to` over `adapters` (plan v11,
+/// Plan and score Molt routes from `from` to `to` over `adapters` (plan v14,
 /// S9).
 ///
 /// This is a **thin delegation** into `pubky-molt`: the bounded planner runs

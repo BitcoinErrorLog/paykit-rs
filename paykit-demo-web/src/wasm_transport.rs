@@ -5,8 +5,8 @@
 
 use js_sys::{Object, Reflect};
 use paykit_lib::{
-    EndpointData, MethodId, PaykitError, PublicKey, Result, SupportedPayments,
-    HomeserverPublicStorageRead,
+    EndpointData, HomeserverPublicStorageRead, MethodId, PaykitError, PublicKey, Result,
+    SupportedPayments,
 };
 use wasm_bindgen::JsCast;
 

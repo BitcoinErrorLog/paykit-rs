@@ -5,7 +5,7 @@
 use async_trait::async_trait;
 use paykit_lib::protocol::drop_transport::{
     receive_bonded, send_bonded, send_protocol_message, BondSession, DropClient, DropHttp,
-    ProtocolMessageKind, MAX_DROP_BODY_BYTES, MAX_POLL_RESPONSE_BYTES,
+    ProtocolMessageKind, MAX_DROP_BODY_BYTES, MAX_DROP_WIRE_BYTES, MAX_POLL_RESPONSE_BYTES,
 };
 use paykit_lib::{PaykitError, Result};
 use pubky_crypto::molt::{
@@ -73,6 +73,18 @@ impl StubRelay {
             .values()
             .map(Vec::len)
             .sum()
+    }
+
+    /// The wire length of the most recently appended message.
+    fn newest_wire_len(&self) -> usize {
+        self.channels
+            .lock()
+            .expect("lock")
+            .values()
+            .filter_map(|msgs| msgs.last())
+            .map(|(_, _, body)| body.len())
+            .max()
+            .expect("a message was stored")
     }
 
     /// The relay-side key for a channel id (base64url, no padding).
@@ -181,8 +193,8 @@ impl DropHttp for StubRelay {
 fn alice_bob_sessions() -> (PeerId, PeerId, BondSession, BondSession) {
     let alice = PeerId([0x01; 32]);
     let bob = PeerId([0x02; 32]);
-    let sk_a = derive_pair_secret(&[0x11; 32], &bob);
-    let sk_b = derive_pair_secret(&[0x22; 32], &alice);
+    let sk_a = derive_pair_secret(&[0x11; 32], &bob).expect("pair secret");
+    let sk_b = derive_pair_secret(&[0x22; 32], &alice).expect("pair secret");
     let pk_a = pair_public(&sk_a);
     let pk_b = pair_public(&sk_b);
     let bond_a: Bond = derive_bond(&alice, &sk_a, &bob, &pk_b).expect("bond");
@@ -369,9 +381,56 @@ fn now() -> u64 {
 async fn put_rejects_oversized_body_client_side() {
     let c = client(StubRelay::new());
     let channel = pubky_crypto::molt::ChannelId([7u8; 32]);
-    let big = vec![0u8; MAX_DROP_BODY_BYTES + 1];
+    // `put` bounds the whole SB2 wire blob (see MAX_DROP_WIRE_BYTES); the
+    // plaintext-body bound is enforced earlier, in `send_bonded`.
+    let big = vec![0u8; MAX_DROP_WIRE_BYTES + 1];
     let err = c.put(&channel, &big).await.expect_err("oversized");
     assert!(matches!(err, PaykitError::QuotaExceeded { .. }));
+}
+
+#[tokio::test]
+async fn max_drop_body_seals_within_relay_bound() {
+    let (_alice, _bob, mut sa, _sb) = alice_bob_sessions();
+    let c = client(StubRelay::new());
+    let purpose = PurposeId::paykit();
+
+    // The largest allowed body seals to a wire blob within the relay's
+    // 64 KiB PUT bound and is delivered.
+    let body = vec![0xabu8; MAX_DROP_BODY_BYTES];
+    let env = MoltEnvelope {
+        purpose: &purpose,
+        authenticity: Authenticity::SessionAuthenticated,
+        body: &body,
+    };
+    send_bonded(&mut sa, &env, &c).await.expect("max body send");
+    assert_eq!(c.backend().message_count(), 1);
+    let wire_len = c.backend().newest_wire_len();
+    assert!(
+        wire_len <= MAX_DROP_WIRE_BYTES,
+        "sealed wire {wire_len} exceeds relay bound {MAX_DROP_WIRE_BYTES}"
+    );
+}
+
+#[tokio::test]
+async fn send_bonded_rejects_body_above_max_before_network() {
+    let (_alice, _bob, mut sa, _sb) = alice_bob_sessions();
+    let c = client(StubRelay::new());
+    let purpose = PurposeId::paykit();
+
+    let body = vec![0xabu8; MAX_DROP_BODY_BYTES + 1];
+    let env = MoltEnvelope {
+        purpose: &purpose,
+        authenticity: Authenticity::SessionAuthenticated,
+        body: &body,
+    };
+    let err = send_bonded(&mut sa, &env, &c)
+        .await
+        .expect_err("over-limit body must be rejected");
+    assert!(matches!(err, PaykitError::QuotaExceeded { .. }));
+    // Rejected before any network call: nothing reached the relay...
+    assert_eq!(c.backend().message_count(), 0);
+    // ...and before the ratchet index was consumed.
+    assert_eq!(sa.send.next_index(), 0);
 }
 
 #[tokio::test]

@@ -30,7 +30,7 @@ pub const DROP_NETWORK: &str = "drop";
 pub const DROP_ENDPOINT_KIND: &str = "opaque-channel";
 
 /// The S8 Drop relay manifest, byte-for-byte the JSON returned by
-/// `pubky-core`'s `http-relay::drop_relay_manifest()` (quoted in plan v11,
+/// `pubky-core`'s `http-relay::drop_relay_manifest()` (quoted in plan v14,
 /// S9). The executing adapter's [`Manifest`] is field-for-field equivalent;
 /// the JSON is embedded for cross-implementation pinning because
 /// `pubky-molt`'s `Field` text form (`"A | B"`) differs from this JSON's

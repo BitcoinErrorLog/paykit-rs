@@ -35,8 +35,8 @@ fn channel_id_vectors_match_through_bond_session() {
 
     // Both sides derive their pair secrets from their own seeds, exactly as
     // a real session would after an intro exchange.
-    let sk_a = derive_pair_secret(&alice_seed, &bob_id);
-    let sk_b = derive_pair_secret(&bob_seed, &alice_id);
+    let sk_a = derive_pair_secret(&alice_seed, &bob_id).expect("pair secret alice");
+    let sk_b = derive_pair_secret(&bob_seed, &alice_id).expect("pair secret bob");
     let pk_a = pair_public(&sk_a);
     let pk_b = pair_public(&sk_b);
 

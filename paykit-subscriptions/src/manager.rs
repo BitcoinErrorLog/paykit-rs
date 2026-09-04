@@ -7,12 +7,13 @@ use crate::{
 };
 use paykit_interactive::{PaykitInteractiveManager, PaykitNoiseChannel, PaykitNoiseMessage};
 use paykit_lib::protocol::drop_transport::{
-    send_protocol_message, BondSession, DropClient, DropHttp, ProtocolMessageKind,
+    receive_bonded, send_protocol_message, BondSession, DropClient, DropHttp, ProtocolMessageKind,
 };
 use paykit_lib::protocol::{
     owner_peerid_bytes_from_z32, subscription_proposal_path, PURPOSE_SUBSCRIPTION_PROPOSAL,
 };
-use paykit_lib::PublicKey;
+use paykit_lib::{HomeserverSessionStorage, PublicKey};
+use pubky_crypto::molt::{Authenticity, Header, PurposeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -149,6 +150,195 @@ impl SubscriptionManager {
             .read()
             .await
             .contains_key(&peer.to_string())
+    }
+
+    /// Deliver an already-serialized protocol payload to `peer_z32` over its
+    /// registered bonded route (W2b).
+    ///
+    /// One registry write guard spans the membership check and the dispatch,
+    /// so a route removed after the caller selected bonded delivery surfaces
+    /// as a clean error here — never a panic and never a silent fallback to
+    /// the public outbox (fail closed). The guard is held across the send so
+    /// registration state cannot change mid-dispatch.
+    async fn deliver_bonded(
+        &self,
+        peer_z32: &str,
+        kind: ProtocolMessageKind,
+        body: &[u8],
+    ) -> Result<()> {
+        let mut routes = self.bonded_outbounds.write().await;
+        let route = routes.get_mut(peer_z32).ok_or_else(|| {
+            anyhow::anyhow!(
+                "bonded route to {} is no longer registered; message not delivered (no public fallback)",
+                peer_z32
+            )
+        })?;
+        send_protocol_message(&mut route.session, kind, body, &route.client)
+            .await
+            .map_err(|e| anyhow::anyhow!("bonded send failed (no public fallback): {}", e))
+    }
+
+    /// Publish a payment request for async discovery (W2b).
+    ///
+    /// When a bonded route is registered for the recipient (see
+    /// [`add_bonded_outbound`](Self::add_bonded_outbound)), the encrypted
+    /// request is delivered over the recipient's Drop channel with purpose
+    /// `pubky.molt.paykit.v1` and nothing is written to any `/pub/` path; a
+    /// failed bonded send returns an error and never falls back to the
+    /// public outbox. When no route is registered, the behavior is
+    /// byte-identical to [`crate::discovery::publish_payment_request`].
+    ///
+    /// The payload (Sealed Blob, canonical path in the AAD) is identical on
+    /// both routes, so the recipient decrypts it with the unchanged schema
+    /// regardless of how it arrived.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - Authenticated transport for the sender (used only
+    ///   when no bonded route is registered)
+    /// * `sender_pubkey_z32` - Sender's z-base-32 pubkey (storage owner)
+    /// * `request` - The payment request to publish
+    /// * `recipient_noise_pk` - Recipient's Noise endpoint X25519 public key
+    pub async fn publish_payment_request<T: HomeserverSessionStorage>(
+        &self,
+        transport: &T,
+        sender_pubkey_z32: &str,
+        request: &PaymentRequest,
+        recipient_noise_pk: &[u8; 32],
+    ) -> Result<()> {
+        let recipient_z32 = request.to.to_string();
+        if self
+            .bonded_outbounds
+            .read()
+            .await
+            .contains_key(&recipient_z32)
+        {
+            let (_path, envelope) = crate::discovery::seal_payment_request(
+                sender_pubkey_z32,
+                request,
+                recipient_noise_pk,
+            )?;
+            self.deliver_bonded(
+                &recipient_z32,
+                ProtocolMessageKind::Request,
+                envelope.as_bytes(),
+            )
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to deliver bonded payment request (no public fallback): {}",
+                    e
+                )
+            })
+        } else {
+            crate::discovery::publish_payment_request(
+                transport,
+                sender_pubkey_z32,
+                request,
+                recipient_noise_pk,
+            )
+            .await
+        }
+    }
+
+    /// Store an encrypted ACK for `peer` (W2b): over the bonded Drop
+    /// channel when a route is registered for `peer`, otherwise via the
+    /// caller's legacy public-outbox write.
+    ///
+    /// - Bonded: the ACK bytes are delivered with
+    ///   [`ProtocolMessageKind::Ack`] (declared `ExternallyAuthenticated`,
+    ///   so the signed receipt inside the body stays independently
+    ///   verifiable). `public_write` is never invoked, and a failed bonded
+    ///   send returns an error — no public fallback.
+    /// - No route: `public_write()` runs exactly as the caller would have
+    ///   invoked it (byte-identical legacy behavior).
+    ///
+    /// # Arguments
+    ///
+    /// * `peer` - The counterparty the ACK is addressed to
+    /// * `encrypted_ack` - The encrypted ACK as produced by
+    ///   `paykit_lib::protocol::ack::encrypt_ack`
+    /// * `public_write` - The caller's existing public-outbox write
+    ///   (`/pub/paykit.app/v0/acks/…`), invoked only when no bonded route
+    ///   is registered
+    pub async fn store_encrypted_ack<F, Fut>(
+        &self,
+        peer: &PublicKey,
+        encrypted_ack: &[u8],
+        public_write: F,
+    ) -> Result<()>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        let peer_z32 = peer.to_string();
+        if self.bonded_outbounds.read().await.contains_key(&peer_z32) {
+            self.deliver_bonded(&peer_z32, ProtocolMessageKind::Ack, encrypted_ack)
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to deliver bonded ACK (no public fallback): {}", e)
+                })
+        } else {
+            public_write().await
+        }
+    }
+
+    /// Poll every registered bonded route's receive channels and open every
+    /// envelope that authenticates (W2b receive helper; the library-level
+    /// caller of [`receive_bonded`]).
+    ///
+    /// Returns one `(peer_z32, header, authenticity, body)` tuple per opened
+    /// envelope across all registered routes, keyed by the registry's peer
+    /// z32. Bodies are returned untouched and the authenticity is exactly
+    /// the AAD-bound declaration; successfully opened messages are
+    /// ack-deleted by [`receive_bonded`], unopenable ones stay on the relay
+    /// for TTL expiry.
+    ///
+    /// # Errors
+    ///
+    /// Mirroring [`receive_bonded`], a route whose every channel poll failed
+    /// does not discard messages already collected from other routes; an
+    /// error is returned only when **every** registered route failed to
+    /// poll. An empty registry yields an empty result.
+    pub async fn poll_bonded(
+        &self,
+        purposes: &[PurposeId],
+    ) -> Result<Vec<(String, Header, Authenticity, Vec<u8>)>> {
+        let mut routes = self.bonded_outbounds.write().await;
+        let mut out = Vec::new();
+        let mut first_error: Option<anyhow::Error> = None;
+        let mut failed = 0usize;
+        for (peer_z32, route) in routes.iter_mut() {
+            match receive_bonded(
+                std::slice::from_mut(&mut route.session),
+                purposes,
+                &route.client,
+            )
+            .await
+            {
+                Ok(messages) => {
+                    out.extend(
+                        messages
+                            .into_iter()
+                            .map(|(_peer, hdr, authenticity, body)| {
+                                (peer_z32.clone(), hdr, authenticity, body)
+                            }),
+                    );
+                }
+                Err(e) => {
+                    failed += 1;
+                    if first_error.is_none() {
+                        first_error = Some(anyhow::Error::new(e));
+                    }
+                }
+            }
+        }
+        if !routes.is_empty() && failed == routes.len() {
+            return Err(
+                first_error.unwrap_or_else(|| anyhow::anyhow!("every bonded route poll failed"))
+            );
+        }
+        Ok(out)
     }
 
     /// Validate payment request
@@ -291,7 +481,10 @@ impl SubscriptionManager {
         // channel when a BondSession is registered for the subscriber (W2b),
         // otherwise to the public homeserver outbox as before. Fail closed:
         // a failed bonded send returns an error and never falls back to the
-        // public outbox.
+        // public outbox. `deliver_bonded` holds one registry write guard
+        // across the membership check and the dispatch, so a route removed
+        // between the check here and the send surfaces as a clean error,
+        // never a panic.
         let subscriber_z32 = subscription.subscriber.to_string();
         let is_bonded = self
             .bonded_outbounds
@@ -300,15 +493,10 @@ impl SubscriptionManager {
             .contains_key(&subscriber_z32);
         if is_bonded {
             let (_path, envelope) = self.seal_subscription_proposal(&subscription).await?;
-            let mut routes = self.bonded_outbounds.write().await;
-            let route = routes
-                .get_mut(&subscriber_z32)
-                .expect("presence checked above");
-            send_protocol_message(
-                &mut route.session,
+            self.deliver_bonded(
+                &subscriber_z32,
                 ProtocolMessageKind::Proposal,
                 envelope.as_bytes(),
-                &route.client,
             )
             .await
             .map_err(|e| {
@@ -1044,10 +1232,10 @@ mod tests {
     use crate::{storage::FileSubscriptionStorage, Amount, PaymentFrequency, SubscriptionTerms};
     use paykit_interactive::{PaykitInteractiveManager, PaykitStorage, ReceiptGenerator};
     use paykit_lib::protocol::drop_transport::{receive_bonded, DropHttp};
-    use paykit_lib::{MethodId, PublicKey};
+    use paykit_lib::{HomeserverSessionStorage, MethodId, PublicKey};
     use pubky_crypto::molt::{
-        derive_bond, derive_pair_secret, pair_public, Bond, BondRecord, PairPublic, PeerId,
-        PurposeId,
+        derive_bond, derive_pair_secret, pair_public, Authenticity, Bond, BondRecord, PairPublic,
+        PeerId, PurposeId,
     };
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -1247,6 +1435,7 @@ mod tests {
         channels: Mutex<HashMap<String, Vec<StoredMessage>>>,
         next_cursor: AtomicU64,
         fail_writes: AtomicBool,
+        fail_reads: AtomicBool,
     }
 
     impl StubDropRelay {
@@ -1255,6 +1444,7 @@ mod tests {
                 channels: Mutex::new(HashMap::new()),
                 next_cursor: AtomicU64::new(1),
                 fail_writes: AtomicBool::new(false),
+                fail_reads: AtomicBool::new(false),
             }
         }
 
@@ -1322,6 +1512,11 @@ mod tests {
             url: &str,
             _max_response_bytes: usize,
         ) -> paykit_lib::Result<Vec<u8>> {
+            if self.0.fail_reads.load(Ordering::SeqCst) {
+                return Err(paykit_lib::PaykitError::Transport(
+                    "relay read failure".into(),
+                ));
+            }
             let key = StubDropRelay::channel_key(url)?;
             let messages = self
                 .0
@@ -1379,8 +1574,8 @@ mod tests {
     fn bonded_pair() -> (PeerId, PeerId, BondSession, BondSession) {
         let provider = PeerId([0x01; 32]);
         let subscriber = PeerId([0x02; 32]);
-        let sk_p = derive_pair_secret(&[0x11; 32], &subscriber);
-        let sk_s = derive_pair_secret(&[0x22; 32], &provider);
+        let sk_p = derive_pair_secret(&[0x11; 32], &subscriber).expect("pair secret");
+        let sk_s = derive_pair_secret(&[0x22; 32], &provider).expect("pair secret");
         let pk_p = pair_public(&sk_p);
         let pk_s = pair_public(&sk_s);
         let bond_p: Bond = derive_bond(&provider, &sk_p, &subscriber, &pk_s).expect("bond");
@@ -1568,5 +1763,390 @@ mod tests {
         assert!(manager.has_bonded_outbound(&peer).await);
         assert!(manager.remove_bonded_outbound(&peer).await);
         assert!(!manager.has_bonded_outbound(&peer).await);
+    }
+
+    // ============================================================
+    // W4 audit: SF-2 (mid-flight route removal) and SF-3 (bonded
+    // requests/ACKs + poll_bonded through the registry)
+    // ============================================================
+
+    /// Homeserver session storage mock recording every `put` (path, content).
+    struct RecordingSessionStorage {
+        puts: Mutex<Vec<(String, String)>>,
+    }
+
+    impl RecordingSessionStorage {
+        fn new() -> Self {
+            RecordingSessionStorage {
+                puts: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn recorded(&self) -> Vec<(String, String)> {
+            self.puts.lock().expect("lock").clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HomeserverSessionStorage for RecordingSessionStorage {
+        async fn upsert_payment_endpoint(
+            &self,
+            _method: &MethodId,
+            _data: &paykit_lib::EndpointData,
+        ) -> paykit_lib::Result<()> {
+            Ok(())
+        }
+
+        async fn remove_payment_endpoint(&self, _method: &MethodId) -> paykit_lib::Result<()> {
+            Ok(())
+        }
+
+        async fn put(&self, path: &str, content: &str) -> paykit_lib::Result<()> {
+            self.puts
+                .lock()
+                .expect("lock")
+                .push((path.to_string(), content.to_string()));
+            Ok(())
+        }
+
+        async fn get(&self, _path: &str) -> paykit_lib::Result<Option<String>> {
+            Ok(None)
+        }
+
+        async fn delete(&self, _path: &str) -> paykit_lib::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Register a bonded route to `peer` on `manager` over a fresh stub
+    /// relay; returns the relay and the counterparty's session.
+    fn bonded_route_setup() -> (PeerId, BondSession, BondSession) {
+        let (sender_id, _recipient_id, sender_session, recipient_session) = bonded_pair();
+        (sender_id, sender_session, recipient_session)
+    }
+
+    #[tokio::test]
+    async fn test_bonded_delivery_route_removed_midflight_fails_closed() {
+        // SF-2 regression: the bonded dispatch used to re-acquire the
+        // registry lock and `expect("presence checked above")`; a route
+        // removed between the caller's presence check and the dispatch
+        // turned that into a reachable panic. `deliver_bonded` now holds one
+        // write guard across check-and-dispatch and returns a clean error —
+        // for every message kind (SF-3 funnels all three through it).
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+        let peer = test_pubkey();
+
+        let (_peer_id, sender_session, _recipient_session) = bonded_route_setup();
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager
+            .add_bonded_outbound(&peer, sender_session, client)
+            .await;
+        // The route vanishes between the caller's presence check and the
+        // dispatch (the interleaving that previously panicked).
+        assert!(manager.remove_bonded_outbound(&peer).await);
+
+        for kind in [
+            ProtocolMessageKind::Request,
+            ProtocolMessageKind::Proposal,
+            ProtocolMessageKind::Ack,
+        ] {
+            let err = manager
+                .deliver_bonded(&peer.to_string(), kind, b"payload")
+                .await
+                .expect_err("removed route must be a clean error, not a panic");
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("no longer registered"),
+                "unexpected error: {msg}"
+            );
+            assert!(
+                msg.contains("no public fallback"),
+                "unexpected error: {msg}"
+            );
+        }
+        // Fail closed in every case: nothing reached the relay.
+        assert_eq!(relay.0.message_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_publish_payment_request_bonded_arrives_via_drop() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let sender = test_pubkey();
+        let recipient = test_pubkey();
+        let (_peer_id, sender_session, mut recipient_session) = bonded_route_setup();
+
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager
+            .add_bonded_outbound(&recipient, sender_session, client)
+            .await;
+
+        let storage = RecordingSessionStorage::new();
+        let request = PaymentRequest::new(
+            sender.clone(),
+            recipient.clone(),
+            Amount::from_sats(1000),
+            "SAT".to_string(),
+            MethodId("lightning".to_string()),
+        );
+        let (noise_sk, noise_pk) = pubky_crypto::sealed_blob::x25519_generate_keypair();
+        manager
+            .publish_payment_request(&storage, &sender.to_string(), &request, &noise_pk)
+            .await
+            .expect("bonded publish");
+
+        // SF-3: with a registered route the storage mock records ZERO
+        // writes under /pub/; the request traveled over the Drop channel.
+        assert!(storage.recorded().is_empty());
+        assert_eq!(relay.0.message_count(), 1);
+
+        // The recipient opens it over its own receive channel; the body is
+        // the same encrypted blob the public path would have stored.
+        let sub_client: DropClient<SharedRelay> =
+            DropClient::new("http://relay.test", relay.clone()).unwrap();
+        let received = receive_bonded(
+            std::slice::from_mut(&mut recipient_session),
+            &[PurposeId::paykit()],
+            &sub_client,
+        )
+        .await
+        .expect("recipient receive");
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].2, Authenticity::SessionAuthenticated);
+        let body = String::from_utf8(received[0].3.clone()).expect("blob is text");
+        assert!(pubky_crypto::sealed_blob::is_sealed_blob(&body));
+
+        let path = paykit_lib::protocol::payment_request_path(
+            &sender.to_string(),
+            &recipient.to_string(),
+            &request.request_id,
+        )
+        .expect("path");
+        let owner_bytes = owner_peerid_bytes_from_z32(&sender.to_string()).expect("owner bytes");
+        let plaintext = pubky_crypto::sealed_blob::sealed_blob_decrypt_with_context(
+            &noise_sk,
+            &body,
+            &owner_bytes,
+            &path,
+        )
+        .expect("decrypt request");
+        let published: crate::discovery::PublishedRequest =
+            serde_json::from_slice(&plaintext).expect("decode");
+        assert_eq!(published.request.request_id, request.request_id);
+        assert!(published.active);
+    }
+
+    #[tokio::test]
+    async fn test_publish_payment_request_unbonded_is_byte_identical_legacy() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let sender = test_pubkey();
+        let recipient = test_pubkey();
+        let request = PaymentRequest::new(
+            sender.clone(),
+            recipient.clone(),
+            Amount::from_sats(1000),
+            "SAT".to_string(),
+            MethodId("lightning".to_string()),
+        );
+        let (_noise_sk, noise_pk) = pubky_crypto::sealed_blob::x25519_generate_keypair();
+
+        // Manager path with no registered route...
+        let via_manager = RecordingSessionStorage::new();
+        manager
+            .publish_payment_request(&via_manager, &sender.to_string(), &request, &noise_pk)
+            .await
+            .expect("legacy publish via manager");
+
+        // ...must behave byte-identically to the legacy entry point.
+        let direct = RecordingSessionStorage::new();
+        crate::discovery::publish_payment_request(
+            &direct,
+            &sender.to_string(),
+            &request,
+            &noise_pk,
+        )
+        .await
+        .expect("legacy publish direct");
+
+        let via_manager = via_manager.recorded();
+        let direct = direct.recorded();
+        assert_eq!(via_manager.len(), 1);
+        assert_eq!(direct.len(), 1);
+        // Same canonical /pub/ path; bodies differ only by random nonce.
+        assert_eq!(via_manager[0].0, direct[0].0);
+        assert!(via_manager[0].0.starts_with("/pub/paykit.app/v0/requests/"));
+        assert!(pubky_crypto::sealed_blob::is_sealed_blob(&via_manager[0].1));
+    }
+
+    #[tokio::test]
+    async fn test_store_encrypted_ack_bonded_arrives_via_drop() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let recipient = test_pubkey();
+        let (_peer_id, acker_session, mut recipient_session) = bonded_route_setup();
+
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager
+            .add_bonded_outbound(&recipient, acker_session, client)
+            .await;
+
+        let public_calls = Arc::new(Mutex::new(0usize));
+        let calls = public_calls.clone();
+        let ack_bytes = b"signed-sb2-ack-bytes".to_vec();
+        manager
+            .store_encrypted_ack(&recipient, &ack_bytes, move || {
+                let calls = calls.clone();
+                async move {
+                    *calls.lock().expect("lock") += 1;
+                    Ok(())
+                }
+            })
+            .await
+            .expect("bonded ack");
+
+        // SF-3, fail closed: the public write never ran; the ACK traveled
+        // over the Drop channel.
+        assert_eq!(*public_calls.lock().expect("lock"), 0);
+        assert_eq!(relay.0.message_count(), 1);
+
+        // The recipient receives it declared ExternallyAuthenticated
+        // (receipt semantics, S9).
+        let sub_client: DropClient<SharedRelay> =
+            DropClient::new("http://relay.test", relay.clone()).unwrap();
+        let received = receive_bonded(
+            std::slice::from_mut(&mut recipient_session),
+            &[PurposeId::paykit()],
+            &sub_client,
+        )
+        .await
+        .expect("receive");
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].2, Authenticity::ExternallyAuthenticated);
+        assert_eq!(received[0].3, ack_bytes);
+    }
+
+    #[tokio::test]
+    async fn test_store_encrypted_ack_unbonded_runs_public_write() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+        let peer = test_pubkey();
+
+        // No route registered: the caller's legacy public write runs,
+        // unchanged.
+        let public_calls = Arc::new(Mutex::new(Vec::new()));
+        let calls = public_calls.clone();
+        manager
+            .store_encrypted_ack(&peer, b"ack-bytes", move || {
+                let calls = calls.clone();
+                async move {
+                    calls.lock().expect("lock").push(b"ack-bytes".to_vec());
+                    Ok(())
+                }
+            })
+            .await
+            .expect("public ack write");
+        assert_eq!(public_calls.lock().expect("lock").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_poll_bonded_receives_across_registered_routes() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let peer = test_pubkey();
+        let (_peer_id, my_session, mut peer_session) = bonded_route_setup();
+
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        let client: DropClient<Box<dyn DropHttp>> = DropClient::new(
+            "http://relay.test",
+            Box::new(relay.clone()) as Box<dyn DropHttp>,
+        )
+        .unwrap();
+        manager.add_bonded_outbound(&peer, my_session, client).await;
+
+        // The counterparty sends a protocol message back over the same
+        // relay; `poll_bonded` is the in-repo receive-side caller of
+        // `receive_bonded`.
+        let peer_client: DropClient<SharedRelay> =
+            DropClient::new("http://relay.test", relay.clone()).unwrap();
+        send_protocol_message(
+            &mut peer_session,
+            ProtocolMessageKind::Request,
+            b"inbound-request",
+            &peer_client,
+        )
+        .await
+        .expect("peer send");
+
+        let received = manager
+            .poll_bonded(&[PurposeId::paykit()])
+            .await
+            .expect("poll");
+        assert_eq!(received.len(), 1);
+        let (peer_z32, hdr, authenticity, body) = &received[0];
+        assert_eq!(peer_z32, &peer.to_string());
+        assert_eq!(hdr.purpose, PurposeId::paykit());
+        assert_eq!(authenticity, &Authenticity::SessionAuthenticated);
+        assert_eq!(body, b"inbound-request");
+
+        // Opened messages were ack-deleted: a second poll is empty.
+        let again = manager
+            .poll_bonded(&[PurposeId::paykit()])
+            .await
+            .expect("second poll");
+        assert!(again.is_empty());
+        assert_eq!(relay.0.message_count(), 0);
+
+        // An empty registry polls clean.
+        assert!(manager.remove_bonded_outbound(&peer).await);
+        let none = manager
+            .poll_bonded(&[PurposeId::paykit()])
+            .await
+            .expect("empty registry");
+        assert!(none.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_poll_bonded_errors_when_every_route_fails() {
+        let temp_dir = tempdir().unwrap();
+        let (manager, _storage) = test_manager(&temp_dir);
+
+        let peer = test_pubkey();
+        let (_peer_id, my_session, _peer_session) = bonded_route_setup();
+        let relay = SharedRelay(Arc::new(StubDropRelay::new()));
+        relay.0.fail_reads.store(true, Ordering::SeqCst);
+        let client: DropClient<Box<dyn DropHttp>> =
+            DropClient::new("http://relay.test", Box::new(relay) as Box<dyn DropHttp>).unwrap();
+        manager.add_bonded_outbound(&peer, my_session, client).await;
+
+        let err = manager
+            .poll_bonded(&[PurposeId::paykit()])
+            .await
+            .expect_err("every route failing must error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("relay read failure"),
+            "unexpected error: {msg}"
+        );
     }
 }

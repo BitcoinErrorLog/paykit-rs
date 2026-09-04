@@ -76,8 +76,18 @@ fn channel_id_vectors_match_through_bond_session() {
         let purpose =
             PurposeId::parse(entry["purpose"].as_str().expect("purpose")).expect("valid purpose");
         let dir = entry["dir"].as_u64().expect("dir") as u8;
-        let epochs = entry["epochs"].as_object().expect("epochs map");
-        let mut epochs: Vec<(u32, &str)> = epochs
+        // Two-viewpoint vectors: each channel id is recorded as computed by
+        // Alice (her Bond, her send/recv mapping) and by Bob; both must
+        // equal each other and the BondSession-derived value.
+        let epochs_alice = entry["epochs_alice"].as_object().expect("epochs_alice map");
+        let epochs_bob = entry["epochs_bob"].as_object().expect("epochs_bob map");
+        assert_eq!(
+            epochs_alice,
+            epochs_bob,
+            "two-viewpoint mismatch: {} dir {dir}",
+            purpose.as_str()
+        );
+        let mut epochs: Vec<(u32, &str)> = epochs_alice
             .iter()
             .map(|(k, v)| {
                 (

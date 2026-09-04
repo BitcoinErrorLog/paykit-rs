@@ -1,5 +1,58 @@
 # DECISIONS.md — Molt wave 2 (paykit-rs, `feat/molt-route`)
 
+## W3 review fixes (2026-09-04, against the updated `pubky-crypto`)
+
+18. **`receive_bonded` binds the polled purpose and the receiver's inbox
+    kid.** `pubky_crypto::molt::open` is now
+    `open(bytes, ratchet, expected_inbox_kid, expected_purpose)` and
+    transactional (authenticate before any ratchet commit). `receive_bonded`
+    passes `DROP_INBOX_KID` (the receiver's own inbox kid for Drop traffic,
+    decision 11) and the `PurposeId` of the channel being polled. A relay
+    copying a valid message between a peer's purpose channels is now rejected
+    with `PurposeMismatch` before `peek_recv`/AEAD/commit, consuming no
+    ratchet state, so the genuine delivery on the correct channel still opens
+    at the same index; ack-delete already happened only after a successful
+    open (decision 12) and is unchanged. Regression test:
+    `receive_bonded_rejects_cross_channel_copy_without_consuming_ratchet_state`.
+
+19. **Poll response size cap enforced during the read, not after.**
+    `DropHttp::http_get` now takes `max_response_bytes` and the trait
+    contract requires the backend to abort with an explicit error as soon as
+    the cap is exceeded. `ReqwestDropHttp` does a `Content-Length` precheck
+    (reject before reading a byte) and a streaming `chunk()` read capped at
+    `max_response_bytes` (abort on the first chunk that would exceed it);
+    `DropClient::poll` passes `MAX_POLL_RESPONSE_BYTES` and keeps the
+    post-read check as defense in depth for lenient backends. `chunk()` is
+    used instead of `bytes_stream()` so the `reqwest` dependency needs no new
+    feature flags. Test: `poll_rejects_oversize_response_body` (stub returns
+    `MAX_POLL_RESPONSE_BYTES + 1`).
+
+20. **Poll CBOR decoding is streaming, strict, and duplicate-free.**
+    Integer keys `{0: cursor, 1: ts, 2: body}` are primary (the current
+    `pubky-core` relay form); text keys remain as a fallback for the earlier
+    relay revision. The previous decoder went through
+    `serde_cbor::Value::Map`, whose map representation collapses duplicate
+    keys last-write-wins *before* the client could see them. Decoding is now
+    a single streaming serde pass: key spellings normalize to one canonical
+    field, any duplicate canonical field (int/int, text/text, or mixed
+    int/text) is rejected, unknown keys are ignored, known fields with the
+    wrong type are errors, the array is bounded at `MAX_DROP_POLL_LIMIT`
+    *while* decoding, and trailing bytes after the top-level array are
+    rejected. The fallback cannot bypass checks because key spelling only
+    selects the canonical field — every value check (type, range,
+    duplicates, entry count) runs identically for both spellings (tests:
+    `poll_response_rejects_duplicate_canonical_fields`,
+    `poll_response_text_fallback_cannot_bypass_checks`).
+
+21. **Vector test tracks the two-viewpoint vector format.** The regenerated
+    `molt_crypto_v1.json` records each channel id twice (`epochs_alice`,
+    `epochs_bob`, with a `role` label). The cross-check in
+    `tests/molt_vectors.rs` now asserts the two viewpoints are equal and each
+    matches the `BondSession`-derived id — the same assertion as before,
+    made stronger. No product code changed.
+
+
+
 Ambiguities in `molt_v11.plan.md` section S9 resolved during implementation,
 with reasoning. In every case the more conservative reading was chosen.
 Section numbers refer to the v11 plan (the brief named `molt_v10.plan.md`;

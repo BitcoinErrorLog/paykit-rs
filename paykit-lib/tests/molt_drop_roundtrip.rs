@@ -5,7 +5,7 @@
 use async_trait::async_trait;
 use paykit_lib::protocol::drop_transport::{
     receive_bonded, send_bonded, send_protocol_message, BondSession, DropClient, DropHttp,
-    ProtocolMessageKind, MAX_DROP_BODY_BYTES,
+    ProtocolMessageKind, MAX_DROP_BODY_BYTES, MAX_POLL_RESPONSE_BYTES,
 };
 use paykit_lib::{PaykitError, Result};
 use pubky_crypto::molt::{
@@ -26,6 +26,7 @@ struct StubRelay {
     next_cursor: AtomicU64,
     fail_writes: AtomicBool,
     fail_reads: AtomicBool,
+    oversize_responses: AtomicBool,
 }
 
 impl StubRelay {
@@ -35,6 +36,7 @@ impl StubRelay {
             next_cursor: AtomicU64::new(1),
             fail_writes: AtomicBool::new(false),
             fail_reads: AtomicBool::new(false),
+            oversize_responses: AtomicBool::new(false),
         }
     }
 
@@ -72,6 +74,30 @@ impl StubRelay {
             .map(Vec::len)
             .sum()
     }
+
+    /// The relay-side key for a channel id (base64url, no padding).
+    fn key_of(channel: &pubky_crypto::molt::ChannelId) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(channel.0)
+    }
+
+    /// Copy the newest message from one channel to another, as a malicious
+    /// relay could (cross-channel copy with a fresh cursor).
+    fn copy_newest(
+        &self,
+        from: &pubky_crypto::molt::ChannelId,
+        to: &pubky_crypto::molt::ChannelId,
+    ) {
+        let (from_key, to_key) = (Self::key_of(from), Self::key_of(to));
+        let mut channels = self.channels.lock().expect("lock");
+        let (_, ts, body) = channels
+            .get(&from_key)
+            .and_then(|msgs| msgs.last())
+            .expect("source channel has a message")
+            .clone();
+        let cursor = self.next_cursor.fetch_add(1, Ordering::SeqCst);
+        channels.entry(to_key).or_default().push((cursor, ts, body));
+    }
 }
 
 #[async_trait]
@@ -92,9 +118,14 @@ impl DropHttp for StubRelay {
         Ok(cursor)
     }
 
-    async fn http_get(&self, url: &str) -> Result<Vec<u8>> {
+    async fn http_get(&self, url: &str, _max_response_bytes: usize) -> Result<Vec<u8>> {
         if self.fail_reads.load(Ordering::SeqCst) {
             return Err(PaykitError::Transport("relay read failure".into()));
+        }
+        if self.oversize_responses.load(Ordering::SeqCst) {
+            // A misbehaving (or hostile) backend ignoring the cap: the
+            // client's own post-read bound must still reject the body.
+            return Ok(vec![0u8; MAX_POLL_RESPONSE_BYTES + 1]);
         }
         let key = Self::channel_key(url)?;
         let messages = self
@@ -341,4 +372,84 @@ async fn put_rejects_oversized_body_client_side() {
     let big = vec![0u8; MAX_DROP_BODY_BYTES + 1];
     let err = c.put(&channel, &big).await.expect_err("oversized");
     assert!(matches!(err, PaykitError::QuotaExceeded { .. }));
+}
+
+#[tokio::test]
+async fn receive_bonded_rejects_cross_channel_copy_without_consuming_ratchet_state() {
+    let (alice, _bob, mut sa, mut sb) = alice_bob_sessions();
+    let c = client(StubRelay::new());
+    let paykit = PurposeId::paykit();
+    let hello = PurposeId::hello();
+
+    // Alice seals a genuine PAYKIT request; it lands on Bob's PAYKIT recv
+    // channel.
+    send_protocol_message(
+        &mut sa,
+        ProtocolMessageKind::Request,
+        b"genuine-request",
+        &c,
+    )
+    .await
+    .expect("send");
+
+    // A relay copies the sealed message onto Bob's HELLO channel (same
+    // receive direction, different purpose).
+    let epoch = sb.poll_epochs(now()).expect("epochs")[0];
+    let paykit_channel = sb.recv_channel(&paykit, epoch);
+    let hello_channel = sb.recv_channel(&hello, epoch);
+    c.backend().copy_newest(&paykit_channel, &hello_channel);
+    assert_eq!(c.backend().message_count(), 2);
+
+    // Polling the HELLO channel rejects the copy with PurposeMismatch inside
+    // `open` — before any ratchet state is consumed.
+    let state_before = format!("{:?}", sb.recv);
+    let got = receive_bonded(
+        std::slice::from_mut(&mut sb),
+        std::slice::from_ref(&hello),
+        &c,
+    )
+    .await
+    .expect("hello poll");
+    assert!(got.is_empty(), "cross-channel copy must not be delivered");
+    assert_eq!(
+        state_before,
+        format!("{:?}", sb.recv),
+        "rejection must leave the ratchet untouched"
+    );
+    assert_eq!(sb.recv.next_index(), 0);
+    assert_eq!(sb.recv.skipped_len(), 0);
+    // And it must not be ack-deleted: an unopened message stays on the relay.
+    assert_eq!(c.backend().message_count(), 2);
+
+    // The genuine delivery on the correct channel still opens at the same
+    // ratchet index (no replay rejection).
+    let got = receive_bonded(std::slice::from_mut(&mut sb), &[paykit], &c)
+        .await
+        .expect("paykit poll");
+    assert_eq!(got.len(), 1);
+    let (peer, hdr, authenticity, body) = &got[0];
+    assert_eq!(peer, &alice);
+    assert_eq!(hdr.n, 0);
+    assert_eq!(hdr.purpose, PurposeId::paykit());
+    assert_eq!(authenticity, &Authenticity::SessionAuthenticated);
+    assert_eq!(body, b"genuine-request");
+    assert_eq!(sb.recv.next_index(), 1);
+}
+
+#[tokio::test]
+async fn poll_rejects_oversize_response_body() {
+    let (_alice, _bob, _sa, mut sb) = alice_bob_sessions();
+    let relay = StubRelay::new();
+    relay.oversize_responses.store(true, Ordering::SeqCst);
+    let c = client(relay);
+    let err = receive_bonded(std::slice::from_mut(&mut sb), &[PurposeId::paykit()], &c)
+        .await
+        .expect_err("oversize body must be rejected");
+    assert!(
+        matches!(err, PaykitError::Serialization(ref m) if m.contains("size bound")),
+        "unexpected error: {err}"
+    );
+    // No ratchet state was consumed by the rejected response.
+    assert_eq!(sb.recv.next_index(), 0);
+    assert_eq!(sb.recv.skipped_len(), 0);
 }

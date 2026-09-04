@@ -71,7 +71,13 @@ pub trait DropHttp: Send + Sync {
     async fn http_put(&self, url: &str, body: Vec<u8>) -> Result<u64>;
 
     /// `GET` `url`; returns the raw response body (a CBOR array).
-    async fn http_get(&self, url: &str) -> Result<Vec<u8>>;
+    ///
+    /// The backend MUST NOT return more than `max_response_bytes` bytes: it
+    /// must reject the response (explicit error) as soon as the cap is known
+    /// to be exceeded (a declared `Content-Length` above the cap, or the
+    /// streaming body growing past it) rather than buffering an unbounded
+    /// body first.
+    async fn http_get(&self, url: &str, max_response_bytes: usize) -> Result<Vec<u8>>;
 
     /// `DELETE` `url`. Success or already-absent both count as `Ok`.
     async fn http_delete(&self, url: &str) -> Result<()>;
@@ -174,7 +180,10 @@ impl<H: DropHttp> DropClient<H> {
             sep = '&';
         }
         url.push_str(&format!("{sep}limit={limit}"));
-        let bytes = self.http.http_get(&url).await?;
+        // The cap is enforced by the backend *during* the read (see the
+        // `DropHttp::http_get` contract); the post-read check stays as
+        // defense in depth for backends that honor the contract loosely.
+        let bytes = self.http.http_get(&url, MAX_POLL_RESPONSE_BYTES).await?;
         if bytes.len() > MAX_POLL_RESPONSE_BYTES {
             return Err(PaykitError::Serialization(
                 "drop poll response exceeds size bound".into(),
@@ -197,83 +206,194 @@ impl<H: DropHttp> DropClient<H> {
 
 /// Decode a Drop poll response: a CBOR array of `{cursor, ts, body}` maps.
 ///
-/// The deployed `http-relay` encodes text keys via `serde_cbor` (see the
-/// wave-1 review flag in plan v11); the spec's stated form uses integer keys
-/// `{0: cursor, 1: ts, 2: body}`. Both are accepted so the client tracks
-/// either relay revision (see `DECISIONS.md`).
+/// Integer keys `{0: cursor, 1: ts, 2: body}` are primary — that is the
+/// deterministic form the current `pubky-core` http-relay emits. Text keys
+/// (`"cursor"`, `"ts"`, `"body"`, the earlier relay revision) remain
+/// accepted as a fallback, but a *canonical field* (`cursor`/`ts`/`body`
+/// regardless of key spelling) may appear at most once per map: duplicates
+/// are rejected rather than last-write-wins, so the text fallback cannot be
+/// used to override or smuggle a second value past the integer form (see
+/// `DECISIONS.md`). Unknown keys are ignored; a known field with the wrong
+/// type is an error.
+///
+/// Decoding is a single streaming pass over the CBOR (not a
+/// `serde_cbor::Value` round-trip, whose map representation would silently
+/// collapse duplicates) and the array is bounded at
+/// [`MAX_DROP_POLL_LIMIT`] entries *while* decoding.
 fn decode_poll_response(bytes: &[u8]) -> Result<Vec<DropMessage>> {
-    let value: serde_cbor::Value = serde_cbor::from_slice(bytes)
+    use serde::Deserialize;
+    let mut de = serde_cbor::Deserializer::from_slice(bytes);
+    let response = PollResponse::deserialize(&mut de)
         .map_err(|e| PaykitError::Serialization(format!("invalid drop poll CBOR: {e}")))?;
-    let items = match value {
-        serde_cbor::Value::Array(items) => items,
-        _ => {
-            return Err(PaykitError::Serialization(
-                "drop poll response is not an array".into(),
-            ))
-        }
-    };
-    if items.len() > MAX_DROP_POLL_LIMIT as usize {
-        return Err(PaykitError::Serialization(format!(
-            "drop poll response has {} entries (max {MAX_DROP_POLL_LIMIT})",
-            items.len()
-        )));
-    }
-    items.iter().map(decode_drop_message).collect()
+    // Reject trailing data after the top-level array.
+    de.end()
+        .map_err(|e| PaykitError::Serialization(format!("invalid drop poll CBOR: {e}")))?;
+    Ok(response.0)
 }
 
-fn decode_drop_message(value: &serde_cbor::Value) -> Result<DropMessage> {
-    let entries = match value {
-        serde_cbor::Value::Map(entries) => entries,
-        _ => {
-            return Err(PaykitError::Serialization(
-                "drop message is not a map".into(),
-            ))
+/// Top-level poll response wrapper with a bounded streaming visitor.
+struct PollResponse(Vec<DropMessage>);
+
+impl<'de> serde::Deserialize<'de> for PollResponse {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = PollResponse;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a CBOR array of drop messages")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<PollResponse, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut items = Vec::new();
+                while let Some(msg) = seq.next_element::<WireDropMessage>()? {
+                    if items.len() >= MAX_DROP_POLL_LIMIT as usize {
+                        return Err(serde::de::Error::custom(format!(
+                            "drop poll response exceeds {MAX_DROP_POLL_LIMIT} entries"
+                        )));
+                    }
+                    items.push(msg.0);
+                }
+                Ok(PollResponse(items))
+            }
         }
-    };
-    let mut cursor = None;
-    let mut ts = None;
-    let mut body = None;
-    for (key, val) in entries {
-        let field = match key {
-            serde_cbor::Value::Text(t) => t.as_str(),
-            serde_cbor::Value::Integer(i) => match *i {
-                0 => "cursor",
-                1 => "ts",
-                2 => "body",
-                _ => continue,
-            },
-            _ => continue,
-        };
-        match (field, val) {
-            ("cursor", serde_cbor::Value::Integer(i)) => {
-                cursor =
-                    Some(u64::try_from(*i).map_err(|_| {
-                        PaykitError::Serialization("drop cursor out of range".into())
-                    })?);
-            }
-            ("ts", serde_cbor::Value::Integer(i)) => {
-                ts = Some(u64::try_from(*i).map_err(|_| {
-                    PaykitError::Serialization("drop timestamp out of range".into())
-                })?);
-            }
-            ("body", serde_cbor::Value::Bytes(b)) => {
-                body = Some(b.clone());
-            }
-            // Unknown key or mismatched type: ignore unknown keys, but a
-            // known key with the wrong type makes the entry unusable.
-            ("cursor" | "ts" | "body", _) => {
-                return Err(PaykitError::Serialization(format!(
-                    "drop message field {field} has unexpected type"
-                )))
-            }
-            _ => {}
-        }
+        deserializer.deserialize_seq(V)
     }
-    match (cursor, ts, body) {
-        (Some(cursor), Some(ts), Some(body)) => Ok(DropMessage { cursor, ts, body }),
-        _ => Err(PaykitError::Serialization(
-            "drop message missing cursor/ts/body".into(),
-        )),
+}
+
+/// A Drop message map key: integer keys (primary, current relay form) and
+/// text keys (fallback, earlier relay form) normalize to the same canonical
+/// field so mixed-spelling duplicates are detected.
+enum FieldKey {
+    /// `0` / `"cursor"`.
+    Cursor,
+    /// `1` / `"ts"`.
+    Ts,
+    /// `2` / `"body"`.
+    Body,
+    /// Any other key (ignored, value skipped).
+    Unknown,
+}
+
+impl<'de> serde::Deserialize<'de> for FieldKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+        impl serde::de::Visitor<'_> for V {
+            type Value = FieldKey;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("integer 0/1/2 or text cursor/ts/body")
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<FieldKey, E> {
+                Ok(match v {
+                    0 => FieldKey::Cursor,
+                    1 => FieldKey::Ts,
+                    2 => FieldKey::Body,
+                    _ => FieldKey::Unknown,
+                })
+            }
+
+            fn visit_i64<E>(self, _v: i64) -> std::result::Result<FieldKey, E> {
+                // Negative integers are not field keys (and are not valid
+                // values for cursor/ts either).
+                Ok(FieldKey::Unknown)
+            }
+
+            fn visit_str<E>(self, v: &str) -> std::result::Result<FieldKey, E> {
+                Ok(match v {
+                    "cursor" => FieldKey::Cursor,
+                    "ts" => FieldKey::Ts,
+                    "body" => FieldKey::Body,
+                    _ => FieldKey::Unknown,
+                })
+            }
+        }
+        deserializer.deserialize_any(V)
+    }
+}
+
+/// One `{cursor, ts, body}` map with strict field semantics.
+struct WireDropMessage(DropMessage);
+
+impl<'de> serde::Deserialize<'de> for WireDropMessage {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = WireDropMessage;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a CBOR map {0: cursor, 1: ts, 2: body}")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<WireDropMessage, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut cursor = None;
+                let mut ts = None;
+                let mut body = None;
+                while let Some(key) = map.next_key::<FieldKey>()? {
+                    let slot = match key {
+                        FieldKey::Cursor => &mut cursor,
+                        FieldKey::Ts => &mut ts,
+                        FieldKey::Body => &mut body,
+                        FieldKey::Unknown => {
+                            // Unknown key: skip its value, whatever it is.
+                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                            continue;
+                        }
+                    };
+                    if slot.is_some() {
+                        return Err(serde::de::Error::custom(
+                            "duplicate drop message field (cursor/ts/body)",
+                        ));
+                    }
+                    let value = map.next_value::<serde_cbor::Value>()?;
+                    *slot = Some(value);
+                }
+                fn uint_field(
+                    field: &str,
+                    value: Option<serde_cbor::Value>,
+                ) -> std::result::Result<u64, String> {
+                    match value {
+                        Some(serde_cbor::Value::Integer(i)) => u64::try_from(i)
+                            .map_err(|_| format!("drop message field {field} out of range")),
+                        Some(_) => Err(format!("drop message field {field} has unexpected type")),
+                        None => Err("drop message missing cursor/ts/body".to_string()),
+                    }
+                }
+                let cursor = uint_field("cursor", cursor).map_err(serde::de::Error::custom)?;
+                let ts = uint_field("ts", ts).map_err(serde::de::Error::custom)?;
+                let body = match body {
+                    Some(serde_cbor::Value::Bytes(b)) => b,
+                    Some(_) => {
+                        return Err(serde::de::Error::custom(
+                            "drop message field body has unexpected type",
+                        ))
+                    }
+                    None => {
+                        return Err(serde::de::Error::custom(
+                            "drop message missing cursor/ts/body",
+                        ))
+                    }
+                };
+                Ok(WireDropMessage(DropMessage { cursor, ts, body }))
+            }
+        }
+        deserializer.deserialize_map(V)
     }
 }
 
@@ -398,11 +518,16 @@ pub async fn send_bonded<H: DropHttp>(
 ///
 /// Returns one `(peer, header, authenticity, body)` tuple per opened
 /// envelope; the body is returned untouched (Molt never parses bodies) and
-/// the authenticity is exactly the AAD-bound declaration. Successfully
-/// opened messages are ack-deleted; messages that fail to open are skipped
-/// and left on the relay for TTL expiry (they may belong to a post-mix
-/// future the receiver has not scheduled yet). Ack failures are tolerated:
-/// a redelivered duplicate is rejected by ratchet replay protection.
+/// the authenticity is exactly the AAD-bound declaration. Every envelope is
+/// opened against the receiver's own inbox kid and the `PurposeId` of the
+/// channel being polled, so a message a relay copied between a peer's
+/// purpose channels is rejected (`PurposeMismatch`) without consuming
+/// ratchet state; the genuine delivery on the correct channel still opens
+/// at the same index. Successfully opened messages are ack-deleted — and
+/// only those: messages that fail to open are skipped and left on the relay
+/// for TTL expiry (they may belong to a post-mix future the receiver has
+/// not scheduled yet). Ack failures are tolerated: a redelivered duplicate
+/// is rejected by ratchet replay protection.
 ///
 /// # Errors
 ///
@@ -440,7 +565,13 @@ pub async fn receive_bonded<H: DropHttp>(
                     }
                 };
                 for msg in messages {
-                    match molt::open(&msg.body, &mut s.recv) {
+                    // Bind the receiver's own inbox kid and the purpose of
+                    // the channel being polled: the ratchet is per direction
+                    // but shared across purposes, so a relay copying a valid
+                    // message between a peer's purpose channels must be
+                    // rejected with PurposeMismatch BEFORE any ratchet state
+                    // is consumed (transactional open in pubky-crypto).
+                    match molt::open(&msg.body, &mut s.recv, &DROP_INBOX_KID, purpose) {
                         Ok((hdr, body)) => {
                             let authenticity = hdr.authenticity;
                             out.push((s.peer, hdr, authenticity, body));
@@ -579,8 +710,8 @@ impl DropHttp for ReqwestDropHttp {
         Ok(cursor)
     }
 
-    async fn http_get(&self, url: &str) -> Result<Vec<u8>> {
-        let resp = self
+    async fn http_get(&self, url: &str, max_response_bytes: usize) -> Result<Vec<u8>> {
+        let mut resp = self
             .client
             .get(url)
             .send()
@@ -592,11 +723,32 @@ impl DropHttp for ReqwestDropHttp {
                 "drop GET rejected with status {status}"
             )));
         }
-        let bytes = resp
-            .bytes()
+        // Content-Length precheck: reject before reading a single byte when
+        // the declared length already exceeds the cap.
+        if let Some(len) = resp.content_length() {
+            if len > max_response_bytes as u64 {
+                return Err(PaykitError::Transport(format!(
+                    "drop GET response declares {len} bytes (max {max_response_bytes})"
+                )));
+            }
+        }
+        // Streaming read capped at `max_response_bytes`: abort with an
+        // explicit error as soon as the body grows past the cap instead of
+        // buffering it whole first.
+        let mut body = Vec::new();
+        while let Some(chunk) = resp
+            .chunk()
             .await
-            .map_err(|e| transport_err("drop GET body", e))?;
-        Ok(bytes.to_vec())
+            .map_err(|e| transport_err("drop GET body", e))?
+        {
+            if body.len() + chunk.len() > max_response_bytes {
+                return Err(PaykitError::Transport(format!(
+                    "drop GET response exceeds {max_response_bytes} bytes"
+                )));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
     }
 
     async fn http_delete(&self, url: &str) -> Result<()> {
@@ -651,7 +803,7 @@ mod tests {
             async fn http_put(&self, _url: &str, _body: Vec<u8>) -> Result<u64> {
                 unreachable!()
             }
-            async fn http_get(&self, _url: &str) -> Result<Vec<u8>> {
+            async fn http_get(&self, _url: &str, _max_response_bytes: usize) -> Result<Vec<u8>> {
                 unreachable!()
             }
             async fn http_delete(&self, _url: &str) -> Result<()> {
@@ -784,6 +936,107 @@ mod tests {
         let many = serde_cbor::Value::Array((0..51).map(|i| text_key_message(i, 0, &[])).collect());
         let many = serde_cbor::to_vec(&many).expect("enc");
         assert!(decode_poll_response(&many).is_err());
+        // Trailing bytes after the top-level array.
+        let mut trailing = serde_cbor::to_vec(&serde_cbor::Value::Array(vec![])).expect("enc");
+        trailing.push(0x00);
+        assert!(decode_poll_response(&trailing).is_err());
+    }
+
+    /// Hand-encoded CBOR: `[{0: cursor, 1: ts, 2: h'body'}]` with optional
+    /// extra map entries appended (used to craft duplicate keys, which
+    /// `serde_cbor::Value::Map` cannot represent).
+    fn cbor_int_message(extra_entries: &[(u8, u8)]) -> Vec<u8> {
+        let map_len = 3 + extra_entries.len() as u8;
+        let mut w = vec![
+            0x81,
+            0xa0 | map_len,
+            0x00,
+            0x07,
+            0x01,
+            0x18,
+            0x2a,
+            0x02,
+            0x43,
+            0xaa,
+            0xbb,
+            0xcc,
+        ];
+        for (k, v) in extra_entries {
+            w.extend_from_slice(&[*k, *v]);
+        }
+        w
+    }
+
+    #[test]
+    fn poll_response_rejects_duplicate_canonical_fields() {
+        // Positive: the plain integer-keyed form decodes.
+        let ok = cbor_int_message(&[]);
+        let msgs = decode_poll_response(&ok).expect("plain decode");
+        assert_eq!(
+            msgs,
+            vec![DropMessage {
+                cursor: 7,
+                ts: 42,
+                body: vec![0xaa, 0xbb, 0xcc]
+            }]
+        );
+
+        // Duplicate integer key 0 (cursor): map(4) = {0:7, 1:42, 2:bytes, 0:9}.
+        let dup_int = cbor_int_message(&[(0x00, 0x09)]);
+        let err = decode_poll_response(&dup_int).expect_err("duplicate int key");
+        assert!(
+            matches!(err, PaykitError::Serialization(ref m) if m.contains("duplicate")),
+            "unexpected error: {err}"
+        );
+
+        // Mixed-spelling duplicate: integer key 0 then text key "cursor" —
+        // the text fallback must not override the integer form.
+        // map(4) = {0:7, 1:42, 2:bytes, "cursor":9}.
+        let mut mixed = cbor_int_message(&[]);
+        mixed[1] = 0xa4;
+        mixed.extend_from_slice(b"\x66cursor\x09");
+        let err = decode_poll_response(&mixed).expect_err("mixed-spelling duplicate");
+        assert!(
+            matches!(err, PaykitError::Serialization(ref m) if m.contains("duplicate")),
+            "unexpected error: {err}"
+        );
+
+        // Text-only duplicate: {"cursor":7, "cursor":9, "ts":42, "body":bytes}.
+        let text_dup = vec![
+            0x81, 0xa4, 0x66, b'c', b'u', b'r', b's', b'o', b'r', 0x07, 0x66, b'c', b'u', b'r',
+            b's', b'o', b'r', 0x09, 0x62, b't', b's', 0x18, 0x2a, 0x64, b'b', b'o', b'd', b'y',
+            0x41, 0xff,
+        ];
+        assert!(decode_poll_response(&text_dup).is_err());
+    }
+
+    #[test]
+    fn poll_response_text_fallback_cannot_bypass_checks() {
+        // The text-key fallback decodes to exactly the same message as the
+        // integer-keyed primary form...
+        let text_form = serde_cbor::to_vec(&serde_cbor::Value::Array(vec![text_key_message(
+            7,
+            42,
+            &[0xaa, 0xbb, 0xcc],
+        )]))
+        .expect("encode");
+        let int_form = cbor_int_message(&[]);
+        assert_eq!(
+            decode_poll_response(&text_form).expect("text"),
+            decode_poll_response(&int_form).expect("int"),
+            "key spelling must not change the decoded value"
+        );
+
+        // ...and every check applies identically through the fallback: a
+        // wrong-typed text field is rejected just like the integer form.
+        let wrong_type_int = {
+            // map(3) = {0:7, 1:42, 2:"not-bytes"}
+            vec![
+                0x81, 0xa3, 0x00, 0x07, 0x01, 0x18, 0x2a, 0x02, 0x69, b'n', b'o', b't', b'-', b'b',
+                b'y', b't', b'e', b's',
+            ]
+        };
+        assert!(decode_poll_response(&wrong_type_int).is_err());
     }
 
     #[test]

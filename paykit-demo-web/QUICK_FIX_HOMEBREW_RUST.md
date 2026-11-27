@@ -44,7 +44,7 @@ rustc --version
 # Should show: rustc 1.x.x
 
 which rustc
-# Should show: /Users/johncarvalho/.cargo/bin/rustc
+# Should show: $HOME/.cargo/bin/rustc
 # (NOT /opt/homebrew/bin/rustc)
 
 # Check rustup is working
@@ -66,7 +66,7 @@ rustup target list --installed | grep wasm32
 ### Step 5: Build Web Demo
 
 ```bash
-cd "/Users/john/vibes-dev/paykit-rs/paykit-demo-web"
+cd paykit-demo-web
 
 # Build with wasm-pack
 wasm-pack build --target web --out-dir www/pkg
@@ -123,7 +123,7 @@ After switching to Rustup, verify everything:
 ```bash
 # 1. Rust is from Rustup (not Homebrew)
 which rustc
-# Should be: /Users/johncarvalho/.cargo/bin/rustc
+# Should be: $HOME/.cargo/bin/rustc
 
 # 2. Rustup is working
 rustup --version

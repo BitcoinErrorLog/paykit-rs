@@ -138,7 +138,7 @@ If any of these fail, go back to the Prerequisites section.
 ### Step 2: Navigate to Project
 
 ```bash
-cd "/Users/john/vibes-dev/paykit-rs/paykit-demo-web"
+cd paykit-demo-web
 
 # Verify you're in the right directory
 ls -la
